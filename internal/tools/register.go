@@ -11,4 +11,5 @@ func Register(s *mcp.Server) {
 	s.RegisterTool(createProject())
 	s.RegisterTool(createScene())
 	s.RegisterTool(addNode())
+	s.RegisterTool(loadSprite())
 }
