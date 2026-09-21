@@ -93,6 +93,35 @@ func TestFindGodotProjectsMissingDirectory(t *testing.T) {
 	}
 }
 
+func TestCountProjectStructure(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "main.tscn"), "")
+	seedFile(t, filepath.Join(root, "nested", "level.tscn"), "")
+	seedFile(t, filepath.Join(root, "player.gd"), "")
+	seedFile(t, filepath.Join(root, "enemy.gdscript"), "")
+	seedFile(t, filepath.Join(root, "player.cs"), "")
+	seedFile(t, filepath.Join(root, "icon.PNG"), "")
+	seedFile(t, filepath.Join(root, "font.ttf"), "")
+	seedFile(t, filepath.Join(root, "sound.wav"), "")
+	seedFile(t, filepath.Join(root, "notes.txt"), "")
+	seedFile(t, filepath.Join(root, "LICENSE"), "")
+	seedFile(t, filepath.Join(root, ".hidden", "secret.tscn"), "")
+
+	got := countProjectStructure(root)
+	want := projectStructure{Scenes: 2, Scripts: 3, Assets: 3, Other: 3}
+	if got != want {
+		t.Fatalf("structure = %+v, want %+v", got, want)
+	}
+}
+
+func TestCountProjectStructureMissingDirectory(t *testing.T) {
+	got := countProjectStructure(filepath.Join(t.TempDir(), "nope"))
+	if got != (projectStructure{}) {
+		t.Fatalf("structure = %+v, want zero value", got)
+	}
+}
+
 func equalStrings(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

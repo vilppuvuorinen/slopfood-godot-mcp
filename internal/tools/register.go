@@ -7,5 +7,6 @@ import "github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 func Register(s *mcp.Server) {
 	s.RegisterTool(getGodotVersion())
 	s.RegisterTool(listProjects())
+	s.RegisterTool(getProjectInfo())
 	s.RegisterTool(createProject())
 }

@@ -11,10 +11,10 @@ import (
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
-func fakeGodot(t *testing.T, body string) string {
+func fakeGodot(t *testing.T) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "godot")
-	if err := os.WriteFile(path, []byte("#!/bin/sh\n"+body+"\n"), 0o755); err != nil { //nolint:gosec // test helper needs an executable script.
+	if err := os.WriteFile(path, []byte("#!/bin/sh\necho 4.7.2.stable.official.fake\n"), 0o755); err != nil { //nolint:gosec // test helper needs an executable script.
 		t.Fatalf("write fake godot: %v", err)
 	}
 	return path
@@ -44,7 +44,7 @@ func TestGetGodotVersionSchema(t *testing.T) {
 }
 
 func TestGetGodotVersionSuccess(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodot(t, "echo 4.7.2.stable.official.fake"))
+	t.Setenv(godot.PathEnv, fakeGodot(t))
 
 	result := callTool(t, getGodotVersion())
 	if result.IsError {
