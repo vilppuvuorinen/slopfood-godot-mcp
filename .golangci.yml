@@ -41,9 +41,4 @@ linters:
 
 formatters:
   enable:
-    - gofumpt
-    - goimports
-  settings:
-    goimports:
-      local-prefixes:
-        - github.com/vilppuvuorinen/go-dot-mcp
+    - gofmt

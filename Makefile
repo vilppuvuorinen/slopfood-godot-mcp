@@ -7,7 +7,8 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 
 GO ?= go
 GOFLAGS ?=
-GOLANGCI_LINT ?= golangci-lint
+TOOLS_MOD := tools/go.mod
+GOLANGCI_LINT ?= $(GO) tool -modfile=$(TOOLS_MOD) golangci-lint
 
 .PHONY: all
 all: fmt vet test build

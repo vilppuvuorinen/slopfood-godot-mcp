@@ -19,3 +19,11 @@ build. To run it by hand, build first and pass the path:
 make build
 GO_DOT_MCP_BIN=$PWD/bin/go-dot-mcp go test ./e2e/...
 ```
+
+## Tooling
+
+Lint tooling is pinned and isolated in the `tools/` module so it never enters
+the server's dependency graph. `make lint` runs the pinned `golangci-lint` via
+`go tool -modfile=tools/go.mod golangci-lint`. CI invokes `make lint` instead of
+fetching a moving `latest` release. Formatting is plain `gofmt` (`make fmt`,
+checked with `gofmt -l .`).
