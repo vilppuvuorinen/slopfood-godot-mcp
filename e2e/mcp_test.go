@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"os"
-	"os/exec"
 	"strings"
 	"testing"
 
@@ -20,25 +19,7 @@ const binaryEnv = "GO_DOT_MCP_BIN"
 
 func connect(t *testing.T) *mcp.ClientSession {
 	t.Helper()
-
-	binary := os.Getenv(binaryEnv)
-	if binary == "" {
-		t.Fatalf("%s is not set; build the server and point it at the binary", binaryEnv)
-	}
-
-	client := mcp.NewClient(&mcp.Implementation{Name: "go-dot-mcp-e2e", Version: "0.0.1"}, nil)
-	session, err := client.Connect(context.Background(), &mcp.CommandTransport{
-		Command: exec.Command(binary),
-	}, nil)
-	if err != nil {
-		t.Fatalf("connect: %v", err)
-	}
-	t.Cleanup(func() {
-		if err := session.Close(); err != nil {
-			t.Errorf("close session: %v", err)
-		}
-	})
-	return session
+	return connectWithEnv(t)
 }
 
 func TestHelloWorldTool(t *testing.T) {
