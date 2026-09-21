@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	"sync"
 )
 
@@ -34,6 +35,38 @@ type Tool struct {
 }
 
 type ToolHandler func(ctx context.Context, args json.RawMessage) (any, error)
+
+// Content is a single MCP content block.
+type Content struct {
+	Type string `json:"type"`
+	Text string `json:"text"`
+}
+
+// ToolResult is a complete tool result. Handlers may return one directly to
+// control the content blocks and isError flag; any other return value is
+// JSON-encoded into a single text block.
+type ToolResult struct {
+	Content []Content `json:"content"`
+	IsError bool      `json:"isError,omitempty"`
+}
+
+// TextResult builds a successful single-block text result.
+func TextResult(text string) ToolResult {
+	return ToolResult{Content: []Content{{Type: "text", Text: text}}}
+}
+
+// ErrorResult builds an error result with an optional "Possible solutions"
+// block, mirroring the Coding-Solo reference response shape.
+func ErrorResult(message string, possibleSolutions ...string) ToolResult {
+	content := []Content{{Type: "text", Text: message}}
+	if len(possibleSolutions) > 0 {
+		var b strings.Builder
+		b.WriteString("Possible solutions:\n- ")
+		b.WriteString(strings.Join(possibleSolutions, "\n- "))
+		content = append(content, Content{Type: "text", Text: b.String()})
+	}
+	return ToolResult{Content: content, IsError: true}
+}
 
 type request struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -163,18 +196,19 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 	}
 	out, err := tool.Handler(ctx, p.Arguments)
 	if err != nil {
-		return map[string]any{
-			"content": []any{map[string]any{"type": "text", "text": err.Error()}},
-			"isError": true,
-		}, nil
+		return ErrorResult(err.Error()), nil
+	}
+	switch result := out.(type) {
+	case ToolResult:
+		return result, nil
+	case *ToolResult:
+		return *result, nil
 	}
 	text, err := json.Marshal(out)
 	if err != nil {
 		return nil, err
 	}
-	return map[string]any{
-		"content": []any{map[string]any{"type": "text", "text": string(text)}},
-	}, nil
+	return TextResult(string(text)), nil
 }
 
 func (s *Server) write(w io.Writer, resp response) error {

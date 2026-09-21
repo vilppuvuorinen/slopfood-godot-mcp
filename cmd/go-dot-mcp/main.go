@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/tools"
 )
 
 var version = "dev"
@@ -98,6 +99,8 @@ func run() error {
 			return in.Message, nil
 		},
 	})
+
+	tools.Register(srv)
 
 	if err := srv.Serve(ctx, os.Stdin, os.Stdout); err != nil && !errors.Is(err, context.Canceled) {
 		return err

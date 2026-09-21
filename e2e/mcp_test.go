@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -94,5 +95,47 @@ func TestHelloWorldTool(t *testing.T) {
 				t.Errorf("message = %q, want %q", got.Message, tt.want)
 			}
 		})
+	}
+}
+
+// TestGetGodotVersionTool drives the real get_godot_version tool against the
+// repository-pinned Godot build. The suite is expected to run with Godot 4.7
+// (the server's default); pointing GODOT_PATH at another minor makes this test
+// fail on purpose.
+func TestGetGodotVersionTool(t *testing.T) {
+	ctx := context.Background()
+	session := connect(t)
+
+	tools, err := session.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatalf("list tools: %v", err)
+	}
+	var listed bool
+	for _, tool := range tools.Tools {
+		if tool.Name == "get_godot_version" {
+			listed = true
+			break
+		}
+	}
+	if !listed {
+		t.Fatalf("get_godot_version tool not listed: %+v", tools.Tools)
+	}
+
+	res, err := session.CallTool(ctx, &mcp.CallToolParams{Name: "get_godot_version"})
+	if err != nil {
+		t.Fatalf("call tool: %v", err)
+	}
+	if res.IsError {
+		t.Skipf("Godot unavailable, skipping: %+v", res.Content)
+	}
+	if len(res.Content) != 1 {
+		t.Fatalf("content = %+v", res.Content)
+	}
+	text, ok := res.Content[0].(*mcp.TextContent)
+	if !ok {
+		t.Fatalf("content type = %T", res.Content[0])
+	}
+	if !strings.HasPrefix(text.Text, "4.7.") {
+		t.Errorf("version = %q, want a 4.7.x build (GODOT_PATH=%q)", text.Text, os.Getenv("GODOT_PATH"))
 	}
 }
