@@ -13,4 +13,5 @@ func Register(s *mcp.Server) {
 	s.RegisterTool(addNode())
 	s.RegisterTool(loadSprite())
 	s.RegisterTool(exportMeshLibrary())
+	s.RegisterTool(saveScene())
 }
