@@ -110,7 +110,7 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
 	for scanner.Scan() {
 		if err := ctx.Err(); err != nil {
-			return err
+			return fmt.Errorf("context: %w", err)
 		}
 		line := scanner.Bytes()
 		if len(line) == 0 {
@@ -129,7 +129,10 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 			return err
 		}
 	}
-	return scanner.Err()
+	if err := scanner.Err(); err != nil {
+		return fmt.Errorf("read input: %w", err)
+	}
+	return nil
 }
 
 func (s *Server) handle(ctx context.Context, req request) (response, bool) {
@@ -206,7 +209,7 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 	}
 	text, err := json.Marshal(out)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("encode tool result: %w", err)
 	}
 	return TextResult(string(text)), nil
 }
@@ -214,11 +217,13 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 func (s *Server) write(w io.Writer, resp response) error {
 	data, err := json.Marshal(resp)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode response: %w", err)
 	}
 	data = append(data, '\n')
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
-	_, err = w.Write(data)
-	return err
+	if _, err := w.Write(data); err != nil {
+		return fmt.Errorf("write response: %w", err)
+	}
+	return nil
 }

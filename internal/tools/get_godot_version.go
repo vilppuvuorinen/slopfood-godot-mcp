@@ -23,12 +23,12 @@ func getGodotVersion() mcp.Tool {
 
 func handleGetGodotVersion(ctx context.Context, _ json.RawMessage) (any, error) {
 	version, err := godot.Version(ctx, godot.Path())
-	if err != nil {
-		return mcp.ErrorResult(
-			"Failed to get Godot version: "+err.Error(),
-			"Ensure Godot is installed correctly",
-			"Check if the GODOT_PATH environment variable is set correctly",
-		), nil
+	if err == nil {
+		return mcp.TextResult(version), nil
 	}
-	return mcp.TextResult(version), nil
+	return mcp.ErrorResult(
+		"Failed to get Godot version: "+err.Error(),
+		"Ensure Godot is installed correctly",
+		"Check if the GODOT_PATH environment variable is set correctly",
+	), nil
 }

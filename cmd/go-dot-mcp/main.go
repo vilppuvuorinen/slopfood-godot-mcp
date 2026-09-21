@@ -94,7 +94,7 @@ func run() error {
 				Message string `json:"message"`
 			}
 			if err := json.Unmarshal(args, &in); err != nil {
-				return nil, err
+				return nil, fmt.Errorf("invalid arguments: %w", err)
 			}
 			return in.Message, nil
 		},
@@ -103,7 +103,7 @@ func run() error {
 	tools.Register(srv)
 
 	if err := srv.Serve(ctx, os.Stdin, os.Stdout); err != nil && !errors.Is(err, context.Canceled) {
-		return err
+		return fmt.Errorf("serve: %w", err)
 	}
 	return nil
 }
