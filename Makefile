@@ -28,6 +28,13 @@ run:
 test:
 	$(GO) test $(GOFLAGS) -race -covermode=atomic -coverprofile=coverage.out ./...
 
+# e2e drives a pre-built server binary with the official MCP SDK client. It is
+# a standalone black-box module, so the SDK never enters the server's module
+# graph. The binary is built first and handed to the tests via GO_DOT_MCP_BIN.
+.PHONY: e2e
+e2e: build
+	cd e2e && GO_DOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)' $(GO) test $(GOFLAGS) -race -covermode=atomic ./...
+
 .PHONY: bench
 bench:
 	$(GO) test $(GOFLAGS) -run '^$$' -bench . -benchmem ./...
@@ -53,7 +60,7 @@ tidy:
 	$(GO) mod tidy
 
 .PHONY: check
-check: fmt vet lint test
+check: fmt vet lint test e2e
 
 .PHONY: clean
 clean:
@@ -66,5 +73,6 @@ help:
 	@printf '  build    compile %s into bin/\n' '$(BINARY)'
 	@printf '  run      run the server (ARGS=...)\n'
 	@printf '  test     run tests with race detector and coverage\n'
+	@printf '  e2e      build, then run the SDK-backed black-box tests\n'
 	@printf '  fmt/vet/lint/check  code quality\n'
 	@printf '  clean    remove build artifacts\n'

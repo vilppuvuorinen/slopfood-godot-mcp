@@ -25,6 +25,13 @@ jobs:
       - run: go vet ./...
       - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
       - run: go build -trimpath -o bin/go-dot-mcp ./cmd/go-dot-mcp
+      - name: e2e (official MCP SDK client)
+        working-directory: e2e
+        env:
+          GO_DOT_MCP_BIN: ${{ github.workspace }}/bin/go-dot-mcp
+        run: |
+          go mod download
+          go test -race -covermode=atomic ./...
 
   lint:
     runs-on: ubuntu-latest

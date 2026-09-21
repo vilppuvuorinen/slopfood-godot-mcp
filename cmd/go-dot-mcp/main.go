@@ -50,6 +50,35 @@ func run() error {
 	}, logger)
 
 	srv.RegisterTool(mcp.Tool{
+		Name:        "hello",
+		Description: "Say hello. Returns a friendly greeting, optionally addressed to a name.",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"name": map[string]any{
+					"type":        "string",
+					"description": `Who to greet. Defaults to "World".`,
+				},
+			},
+		},
+		Handler: func(_ context.Context, args json.RawMessage) (any, error) {
+			name := "World"
+			if len(args) > 0 && string(args) != "null" {
+				var in struct {
+					Name string `json:"name"`
+				}
+				if err := json.Unmarshal(args, &in); err != nil {
+					return nil, fmt.Errorf("invalid arguments: %w", err)
+				}
+				if in.Name != "" {
+					name = in.Name
+				}
+			}
+			return map[string]any{"message": "Hello, " + name + "!"}, nil
+		},
+	})
+
+	srv.RegisterTool(mcp.Tool{
 		Name:        "echo",
 		Description: "Echo back the provided message.",
 		InputSchema: map[string]any{
