@@ -15,4 +15,5 @@ func Register(s *mcp.Server) {
 	s.RegisterTool(exportMeshLibrary())
 	s.RegisterTool(saveScene())
 	s.RegisterTool(getUID())
+	s.RegisterTool(updateProjectUIDs())
 }
