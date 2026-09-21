@@ -1,0 +1,13 @@
+# Godot builds to download, one entry per line:
+#
+#   <minor>  <version>  <sha256>
+#
+# <minor>   install directory, e.g. 4.7 (point releases share one directory so
+#           upgrades replace in place with a smaller footprint).
+# <version> godot-builds release tag, e.g. 4.7.2-stable or 4.8-dev6.
+# <sha256>  checksum of the Linux x86_64 zip.
+#
+# These are Linux x86_64 builds only.
+
+4.7 4.7.2-stable cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4
+4.8 4.8-dev6     d3678019d0a6501d754db36807110a02a1cfa24d49886be8d3a72d91faa80ca3
