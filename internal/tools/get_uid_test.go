@@ -1,0 +1,177 @@
+package tools
+
+import (
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
+)
+
+const fakeUIDVersion = `if [ "$1" = "--version" ]; then echo "4.7.2.stable.official.fake"; exit 0; fi`
+
+func TestGetUIDSchema(t *testing.T) {
+	tool := getUID()
+	if tool.Name != "get_uid" {
+		t.Errorf("name = %q", tool.Name)
+	}
+	if tool.Description != "Get the UID for a specific file in a Godot project (for Godot 4.4+)" {
+		t.Errorf("description = %q", tool.Description)
+	}
+	required, ok := tool.InputSchema["required"].([]string)
+	if !ok || strings.Join(required, ",") != "projectPath,filePath" {
+		t.Errorf("required = %v", tool.InputSchema["required"])
+	}
+	props, ok := tool.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T", tool.InputSchema["properties"])
+	}
+	if len(props) != 2 {
+		t.Errorf("properties = %v", props)
+	}
+	for _, key := range []string{"projectPath", "filePath"} {
+		property, ok := props[key].(map[string]any)
+		if !ok || property["type"] != "string" {
+			t.Errorf("%s property = %v", key, props[key])
+		}
+	}
+}
+
+func TestGetUIDSuccess(t *testing.T) {
+	fake := fakeGodotOps(t, fakeUIDVersion+"\necho '{\"file\":\"res://player.gd\",\"uid\":\"uid://abc\",\"exists\":true}'")
+	t.Setenv(godot.PathEnv, fake)
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "player.gd"), "script")
+
+	result := callToolArgs(t, getUID(), `{"projectPath":`+jsonString(root)+`,"filePath":"player.gd"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if len(result.Content) != 1 {
+		t.Fatalf("content = %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	if !strings.HasPrefix(text, "UID for player.gd: ") {
+		t.Errorf("text = %q", text)
+	}
+	if !strings.Contains(text, "uid://abc") {
+		t.Errorf("text = %q, want it to contain uid://abc", text)
+	}
+}
+
+func TestGetUIDVersionGate(t *testing.T) {
+	fake := fakeGodotOps(t, `if [ "$1" = "--version" ]; then echo "4.3.1.stable"; exit 0; fi`+"\nexit 1")
+	t.Setenv(godot.PathEnv, fake)
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "player.gd"), "script")
+
+	result := callToolArgs(t, getUID(), `{"projectPath":`+jsonString(root)+`,"filePath":"player.gd"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if len(result.Content) != 2 {
+		t.Fatalf("content = %+v", result.Content)
+	}
+	if got := result.Content[0].Text; got != "UIDs are only supported in Godot 4.4 or later. Current version: 4.3.1.stable" {
+		t.Errorf("message = %q", got)
+	}
+}
+
+func TestGetUIDSnakeCaseAliases(t *testing.T) {
+	fake := fakeGodotOps(t, fakeUIDVersion+"\necho '{\"file\":\"res://player.gd\",\"uid\":\"uid://abc\",\"exists\":true}'")
+	t.Setenv(godot.PathEnv, fake)
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "player.gd"), "script")
+
+	result := callToolArgs(t, getUID(), `{"project_path":`+jsonString(root)+`,"file_path":"player.gd"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "UID for player.gd: ") {
+		t.Errorf("text = %q", result.Content[0].Text)
+	}
+}
+
+func TestGetUIDValidation(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "player.gd"), "script")
+
+	tests := []struct {
+		name string
+		args string
+		want string
+	}{
+		{name: "missing params", args: `{}`, want: "Missing required parameters"},
+		{name: "invalid path", args: `{"projectPath":"../escape","filePath":"player.gd"}`, want: "Invalid path"},
+		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"filePath":"player.gd"}`, want: "Not a valid Godot project"},
+		{name: "missing file", args: `{"projectPath":` + jsonString(root) + `,"filePath":"missing.gd"}`, want: "File does not exist: "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := callToolArgs(t, getUID(), tt.args)
+			if !result.IsError {
+				t.Fatalf("expected an error result: %+v", result.Content)
+			}
+			if !strings.HasPrefix(result.Content[0].Text, tt.want) {
+				t.Errorf("message = %q, want prefix %q", result.Content[0].Text, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetUIDScriptFailure(t *testing.T) {
+	fake := fakeGodotOps(t, fakeUIDVersion+"\necho 'Failed to get UID: boom' >&2; exit 1")
+	t.Setenv(godot.PathEnv, fake)
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "player.gd"), "script")
+
+	result := callToolArgs(t, getUID(), `{"projectPath":`+jsonString(root)+`,"filePath":"player.gd"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if len(result.Content) != 2 {
+		t.Fatalf("content = %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to get UID: ") {
+		t.Errorf("message = %q", result.Content[0].Text)
+	}
+	if !strings.HasPrefix(result.Content[1].Text, "Possible solutions:") {
+		t.Errorf("solutions = %q", result.Content[1].Text)
+	}
+}
+
+func TestGetUIDSpawnFailure(t *testing.T) {
+	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "player.gd"), "script")
+
+	result := callToolArgs(t, getUID(), `{"projectPath":`+jsonString(root)+`,"filePath":"player.gd"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to get UID: ") {
+		t.Errorf("message = %q", result.Content[0].Text)
+	}
+}
+
+func TestGetUIDVersionFailure(t *testing.T) {
+	fake := fakeGodotOps(t, `echo "boom" >&2; exit 1`)
+	t.Setenv(godot.PathEnv, fake)
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "player.gd"), "script")
+
+	result := callToolArgs(t, getUID(), `{"projectPath":`+jsonString(root)+`,"filePath":"player.gd"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to get UID: ") {
+		t.Errorf("message = %q", result.Content[0].Text)
+	}
+}

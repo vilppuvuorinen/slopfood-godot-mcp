@@ -14,4 +14,5 @@ func Register(s *mcp.Server) {
 	s.RegisterTool(loadSprite())
 	s.RegisterTool(exportMeshLibrary())
 	s.RegisterTool(saveScene())
+	s.RegisterTool(getUID())
 }
