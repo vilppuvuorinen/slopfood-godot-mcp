@@ -10,4 +10,5 @@ func Register(s *mcp.Server) {
 	s.RegisterTool(getProjectInfo())
 	s.RegisterTool(createProject())
 	s.RegisterTool(createScene())
+	s.RegisterTool(addNode())
 }

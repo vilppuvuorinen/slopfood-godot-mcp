@@ -30,6 +30,16 @@ func scriptFailed(stderr string) bool {
 	return strings.Contains(stderr, "Failed to")
 }
 
+// sceneMissingResult is the shared error for a scene file that does not exist,
+// matching the reference server's message and solutions.
+func sceneMissingResult(scenePath string) mcp.ToolResult {
+	return mcp.ErrorResult(
+		"Scene file does not exist: "+scenePath,
+		"Ensure the scene path is correct",
+		"Use create_scene to create a new scene first",
+	)
+}
+
 // notAProjectResult is the shared error for a projectPath without a
 // project.godot file, matching the reference server's message and solutions.
 func notAProjectResult(projectPath string) mcp.ToolResult {
