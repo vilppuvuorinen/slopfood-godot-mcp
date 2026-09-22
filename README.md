@@ -20,11 +20,11 @@ explicitly to keep it. The flag is repeatable and accepts comma-separated names;
 ```
 go-dot-mcp                                     # project only
 go-dot-mcp --enable scene,script               # scene and script, no project
-go-dot-mcp --enable project --enable files     # project and files
+go-dot-mcp --enable project --enable node      # project and node
 go-dot-mcp --enable all                        # everything
 ```
 
-**Progress: 11/41 tools implemented.**
+**Progress: 11/35 tools implemented.**
 
 ### project (default) — project discovery and creation (4/4)
 
@@ -72,15 +72,6 @@ go-dot-mcp --enable all                        # everything
 - [ ] `attach_script`
 - [ ] `validate_script`
 - [ ] `validate_scripts`
-
-### files — file and directory operations (0/6)
-
-- [ ] `list_project_files`
-- [ ] `read_file`
-- [ ] `write_file`
-- [ ] `delete_file`
-- [ ] `create_directory`
-- [ ] `rename_file`
 
 ### resources — resources, shaders, and themes (2/6)
 
