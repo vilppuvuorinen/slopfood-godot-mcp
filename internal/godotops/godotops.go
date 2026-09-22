@@ -13,10 +13,19 @@ import (
 //go:embed godot_operations.gd
 var operationsScript string
 
+//go:embed validate_script.gd
+var validateScript string
+
 var (
 	once sync.Once
 	path string
 	err  error
+)
+
+var (
+	validateOnce sync.Once
+	validatePath string
+	validateErr  error
 )
 
 // OperationsScript materializes the embedded godot_operations.gd to a file and
@@ -38,4 +47,24 @@ func OperationsScript() (string, error) {
 		path = scriptPath
 	})
 	return path, err
+}
+
+// ValidateScript materializes the embedded validate_script.gd to a file and
+// returns its path. Like OperationsScript the file is written once per process,
+// because Godot needs a real path for --script.
+func ValidateScript() (string, error) {
+	validateOnce.Do(func() {
+		dir, mkErr := os.MkdirTemp("", "go-dot-mcp-")
+		if mkErr != nil {
+			validateErr = fmt.Errorf("create script dir: %w", mkErr)
+			return
+		}
+		scriptPath := filepath.Join(dir, "validate_script.gd")
+		if writeErr := os.WriteFile(scriptPath, []byte(validateScript), 0o644); writeErr != nil { //nolint:gosec // script is operator-provided and read-only.
+			validateErr = fmt.Errorf("write validate script: %w", writeErr)
+			return
+		}
+		validatePath = scriptPath
+	})
+	return validatePath, validateErr
 }

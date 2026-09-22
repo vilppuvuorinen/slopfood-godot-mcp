@@ -53,7 +53,10 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		addNode, loadSprite, modifySceneNode, removeSceneNode,
 		manageSceneStructure, manageSceneSignals,
 	},
-	CategoryScript: {},
+	CategoryScript: {
+		createScript, createCSharpScript, attachScript,
+		validateScript, validateScripts,
+	},
 	CategoryResources: {
 		getUID, updateProjectUIDs,
 	},

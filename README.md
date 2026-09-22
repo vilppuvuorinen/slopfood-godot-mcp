@@ -24,7 +24,7 @@ go-dot-mcp --enable project --enable node      # project and node
 go-dot-mcp --enable all                        # everything
 ```
 
-**Progress: 26/35 tools implemented.**
+**Progress: 31/35 tools implemented.**
 
 ### project (default) — project discovery and creation (4/4)
 
@@ -65,13 +65,13 @@ go-dot-mcp --enable all                        # everything
 - [x] `manage_scene_structure`
 - [x] `manage_scene_signals`
 
-### script — GDScript and C# authoring (0/5)
+### script — GDScript and C# authoring (5/5)
 
-- [ ] `create_script`
-- [ ] `create_csharp_script`
-- [ ] `attach_script`
-- [ ] `validate_script`
-- [ ] `validate_scripts`
+- [x] `create_script`
+- [x] `create_csharp_script`
+- [x] `attach_script`
+- [x] `validate_script`
+- [x] `validate_scripts`
 
 ### resources — resources, shaders, and themes (2/6)
 

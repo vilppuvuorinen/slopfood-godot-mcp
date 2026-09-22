@@ -77,6 +77,8 @@ func _init():
             manage_scene_structure(params)
         "manage_scene_signals":
             manage_scene_signals(params)
+        "attach_script":
+            attach_script(params)
         "get_uid":
             get_uid(params)
         "resave_resources":
@@ -1657,3 +1659,68 @@ func _is_ancestor(node, maybe_descendant):
             return true
         n = n.get_parent()
     return false
+
+# Attach a script to a node in a scene file
+func attach_script(params):
+    if not params.has("scene_path") or not params.has("node_path") or not params.has("script_path"):
+        printerr("scene_path, node_path, and script_path are required")
+        quit(1)
+
+    var full_scene_path = params.scene_path
+    if not full_scene_path.begins_with("res://"):
+        full_scene_path = "res://" + full_scene_path
+
+    var full_script_path = params.script_path
+    if not full_script_path.begins_with("res://"):
+        full_script_path = "res://" + full_script_path
+
+    log_info("Attaching script " + full_script_path + " to node in scene: " + full_scene_path)
+
+    if not FileAccess.file_exists(full_scene_path):
+        printerr("Scene file does not exist at: " + full_scene_path)
+        quit(1)
+
+    if not FileAccess.file_exists(full_script_path):
+        printerr("Script file does not exist at: " + full_script_path)
+        quit(1)
+
+    var scene = load(full_scene_path)
+    if not scene:
+        printerr("Failed to load scene: " + full_scene_path)
+        quit(1)
+
+    var scene_root = scene.instantiate()
+
+    # Find the target node
+    var node_path = params.node_path
+    var target = scene_root
+    if node_path != "root" and node_path != ".":
+        if node_path.begins_with("root/"):
+            node_path = node_path.substr(5)
+        target = scene_root.get_node_or_null(node_path)
+
+    if target == null:
+        printerr("Node not found: " + params.node_path)
+        quit(1)
+
+    # Load and attach the script
+    var script = load(full_script_path)
+    if not script:
+        printerr("Failed to load script: " + full_script_path)
+        quit(1)
+
+    target.set_script(script)
+
+    # Repack and save
+    var packed_scene = PackedScene.new()
+    var result = packed_scene.pack(scene_root)
+    if result != OK:
+        printerr("Failed to pack scene after attaching script: " + str(result))
+        quit(1)
+
+    var save_error = ResourceSaver.save(packed_scene, full_scene_path)
+    if save_error != OK:
+        printerr("Failed to save scene after attaching script: " + str(save_error))
+        quit(1)
+
+    print("Script '" + full_script_path + "' attached successfully to node in: " + full_scene_path)

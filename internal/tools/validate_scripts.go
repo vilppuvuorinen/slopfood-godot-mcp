@@ -1,0 +1,178 @@
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+)
+
+func validateScripts() mcp.Tool {
+	return mcp.Tool{
+		Name:        "validate_scripts",
+		Description: "Batch-check GDScript files (git-changed by default, or all)",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"projectPath": map[string]any{
+					"type":        "string",
+					"description": "Godot project path",
+				},
+				"scope": map[string]any{
+					"type":        "string",
+					"enum":        []string{"changed", "all"},
+					"description": `"changed" = git-changed .gd (default); "all" = every .gd in project`,
+				},
+				"scriptPaths": map[string]any{
+					"type":        "array",
+					"items":       map[string]any{"type": "string"},
+					"description": "Optional explicit list of .gd paths to check (overrides scope)",
+				},
+			},
+			"required": []string{"projectPath"},
+		},
+		Handler: handleValidateScripts,
+	}
+}
+
+type validateScriptsArgs struct {
+	ProjectPath string   `json:"projectPath"`
+	Scope       string   `json:"scope"`
+	ScriptPaths []string `json:"scriptPaths"`
+}
+
+// validateScriptCheck is one checked script's result, mirroring the reference
+// server's per-file success object.
+type validateScriptCheck struct {
+	ScriptPath string             `json:"scriptPath"`
+	Checked    bool               `json:"checked"`
+	Valid      bool               `json:"valid"`
+	ErrorCount int                `json:"errorCount"`
+	Errors     []scriptDiagnostic `json:"errors"`
+}
+
+// validateScriptSkip is one candidate that was not checked, mirroring the
+// reference server's per-file failure object.
+type validateScriptSkip struct {
+	ScriptPath string `json:"scriptPath"`
+	Checked    bool   `json:"checked"`
+	Error      string `json:"error"`
+}
+
+// validateScriptsReport is the JSON document validate_scripts returns.
+type validateScriptsReport struct {
+	Scope           string `json:"scope"`
+	FileCount       int    `json:"fileCount"`
+	FilesWithErrors int    `json:"filesWithErrors"`
+	AllValid        bool   `json:"allValid"`
+	Results         []any  `json:"results"`
+}
+
+// maxValidateScripts is the reference server's batch cap.
+const maxValidateScripts = 60
+
+func handleValidateScripts(ctx context.Context, raw json.RawMessage) (any, error) {
+	raw, err := aliasParams(raw, parameterMappings)
+	if err != nil {
+		return nil, err
+	}
+	var args validateScriptsArgs
+	if len(raw) > 0 && string(raw) != "null" {
+		if err = json.Unmarshal(raw, &args); err != nil {
+			return nil, fmt.Errorf("invalid arguments: %w", err)
+		}
+	}
+	if args.ProjectPath == "" {
+		return mcp.ErrorResult("projectPath is required."), nil
+	}
+	if !validPath(args.ProjectPath) {
+		return mcp.ErrorResult("Invalid path."), nil
+	}
+	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
+		return notAProjectResult(args.ProjectPath), nil
+	}
+
+	explicit := len(args.ScriptPaths) > 0
+	scope := ""
+	var candidates []string
+	switch {
+	case explicit:
+		scope = "explicit"
+		candidates = args.ScriptPaths
+	case args.Scope == "" || args.Scope == "changed":
+		scope = "changed"
+		changed, listErr := listChangedGdFiles(ctx, args.ProjectPath)
+		if listErr != nil {
+			return mcp.ErrorResult(listErr.Error()), nil
+		}
+		candidates = changed
+	case args.Scope == "all":
+		scope = "all"
+		candidates = listAllGdFiles(args.ProjectPath)
+	default:
+		return mcp.ErrorResult(fmt.Sprintf(`Invalid scope %q. Use "changed" or "all", or pass scriptPaths.`, args.Scope)), nil
+	}
+
+	results := make([]any, 0, len(candidates))
+	allChecked := true
+	toCheck := make([]string, 0, len(candidates))
+	for _, rel := range candidates {
+		if !strings.HasSuffix(strings.ToLower(rel), ".gd") || !validPath(rel) {
+			if explicit {
+				results = append(results, validateScriptSkip{ScriptPath: rel, Checked: false, Error: "Not a valid .gd path"})
+				allChecked = false
+			}
+			continue
+		}
+		if !pathExists(filepath.Join(args.ProjectPath, rel)) {
+			if explicit {
+				results = append(results, validateScriptSkip{ScriptPath: rel, Checked: false, Error: "Script does not exist"})
+				allChecked = false
+			}
+			continue
+		}
+		toCheck = append(toCheck, rel)
+	}
+
+	if len(toCheck) > maxValidateScripts {
+		return mcp.ErrorResult(fmt.Sprintf(
+			"Too many scripts to validate (%d > %d). Narrow the scope or pass an explicit scriptPaths list.",
+			len(toCheck), maxValidateScripts)), nil
+	}
+
+	filesWithErrors := 0
+	for _, rel := range toCheck {
+		diagnostics, checkErr := runGDScriptCheck(ctx, args.ProjectPath, filepath.Join(args.ProjectPath, rel))
+		if checkErr != nil {
+			results = append(results, validateScriptSkip{ScriptPath: rel, Checked: false, Error: checkErr.Error()})
+			allChecked = false
+			continue
+		}
+		if len(diagnostics) > 0 {
+			filesWithErrors++
+		}
+		results = append(results, validateScriptCheck{
+			ScriptPath: rel,
+			Checked:    true,
+			Valid:      len(diagnostics) == 0,
+			ErrorCount: len(diagnostics),
+			Errors:     diagnostics,
+		})
+	}
+
+	report := validateScriptsReport{
+		Scope:           scope,
+		FileCount:       len(results),
+		FilesWithErrors: filesWithErrors,
+		AllValid:        filesWithErrors == 0 && allChecked,
+		Results:         results,
+	}
+	encoded, err := json.MarshalIndent(report, "", "  ")
+	if err != nil {
+		return nil, fmt.Errorf("encode validate_scripts report: %w", err)
+	}
+	return mcp.TextResult(string(encoded)), nil
+}
