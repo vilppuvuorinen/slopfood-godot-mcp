@@ -12,6 +12,41 @@ import (
 // OperationParams is the JSON object handed to the operations script.
 type OperationParams map[string]any
 
+// Export runs
+// `<executable> --headless --path <project> --export-release|--export-debug
+// <preset> <output>` and returns the captured streams. A non-zero exit is not a
+// wrapper failure, matching RunOperation: the caller inspects stderr for
+// ERROR markers.
+func Export(ctx context.Context, executable, projectPath, presetName, outputPath string, debug bool) (stdout, stderr string, err error) {
+	exportFlag := "--export-release"
+	if debug {
+		exportFlag = "--export-debug"
+	}
+	args := []string{
+		"--headless",
+		"--path", projectPath,
+		exportFlag,
+		presetName,
+		outputPath,
+	}
+	cmd := exec.CommandContext(ctx, executable, args...) //nolint:gosec // executable is operator-controlled via GODOT_PATH.
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+
+	runErr := cmd.Run()
+	stdout, stderr = stdoutBuf.String(), stderrBuf.String()
+
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) {
+		return stdout, stderr, nil
+	}
+	if runErr != nil {
+		return stdout, stderr, fmt.Errorf("run godot: %w", runErr)
+	}
+	return stdout, stderr, nil
+}
+
 // RunOperation invokes
 // `<executable> --headless --path <project> --script <script> <operation>
 // <params-json> --debug-godot`, mirroring the reference server's

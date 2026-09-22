@@ -1,0 +1,84 @@
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"strings"
+
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+)
+
+func exportProject() mcp.Tool {
+	return mcp.Tool{
+		Name:        "export_project",
+		Description: "Export a Godot project using a preset",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"projectPath": map[string]any{
+					"type":        "string",
+					"description": "Godot project path",
+				},
+				"presetName": map[string]any{
+					"type":        "string",
+					"description": "Export preset name",
+				},
+				"outputPath": map[string]any{
+					"type":        "string",
+					"description": "Output file path for the exported build",
+				},
+				"debug": map[string]any{
+					"type":        "boolean",
+					"description": "Use debug export. Default: false",
+				},
+			},
+			"required": []string{"projectPath", "presetName", "outputPath"},
+		},
+		Handler: handleExportProject,
+	}
+}
+
+type exportProjectArgs struct {
+	ProjectPath string `json:"projectPath"`
+	PresetName  string `json:"presetName"`
+	OutputPath  string `json:"outputPath"`
+	Debug       bool   `json:"debug"`
+}
+
+func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) {
+	raw, err := aliasParams(raw, parameterMappings)
+	if err != nil {
+		return nil, err
+	}
+	var args exportProjectArgs
+	if len(raw) > 0 && string(raw) != "null" {
+		if err = json.Unmarshal(raw, &args); err != nil {
+			return nil, fmt.Errorf("invalid arguments: %w", err)
+		}
+	}
+	if args.ProjectPath == "" || args.PresetName == "" || args.OutputPath == "" {
+		return mcp.ErrorResult("projectPath, presetName, and outputPath are required."), nil
+	}
+	if !validPath(args.ProjectPath) {
+		return mcp.ErrorResult("Invalid project path."), nil
+	}
+	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
+		return mcp.ErrorResult("Not a valid Godot project: " + args.ProjectPath), nil
+	}
+
+	stdout, stderr, err := godot.Export(ctx, godot.Path(), args.ProjectPath, args.PresetName, args.OutputPath, args.Debug)
+	if err != nil {
+		return mcp.ErrorResult("Export failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
+	}
+	if strings.Contains(stderr, "ERROR") {
+		return mcp.ErrorResult("Export failed: " + stderr), nil
+	}
+	output := stdout
+	if output == "" {
+		output = args.OutputPath
+	}
+	return mcp.TextResult("Export succeeded.\n\nOutput: " + output), nil
+}

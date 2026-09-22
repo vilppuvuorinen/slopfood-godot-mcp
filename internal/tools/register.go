@@ -43,7 +43,9 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		manageAutoloads, manageInputMap, manageLayers, managePlugins,
 		manageTranslations,
 	},
-	CategoryExport: {},
+	CategoryExport: {
+		manageExportPresets, exportProject,
+	},
 	CategoryScene: {
 		createScene, saveScene, exportMeshLibrary,
 	},

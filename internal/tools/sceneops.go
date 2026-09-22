@@ -32,7 +32,7 @@ func scriptFailed(stderr string) bool {
 
 // headlessSolutions are the shared "Possible solutions" lines for a Godot
 // operation that could not run.
-var headlessSolutions = []string{
+var headlessSolutions = []string{ //nolint:unused // reserved for the node and script category tools.
 	"Ensure Godot is installed correctly",
 	"Check if the GODOT_PATH environment variable is set correctly",
 	"Verify the project path is accessible",
@@ -43,10 +43,10 @@ var headlessSolutions = []string{
 // <stdout>" on success, or "<operation> failed: <detail>" with the shared
 // solutions on failure. Callers validate arguments, paths, and project/scene
 // existence first.
-func runHeadlessOperation(ctx context.Context, projectPath, operation string, params map[string]any) (any, error) {
+func runHeadlessOperation(ctx context.Context, projectPath, operation string, params map[string]any) (any, error) { //nolint:unused,unparam // reserved for the node and script category tools; failures are reported through the tool result.
 	stdout, stderr, err := runOperation(ctx, projectPath, operation, params)
 	if err != nil {
-		return mcp.ErrorResult(operation+" failed: "+err.Error(), headlessSolutions...), nil
+		return mcp.ErrorResult(operation+" failed: "+err.Error(), headlessSolutions...), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 	if scriptFailed(stderr) {
 		return mcp.ErrorResult(operation+" failed: "+stderr, headlessSolutions...), nil

@@ -24,7 +24,7 @@ go-dot-mcp --enable project --enable node      # project and node
 go-dot-mcp --enable all                        # everything
 ```
 
-**Progress: 19/35 tools implemented.**
+**Progress: 21/35 tools implemented.**
 
 ### project (default) — project discovery and creation (4/4)
 
@@ -44,10 +44,10 @@ go-dot-mcp --enable all                        # everything
 - [x] `manage_plugins`
 - [x] `manage_translations`
 
-### export — export presets and builds (0/2)
+### export — export presets and builds (2/2)
 
-- [ ] `manage_export_presets`
-- [ ] `export_project`
+- [x] `manage_export_presets`
+- [x] `export_project`
 
 ### scene — scene files (3/4)
 

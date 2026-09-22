@@ -23,6 +23,7 @@ var parameterMappings = map[string]string{
 	"output_path":      "outputPath",
 	"mesh_item_names":  "meshItemNames",
 	"new_path":         "newPath",
+	"preset_name":      "presetName",
 	"file_path":        "filePath",
 	"directory":        "directory",
 	"recursive":        "recursive",
