@@ -24,7 +24,7 @@ go-dot-mcp --enable project --enable node      # project and node
 go-dot-mcp --enable all                        # everything
 ```
 
-**Progress: 11/35 tools implemented.**
+**Progress: 19/35 tools implemented.**
 
 ### project (default) — project discovery and creation (4/4)
 
@@ -33,16 +33,16 @@ go-dot-mcp --enable all                        # everything
 - [x] `get_project_info`
 - [x] `create_project`
 
-### settings — project configuration (0/8)
+### settings — project configuration (8/8)
 
-- [ ] `read_project_settings`
-- [ ] `modify_project_settings`
-- [ ] `set_main_scene`
-- [ ] `manage_autoloads`
-- [ ] `manage_input_map`
-- [ ] `manage_layers`
-- [ ] `manage_plugins`
-- [ ] `manage_translations`
+- [x] `read_project_settings`
+- [x] `modify_project_settings`
+- [x] `set_main_scene`
+- [x] `manage_autoloads`
+- [x] `manage_input_map`
+- [x] `manage_layers`
+- [x] `manage_plugins`
+- [x] `manage_translations`
 
 ### export — export presets and builds (0/2)
 

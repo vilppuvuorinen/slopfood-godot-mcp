@@ -16,4 +16,12 @@ func Register(s *mcp.Server) {
 	s.RegisterTool(saveScene())
 	s.RegisterTool(getUID())
 	s.RegisterTool(updateProjectUIDs())
+	s.RegisterTool(readProjectSettings())
+	s.RegisterTool(modifyProjectSettings())
+	s.RegisterTool(setMainScene())
+	s.RegisterTool(manageAutoloads())
+	s.RegisterTool(manageInputMap())
+	s.RegisterTool(manageLayers())
+	s.RegisterTool(managePlugins())
+	s.RegisterTool(manageTranslations())
 }
