@@ -24,7 +24,7 @@ go-dot-mcp --enable project --enable node      # project and node
 go-dot-mcp --enable all                        # everything
 ```
 
-**Progress: 31/35 tools implemented.**
+**Progress: 35/35 tools implemented.**
 
 ### project (default) — project discovery and creation (4/4)
 
@@ -73,12 +73,12 @@ go-dot-mcp --enable all                        # everything
 - [x] `validate_script`
 - [x] `validate_scripts`
 
-### resources — resources, shaders, and themes (2/6)
+### resources — resources, shaders, and themes (6/6)
 
-- [ ] `create_resource`
-- [ ] `manage_resource`
-- [ ] `manage_shader`
-- [ ] `manage_theme_resource`
+- [x] `create_resource`
+- [x] `manage_resource`
+- [x] `manage_shader`
+- [x] `manage_theme_resource`
 - [x] `get_uid`
 - [x] `update_project_uids`
 

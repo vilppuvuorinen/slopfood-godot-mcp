@@ -83,6 +83,12 @@ func _init():
             get_uid(params)
         "resave_resources":
             resave_resources(params)
+        "create_resource":
+            create_resource(params)
+        "manage_resource":
+            manage_resource(params)
+        "manage_theme_resource":
+            manage_theme_resource(params)
         _:
             log_error("Unknown operation: " + operation)
             quit(1)
@@ -1724,3 +1730,142 @@ func attach_script(params):
         quit(1)
 
     print("Script '" + full_script_path + "' attached successfully to node in: " + full_scene_path)
+
+# Create a resource file (.tres)
+func create_resource(params):
+    if not params.has("resource_type") or not params.has("resource_path"):
+        printerr("resource_type and resource_path are required")
+        quit(1)
+
+    var resource_type = params.resource_type
+    var full_resource_path = params.resource_path
+    if not full_resource_path.begins_with("res://"):
+        full_resource_path = "res://" + full_resource_path
+
+    log_info("Creating resource of type " + resource_type + " at: " + full_resource_path)
+
+    # Instantiate the resource
+    if not ClassDB.class_exists(resource_type):
+        printerr("Unknown resource type: " + resource_type)
+        printerr("Must be a valid Godot class name (e.g., StandardMaterial3D, AudioStreamPlayer, Theme)")
+        quit(1)
+
+    if not ClassDB.can_instantiate(resource_type):
+        printerr("Cannot instantiate resource type: " + resource_type)
+        quit(1)
+
+    var resource = ClassDB.instantiate(resource_type)
+    if resource == null:
+        printerr("Failed to instantiate resource of type: " + resource_type)
+        quit(1)
+
+    if not resource is Resource:
+        printerr("Type " + resource_type + " is not a Resource subclass")
+        quit(1)
+
+    # Set properties if provided
+    if params.has("properties"):
+        var properties = params.properties
+        for prop_name in properties:
+            var raw_value = properties[prop_name]
+            var converted_value = _convert_property_value(resource, prop_name, raw_value)
+            log_info("Setting " + prop_name + " = " + str(converted_value))
+            resource.set(prop_name, converted_value)
+
+    # Ensure directory exists
+    var dir_path = full_resource_path.get_base_dir()
+    var dir_relative = dir_path.substr(6)  # Remove "res://"
+    if not dir_relative.is_empty():
+        var dir = DirAccess.open("res://")
+        if dir and not dir.dir_exists(dir_relative):
+            dir.make_dir_recursive(dir_relative)
+
+    # Save the resource
+    var save_error = ResourceSaver.save(resource, full_resource_path)
+    if save_error != OK:
+        printerr("Failed to save resource: " + str(save_error))
+        quit(1)
+
+    print("Resource created successfully at: " + full_resource_path)
+
+
+func manage_resource(params):
+    var resource_path = params.get("resource_path", "")
+    var action = params.get("action", "read")
+    var full_path = resource_path
+    if not full_path.begins_with("res://"):
+        full_path = "res://" + full_path
+
+    if action == "read":
+        if not ResourceLoader.exists(full_path):
+            printerr("Resource not found: " + full_path)
+            quit(1)
+        var res = ResourceLoader.load(full_path)
+        if res == null:
+            printerr("Failed to load resource: " + full_path)
+            quit(1)
+        var props = {}
+        for prop in res.get_property_list():
+            if prop["usage"] & PROPERTY_USAGE_STORAGE:
+                props[prop["name"]] = str(res.get(prop["name"]))
+        print("RESOURCE_JSON_START")
+        print(JSON.stringify({"type": res.get_class(), "path": full_path, "properties": props}))
+        print("RESOURCE_JSON_END")
+    elif action == "modify":
+        if not ResourceLoader.exists(full_path):
+            printerr("Resource not found: " + full_path)
+            quit(1)
+        var res = ResourceLoader.load(full_path)
+        var properties = params.get("properties", {})
+        for prop_name in properties:
+            var raw_value = properties[prop_name]
+            var converted_value = _convert_property_value(res, prop_name, raw_value)
+            res.set(prop_name, converted_value)
+        ResourceSaver.save(res, full_path)
+        print("Resource modified: " + full_path)
+    else:
+        printerr("Unknown manage_resource action: " + action)
+        quit(1)
+
+
+func manage_theme_resource(params):
+    var resource_path = params.get("resource_path", "")
+    var action = params.get("action", "read")
+    var full_path = resource_path
+    if not full_path.begins_with("res://"):
+        full_path = "res://" + full_path
+
+    if action == "create":
+        var theme = Theme.new()
+        var properties = params.get("properties", {})
+        for key in properties:
+            theme.set(key, properties[key])
+        var dir_path = full_path.get_base_dir()
+        var dir_relative = dir_path.substr(6)
+        if not dir_relative.is_empty():
+            var dir = DirAccess.open("res://")
+            if dir and not dir.dir_exists(dir_relative):
+                dir.make_dir_recursive(dir_relative)
+        ResourceSaver.save(theme, full_path)
+        print("Theme created at: " + full_path)
+    elif action == "read":
+        if not ResourceLoader.exists(full_path):
+            printerr("Theme not found: " + full_path)
+            quit(1)
+        var theme = ResourceLoader.load(full_path)
+        print("THEME_JSON_START")
+        print(JSON.stringify({"type": theme.get_class(), "path": full_path}))
+        print("THEME_JSON_END")
+    elif action == "modify":
+        if not ResourceLoader.exists(full_path):
+            printerr("Theme not found: " + full_path)
+            quit(1)
+        var theme = ResourceLoader.load(full_path)
+        var properties = params.get("properties", {})
+        for key in properties:
+            theme.set(key, properties[key])
+        ResourceSaver.save(theme, full_path)
+        print("Theme modified: " + full_path)
+    else:
+        printerr("Unknown manage_theme_resource action: " + action)
+        quit(1)
