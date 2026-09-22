@@ -47,7 +47,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		manageExportPresets, exportProject,
 	},
 	CategoryScene: {
-		createScene, saveScene, exportMeshLibrary,
+		createScene, readScene, saveScene, exportMeshLibrary,
 	},
 	CategoryNode: {
 		addNode, loadSprite,

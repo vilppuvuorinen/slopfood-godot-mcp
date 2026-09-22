@@ -1,0 +1,164 @@
+package tools
+
+import (
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
+)
+
+func TestReadSceneSchema(t *testing.T) {
+	tool := readScene()
+	if tool.Name != "read_scene" {
+		t.Errorf("name = %q", tool.Name)
+	}
+	if tool.Description != "Read scene file as JSON node tree (headless)" {
+		t.Errorf("description = %q", tool.Description)
+	}
+	required, ok := tool.InputSchema["required"].([]string)
+	if !ok || strings.Join(required, ",") != "projectPath,scenePath" {
+		t.Errorf("required = %v", tool.InputSchema["required"])
+	}
+	props, ok := tool.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T", tool.InputSchema["properties"])
+	}
+	for _, key := range []string{"projectPath", "scenePath"} {
+		prop, ok := props[key].(map[string]any)
+		if !ok || prop["type"] != "string" {
+			t.Errorf("property %q = %v, want string", key, props[key])
+		}
+	}
+}
+
+func TestReadSceneSuccess(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf 'SCENE_JSON_START\n{"name":"root","type":"Node2D","children":[{"name":"Child","type":"Sprite2D"}]}\nSCENE_JSON_END\n'`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, readScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if len(result.Content) != 1 {
+		t.Fatalf("content = %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	for _, want := range []string{`"name": "root"`, `"type": "Node2D"`, `"name": "Child"`, `"type": "Sprite2D"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text = %q, want it to contain %q", text, want)
+		}
+	}
+	if strings.Contains(text, "SCENE_JSON") {
+		t.Errorf("text still contains markers: %q", text)
+	}
+}
+
+func TestReadSceneSnakeCaseAliases(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, readScene(), `{"project_path":`+jsonString(root)+`,"scene_path":"main.tscn"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if !strings.Contains(result.Content[0].Text, `"scene_path":"main.tscn"`) {
+		t.Errorf("text = %q, want converted snake_case params", result.Content[0].Text)
+	}
+}
+
+func TestReadSceneRawWhenNoMarkers(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "plain output"`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, readScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if !strings.Contains(result.Content[0].Text, "Scene read output:\nplain output") {
+		t.Errorf("text = %q", result.Content[0].Text)
+	}
+}
+
+func TestReadSceneRawWhenMarkersInvalid(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf 'SCENE_JSON_START\nnot-json\nSCENE_JSON_END\n'`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, readScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if !strings.Contains(result.Content[0].Text, "Raw scene data:\nnot-json") {
+		t.Errorf("text = %q", result.Content[0].Text)
+	}
+}
+
+func TestReadSceneValidation(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+
+	tests := []struct {
+		name string
+		args string
+		want string
+	}{
+		{name: "missing paths", args: `{}`, want: "projectPath and scenePath are required."},
+		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `}`, want: "projectPath and scenePath are required."},
+		{name: "invalid project path", args: `{"projectPath":"../escape","scenePath":"main.tscn"}`, want: "Invalid path."},
+		{name: "invalid scene path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"../escape.tscn"}`, want: "Invalid path."},
+		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn"}`, want: "Not a valid Godot project"},
+		{name: "missing scene file", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"missing.tscn"}`, want: "Scene file does not exist: missing.tscn"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := callToolArgs(t, readScene(), tt.args)
+			if !result.IsError {
+				t.Fatalf("expected an error result: %+v", result.Content)
+			}
+			if !strings.HasPrefix(result.Content[0].Text, tt.want) {
+				t.Errorf("message = %q, want prefix %q", result.Content[0].Text, tt.want)
+			}
+		})
+	}
+}
+
+func TestReadSceneScriptFailure(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo 'Failed to load scene: boom' >&2; exit 1`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, readScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to read scene: ") {
+		t.Errorf("message = %q", result.Content[0].Text)
+	}
+	if len(result.Content) != 2 || !strings.HasPrefix(result.Content[1].Text, "Possible solutions:") {
+		t.Errorf("solutions = %+v", result.Content)
+	}
+}
+
+func TestReadSceneSpawnFailure(t *testing.T) {
+	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, readScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to read scene: ") {
+		t.Errorf("message = %q", result.Content[0].Text)
+	}
+}

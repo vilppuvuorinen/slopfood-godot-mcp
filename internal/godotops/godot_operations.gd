@@ -67,6 +67,8 @@ func _init():
             export_mesh_library(params)
         "save_scene":
             save_scene(params)
+        "read_scene":
+            read_scene(params)
         "get_uid":
             get_uid(params)
         "resave_resources":
@@ -1184,3 +1186,97 @@ func save_scene(params):
             printerr("Failed to save scene: " + str(error))
     else:
         printerr("Failed to pack scene: " + str(result))
+
+# Read a scene file as a JSON node tree
+func read_scene(params):
+    if not params.has("scene_path"):
+        printerr("scene_path is required")
+        quit(1)
+
+    var full_scene_path = params.scene_path
+    if not full_scene_path.begins_with("res://"):
+        full_scene_path = "res://" + full_scene_path
+
+    log_info("Reading scene: " + full_scene_path)
+
+    if not FileAccess.file_exists(full_scene_path):
+        printerr("Scene file does not exist at: " + full_scene_path)
+        quit(1)
+
+    var scene = load(full_scene_path)
+    if not scene:
+        printerr("Failed to load scene: " + full_scene_path)
+        printerr("The scene may reference missing external resources.")
+        var f = FileAccess.open(full_scene_path, FileAccess.READ)
+        if f:
+            var raw_content = f.get_as_text()
+            f.close()
+            print("SCENE_JSON_START")
+            print(JSON.stringify({"error": "Failed to instantiate scene, returning raw text", "raw": raw_content.substr(0, 4096)}))
+            print("SCENE_JSON_END")
+            return
+        quit(1)
+
+    var scene_root = scene.instantiate()
+    if scene_root == null:
+        printerr("Failed to instantiate scene: " + full_scene_path)
+        quit(1)
+
+    var tree_data = _walk_scene_tree(scene_root)
+
+    print("SCENE_JSON_START")
+    print(JSON.stringify(tree_data))
+    print("SCENE_JSON_END")
+
+    scene_root.queue_free()
+
+# Walk a scene tree and build a dictionary describing each node
+func _walk_scene_tree(node) -> Dictionary:
+    var info = {
+        "name": node.name,
+        "type": node.get_class(),
+    }
+
+    var node_script = node.get_script()
+    if node_script != null and node_script is Script:
+        info["script"] = node_script.resource_path
+
+    var props = {}
+    for prop in node.get_property_list():
+        var prop_name = prop["name"]
+        var usage = prop.get("usage", 0)
+        if usage & PROPERTY_USAGE_EDITOR and usage & PROPERTY_USAGE_STORAGE:
+            var value = node.get(prop_name)
+            if value != null:
+                props[prop_name] = _variant_to_string(value)
+
+    if props.size() > 0:
+        info["properties"] = props
+
+    var groups = node.get_groups()
+    if groups.size() > 0:
+        var group_names = []
+        for g in groups:
+            group_names.append(str(g))
+        info["groups"] = group_names
+
+    var children_arr = []
+    for child in node.get_children():
+        children_arr.append(_walk_scene_tree(child))
+
+    if children_arr.size() > 0:
+        info["children"] = children_arr
+
+    return info
+
+# Convert a Variant value to a string representation
+func _variant_to_string(value) -> String:
+    if value == null:
+        return "null"
+    if value is String:
+        return value
+    if value is bool:
+        return "true" if value else "false"
+    if value is NodePath:
+        return str(value)
+    return str(value)
