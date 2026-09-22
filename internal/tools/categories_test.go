@@ -99,8 +99,8 @@ func TestRegisterGating(t *testing.T) {
 	}
 }
 
-// TestCategoryToolsUnique verifies every constructor is reachable and no tool
-// is registered twice.
+// TestCategoryToolsUnique verifies every constructor is reachable, no tool is
+// registered twice, and the total matches the README's 35-tool list.
 func TestCategoryToolsUnique(t *testing.T) {
 	seen := make(map[string]bool)
 	for _, category := range AllCategories {
@@ -111,5 +111,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			}
 			seen[tool.Name] = true
 		}
+	}
+	if len(seen) != 35 {
+		t.Errorf("registered %d tools, want 35", len(seen))
 	}
 }

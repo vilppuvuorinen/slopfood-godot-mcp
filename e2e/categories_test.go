@@ -9,8 +9,12 @@ func TestEnableCategories(t *testing.T) {
 		session := connectSession(t, nil)
 
 		findTool(t, session, "get_project_info")
-		requireToolAbsent(t, session, "read_project_settings")
-		requireToolAbsent(t, session, "create_scene")
+		for _, name := range []string{
+			"read_project_settings", "manage_export_presets", "create_scene",
+			"add_node", "create_script", "create_resource",
+		} {
+			requireToolAbsent(t, session, name)
+		}
 	})
 
 	t.Run("single category replaces the default", func(t *testing.T) {
@@ -18,6 +22,7 @@ func TestEnableCategories(t *testing.T) {
 
 		findTool(t, session, "create_scene")
 		requireToolAbsent(t, session, "get_project_info")
+		requireToolAbsent(t, session, "create_script")
 	})
 
 	t.Run("comma-separated categories", func(t *testing.T) {
@@ -28,10 +33,18 @@ func TestEnableCategories(t *testing.T) {
 		requireToolAbsent(t, session, "create_scene")
 	})
 
-	t.Run("all registers every implemented category", func(t *testing.T) {
+	t.Run("all registers every category", func(t *testing.T) {
 		session := connectCategories(t, "all")
 
-		for _, name := range []string{"get_project_info", "read_project_settings", "create_scene", "add_node", "get_uid"} {
+		for _, name := range []string{
+			"get_project_info",      // project
+			"read_project_settings", // settings
+			"manage_export_presets", // export
+			"create_scene",          // scene
+			"add_node",              // node
+			"create_script",         // script
+			"create_resource",       // resources
+		} {
 			findTool(t, session, name)
 		}
 	})
