@@ -16,15 +16,30 @@ import (
 // running these tests; the test itself never builds anything.
 const binaryEnv = "GO_DOT_MCP_BIN"
 
-// connect starts the server binary and returns a connected MCP client session.
+// connect starts the server binary with every tool category enabled and returns
+// a connected MCP client session.
 func connect(t *testing.T) *mcp.ClientSession {
 	t.Helper()
-	return connectWithEnv(t)
+	return connectSession(t, nil, "--enable", "all")
 }
 
-// connectWithEnv starts the server binary with extra environment entries
-// (KEY=VALUE) and returns a connected MCP client session.
+// connectCategories starts the server with exactly the given --enable value.
+func connectCategories(t *testing.T, categories string) *mcp.ClientSession {
+	t.Helper()
+	return connectSession(t, nil, "--enable", categories)
+}
+
+// connectWithEnv starts the server binary with every category enabled plus
+// extra environment entries (KEY=VALUE) and returns a connected MCP client
+// session.
 func connectWithEnv(t *testing.T, env ...string) *mcp.ClientSession {
+	t.Helper()
+	return connectSession(t, env, "--enable", "all")
+}
+
+// connectSession starts the server binary with extra environment entries and
+// command-line arguments and returns a connected MCP client session.
+func connectSession(t *testing.T, env []string, args ...string) *mcp.ClientSession {
 	t.Helper()
 
 	binary := os.Getenv(binaryEnv)
@@ -32,7 +47,7 @@ func connectWithEnv(t *testing.T, env ...string) *mcp.ClientSession {
 		t.Fatalf("%s is not set; build the server and point it at the binary", binaryEnv)
 	}
 
-	cmd := exec.CommandContext(context.Background(), binary) //nolint:gosec // the binary path is supplied by the test harness.
+	cmd := exec.CommandContext(context.Background(), binary, args...) //nolint:gosec // the binary path is supplied by the test harness.
 	cmd.Env = append(os.Environ(), env...)
 	client := mcp.NewClient(&mcp.Implementation{Name: "go-dot-mcp-e2e", Version: "0.0.1"}, nil)
 	session, err := client.Connect(context.Background(), &mcp.CommandTransport{Command: cmd}, nil)
@@ -79,6 +94,20 @@ func findTool(t *testing.T, session *mcp.ClientSession, name string) *mcp.Tool {
 	}
 	t.Fatalf("tool %q not listed", name)
 	return nil
+}
+
+// requireToolAbsent fails when a listed tool is present.
+func requireToolAbsent(t *testing.T, session *mcp.ClientSession, name string) {
+	t.Helper()
+	res, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list tools: %v", err)
+	}
+	for _, tool := range res.Tools {
+		if tool.Name == name {
+			t.Errorf("tool %q should not be listed", name)
+		}
+	}
 }
 
 // callTool invokes a tool over the session and fails only on transport errors.

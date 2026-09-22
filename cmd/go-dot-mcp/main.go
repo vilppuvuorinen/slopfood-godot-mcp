@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
@@ -16,6 +17,16 @@ import (
 )
 
 var version = "dev"
+
+// enableValues collects the repeatable --enable flag values verbatim.
+type enableValues []string
+
+func (e *enableValues) String() string { return strings.Join(*e, ",") }
+
+func (e *enableValues) Set(value string) error {
+	*e = append(*e, value)
+	return nil
+}
 
 func main() {
 	if err := run(); err != nil {
@@ -28,12 +39,19 @@ func run() error {
 	var (
 		showVersion = flag.Bool("version", false, "print version and exit")
 		logLevel    = flag.String("log-level", "info", "log level (debug, info, warn, error)")
+		enable      enableValues
 	)
+	flag.Var(&enable, "enable", "tool categories to enable (repeatable, comma-separated; default \"project\"; \"all\" selects every category)")
 	flag.Parse()
 
 	if *showVersion {
 		fmt.Println(version)
 		return nil
+	}
+
+	categories, err := tools.ResolveCategories(enable)
+	if err != nil {
+		return fmt.Errorf("resolve categories: %w", err)
 	}
 
 	var level slog.Level
@@ -100,7 +118,7 @@ func run() error {
 		},
 	})
 
-	tools.Register(srv)
+	tools.Register(srv, categories...)
 
 	if err := srv.Serve(ctx, os.Stdin, os.Stdout); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("serve: %w", err)
