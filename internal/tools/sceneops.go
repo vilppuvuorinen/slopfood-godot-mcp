@@ -30,6 +30,30 @@ func scriptFailed(stderr string) bool {
 	return strings.Contains(stderr, "Failed to")
 }
 
+// headlessSolutions are the shared "Possible solutions" lines for a Godot
+// operation that could not run.
+var headlessSolutions = []string{
+	"Ensure Godot is installed correctly",
+	"Check if the GODOT_PATH environment variable is set correctly",
+	"Verify the project path is accessible",
+}
+
+// runHeadlessOperation runs an operations-script operation and returns the
+// reference server's generic result: "<operation> succeeded.\n\nOutput:
+// <stdout>" on success, or "<operation> failed: <detail>" with the shared
+// solutions on failure. Callers validate arguments, paths, and project/scene
+// existence first.
+func runHeadlessOperation(ctx context.Context, projectPath, operation string, params map[string]any) (any, error) {
+	stdout, stderr, err := runOperation(ctx, projectPath, operation, params)
+	if err != nil {
+		return mcp.ErrorResult(operation+" failed: "+err.Error(), headlessSolutions...), nil
+	}
+	if scriptFailed(stderr) {
+		return mcp.ErrorResult(operation+" failed: "+stderr, headlessSolutions...), nil
+	}
+	return mcp.TextResult(operation + " succeeded.\n\nOutput: " + stdout), nil
+}
+
 // sceneMissingResult is the shared error for a scene file that does not exist,
 // matching the reference server's message and solutions.
 func sceneMissingResult(scenePath string) mcp.ToolResult {
