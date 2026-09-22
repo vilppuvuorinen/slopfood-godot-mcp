@@ -8,7 +8,7 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 GO ?= go
 GOFLAGS ?=
 TOOLS_MOD := tools/go.mod
-GOLANGCI_LINT ?= $(GO) tool -modfile=$(TOOLS_MOD) golangci-lint
+GOLANGCI_LINT ?= $(GO) tool -modfile=$(CURDIR)/$(TOOLS_MOD) golangci-lint
 
 .PHONY: all
 all: fmt vet test build
@@ -47,18 +47,24 @@ cover: test
 .PHONY: fmt
 fmt:
 	$(GO) fmt ./...
+	cd e2e && $(GO) fmt ./...
 
 .PHONY: vet
 vet:
 	$(GO) vet ./...
+	cd e2e && $(GO) vet ./...
 
+# lint covers the e2e module too; it is a separate module, so it must be
+# linted from its own directory.
 .PHONY: lint
 lint:
 	$(GOLANGCI_LINT) run ./...
+	cd e2e && $(GOLANGCI_LINT) run ./...
 
 .PHONY: tidy
 tidy:
 	$(GO) mod tidy
+	cd e2e && $(GO) mod tidy
 
 .PHONY: check
 check: fmt vet lint test e2e

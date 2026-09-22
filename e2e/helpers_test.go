@@ -32,7 +32,7 @@ func connectWithEnv(t *testing.T, env ...string) *mcp.ClientSession {
 		t.Fatalf("%s is not set; build the server and point it at the binary", binaryEnv)
 	}
 
-	cmd := exec.Command(binary) //nolint:gosec // the binary path is supplied by the test harness.
+	cmd := exec.CommandContext(context.Background(), binary) //nolint:gosec // the binary path is supplied by the test harness.
 	cmd.Env = append(os.Environ(), env...)
 	client := mcp.NewClient(&mcp.Implementation{Name: "go-dot-mcp-e2e", Version: "0.0.1"}, nil)
 	session, err := client.Connect(context.Background(), &mcp.CommandTransport{Command: cmd}, nil)
