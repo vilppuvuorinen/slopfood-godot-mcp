@@ -2,12 +2,8 @@ package e2e
 
 import (
 	"encoding/json"
-	"os"
 	"path/filepath"
-	"strings"
 	"testing"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 type projectInfoResult struct {
@@ -34,16 +30,6 @@ func seedInfoProject(t *testing.T, dir string) {
 	writeE2EFile(t, filepath.Join(dir, "notes.txt"), "other")
 }
 
-func writeE2EFile(t *testing.T, path, content string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
-	}
-	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
-		t.Fatalf("write %s: %v", path, err)
-	}
-}
-
 func decodeProjectInfo(t *testing.T, text string) projectInfoResult {
 	t.Helper()
 	var info projectInfoResult
@@ -56,32 +42,9 @@ func decodeProjectInfo(t *testing.T, text string) projectInfoResult {
 // TestGetProjectInfoSchema ports the reference's tool-definition expectations
 // for get_project_info over the real stdio surface.
 func TestGetProjectInfoSchema(t *testing.T) {
-	tool := findTool(t, connect(t), "get_project_info")
-	if tool.Description != "Retrieve metadata about a Godot project" {
-		t.Errorf("description = %q", tool.Description)
-	}
-
-	data, err := json.Marshal(tool.InputSchema)
-	if err != nil {
-		t.Fatalf("marshal schema: %v", err)
-	}
-	var schema struct {
-		Type       string                    `json:"type"`
-		Required   []string                  `json:"required"`
-		Properties map[string]map[string]any `json:"properties"`
-	}
-	if err := json.Unmarshal(data, &schema); err != nil {
-		t.Fatalf("unmarshal schema %s: %v", data, err)
-	}
-	if schema.Type != "object" {
-		t.Errorf("schema type = %q", schema.Type)
-	}
-	if strings.Join(schema.Required, ",") != "projectPath" {
-		t.Errorf("required = %v", schema.Required)
-	}
-	if schema.Properties["projectPath"]["type"] != "string" {
-		t.Errorf("projectPath type = %v", schema.Properties["projectPath"]["type"])
-	}
+	schema := requireSchema(t, "get_project_info", "Retrieve metadata about a Godot project")
+	schema.requireRequired(t, "projectPath")
+	schema.requireStringProps(t, "projectPath")
 }
 
 // TestGetProjectInfoTool exercises name extraction, structure counting, and
@@ -89,18 +52,13 @@ func TestGetProjectInfoSchema(t *testing.T) {
 // installed, since the reference probes `godot --version`.
 func TestGetProjectInfoTool(t *testing.T) {
 	session := connect(t)
+	requireGodot(t, session)
 
 	t.Run("camelCase", func(t *testing.T) {
 		root := t.TempDir()
 		seedInfoProject(t, root)
 
-		res := callTool(t, session, "get_project_info", map[string]any{"projectPath": root})
-		if res.IsError {
-			skipIfGodotUnavailable(t, res)
-			t.Fatalf("unexpected error: %s", firstText(t, res))
-		}
-
-		info := decodeProjectInfo(t, firstText(t, res))
+		info := decodeProjectInfo(t, requireToolText(t, session, "get_project_info", map[string]any{"projectPath": root}))
 		if info.Name != "E2E Game" {
 			t.Errorf("name = %q, want E2E Game", info.Name)
 		}
@@ -120,12 +78,8 @@ func TestGetProjectInfoTool(t *testing.T) {
 		root := t.TempDir()
 		seedInfoProject(t, root)
 
-		res := callTool(t, session, "get_project_info", map[string]any{"project_path": root})
-		if res.IsError {
-			skipIfGodotUnavailable(t, res)
-			t.Fatalf("unexpected error: %s", firstText(t, res))
-		}
-		if info := decodeProjectInfo(t, firstText(t, res)); info.Path != root {
+		info := decodeProjectInfo(t, requireToolText(t, session, "get_project_info", map[string]any{"project_path": root}))
+		if info.Path != root {
 			t.Errorf("path = %q, want %q", info.Path, root)
 		}
 	})
@@ -134,12 +88,8 @@ func TestGetProjectInfoTool(t *testing.T) {
 		root := filepath.Join(t.TempDir(), "fallback")
 		seedProject(t, root)
 
-		res := callTool(t, session, "get_project_info", map[string]any{"projectPath": root})
-		if res.IsError {
-			skipIfGodotUnavailable(t, res)
-			t.Fatalf("unexpected error: %s", firstText(t, res))
-		}
-		if info := decodeProjectInfo(t, firstText(t, res)); info.Name != "fallback" {
+		info := decodeProjectInfo(t, requireToolText(t, session, "get_project_info", map[string]any{"projectPath": root}))
+		if info.Name != "fallback" {
 			t.Errorf("name = %q, want fallback", info.Name)
 		}
 	})
@@ -151,23 +101,11 @@ func TestGetProjectInfoErrors(t *testing.T) {
 	session := connect(t)
 
 	t.Run("missing projectPath", func(t *testing.T) {
-		res := callTool(t, session, "get_project_info", map[string]any{})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		if got := firstText(t, res); got != "Project path is required" {
-			t.Errorf("message = %q", got)
-		}
+		requireToolError(t, session, "get_project_info", map[string]any{}, "Project path is required")
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
-		res := callTool(t, session, "get_project_info", map[string]any{"projectPath": "../escape"})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		if got := firstText(t, res); got != "Invalid project path" {
-			t.Errorf("message = %q", got)
-		}
+		requireToolError(t, session, "get_project_info", map[string]any{"projectPath": "../escape"}, "Invalid project path")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
@@ -183,13 +121,4 @@ func TestGetProjectInfoErrors(t *testing.T) {
 			t.Errorf("content = %+v", res.Content)
 		}
 	})
-}
-
-// skipIfGodotUnavailable turns a Godot probe failure into a skip so the suite
-// still passes on machines without Godot.
-func skipIfGodotUnavailable(t *testing.T, res *mcp.CallToolResult) {
-	t.Helper()
-	if text := firstText(t, res); strings.HasPrefix(text, "Failed to get project info:") {
-		t.Skipf("Godot unavailable, skipping: %s", text)
-	}
 }

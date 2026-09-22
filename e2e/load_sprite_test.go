@@ -1,46 +1,40 @@
 package e2e
 
 import (
-	"encoding/json"
 	"path/filepath"
-	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+const gradientTextureResource = "[gd_resource type=\"GradientTexture2D\" format=3]\n\n[resource]\nwidth = 8\nheight = 8\n"
 
 // TestLoadSpriteSchema ports the reference's tool-definition expectations for
 // load_sprite over the real stdio surface.
 func TestLoadSpriteSchema(t *testing.T) {
-	tool := findTool(t, connect(t), "load_sprite")
-	if tool.Description != "Load a sprite into a Sprite2D node" {
-		t.Errorf("description = %q", tool.Description)
-	}
+	schema := requireSchema(t, "load_sprite", "Load a sprite into a Sprite2D node")
+	schema.requireRequired(t, "projectPath", "scenePath", "nodePath", "texturePath")
+	schema.requirePropCount(t, 4)
+	schema.requireStringProps(t, "projectPath", "scenePath", "nodePath", "texturePath")
+}
 
-	data, err := json.Marshal(tool.InputSchema)
-	if err != nil {
-		t.Fatalf("marshal schema: %v", err)
+// seedSpriteScene creates a scene with a Sprite2D node and a texture resource
+// so load_sprite has a target and an image to load.
+func seedSpriteScene(t *testing.T, session *mcp.ClientSession, scenePath string) string {
+	t.Helper()
+	root := seedScene(t, session, scenePath)
+
+	res := callTool(t, session, "add_node", map[string]any{
+		"projectPath": root,
+		"scenePath":   scenePath,
+		"nodeType":    "Sprite2D",
+		"nodeName":    "Sprite",
+	})
+	if res.IsError {
+		t.Skipf("add_node failed, skipping: %s", firstText(t, res))
 	}
-	var schema struct {
-		Type       string                    `json:"type"`
-		Required   []string                  `json:"required"`
-		Properties map[string]map[string]any `json:"properties"`
-	}
-	if err := json.Unmarshal(data, &schema); err != nil {
-		t.Fatalf("unmarshal schema %s: %v", data, err)
-	}
-	if schema.Type != "object" {
-		t.Errorf("schema type = %q", schema.Type)
-	}
-	if strings.Join(schema.Required, ",") != "projectPath,scenePath,nodePath,texturePath" {
-		t.Errorf("required = %v", schema.Required)
-	}
-	if len(schema.Properties) != 4 {
-		t.Errorf("properties = %v", schema.Properties)
-	}
-	for _, key := range []string{"projectPath", "scenePath", "nodePath", "texturePath"} {
-		if schema.Properties[key]["type"] != "string" {
-			t.Errorf("%s type = %v", key, schema.Properties[key]["type"])
-		}
-	}
+	writeE2EFile(t, filepath.Join(root, "icon.tres"), gradientTextureResource)
+	return root
 }
 
 // TestLoadSpriteTool drives the real load_sprite tool against Godot, including
@@ -50,83 +44,30 @@ func TestLoadSpriteTool(t *testing.T) {
 	requireGodot(t, session)
 
 	t.Run("loads a sprite", func(t *testing.T) {
-		root := t.TempDir()
-		seedProject(t, root)
+		root := seedSpriteScene(t, session, "scenes/main.tscn")
 
-		res := callTool(t, session, "create_scene", map[string]any{
-			"projectPath": root,
-			"scenePath":   "scenes/main.tscn",
-		})
-		if res.IsError {
-			t.Skipf("create_scene failed, skipping: %s", firstText(t, res))
-		}
-
-		res = callTool(t, session, "add_node", map[string]any{
-			"projectPath": root,
-			"scenePath":   "scenes/main.tscn",
-			"nodeType":    "Sprite2D",
-			"nodeName":    "Sprite",
-		})
-		if res.IsError {
-			t.Skipf("add_node failed, skipping: %s", firstText(t, res))
-		}
-
-		writeE2EFile(t, filepath.Join(root, "icon.tres"), "[gd_resource type=\"GradientTexture2D\" format=3]\n\n[resource]\nwidth = 8\nheight = 8\n")
-
-		res = callTool(t, session, "load_sprite", map[string]any{
+		text := requireToolText(t, session, "load_sprite", map[string]any{
 			"projectPath": root,
 			"scenePath":   "scenes/main.tscn",
 			"nodePath":    "root/Sprite",
 			"texturePath": "icon.tres",
 		})
-		if res.IsError {
-			t.Fatalf("unexpected error: %s", firstText(t, res))
-		}
-		if got := firstText(t, res); !strings.HasPrefix(got, "Sprite loaded successfully with texture: icon.tres") {
-			t.Errorf("text = %q", got)
-		}
+		requirePrefix(t, text, "Sprite loaded successfully with texture: icon.tres")
+
 		scene := readFile(t, filepath.Join(root, "scenes", "main.tscn"))
-		if !strings.Contains(scene, `texture = ExtResource(`) {
-			t.Errorf("scene = %q, want a texture reference", scene)
-		}
+		requireContains(t, scene, `texture = ExtResource(`)
 	})
 
 	t.Run("snake_case aliases", func(t *testing.T) {
-		root := t.TempDir()
-		seedProject(t, root)
+		root := seedSpriteScene(t, session, "scenes/aliased.tscn")
 
-		res := callTool(t, session, "create_scene", map[string]any{
-			"projectPath": root,
-			"scenePath":   "scenes/aliased.tscn",
-		})
-		if res.IsError {
-			t.Skipf("create_scene failed, skipping: %s", firstText(t, res))
-		}
-
-		res = callTool(t, session, "add_node", map[string]any{
-			"projectPath": root,
-			"scenePath":   "scenes/aliased.tscn",
-			"nodeType":    "Sprite2D",
-			"nodeName":    "Sprite",
-		})
-		if res.IsError {
-			t.Skipf("add_node failed, skipping: %s", firstText(t, res))
-		}
-
-		writeE2EFile(t, filepath.Join(root, "icon.tres"), "[gd_resource type=\"GradientTexture2D\" format=3]\n\n[resource]\nwidth = 8\nheight = 8\n")
-
-		res = callTool(t, session, "load_sprite", map[string]any{
+		text := requireToolText(t, session, "load_sprite", map[string]any{
 			"project_path": root,
 			"scene_path":   "scenes/aliased.tscn",
 			"node_path":    "root/Sprite",
 			"texture_path": "icon.tres",
 		})
-		if res.IsError {
-			t.Fatalf("unexpected error: %s", firstText(t, res))
-		}
-		if got := firstText(t, res); !strings.HasPrefix(got, "Sprite loaded successfully with texture: icon.tres") {
-			t.Errorf("text = %q", got)
-		}
+		requirePrefix(t, text, "Sprite loaded successfully with texture: icon.tres")
 	})
 }
 
@@ -135,78 +76,48 @@ func TestLoadSpriteErrors(t *testing.T) {
 	session := connect(t)
 
 	t.Run("missing params", func(t *testing.T) {
-		res := callTool(t, session, "load_sprite", map[string]any{})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		if got := firstText(t, res); got != "Missing required parameters" {
-			t.Errorf("message = %q", got)
-		}
+		requireToolError(t, session, "load_sprite", map[string]any{}, "Missing required parameters")
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
-		res := callTool(t, session, "load_sprite", map[string]any{
+		requireToolError(t, session, "load_sprite", map[string]any{
 			"projectPath": "../escape",
 			"scenePath":   "scenes/main.tscn",
 			"nodePath":    "root/Sprite",
 			"texturePath": "icon.tres",
-		})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		if got := firstText(t, res); got != "Invalid path" {
-			t.Errorf("message = %q", got)
-		}
+		}, "Invalid path")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
-		res := callTool(t, session, "load_sprite", map[string]any{
+		requireToolError(t, session, "load_sprite", map[string]any{
 			"projectPath": root,
 			"scenePath":   "scenes/main.tscn",
 			"nodePath":    "root/Sprite",
 			"texturePath": "icon.tres",
-		})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		if got := firstText(t, res); got != "Not a valid Godot project: "+root {
-			t.Errorf("message = %q", got)
-		}
+		}, "Not a valid Godot project: "+root)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
 		root := t.TempDir()
 		seedProject(t, root)
-		res := callTool(t, session, "load_sprite", map[string]any{
+		requireToolError(t, session, "load_sprite", map[string]any{
 			"projectPath": root,
 			"scenePath":   "missing.tscn",
 			"nodePath":    "root/Sprite",
 			"texturePath": "icon.tres",
-		})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		if got := firstText(t, res); got != "Scene file does not exist: missing.tscn" {
-			t.Errorf("message = %q", got)
-		}
+		}, "Scene file does not exist: missing.tscn")
 	})
 
 	t.Run("missing texture", func(t *testing.T) {
 		root := t.TempDir()
 		seedProject(t, root)
 		writeE2EFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
-		res := callTool(t, session, "load_sprite", map[string]any{
+		requireToolError(t, session, "load_sprite", map[string]any{
 			"projectPath": root,
 			"scenePath":   "scenes/main.tscn",
 			"nodePath":    "root/Sprite",
 			"texturePath": "missing.tres",
-		})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		if got := firstText(t, res); got != "Texture file does not exist: missing.tres" {
-			t.Errorf("message = %q", got)
-		}
+		}, "Texture file does not exist: missing.tres")
 	})
 }
