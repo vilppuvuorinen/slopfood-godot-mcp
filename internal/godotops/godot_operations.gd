@@ -69,6 +69,14 @@ func _init():
             save_scene(params)
         "read_scene":
             read_scene(params)
+        "modify_node":
+            modify_node(params)
+        "remove_node":
+            remove_node(params)
+        "manage_scene_structure":
+            manage_scene_structure(params)
+        "manage_scene_signals":
+            manage_scene_signals(params)
         "get_uid":
             get_uid(params)
         "resave_resources":
@@ -1280,3 +1288,372 @@ func _variant_to_string(value) -> String:
     if value is NodePath:
         return str(value)
     return str(value)
+
+# Helper: Convert a JSON value to the correct Godot type based on a node's property type
+func _convert_property_value(node, prop_name, value):
+    for prop in node.get_property_list():
+        if prop["name"] == prop_name:
+            var type_id = prop.get("type", 0)
+            match type_id:
+                TYPE_VECTOR2:
+                    if value is Dictionary and value.has("x") and value.has("y"):
+                        return Vector2(float(value.get("x", 0)), float(value.get("y", 0)))
+                TYPE_VECTOR2I:
+                    if value is Dictionary and value.has("x") and value.has("y"):
+                        return Vector2i(int(value.get("x", 0)), int(value.get("y", 0)))
+                TYPE_VECTOR3:
+                    if value is Dictionary and value.has("x") and value.has("y"):
+                        return Vector3(float(value.get("x", 0)), float(value.get("y", 0)), float(value.get("z", 0)))
+                TYPE_VECTOR3I:
+                    if value is Dictionary and value.has("x") and value.has("y"):
+                        return Vector3i(int(value.get("x", 0)), int(value.get("y", 0)), int(value.get("z", 0)))
+                TYPE_COLOR:
+                    if value is Dictionary and value.has("r") and value.has("g") and value.has("b"):
+                        return Color(float(value.get("r", 0)), float(value.get("g", 0)), float(value.get("b", 0)), float(value.get("a", 1.0)))
+                    if value is String and value.begins_with("#"):
+                        return Color.html(value)
+                TYPE_QUATERNION:
+                    if value is Dictionary:
+                        return Quaternion(float(value.get("x", 0)), float(value.get("y", 0)), float(value.get("z", 0)), float(value.get("w", 1)))
+                TYPE_RECT2:
+                    if value is Dictionary and value.has("position") and value.has("size"):
+                        var pos = value["position"]
+                        var sz = value["size"]
+                        return Rect2(float(pos.get("x", 0)), float(pos.get("y", 0)), float(sz.get("x", 0)), float(sz.get("y", 0)))
+                TYPE_AABB:
+                    if value is Dictionary and value.has("position") and value.has("size"):
+                        var pos = value["position"]
+                        var sz = value["size"]
+                        return AABB(
+                            Vector3(float(pos.get("x", 0)), float(pos.get("y", 0)), float(pos.get("z", 0))),
+                            Vector3(float(sz.get("x", 0)), float(sz.get("y", 0)), float(sz.get("z", 0)))
+                        )
+                TYPE_BASIS:
+                    if value is Dictionary and value.has("x") and value.has("y") and value.has("z"):
+                        var bx = value["x"]
+                        var by = value["y"]
+                        var bz = value["z"]
+                        return Basis(
+                            Vector3(float(bx.get("x", 0)), float(bx.get("y", 0)), float(bx.get("z", 0))),
+                            Vector3(float(by.get("x", 0)), float(by.get("y", 0)), float(by.get("z", 0))),
+                            Vector3(float(bz.get("x", 0)), float(bz.get("y", 0)), float(bz.get("z", 0)))
+                        )
+                TYPE_TRANSFORM3D:
+                    if value is Dictionary and value.has("basis") and value.has("origin"):
+                        var basis_d = value["basis"]
+                        var origin_d = value["origin"]
+                        var basis = Basis.IDENTITY
+                        if basis_d is Dictionary and basis_d.has("x"):
+                            var bx = basis_d["x"]
+                            var by = basis_d["y"]
+                            var bz = basis_d["z"]
+                            basis = Basis(
+                                Vector3(float(bx.get("x", 0)), float(bx.get("y", 0)), float(bx.get("z", 0))),
+                                Vector3(float(by.get("x", 0)), float(by.get("y", 0)), float(by.get("z", 0))),
+                                Vector3(float(bz.get("x", 0)), float(bz.get("y", 0)), float(bz.get("z", 0)))
+                            )
+                        var origin = Vector3(float(origin_d.get("x", 0)), float(origin_d.get("y", 0)), float(origin_d.get("z", 0)))
+                        return Transform3D(basis, origin)
+                TYPE_TRANSFORM2D:
+                    if value is Dictionary and value.has("x") and value.has("y") and value.has("origin"):
+                        var tx = value["x"]
+                        var ty = value["y"]
+                        var t_origin = value["origin"]
+                        return Transform2D(
+                            Vector2(float(tx.get("x", 0)), float(tx.get("y", 0))),
+                            Vector2(float(ty.get("x", 0)), float(ty.get("y", 0))),
+                            Vector2(float(t_origin.get("x", 0)), float(t_origin.get("y", 0)))
+                        )
+                TYPE_BOOL:
+                    if value is String:
+                        return value.to_lower() == "true"
+                    return bool(value)
+                TYPE_INT:
+                    return int(value)
+                TYPE_FLOAT:
+                    return float(value)
+                TYPE_STRING:
+                    return str(value)
+                TYPE_NODE_PATH:
+                    return NodePath(str(value))
+                TYPE_OBJECT:
+                    if value is String and value.begins_with("res://"):
+                        if ResourceLoader.exists(value):
+                            var res = load(value)
+                            if res != null:
+                                return res
+                        printerr("Failed to load resource from path: " + value)
+                    return value
+            break
+    return value
+
+# Modify a node's properties in a scene file
+func modify_node(params):
+    if not params.has("scene_path") or not params.has("node_path") or not params.has("properties"):
+        printerr("scene_path, node_path, and properties are required")
+        quit(1)
+
+    var full_scene_path = params.scene_path
+    if not full_scene_path.begins_with("res://"):
+        full_scene_path = "res://" + full_scene_path
+
+    log_info("Modifying node in scene: " + full_scene_path)
+
+    if not FileAccess.file_exists(full_scene_path):
+        printerr("Scene file does not exist at: " + full_scene_path)
+        quit(1)
+
+    var scene = load(full_scene_path)
+    if not scene:
+        printerr("Failed to load scene: " + full_scene_path)
+        quit(1)
+
+    var scene_root = scene.instantiate()
+
+    # Find the target node
+    var node_path = params.node_path
+    var target = scene_root
+    if node_path != "root" and node_path != ".":
+        if node_path.begins_with("root/"):
+            node_path = node_path.substr(5)
+        target = scene_root.get_node_or_null(node_path)
+
+    if target == null:
+        printerr("Node not found: " + params.node_path)
+        quit(1)
+
+    # Set properties with type conversion
+    var properties = params.properties
+    for prop_name in properties:
+        var raw_value = properties[prop_name]
+        var converted_value = _convert_property_value(target, prop_name, raw_value)
+        log_info("Setting " + prop_name + " = " + str(converted_value) + " (from " + str(raw_value) + ")")
+        target.set(prop_name, converted_value)
+
+    # Repack and save
+    var packed_scene = PackedScene.new()
+    var result = packed_scene.pack(scene_root)
+    if result != OK:
+        printerr("Failed to pack scene after modification: " + str(result))
+        quit(1)
+
+    var save_error = ResourceSaver.save(packed_scene, full_scene_path)
+    if save_error != OK:
+        printerr("Failed to save modified scene: " + str(save_error))
+        quit(1)
+
+    print("Node modified successfully in: " + full_scene_path)
+
+# Remove a node from a scene file
+func remove_node(params):
+    if not params.has("scene_path") or not params.has("node_path"):
+        printerr("scene_path and node_path are required")
+        quit(1)
+
+    var full_scene_path = params.scene_path
+    if not full_scene_path.begins_with("res://"):
+        full_scene_path = "res://" + full_scene_path
+
+    log_info("Removing node from scene: " + full_scene_path)
+
+    if not FileAccess.file_exists(full_scene_path):
+        printerr("Scene file does not exist at: " + full_scene_path)
+        quit(1)
+
+    var scene = load(full_scene_path)
+    if not scene:
+        printerr("Failed to load scene: " + full_scene_path)
+        quit(1)
+
+    var scene_root = scene.instantiate()
+
+    # Find the target node
+    var node_path = params.node_path
+    var target = scene_root
+    if node_path != "root" and node_path != ".":
+        if node_path.begins_with("root/"):
+            node_path = node_path.substr(5)
+        target = scene_root.get_node_or_null(node_path)
+
+    if target == null:
+        printerr("Node not found: " + params.node_path)
+        quit(1)
+
+    if target == scene_root:
+        printerr("Failed to remove the root node of a scene")
+        quit(1)
+
+    var removed_name = target.name
+    target.get_parent().remove_child(target)
+    target.queue_free()
+
+    # Repack and save
+    var packed_scene = PackedScene.new()
+    var result = packed_scene.pack(scene_root)
+    if result != OK:
+        printerr("Failed to pack scene after removal: " + str(result))
+        quit(1)
+
+    var save_error = ResourceSaver.save(packed_scene, full_scene_path)
+    if save_error != OK:
+        printerr("Failed to save scene after removal: " + str(save_error))
+        quit(1)
+
+    print("Node '" + removed_name + "' removed successfully from: " + full_scene_path)
+
+# List/add/remove signal connections in a scene file
+func manage_scene_signals(params):
+    var scene_path = params.get("scene_path", "")
+    var action = params.get("action", "list")
+    var full_path = scene_path
+    if not full_path.begins_with("res://"):
+        full_path = "res://" + full_path
+
+    if not FileAccess.file_exists(full_path):
+        printerr("Scene not found: " + full_path)
+        quit(1)
+
+    var content = FileAccess.get_file_as_string(full_path)
+
+    if action == "list":
+        var connections = []
+        var lines = content.split("\n")
+        for line in lines:
+            if line.begins_with("[connection"):
+                connections.append(line.strip_edges())
+        print("SIGNALS_JSON_START")
+        print(JSON.stringify({"connections": connections}))
+        print("SIGNALS_JSON_END")
+    elif action == "add":
+        var signal_name = params.get("signal_name", "")
+        var source_path = params.get("source_path", ".")
+        var target_path = params.get("target_path", ".")
+        var method = params.get("method", "")
+        var conn_line = '[connection signal="%s" from="%s" to="%s" method="%s"]' % [signal_name, source_path, target_path, method]
+        content += "\n" + conn_line + "\n"
+        var file = FileAccess.open(full_path, FileAccess.WRITE)
+        file.store_string(content)
+        file.close()
+        print("Signal connection added: " + conn_line)
+    elif action == "remove":
+        var signal_name = params.get("signal_name", "")
+        var lines = content.split("\n")
+        var new_lines = []
+        for line in lines:
+            if not (line.begins_with("[connection") and signal_name in line):
+                new_lines.append(line)
+        var file = FileAccess.open(full_path, FileAccess.WRITE)
+        file.store_string("\n".join(new_lines))
+        file.close()
+        print("Signal connections for '%s' removed" % signal_name)
+    else:
+        printerr("Unknown manage_scene_signals action: " + action)
+        quit(1)
+
+# Rename/duplicate/move nodes within a scene file
+func manage_scene_structure(params):
+    var scene_path = params.get("scene_path", "")
+    var action = params.get("action", "rename")
+    var node_path_str = params.get("node_path", "")
+    var full_path = scene_path
+    if not full_path.begins_with("res://"):
+        full_path = "res://" + full_path
+
+    if not FileAccess.file_exists(full_path):
+        printerr("Scene not found: " + full_path)
+        quit(1)
+        return
+
+    var scene = load(full_path) as PackedScene
+    if scene == null:
+        printerr("Failed to load scene: " + full_path)
+        quit(1)
+        return
+
+    var root = scene.instantiate()
+    var target = _resolve_scene_node(root, node_path_str)
+    if target == null:
+        printerr("Node not found: " + node_path_str)
+        quit(1)
+        return
+
+    if action == "rename":
+        var new_name = params.get("new_name", "")
+        if new_name.is_empty():
+            printerr("new_name is required for rename")
+            quit(1)
+            return
+        target.name = new_name
+        print("Node renamed to '%s'" % target.name)
+    elif action == "duplicate":
+        if target == root:
+            printerr("Cannot duplicate the root node")
+            quit(1)
+            return
+        var dup = target.duplicate()
+        target.get_parent().add_child(dup, true)
+        _set_owner_recursive(dup, root)
+        print("Node duplicated: %s (as '%s')" % [node_path_str, dup.name])
+    elif action == "move":
+        var new_parent_path = params.get("new_parent_path", "")
+        if new_parent_path.is_empty():
+            printerr("new_parent_path is required for move")
+            quit(1)
+            return
+        if target == root:
+            printerr("Cannot move the root node")
+            quit(1)
+            return
+        var new_parent = _resolve_scene_node(root, new_parent_path)
+        if new_parent == null:
+            printerr("New parent not found: " + new_parent_path)
+            quit(1)
+            return
+        if new_parent == target or _is_ancestor(target, new_parent):
+            printerr("Cannot move a node into itself or one of its descendants")
+            quit(1)
+            return
+        target.get_parent().remove_child(target)
+        new_parent.add_child(target, true)
+        _set_owner_recursive(target, root)
+        print("Node moved: %s -> parent %s (as '%s')" % [node_path_str, new_parent_path, target.name])
+    else:
+        printerr("Unknown manage_scene_structure action: " + action)
+        quit(1)
+        return
+
+    var packed = PackedScene.new()
+    var pack_result = packed.pack(root)
+    if pack_result != OK:
+        printerr("Failed to pack scene: " + str(pack_result))
+        quit(1)
+        return
+    var save_error = ResourceSaver.save(packed, full_path)
+    if save_error != OK:
+        printerr("Failed to save scene: " + str(save_error))
+        quit(1)
+        return
+    print("Scene structure saved: " + full_path)
+
+func _resolve_scene_node(root, tool_path):
+    if tool_path == "" or tool_path == "root" or tool_path == ".":
+        return root
+    var p = tool_path
+    if p.begins_with("root/"):
+        p = p.substr(5)
+    return root.get_node_or_null(p)
+
+func _set_owner_recursive(node, owner_root):
+    node.owner = owner_root
+    if node.scene_file_path != "":
+        return
+    for c in node.get_children():
+        _set_owner_recursive(c, owner_root)
+
+func _is_ancestor(node, maybe_descendant):
+    var n = maybe_descendant.get_parent()
+    while n != null:
+        if n == node:
+            return true
+        n = n.get_parent()
+    return false

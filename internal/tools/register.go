@@ -50,7 +50,8 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		createScene, readScene, saveScene, exportMeshLibrary,
 	},
 	CategoryNode: {
-		addNode, loadSprite,
+		addNode, loadSprite, modifySceneNode, removeSceneNode,
+		manageSceneStructure, manageSceneSignals,
 	},
 	CategoryScript: {},
 	CategoryResources: {

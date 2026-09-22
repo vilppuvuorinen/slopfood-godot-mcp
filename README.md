@@ -24,7 +24,7 @@ go-dot-mcp --enable project --enable node      # project and node
 go-dot-mcp --enable all                        # everything
 ```
 
-**Progress: 22/35 tools implemented.**
+**Progress: 26/35 tools implemented.**
 
 ### project (default) — project discovery and creation (4/4)
 
@@ -56,14 +56,14 @@ go-dot-mcp --enable all                        # everything
 - [x] `save_scene`
 - [x] `export_mesh_library`
 
-### node — nodes within scenes (2/6)
+### node — nodes within scenes (6/6)
 
 - [x] `add_node`
 - [x] `load_sprite`
-- [ ] `modify_scene_node`
-- [ ] `remove_scene_node`
-- [ ] `manage_scene_structure`
-- [ ] `manage_scene_signals`
+- [x] `modify_scene_node`
+- [x] `remove_scene_node`
+- [x] `manage_scene_structure`
+- [x] `manage_scene_signals`
 
 ### script — GDScript and C# authoring (0/5)
 
