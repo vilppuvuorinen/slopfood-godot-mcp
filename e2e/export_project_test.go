@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -43,16 +44,47 @@ func TestExportProjectValidation(t *testing.T) {
 	})
 }
 
-// TestExportProjectTool drives a real export. Export templates are usually not
-// installed, so a template error skips rather than fails the suite.
+// exportPresetLinux is a complete Linux export preset. Godot requires the
+// filter and options keys to be present; an abbreviated preset is rejected.
+const exportPresetLinux = `[preset.0]
+
+name="Linux"
+platform="Linux"
+runnable=true
+dedicated_server=false
+custom_features=""
+export_filter="all_resources"
+include_filter=""
+exclude_filter=""
+export_path=""
+patches=PackedStringArray()
+encryption_include_filters=""
+encryption_exclude_filters=""
+seed=0
+encrypt_pck=false
+encrypt_directory=false
+script_export_mode=2
+
+[preset.0.options]
+binary_format/embed_pck=false
+`
+
+// TestExportProjectTool drives a real export. The real export needs installed
+// export templates (scripts/download-godot.py with GODOT_TEMPLATES=1), so a
+// template error skips rather than fails the suite.
 func TestExportProjectTool(t *testing.T) {
 	session := connect(t)
 	requireGodot(t, session)
 
 	root := t.TempDir()
 	seedProject(t, root)
-	writeE2EFile(t, filepath.Join(root, "export_presets.cfg"),
-		"[preset.0]\n\nname=\"Linux\"\nplatform=\"Linux\"\nrunnable=true\n")
+	writeE2EFile(t, filepath.Join(root, "export_presets.cfg"), exportPresetLinux)
+	// Godot packs project resources only, so the project needs at least one
+	// file besides project.godot, and it will not create the output directory.
+	writeE2EFile(t, filepath.Join(root, "main.gd"), "extends Node\n")
+	if err := os.MkdirAll(filepath.Join(root, "build"), 0o755); err != nil {
+		t.Fatalf("mkdir build: %v", err)
+	}
 
 	res := callTool(t, session, "export_project", map[string]any{
 		"projectPath": root,
