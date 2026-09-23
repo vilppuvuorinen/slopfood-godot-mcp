@@ -56,6 +56,21 @@ func TestExportProjectSuccess(t *testing.T) {
 	}
 }
 
+func TestExportProjectAbsoluteOutputPath(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
+	root := t.TempDir()
+	makeProject(t, root)
+	out := filepath.Join(t.TempDir(), "game.x86_64")
+
+	result := callToolArgs(t, exportProject(), `{"projectPath":`+jsonString(root)+`,"presetName":"Linux","outputPath":`+jsonString(out)+`}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if text := result.Content[0].Text; !strings.Contains(text, out) {
+		t.Errorf("text = %q, want it to contain %q", text, out)
+	}
+}
+
 func TestExportProjectDebug(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
 	root := t.TempDir()
@@ -135,6 +150,7 @@ func TestExportProjectValidation(t *testing.T) {
 		{name: "missing params", args: `{}`, want: "projectPath, presetName, and outputPath are required."},
 		{name: "missing outputPath", args: `{"projectPath":` + jsonString(root) + `,"presetName":"Linux"}`, want: "projectPath, presetName, and outputPath are required."},
 		{name: "invalid path", args: `{"projectPath":"../escape","presetName":"Linux","outputPath":"out"}`, want: "Invalid project path."},
+		{name: "invalid output path", args: `{"projectPath":` + jsonString(root) + `,"presetName":"Linux","outputPath":"../escape"}`, want: "Invalid output path."},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"presetName":"Linux","outputPath":"out"}`, want: "Not a valid Godot project: "},
 	}
 	for _, tt := range tests {

@@ -56,6 +56,41 @@ func TestConfinePath(t *testing.T) {
 	}
 }
 
+func TestConfineAbsPath(t *testing.T) {
+	root := filepath.Join(string(filepath.Separator), "proj")
+	abs := filepath.Join(string(filepath.Separator), "etc", "passwd")
+	tests := []struct {
+		name string
+		sub  string
+		want string
+		ok   bool
+	}{
+		{name: "relative", sub: "build/game.x86_64", want: filepath.Join(root, "build", "game.x86_64"), ok: true},
+		{name: "normalized", sub: "build/../game.x86_64", want: filepath.Join(root, "game.x86_64"), ok: true},
+		{name: "absolute", sub: abs, want: abs, ok: true},
+		{name: "absolute parent", sub: filepath.Join(root, "..", "escape"), want: filepath.Join(string(filepath.Separator), "escape"), ok: true},
+		{name: "empty", sub: "", ok: false},
+		{name: "parent", sub: "../escape", ok: false},
+		{name: "nested parent", sub: "a/../../escape", ok: false},
+		{name: "res scheme", sub: "res://build/game.x86_64", ok: false},
+		{name: "user scheme", sub: "user://build/game.x86_64", ok: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := confineAbsPath(root, tt.sub)
+			if ok != tt.ok {
+				t.Fatalf("confineAbsPath(%q, %q) ok = %v, want %v", root, tt.sub, ok, tt.ok)
+			}
+			if ok && got != tt.want {
+				t.Errorf("confineAbsPath(%q, %q) = %q, want %q", root, tt.sub, got, tt.want)
+			}
+		})
+	}
+	if _, ok := confineAbsPath("", "build/game.x86_64"); ok {
+		t.Error("confineAbsPath with empty root should not be ok")
+	}
+}
+
 func TestValidClassName(t *testing.T) {
 	tests := []struct {
 		name string

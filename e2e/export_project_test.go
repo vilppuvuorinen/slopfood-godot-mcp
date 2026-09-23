@@ -34,6 +34,14 @@ func TestExportProjectValidation(t *testing.T) {
 		}, "Invalid project path.")
 	})
 
+	t.Run("invalid output path", func(t *testing.T) {
+		requireToolError(t, session, "export_project", map[string]any{
+			"projectPath": t.TempDir(),
+			"presetName":  "Linux",
+			"outputPath":  "../escape",
+		}, "Invalid output path.")
+	})
+
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
 		requireToolError(t, session, "export_project", map[string]any{

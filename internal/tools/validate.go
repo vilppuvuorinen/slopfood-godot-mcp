@@ -60,6 +60,32 @@ func confinePath(root, sub string) (string, bool) {
 	return full, true
 }
 
+// confineAbsPath is confinePath for destinations that may legitimately be
+// absolute, such as a Godot export output path. Relative paths are confined to
+// root with the same guarantees as confinePath. Absolute paths are cleaned and
+// returned unchanged, since Godot resolves them against the host filesystem and
+// supports absolute destinations. Empty paths, Godot virtual paths ("res://",
+// "user://"), and Windows volume-qualified paths that are not fully absolute
+// are still rejected.
+//
+// Like confinePath, the check is lexical and deliberately not a security
+// boundary; the external sandbox remains the real line of defense.
+func confineAbsPath(root, sub string) (string, bool) {
+	if root == "" || sub == "" {
+		return "", false
+	}
+	for _, scheme := range godotSchemes {
+		if strings.HasPrefix(sub, scheme) {
+			return "", false
+		}
+	}
+	cleaned := filepath.Clean(sub)
+	if filepath.IsAbs(cleaned) {
+		return cleaned, true
+	}
+	return confinePath(root, sub)
+}
+
 // classNamePattern matches simple Godot identifiers such as "Node2D" while
 // rejecting paths, extensions, and resource URIs.
 var classNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

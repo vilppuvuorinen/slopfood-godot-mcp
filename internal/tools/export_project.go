@@ -64,6 +64,9 @@ func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) 
 	if !validPath(args.ProjectPath) {
 		return mcp.ErrorResult("Invalid project path."), nil
 	}
+	if _, ok := confineAbsPath(args.ProjectPath, args.OutputPath); !ok {
+		return mcp.ErrorResult("Invalid output path."), nil
+	}
 	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
 		return mcp.ErrorResult("Not a valid Godot project: " + args.ProjectPath), nil
 	}
