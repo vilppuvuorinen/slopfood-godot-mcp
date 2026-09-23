@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -182,6 +183,9 @@ func (s *Server) listTools() []Tool {
 			InputSchema: t.InputSchema,
 		})
 	}
+	sort.Slice(tools, func(i, j int) bool {
+		return tools[i].Name < tools[j].Name
+	})
 	return tools
 }
 
