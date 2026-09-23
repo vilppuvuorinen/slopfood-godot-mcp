@@ -94,17 +94,15 @@ func TestManageResourceErrors(t *testing.T) {
 		requireGodot(t, session)
 		root := t.TempDir()
 		seedProject(t, root)
-		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
 
-		// The operations script reports unknown actions on stderr without a
-		// "Failed to" marker, so the shared headless helper returns the
-		// reference server's fallback success result and performs no read.
-		text := requireToolText(t, session, "manage_resource", map[string]any{
+		res := callTool(t, session, "manage_resource", map[string]any{
 			"projectPath":  root,
 			"resourcePath": "resources/mat.tres",
 			"action":       "bogus",
 		})
-		requirePrefix(t, text, "manage_resource succeeded.")
-		requireNotContains(t, text, "RESOURCE_JSON_START")
+		if !res.IsError {
+			t.Fatal("expected an error result")
+		}
+		requireContains(t, firstText(t, res), "Unknown manage_resource action: bogus")
 	})
 }

@@ -86,7 +86,7 @@ func handleSaveScene(ctx context.Context, raw json.RawMessage) (any, error) {
 		params["newPath"] = args.NewPath
 	}
 
-	stdout, stderr, err := runOperation(ctx, args.ProjectPath, "save_scene", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "save_scene", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to save scene: "+err.Error(),
@@ -95,7 +95,7 @@ func handleSaveScene(ctx context.Context, raw json.RawMessage) (any, error) {
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(stderr) {
+	if scriptFailed(stderr, exitCode) {
 		return mcp.ErrorResult(
 			"Failed to save scene: "+stderr,
 			"Check if the scene file is valid",

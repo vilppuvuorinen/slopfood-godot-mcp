@@ -15,8 +15,7 @@ type OperationParams map[string]any
 // Export runs
 // `<executable> --headless --path <project> --export-release|--export-debug
 // <preset> <output>` and returns the captured streams. A non-zero exit is not a
-// wrapper failure, matching RunOperation: the caller inspects stderr for
-// ERROR markers.
+// wrapper failure: the caller inspects stderr for ERROR markers.
 func Export(ctx context.Context, executable, projectPath, presetName, outputPath string, debug bool) (stdout, stderr string, err error) {
 	exportFlag := "--export-release"
 	if debug {
@@ -52,14 +51,14 @@ func Export(ctx context.Context, executable, projectPath, presetName, outputPath
 // <params-json> --debug-godot`, mirroring the reference server's
 // executeOperation.
 //
-// A non-zero exit is not a wrapper failure: the operations script reports its
-// own errors on stderr with "Failed to" markers, which the caller inspects.
-// Only a failure to start the process is returned as an error, matching the
-// reference's rethrow behavior.
-func RunOperation(ctx context.Context, executable, projectPath, scriptPath, operation string, params OperationParams) (stdout, stderr string, err error) {
+// A non-zero exit is not a wrapper failure: the operations script calls quit(1)
+// on every error and quit() on success, so the exit code is returned for the
+// caller to interpret. Only a failure to start the process is returned as an
+// error, matching the reference's rethrow behavior.
+func RunOperation(ctx context.Context, executable, projectPath, scriptPath, operation string, params OperationParams) (stdout, stderr string, exitCode int, err error) {
 	payload, err := json.Marshal(params)
 	if err != nil {
-		return "", "", fmt.Errorf("encode operation params: %w", err)
+		return "", "", 0, fmt.Errorf("encode operation params: %w", err)
 	}
 
 	args := []string{
@@ -80,10 +79,10 @@ func RunOperation(ctx context.Context, executable, projectPath, scriptPath, oper
 
 	var exitErr *exec.ExitError
 	if errors.As(runErr, &exitErr) {
-		return stdout, stderr, nil
+		return stdout, stderr, exitErr.ExitCode(), nil
 	}
 	if runErr != nil {
-		return stdout, stderr, fmt.Errorf("run godot: %w", runErr)
+		return stdout, stderr, 0, fmt.Errorf("run godot: %w", runErr)
 	}
-	return stdout, stderr, nil
+	return stdout, stderr, 0, nil
 }

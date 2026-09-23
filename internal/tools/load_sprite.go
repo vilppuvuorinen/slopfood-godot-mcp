@@ -91,7 +91,7 @@ func handleLoadSprite(ctx context.Context, raw json.RawMessage) (any, error) {
 		"nodePath":    args.NodePath,
 		"texturePath": args.TexturePath,
 	}
-	stdout, stderr, err := runOperation(ctx, args.ProjectPath, "load_sprite", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "load_sprite", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to load sprite: "+err.Error(),
@@ -100,7 +100,7 @@ func handleLoadSprite(ctx context.Context, raw json.RawMessage) (any, error) {
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(stderr) {
+	if scriptFailed(stderr, exitCode) {
 		return mcp.ErrorResult(
 			"Failed to load sprite: "+stderr,
 			"Check if the node path is correct",

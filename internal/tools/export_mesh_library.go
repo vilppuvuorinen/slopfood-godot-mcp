@@ -87,7 +87,7 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 		params["meshItemNames"] = args.MeshItemNames
 	}
 
-	stdout, stderr, err := runOperation(ctx, args.ProjectPath, "export_mesh_library", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "export_mesh_library", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to export mesh library: "+err.Error(),
@@ -96,7 +96,7 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(stderr) {
+	if scriptFailed(stderr, exitCode) {
 		return mcp.ErrorResult(
 			"Failed to export mesh library: "+stderr,
 			"Check if the scene contains valid 3D meshes",

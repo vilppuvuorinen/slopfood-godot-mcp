@@ -72,15 +72,15 @@ func TestManageThemeResourceErrors(t *testing.T) {
 		root := t.TempDir()
 		seedProject(t, root)
 
-		// The operations script reports unknown actions on stderr without a
-		// "Failed to" marker, so the shared headless helper returns the
-		// reference server's fallback success result.
-		text := requireToolText(t, session, "manage_theme_resource", map[string]any{
+		res := callTool(t, session, "manage_theme_resource", map[string]any{
 			"projectPath":  root,
 			"resourcePath": "themes/main.tres",
 			"action":       "bogus",
 		})
-		requirePrefix(t, text, "manage_theme_resource succeeded.")
+		if !res.IsError {
+			t.Fatal("expected an error result")
+		}
+		requireContains(t, firstText(t, res), "Unknown manage_theme_resource action: bogus")
 	})
 
 	t.Run("not a project", func(t *testing.T) {

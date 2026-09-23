@@ -69,14 +69,14 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 
 	params := map[string]any{"scenePath": args.ScenePath}
-	stdout, stderr, err := runOperation(ctx, args.ProjectPath, "read_scene", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "read_scene", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to read scene: "+err.Error(),
 			headlessSolutions...,
 		), nil
 	}
-	if scriptFailed(stderr) {
+	if scriptFailed(stderr, exitCode) {
 		return mcp.ErrorResult(
 			"Failed to read scene: "+stderr,
 			headlessSolutions...,

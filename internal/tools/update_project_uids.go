@@ -78,7 +78,7 @@ func handleUpdateProjectUIDs(ctx context.Context, raw json.RawMessage) (any, err
 	}
 
 	params := map[string]any{"projectPath": args.ProjectPath}
-	stdout, stderr, err := runOperation(ctx, args.ProjectPath, "resave_resources", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "resave_resources", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to update project UIDs: "+err.Error(),
@@ -87,7 +87,7 @@ func handleUpdateProjectUIDs(ctx context.Context, raw json.RawMessage) (any, err
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(stderr) {
+	if scriptFailed(stderr, exitCode) {
 		return mcp.ErrorResult(
 			"Failed to update project UIDs: "+stderr,
 			"Check if the project is valid",

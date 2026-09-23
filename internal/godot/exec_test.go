@@ -20,10 +20,13 @@ func writeExecutable(t *testing.T, body string) string {
 func TestRunOperationArgsAndSuccess(t *testing.T) {
 	bin := writeExecutable(t, `echo "$@"`)
 
-	stdout, stderr, err := RunOperation(context.Background(), bin, "/proj", "/script.gd", "create_scene",
+	stdout, stderr, exitCode, err := RunOperation(context.Background(), bin, "/proj", "/script.gd", "create_scene",
 		OperationParams{"scene_path": "main.tscn"})
 	if err != nil {
 		t.Fatalf("RunOperation: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("exitCode = %d, want 0", exitCode)
 	}
 	if stderr != "" {
 		t.Errorf("stderr = %q, want empty", stderr)
@@ -45,9 +48,12 @@ func TestRunOperationArgsAndSuccess(t *testing.T) {
 func TestRunOperationCapturesOutputOnNonZeroExit(t *testing.T) {
 	bin := writeExecutable(t, "echo out\necho 'Failed to create scene' >&2\nexit 1")
 
-	stdout, stderr, err := RunOperation(context.Background(), bin, "/proj", "/script.gd", "create_scene", nil)
+	stdout, stderr, exitCode, err := RunOperation(context.Background(), bin, "/proj", "/script.gd", "create_scene", nil)
 	if err != nil {
 		t.Fatalf("RunOperation: %v, want nil (the script reports its own errors)", err)
+	}
+	if exitCode != 1 {
+		t.Errorf("exitCode = %d, want 1", exitCode)
 	}
 	if !strings.Contains(stdout, "out") {
 		t.Errorf("stdout = %q", stdout)
@@ -58,7 +64,7 @@ func TestRunOperationCapturesOutputOnNonZeroExit(t *testing.T) {
 }
 
 func TestRunOperationSpawnFailure(t *testing.T) {
-	_, _, err := RunOperation(context.Background(), filepath.Join(t.TempDir(), "nope"), "/proj", "/script.gd", "create_scene", nil)
+	_, _, _, err := RunOperation(context.Background(), filepath.Join(t.TempDir(), "nope"), "/proj", "/script.gd", "create_scene", nil)
 	if err == nil {
 		t.Fatal("expected an error when the executable cannot be started")
 	}

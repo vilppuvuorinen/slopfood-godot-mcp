@@ -91,7 +91,7 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 
 	params := map[string]any{"filePath": args.FilePath}
-	stdout, stderr, err := runOperation(ctx, args.ProjectPath, "get_uid", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "get_uid", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to get UID: "+err.Error(),
@@ -100,7 +100,7 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(stderr) {
+	if scriptFailed(stderr, exitCode) {
 		return mcp.ErrorResult(
 			"Failed to get UID: "+stderr,
 			"Check if the file is a valid Godot resource",

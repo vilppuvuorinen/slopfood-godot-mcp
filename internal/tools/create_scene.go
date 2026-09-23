@@ -84,7 +84,7 @@ func handleCreateScene(ctx context.Context, raw json.RawMessage) (any, error) {
 		"scenePath":    args.ScenePath,
 		"rootNodeType": rootNodeType,
 	}
-	stdout, stderr, err := runOperation(ctx, args.ProjectPath, "create_scene", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "create_scene", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to create scene: "+err.Error(),
@@ -93,7 +93,7 @@ func handleCreateScene(ctx context.Context, raw json.RawMessage) (any, error) {
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(stderr) {
+	if scriptFailed(stderr, exitCode) {
 		return mcp.ErrorResult(
 			"Failed to create scene: "+stderr,
 			"Check if the root node type is valid",

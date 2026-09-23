@@ -95,8 +95,13 @@ func _init():
         _:
             log_error("Unknown operation: " + operation)
             quit(1)
-    
-    quit()
+
+# Handlers signal failure with quit(1). SceneTree.quit() does not stop the
+# current call, so a trailing quit() here would reset the exit code to 0 and
+# mask every error. Ending the main loop from _process instead preserves the
+# code set by the handler while still exiting cleanly after success.
+func _process(_delta):
+    return true
 
 # Logging functions
 func log_debug(message):

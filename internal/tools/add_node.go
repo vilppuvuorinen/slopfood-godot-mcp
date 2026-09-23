@@ -106,7 +106,7 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 		params["properties"] = args.Properties
 	}
 
-	stdout, stderr, err := runOperation(ctx, args.ProjectPath, "add_node", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "add_node", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to add node: "+err.Error(),
@@ -115,7 +115,7 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(stderr) {
+	if scriptFailed(stderr, exitCode) {
 		return mcp.ErrorResult(
 			"Failed to add node: "+stderr,
 			"Check if the node type is valid",
