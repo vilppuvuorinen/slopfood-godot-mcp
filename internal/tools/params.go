@@ -105,6 +105,9 @@ func aliasParams(raw json.RawMessage, aliases map[string]string) (json.RawMessag
 	// Apply aliases last so a camelCase key always wins over its snake_case
 	// twin regardless of map iteration order.
 	for from, to := range aliases {
+		if from == to {
+			continue
+		}
 		value, ok := out[from]
 		if !ok {
 			continue
