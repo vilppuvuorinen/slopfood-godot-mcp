@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
@@ -98,7 +99,7 @@ func addAutoload(args manageAutoloadsArgs, content string) (any, error) {
 	if args.Name == "" || args.Path == "" {
 		return mcp.ErrorResult("name and path are required for add action."), nil
 	}
-	autoloadLine := args.Name + `="*` + args.Path + `"`
+	autoloadLine := godotconfig.EncodePropertyName(args.Name) + "=" + godotconfig.FormatValue(godotconfig.String("*"+args.Path))
 	if idx := strings.Index(content, "[autoload]"); idx >= 0 {
 		content = content[:idx] + "[autoload]\n\n" + autoloadLine + content[idx+len("[autoload]"):]
 	} else {

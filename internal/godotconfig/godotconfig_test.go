@@ -2,6 +2,7 @@ package godotconfig
 
 import (
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -226,6 +227,62 @@ func TestKeyInjectionRoundTrip(t *testing.T) {
 	}
 }
 
+// TestParseValueRoundTrip checks the single-value helpers used by the tools
+// that splice one value into an existing file.
+func TestParseValueRoundTrip(t *testing.T) {
+	tests := []struct {
+		in   string
+		want Value
+	}{
+		{in: "0.5", want: Float(0.5)},
+		{in: `"Ground"`, want: String("Ground")},
+		{in: `"say \"hi\""`, want: String(`say "hi"`)},
+		{in: "true", want: Bool(true)},
+		{in: `PackedStringArray("res://en.translation")`, want: PackedStringArray{"res://en.translation"}},
+	}
+	for _, tt := range tests {
+		got, err := ParseValue(tt.in)
+		if err != nil {
+			t.Errorf("ParseValue(%q): %v", tt.in, err)
+			continue
+		}
+		if !reflect.DeepEqual(got, tt.want) {
+			t.Errorf("ParseValue(%q) = %#v, want %#v", tt.in, got, tt.want)
+		}
+	}
+	if _, err := ParseValue("1 2"); err == nil {
+		t.Errorf("ParseValue(%q) = nil error, want trailing-content failure", "1 2")
+	}
+}
+
+// TestOpaqueConstructorRoundTrip proves an unsupported constructor such as
+// Object(InputEventKey, ...) is captured verbatim and re-emitted unchanged,
+// including parentheses and quotes inside its arguments.
+func TestOpaqueConstructorRoundTrip(t *testing.T) {
+	event := `Object(InputEventKey,"resource_name":"a)b\"c","physical_keycode":87,"script":null)`
+	v, err := ParseValue(event)
+	if err != nil {
+		t.Fatalf("ParseValue: %v", err)
+	}
+	if _, ok := v.(Opaque); !ok {
+		t.Fatalf("value = %#v, want Opaque", v)
+	}
+	if got := FormatValue(v); got != event {
+		t.Errorf("FormatValue = %q, want %q", got, event)
+	}
+
+	// The whole dictionary an input action uses must round-trip too.
+	src := `{"deadzone": 0.5, "events": [` + event + `]}`
+	dict, err := ParseValue(src)
+	if err != nil {
+		t.Fatalf("ParseValue(dict): %v", err)
+	}
+	got := FormatValue(dict)
+	if !strings.Contains(got, event) {
+		t.Errorf("re-serialized dictionary lost the event:\n%s", got)
+	}
+}
+
 func TestParseErrors(t *testing.T) {
 	tests := []struct {
 		name string
@@ -233,7 +290,7 @@ func TestParseErrors(t *testing.T) {
 	}{
 		{name: "unterminated string", in: `name="oops`},
 		{name: "unterminated array", in: "nums=[1, 2"},
-		{name: "unknown identifier", in: "value=Vector2(1, 2)"},
+		{name: "bare identifier", in: "value=Vector2"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
@@ -44,10 +44,6 @@ type managePluginsArgs struct {
 	PluginName  string `json:"pluginName"`
 }
 
-// pluginEnabledPattern matches every "<name>/enabled=true" entry in a
-// project.godot file, mirroring the reference server's /(\w+)\/enabled=true/g.
-var pluginEnabledPattern = regexp.MustCompile(`(\w+)/enabled=true`)
-
 // pluginList is the JSON document returned by the list action.
 type pluginList struct {
 	Enabled   []string `json:"enabled"`
@@ -77,8 +73,14 @@ func handleManagePlugins(_ context.Context, raw json.RawMessage) (any, error) {
 	switch args.Action {
 	case "list":
 		enabled := make([]string, 0)
-		for _, match := range pluginEnabledPattern.FindAllStringSubmatch(content, -1) {
-			enabled = append(enabled, match[1])
+		for _, entry := range sectionEntries(content, "editor_plugins") {
+			if strings.TrimSpace(entry.Value) != "true" {
+				continue
+			}
+			name := decodePropertyName(entry.Key)
+			if strings.HasSuffix(name, "/enabled") {
+				enabled = append(enabled, strings.TrimSuffix(name, "/enabled"))
+			}
 		}
 
 		available := make([]string, 0)
@@ -105,14 +107,10 @@ func handleManagePlugins(_ context.Context, raw json.RawMessage) (any, error) {
 			return mcp.ErrorResult("pluginName is required."), nil
 		}
 		key := args.PluginName + "/enabled"
-		value := "false"
-		if args.Action == "enable" {
-			value = "true"
-		}
-		replacement := key + "=" + value
-		existingPattern := regexp.MustCompile(regexp.QuoteMeta(args.PluginName) + `/enabled=\w+`)
-		if loc := existingPattern.FindStringIndex(content); loc != nil {
-			content = content[:loc[0]] + replacement + content[loc[1]:]
+		value := godotconfig.Bool(args.Action == "enable")
+		replacement := godotconfig.EncodePropertyName(key) + "=" + godotconfig.FormatValue(value)
+		if updated, ok := setSectionValue(content, "editor_plugins", key, value); ok {
+			content = updated
 		} else {
 			if !strings.Contains(content, "[editor_plugins]") {
 				content += "\n[editor_plugins]\n"

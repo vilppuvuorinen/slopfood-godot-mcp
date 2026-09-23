@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
@@ -42,8 +42,20 @@ type manageTranslationsArgs struct {
 	TranslationPath string `json:"translationPath"`
 }
 
-// translationsArrayPattern matches a project.godot translations entry.
-var translationsArrayPattern = regexp.MustCompile(`translations=PackedStringArray\(([^)]*)\)`)
+// readTranslations returns the existing translations entry as a typed
+// PackedStringArray, or nil when it is absent or unparseable.
+func readTranslations(content string) godotconfig.PackedStringArray {
+	raw, ok := parseProjectSections(content)["internationalization"]["translations"]
+	if !ok {
+		return nil
+	}
+	value, err := godotconfig.ParseValue(raw)
+	if err != nil {
+		return nil
+	}
+	translations, _ := value.(godotconfig.PackedStringArray)
+	return translations
+}
 
 func handleManageTranslations(_ context.Context, raw json.RawMessage) (any, error) {
 	raw, err := aliasParams(raw, settingsAliases)
@@ -68,14 +80,7 @@ func handleManageTranslations(_ context.Context, raw json.RawMessage) (any, erro
 	switch args.Action {
 	case "list":
 		translations := make([]string, 0)
-		if match := translationsArrayPattern.FindStringSubmatch(content); match != nil {
-			for _, part := range strings.Split(match[1], ",") {
-				value := strings.ReplaceAll(strings.TrimSpace(part), `"`, "")
-				if value != "" {
-					translations = append(translations, value)
-				}
-			}
-		}
+		translations = append(translations, readTranslations(content)...)
 		payload := struct {
 			Translations []string `json:"translations"`
 		}{Translations: translations}
@@ -93,23 +98,16 @@ func handleManageTranslations(_ context.Context, raw json.RawMessage) (any, erro
 		if !strings.HasPrefix(resPath, "res://") {
 			resPath = "res://" + resPath
 		}
-		if loc := translationsArrayPattern.FindStringSubmatchIndex(content); loc != nil {
-			existing := content[loc[2]:loc[3]]
-			var newVal string
-			if existing != "" {
-				newVal = existing + `, "` + resPath + `"`
-			} else {
-				newVal = `"` + resPath + `"`
-			}
-			replacement := "translations=PackedStringArray(" + newVal + ")"
-			content = content[:loc[0]] + replacement + content[loc[1]:]
+		translations := append(readTranslations(content), resPath)
+		if updated, ok := setSectionValue(content, "internationalization", "translations", translations); ok {
+			content = updated
 		} else {
 			if !strings.Contains(content, "[internationalization]") {
 				content += "\n[internationalization]\n"
 			}
 			header := "[internationalization]"
 			idx := strings.Index(content, header)
-			insert := header + "\n\ntranslations=PackedStringArray(\"" + resPath + "\")"
+			insert := header + "\n\ntranslations=" + godotconfig.FormatValue(translations)
 			content = content[:idx] + insert + content[idx+len(header):]
 		}
 		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
@@ -125,9 +123,14 @@ func handleManageTranslations(_ context.Context, raw json.RawMessage) (any, erro
 		if !strings.HasPrefix(resPath, "res://") {
 			resPath = "res://" + resPath
 		}
-		entryPattern := regexp.MustCompile(`,?\s*"` + regexp.QuoteMeta(resPath) + `"`)
-		if loc := entryPattern.FindStringIndex(content); loc != nil {
-			content = content[:loc[0]] + content[loc[1]:]
+		var kept godotconfig.PackedStringArray
+		for _, translation := range readTranslations(content) {
+			if translation != resPath {
+				kept = append(kept, translation)
+			}
+		}
+		if updated, ok := setSectionValue(content, "internationalization", "translations", kept); ok {
+			content = updated
 		}
 		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 			return mcp.ErrorResult("manage_translations failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.

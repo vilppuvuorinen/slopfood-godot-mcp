@@ -166,6 +166,62 @@ func TestManageExportPresetsRemoveMissingFile(t *testing.T) {
 	}
 }
 
+// TestManageExportPresetsEscaping covers preset names and platforms that need
+// escaping, checks list decodes them, and confirms remove matches the encoded
+// name.
+func TestManageExportPresetsEscaping(t *testing.T) {
+	tests := []struct {
+		name     string
+		preset   string
+		platform string
+	}{
+		{name: "quote in name and platform", preset: `Evil"Preset`, platform: `Linux"x`},
+		{name: "newline in name", preset: "Evil\nPreset", platform: "Linux"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			makeProject(t, root)
+
+			result := callToolArgs(t, manageExportPresets(),
+				`{"projectPath":`+jsonString(root)+`,"action":"add","name":`+jsonString(tt.preset)+`,"platform":`+jsonString(tt.platform)+`}`)
+			if result.IsError {
+				t.Fatalf("unexpected error: %+v", result.Content)
+			}
+			data, err := os.ReadFile(filepath.Join(root, "export_presets.cfg"))
+			if err != nil {
+				t.Fatalf("read export_presets.cfg: %v", err)
+			}
+			wantName := "name=" + `"` + strings.ReplaceAll(strings.ReplaceAll(tt.preset, `\`, `\\`), `"`, `\"`) + `"`
+			if !strings.Contains(string(data), wantName) {
+				t.Errorf("export_presets.cfg = %q, want it to contain %q", data, wantName)
+			}
+
+			list := callToolArgs(t, manageExportPresets(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+			var decoded exportPresetList
+			if unmarshalErr := json.Unmarshal([]byte(list.Content[0].Text), &decoded); unmarshalErr != nil {
+				t.Fatalf("unmarshal %q: %v", list.Content[0].Text, unmarshalErr)
+			}
+			if len(decoded.Presets) != 1 || decoded.Presets[0].Name != tt.preset || decoded.Presets[0].Platform != tt.platform {
+				t.Errorf("presets = %+v, want name %q platform %q", decoded.Presets, tt.preset, tt.platform)
+			}
+
+			remove := callToolArgs(t, manageExportPresets(),
+				`{"projectPath":`+jsonString(root)+`,"action":"remove","name":`+jsonString(tt.preset)+`}`)
+			if remove.IsError {
+				t.Fatalf("unexpected error: %+v", remove.Content)
+			}
+			data, err = os.ReadFile(filepath.Join(root, "export_presets.cfg"))
+			if err != nil {
+				t.Fatalf("read export_presets.cfg: %v", err)
+			}
+			if strings.Contains(string(data), "[preset.") {
+				t.Errorf("preset not removed:\n%s", data)
+			}
+		})
+	}
+}
+
 func TestManageExportPresetsErrors(t *testing.T) {
 	projectRoot := t.TempDir()
 	makeProject(t, projectRoot)

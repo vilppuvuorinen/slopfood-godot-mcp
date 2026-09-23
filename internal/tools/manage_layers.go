@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
@@ -67,8 +68,9 @@ type manageLayersListResult struct {
 }
 
 // layerDefinitionPattern matches a project.godot layer_names setting such as
-// layer_names/2d_render/layer_1="Ground".
-var layerDefinitionPattern = regexp.MustCompile(`layer_names/([\w_]+)/layer_(\d+)="([^"]+)"`)
+// layer_names/2d_render/layer_1="Ground". The value group accepts escaped
+// quotes so names survive a round trip.
+var layerDefinitionPattern = regexp.MustCompile(`layer_names/([\w_]+)/layer_(\d+)="((?:[^"\\]|\\.)*)"`)
 
 func handleManageLayers(_ context.Context, raw json.RawMessage) (any, error) {
 	raw, err := aliasParams(raw, settingsAliases)
@@ -99,7 +101,7 @@ func handleManageLayers(_ context.Context, raw json.RawMessage) (any, error) {
 			if convErr != nil {
 				continue
 			}
-			layers = append(layers, layerDefinition{Type: match[1], Layer: layer, Name: match[3]})
+			layers = append(layers, layerDefinition{Type: match[1], Layer: layer, Name: godotconfig.UnescapeString(match[3])})
 		}
 		encoded, err := json.MarshalIndent(manageLayersListResult{Layers: layers}, "", "  ")
 		if err != nil {
@@ -111,10 +113,9 @@ func handleManageLayers(_ context.Context, raw json.RawMessage) (any, error) {
 			return mcp.ErrorResult("layerType, layer, and name are required for set."), nil
 		}
 		key := fmt.Sprintf("layer_names/%s/layer_%d", args.LayerType, args.Layer)
-		settingLine := fmt.Sprintf(`%s="%s"`, key, args.Name)
-		existingPattern := regexp.MustCompile(regexp.QuoteMeta(key) + `="[^"]*"`)
-		if loc := existingPattern.FindStringIndex(content); loc != nil {
-			content = content[:loc[0]] + settingLine + content[loc[1]:]
+		settingLine := godotconfig.EncodePropertyName(key) + "=" + godotconfig.FormatValue(godotconfig.String(args.Name))
+		if updated, ok := setSectionValue(content, "layer_names", key, godotconfig.String(args.Name)); ok {
+			content = updated
 		} else {
 			if !strings.Contains(content, "[layer_names]") {
 				content += "\n[layer_names]\n"

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
@@ -67,8 +68,8 @@ type exportPresetList struct {
 }
 
 var (
-	exportPresetNamePattern     = regexp.MustCompile(`name="([^"]+)"`)
-	exportPresetPlatformPattern = regexp.MustCompile(`platform="([^"]+)"`)
+	exportPresetNamePattern     = regexp.MustCompile(`(?m)^name="((?:[^"\\]|\\.)*)"`)
+	exportPresetPlatformPattern = regexp.MustCompile(`(?m)^platform="((?:[^"\\]|\\.)*)"`)
 	exportPresetBlockPattern    = regexp.MustCompile(`(?m)^\[preset\.`)
 )
 
@@ -105,9 +106,9 @@ func handleManageExportPresets(_ context.Context, raw json.RawMessage) (any, err
 	return mcp.ErrorResult(`Invalid action. Use "list", "add", or "remove".`), nil
 }
 
-// listExportPresets pairs every name="..." with the platform="..." at the same
-// index, defaulting the platform to "unknown", and pretty-prints the list. A
-// missing export_presets.cfg is an empty list.
+// listExportPresets reads the name and platform of every [preset.N] block,
+// defaulting the platform to "unknown", and pretty-prints the list. A missing
+// export_presets.cfg is an empty list.
 func listExportPresets(presetsFile string) mcp.ToolResult {
 	presets := []exportPreset{}
 	data, err := os.ReadFile(presetsFile)
@@ -115,15 +116,16 @@ func listExportPresets(presetsFile string) mcp.ToolResult {
 		return exportPresetsFailure(err)
 	}
 	if err == nil {
-		content := string(data)
-		names := submatchValues(exportPresetNamePattern, content)
-		platforms := submatchValues(exportPresetPlatformPattern, content)
-		for i, name := range names {
-			platform := "unknown"
-			if i < len(platforms) {
-				platform = platforms[i]
+		for _, block := range exportPresetBlocks(string(data)) {
+			match := exportPresetNamePattern.FindStringSubmatch(block)
+			if match == nil {
+				continue
 			}
-			presets = append(presets, exportPreset{Name: name, Platform: platform})
+			preset := exportPreset{Name: godotconfig.UnescapeString(match[1]), Platform: "unknown"}
+			if platform := exportPresetPlatformPattern.FindStringSubmatch(block); platform != nil {
+				preset.Platform = godotconfig.UnescapeString(platform[1])
+			}
+			presets = append(presets, preset)
 		}
 	}
 	encoded, err := json.MarshalIndent(exportPresetList{Presets: presets}, "", "  ")
@@ -133,16 +135,30 @@ func listExportPresets(presetsFile string) mcp.ToolResult {
 	return mcp.TextResult(string(encoded))
 }
 
+// exportPresetBlocks splits content into its [preset.N] blocks, preserving
+// order.
+func exportPresetBlocks(content string) []string {
+	blocks := exportPresetBlockPattern.FindAllStringIndex(content, -1)
+	out := make([]string, 0, len(blocks))
+	for i, block := range blocks {
+		end := len(content)
+		if i+1 < len(blocks) {
+			end = blocks[i+1][0]
+		}
+		out = append(out, content[block[0]:end])
+	}
+	return out
+}
+
 func addExportPreset(presetsFile string, args manageExportPresetsArgs) mcp.ToolResult {
 	if args.Name == "" || args.Platform == "" {
 		return mcp.ErrorResult("name and platform are required for add action.")
 	}
-	runnable := "false"
-	if args.Runnable {
-		runnable = "true"
-	}
-	block := fmt.Sprintf("\n[preset.%d]\n\nname=\"%s\"\nplatform=\"%s\"\nrunnable=%s\n",
-		time.Now().UnixMilli(), args.Name, args.Platform, runnable)
+	block := fmt.Sprintf("\n[preset.%d]\n\nname=%s\nplatform=%s\nrunnable=%s\n",
+		time.Now().UnixMilli(),
+		godotconfig.FormatValue(godotconfig.String(args.Name)),
+		godotconfig.FormatValue(godotconfig.String(args.Platform)),
+		godotconfig.FormatValue(godotconfig.Bool(args.Runnable)))
 
 	content := ""
 	data, err := os.ReadFile(presetsFile)
@@ -190,7 +206,8 @@ func deleteExportPresetBlock(content, name string) string {
 	if len(blocks) == 0 {
 		return content
 	}
-	namePattern := regexp.MustCompile(`name="` + regexp.QuoteMeta(name) + `"`)
+	encodedName := godotconfig.EscapeString(name)
+	namePattern := regexp.MustCompile(`(?m)^name="` + regexp.QuoteMeta(encodedName) + `"`)
 	var out strings.Builder
 	out.WriteString(content[:blocks[0][0]])
 	for i, block := range blocks {
@@ -204,14 +221,4 @@ func deleteExportPresetBlock(content, name string) string {
 		out.WriteString(content[block[0]:end])
 	}
 	return out.String()
-}
-
-// submatchValues returns the first capture group of every match.
-func submatchValues(pattern *regexp.Regexp, content string) []string {
-	matches := pattern.FindAllStringSubmatch(content, -1)
-	values := make([]string, 0, len(matches))
-	for _, match := range matches {
-		values = append(values, match[1])
-	}
-	return values
 }

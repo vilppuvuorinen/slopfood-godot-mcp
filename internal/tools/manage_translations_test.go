@@ -144,6 +144,55 @@ translations=PackedStringArray("res://en.translation", "res://fi.translation")
 	}
 }
 
+// TestManageTranslationsEscaping covers paths that need escaping and checks
+// the typed PackedStringArray round-trips without compounding escapes.
+func TestManageTranslationsEscaping(t *testing.T) {
+	tests := []struct {
+		name     string
+		path     string
+		wantLine string
+	}{
+		{name: "quote in path", path: `evil"name.translation`, wantLine: `"res://evil\"name.translation"`},
+		{name: "newline in path", path: "evil\nname.translation", wantLine: `"res://evil\nname.translation"`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			makeProject(t, root)
+			seedFile(t, filepath.Join(root, "project.godot"), `config_version=5
+
+[internationalization]
+
+translations=PackedStringArray("res://en.translation")
+`)
+			result := callToolArgs(t, manageTranslations(),
+				`{"projectPath":`+jsonString(root)+`,"action":"add","translationPath":`+jsonString(tt.path)+`}`)
+			if result.IsError {
+				t.Fatalf("unexpected error: %+v", result.Content)
+			}
+			data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+			if err != nil {
+				t.Fatalf("read project.godot: %v", err)
+			}
+			if !strings.Contains(string(data), tt.wantLine) {
+				t.Errorf("project.godot = %q, want it to contain %q", data, tt.wantLine)
+			}
+
+			list := callToolArgs(t, manageTranslations(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+			var payload struct {
+				Translations []string `json:"translations"`
+			}
+			if err := json.Unmarshal([]byte(list.Content[0].Text), &payload); err != nil {
+				t.Fatalf("unmarshal %q: %v", list.Content[0].Text, err)
+			}
+			want := []string{"res://en.translation", "res://" + tt.path}
+			if strings.Join(payload.Translations, ",") != strings.Join(want, ",") {
+				t.Errorf("translations = %q, want %q", payload.Translations, want)
+			}
+		})
+	}
+}
+
 func TestManageTranslationsErrors(t *testing.T) {
 	valid := t.TempDir()
 	makeProject(t, valid)

@@ -132,6 +132,53 @@ config/name="Demo"
 	}
 }
 
+// TestSetMainSceneEscaping covers a scene path containing a quote and confirms
+// the existing escaped value is replaced rather than corrupted.
+func TestSetMainSceneEscaping(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "project.godot"), `config_version=5
+
+[application]
+
+run/main_scene="res://old.tscn"
+`)
+
+	result := callToolArgs(t, setMainScene(),
+		`{"projectPath":`+jsonString(root)+`,"scenePath":`+jsonString(`scenes/a"b.tscn`)+`}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+	if err != nil {
+		t.Fatalf("read project.godot: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, `run/main_scene="res://scenes/a\"b.tscn"`) {
+		t.Errorf("project.godot = %q, want the escaped scene path", content)
+	}
+	if strings.Contains(content, "old.tscn") {
+		t.Errorf("old scene still present:\n%s", content)
+	}
+
+	// Setting it again replaces the escaped value, not a truncated prefix.
+	second := callToolArgs(t, setMainScene(),
+		`{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/plain.tscn"}`)
+	if second.IsError {
+		t.Fatalf("unexpected error: %+v", second.Content)
+	}
+	data, err = os.ReadFile(filepath.Join(root, "project.godot"))
+	if err != nil {
+		t.Fatalf("read project.godot: %v", err)
+	}
+	if got := strings.Count(string(data), "run/main_scene="); got != 1 {
+		t.Errorf("run/main_scene appears %d times:\n%s", got, data)
+	}
+	if !strings.Contains(string(data), `run/main_scene="res://scenes/plain.tscn"`) {
+		t.Errorf("project.godot = %q", data)
+	}
+}
+
 func TestSetMainSceneSnakeCaseAliases(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

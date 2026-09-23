@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
@@ -53,11 +54,67 @@ type manageInputMapArgs struct {
 	Deadzone    *float64 `json:"deadzone"`
 }
 
-// inputMapDeadzonePattern extracts the deadzone out of an existing action block.
-var inputMapDeadzonePattern = regexp.MustCompile(`"deadzone"\s*:\s*([\d.eE+-]+)`)
+// readInputAction parses the dictionary of an existing input action. found is
+// false when the action is absent; err is non-nil when it exists but its value
+// cannot be parsed, so callers never overwrite it blindly.
+func readInputAction(content, name string) (godotconfig.Dictionary, bool, error) {
+	for _, entry := range sectionEntries(content, "input") {
+		if decodePropertyName(entry.Key) != name {
+			continue
+		}
+		value, err := godotconfig.ParseValue(entry.Value)
+		if err != nil {
+			return godotconfig.Dictionary{}, false, fmt.Errorf("parse action %q: %w", name, err)
+		}
+		action, ok := value.(godotconfig.Dictionary)
+		if !ok {
+			return godotconfig.Dictionary{}, false, fmt.Errorf("action %q is not a dictionary", name)
+		}
+		return action, true, nil
+	}
+	return godotconfig.Dictionary{}, false, nil
+}
 
-// inputMapEventsPattern extracts the events array out of an existing action block.
-var inputMapEventsPattern = regexp.MustCompile(`"events"\s*:\s*\[([\s\S]*)\]\s*\}\s*$`)
+// inputEvent builds the Object(InputEventKey, ...) literal for a scancode.
+func inputEvent(scancode int) string {
+	return fmt.Sprintf(`Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":%d,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)`, scancode)
+}
+
+// mergeInputAction appends a new InputEventKey to an existing action unless
+// that scancode is already bound, preserving every other entry (including
+// event constructors the parser only captures as Opaque).
+func mergeInputAction(action godotconfig.Dictionary, newEvent string, scancode int) godotconfig.Dictionary {
+	if newEvent == "" {
+		return action
+	}
+	eventsIndex := -1
+	var events godotconfig.Array
+	for i, entry := range action.Entries {
+		if key, ok := entry.Key.(godotconfig.String); ok && string(key) == "events" {
+			eventsIndex = i
+			if arr, ok := entry.Value.(godotconfig.Array); ok {
+				events = arr
+			}
+			break
+		}
+	}
+	duplicate := regexp.MustCompile(`"physical_keycode"\s*:\s*` + strconv.Itoa(scancode) + `\b`)
+	for _, event := range events {
+		if opaque, ok := event.(godotconfig.Opaque); ok && duplicate.MatchString(string(opaque)) {
+			return action
+		}
+	}
+	events = append(events, godotconfig.Opaque(newEvent))
+	if eventsIndex >= 0 {
+		action.Entries[eventsIndex].Value = events
+	} else {
+		action.Entries = append(action.Entries, godotconfig.DictEntry{
+			Key:   godotconfig.String("events"),
+			Value: events,
+		})
+	}
+	return action
+}
 
 func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 	raw, err := aliasParams(raw, settingsAliases)
@@ -98,56 +155,36 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 		if args.Deadzone != nil {
 			deadzone = *args.Deadzone
 		}
-		deadzoneString := strconv.FormatFloat(deadzone, 'g', -1, 64)
-		escapedName := regexp.QuoteMeta(args.ActionName)
 
-		newEventObj := ""
+		newEvent := ""
 		scancode := 0
 		if args.Key != "" {
 			scancode = keyNameToScancode(args.Key)
-			newEventObj = fmt.Sprintf(`Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":%d,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)`, scancode)
+			newEvent = inputEvent(scancode)
 		}
 
-		existingActionPattern := regexp.MustCompile(`(?m)^` + escapedName + `\s*=\s*\{[\s\S]*?\}\s*$`)
-		if loc := existingActionPattern.FindStringIndex(content); loc != nil {
-			block := content[loc[0]:loc[1]]
-			existingDeadzone := deadzoneString
-			if match := inputMapDeadzonePattern.FindStringSubmatch(block); match != nil {
-				existingDeadzone = match[1]
-			}
-			existingEvents := ""
-			if match := inputMapEventsPattern.FindStringSubmatch(block); match != nil {
-				existingEvents = match[1]
-			}
-			mergedEvents := existingEvents
-			if newEventObj != "" {
-				duplicatePattern := regexp.MustCompile(`"physical_keycode"\s*:\s*` + strconv.Itoa(scancode) + `\b`)
-				if !duplicatePattern.MatchString(existingEvents) {
-					if strings.TrimSpace(existingEvents) != "" {
-						mergedEvents = existingEvents + ", " + newEventObj
-					} else {
-						mergedEvents = newEventObj
-					}
-				}
-			}
-			newBlock := ""
-			if strings.TrimSpace(mergedEvents) != "" {
-				newBlock = args.ActionName + `={"deadzone": ` + existingDeadzone + `, "events": [` + mergedEvents + `]}`
-			} else {
-				newBlock = args.ActionName + `={"deadzone": ` + existingDeadzone + `}`
-			}
-			content = content[:loc[0]] + newBlock + content[loc[1]:]
+		existing, found, parseErr := readInputAction(content, args.ActionName)
+		if parseErr != nil {
+			return mcp.ErrorResult("Failed to manage input map: " + parseErr.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
+		}
+		if found {
+			content, _ = setSectionValue(content, "input", args.ActionName, mergeInputAction(existing, newEvent, scancode))
 			if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 				return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 			}
 			return mcp.TextResult(fmt.Sprintf(`Input action "%s" updated (event merged into existing action).`, args.ActionName)), nil
 		}
 
-		events := ""
-		if newEventObj != "" {
-			events = `, "events": [` + newEventObj + `]`
+		action := godotconfig.Dictionary{Entries: []godotconfig.DictEntry{
+			{Key: godotconfig.String("deadzone"), Value: godotconfig.Float(deadzone)},
+		}}
+		if newEvent != "" {
+			action.Entries = append(action.Entries, godotconfig.DictEntry{
+				Key:   godotconfig.String("events"),
+				Value: godotconfig.Array{godotconfig.Opaque(newEvent)},
+			})
 		}
-		inputLine := args.ActionName + `={"deadzone": ` + deadzoneString + events + `}`
+		inputLine := godotconfig.EncodePropertyName(args.ActionName) + "=" + godotconfig.FormatValue(action)
 		if idx := strings.Index(content, "[input]"); idx != -1 {
 			content = content[:idx] + "[input]\n\n" + inputLine + content[idx+len("[input]"):]
 		} else {

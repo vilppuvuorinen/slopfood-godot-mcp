@@ -102,7 +102,7 @@ func TestManageInputMapAddWithKey(t *testing.T) {
 		t.Fatalf("read project.godot: %v", err)
 	}
 	content := string(data)
-	if !strings.Contains(content, `move_left={"deadzone": 0.5, "events": [Object(InputEventKey,`) {
+	if !strings.Contains(content, "move_left={\n\"deadzone\": 0.5,\n\"events\": [Object(InputEventKey,") {
 		t.Errorf("content missing new action:\n%s", content)
 	}
 	if !strings.Contains(content, `"physical_keycode":87`) {
@@ -125,7 +125,7 @@ func TestManageInputMapAddWithoutKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read project.godot: %v", err)
 	}
-	if !strings.Contains(string(data), `jump={"deadzone": 1}`) {
+	if !strings.Contains(string(data), "jump={\n\"deadzone\": 1.0\n}") {
 		t.Errorf("content missing action:\n%s", data)
 	}
 }
@@ -244,6 +244,105 @@ jump="*res://jump.gd"
 			t.Errorf("autoload jump unexpectedly removed in:\n%s", content)
 		}
 	})
+}
+
+// TestManageInputMapEscaping covers action names that need an encoded key and
+// checks they round-trip through list and remove.
+func TestManageInputMapEscaping(t *testing.T) {
+	tests := []struct {
+		name     string
+		action   string
+		wantLine string
+	}{
+		{name: "quote in name", action: `jump"x`, wantLine: `"jump\"x"={`},
+		{name: "newline in name", action: "jump\nx", wantLine: "\"jump\nx\"={"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			makeProject(t, root)
+
+			result := callToolArgs(t, manageInputMap(),
+				`{"projectPath":`+jsonString(root)+`,"action":"add","actionName":`+jsonString(tt.action)+`,"key":"W"}`)
+			if result.IsError {
+				t.Fatalf("unexpected error: %+v", result.Content)
+			}
+			data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+			if err != nil {
+				t.Fatalf("read project.godot: %v", err)
+			}
+			if !strings.Contains(string(data), tt.wantLine) {
+				t.Errorf("project.godot = %q, want it to contain %q", data, tt.wantLine)
+			}
+
+			list := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+			var actions map[string]string
+			if unmarshalErr := json.Unmarshal([]byte(list.Content[0].Text), &actions); unmarshalErr != nil {
+				t.Fatalf("unmarshal %q: %v", list.Content[0].Text, unmarshalErr)
+			}
+			if _, ok := actions[tt.action]; !ok {
+				t.Errorf("actions = %v, want key %q", actions, tt.action)
+			}
+
+			removed := callToolArgs(t, manageInputMap(),
+				`{"projectPath":`+jsonString(root)+`,"action":"remove","actionName":`+jsonString(tt.action)+`}`)
+			if removed.IsError {
+				t.Fatalf("unexpected error: %+v", removed.Content)
+			}
+			data, err = os.ReadFile(filepath.Join(root, "project.godot"))
+			if err != nil {
+				t.Fatalf("read project.godot: %v", err)
+			}
+			if strings.Contains(string(data), "physical_keycode") {
+				t.Errorf("action not removed:\n%s", data)
+			}
+		})
+	}
+}
+
+// TestManageInputMapMergeMultiline seeds a Godot-style multi-line action whose
+// events array holds an Object constructor, then merges a new binding. The
+// existing deadzone and event must survive verbatim and a duplicate scancode
+// must not be appended twice.
+func TestManageInputMapMergeMultiline(t *testing.T) {
+	existingEvent := `Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":87,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)`
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "project.godot"),
+		"config_version=5\n\n[input]\n\nmove_left={\n\"deadzone\": 0.25,\n\"events\": ["+existingEvent+"]\n}\n")
+
+	result := callToolArgs(t, manageInputMap(),
+		`{"projectPath":`+jsonString(root)+`,"action":"add","actionName":"move_left","key":"D"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+	if err != nil {
+		t.Fatalf("read project.godot: %v", err)
+	}
+	content := string(data)
+	for _, want := range []string{`"deadzone": 0.25`, `"physical_keycode":87`, `"physical_keycode":68`} {
+		if !strings.Contains(content, want) {
+			t.Errorf("content = %q, want it to contain %q", content, want)
+		}
+	}
+	if !strings.Contains(content, existingEvent) {
+		t.Errorf("existing event was rewritten:\n%s", content)
+	}
+
+	// Binding the same scancode again is a no-op.
+	again := callToolArgs(t, manageInputMap(),
+		`{"projectPath":`+jsonString(root)+`,"action":"add","actionName":"move_left","key":"W"}`)
+	if again.IsError {
+		t.Fatalf("unexpected error: %+v", again.Content)
+	}
+	data, err = os.ReadFile(filepath.Join(root, "project.godot"))
+	if err != nil {
+		t.Fatalf("read project.godot: %v", err)
+	}
+	if got := strings.Count(string(data), `"physical_keycode":87`); got != 1 {
+		t.Errorf("physical_keycode 87 appears %d times, want 1:\n%s", got, data)
+	}
 }
 
 func TestManageInputMapErrors(t *testing.T) {

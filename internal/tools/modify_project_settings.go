@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
@@ -67,30 +67,13 @@ func handleModifyProjectSettings(_ context.Context, raw json.RawMessage) (any, e
 		return *failure, nil
 	}
 
-	sectionHeader := "[" + args.Section + "]"
-	keyLine := args.Key + "=" + *args.Value
-	sectionIdx := strings.Index(content, sectionHeader)
-	if sectionIdx != -1 {
-		sectionEnd := -1
-		if idx := strings.Index(content[sectionIdx+len(sectionHeader):], "\n["); idx != -1 {
-			sectionEnd = sectionIdx + len(sectionHeader) + idx
-		}
-		sectionContent := content[sectionIdx:]
-		if sectionEnd != -1 {
-			sectionContent = content[sectionIdx:sectionEnd]
-		}
-		keyPattern := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(args.Key) + `\s*=.*$`)
-		if loc := keyPattern.FindStringIndex(sectionContent); loc != nil {
-			newSectionContent := sectionContent[:loc[0]] + keyLine + sectionContent[loc[1]:]
-			suffix := ""
-			if sectionEnd != -1 {
-				suffix = content[sectionEnd:]
-			}
-			content = content[:sectionIdx] + newSectionContent + suffix
-		} else {
-			insertPos := sectionIdx + len(sectionHeader)
-			content = content[:insertPos] + "\n" + keyLine + content[insertPos:]
-		}
+	sectionHeader := "[" + godotconfig.EscapeSectionName(args.Section) + "]"
+	keyLine := godotconfig.EncodePropertyName(args.Key) + "=" + *args.Value
+	if _, valStart, valEnd, ok := findSectionAssignment(content, args.Section, args.Key); ok {
+		content = content[:valStart] + *args.Value + content[valEnd:]
+	} else if sectionIdx := strings.Index(content, sectionHeader); sectionIdx != -1 {
+		insertPos := sectionIdx + len(sectionHeader)
+		content = content[:insertPos] + "\n" + keyLine + content[insertPos:]
 	} else {
 		content += "\n\n" + sectionHeader + "\n\n" + keyLine + "\n"
 	}

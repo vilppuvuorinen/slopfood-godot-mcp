@@ -21,8 +21,11 @@
 //
 // Supported values: null, bool, int, float, String, StringName, Array,
 // Dictionary and PackedStringArray. Every other Variant constructor
-// (Object, Resource, Vector*, Color, NodePath, RID, Signal, ...) is reported
-// as a parse error; add it in parseValue next to its upstream counterpart.
+// (Object, Resource, Vector*, Color, NodePath, RID, Signal, ...) is captured
+// verbatim as an Opaque value so files that contain them (notably the
+// Object(InputEventKey, ...) events in project.godot's [input] section) still
+// round-trip. Opaque is opaque on purpose: its text is never interpreted, only
+// re-emitted.
 package godotconfig
 
 import (
@@ -267,6 +270,14 @@ func (v PackedStringArray) write(b *strings.Builder) {
 	b.WriteByte(')')
 }
 
+// Opaque is a Variant constructor the parser does not model, kept as its
+// verbatim source text (for example `Object(InputEventKey,...)`). It is
+// written back unchanged, so parsing and re-serializing a value that contains
+// one never rewrites it.
+type Opaque string
+
+func (v Opaque) write(b *strings.Builder) { b.WriteString(string(v)) }
+
 func writeValue(b *strings.Builder, v Value) {
 	if v == nil {
 		b.WriteString("null")
@@ -354,6 +365,37 @@ func (c *Config) Encode() string {
 			b.WriteByte('\n')
 		}
 	}
+	return b.String()
+}
+
+// ParseValue parses a single Variant literal, for example `0.5`, `"hi"` or
+// `{"deadzone": 0.5}`. Leading and trailing whitespace and comments are
+// ignored; any other trailing text is an error.
+func ParseValue(text string) (Value, error) {
+	s := newScanner(text)
+	tok, err := s.getToken()
+	if err != nil {
+		return nil, err
+	}
+	v, err := s.parseValue(tok)
+	if err != nil {
+		return nil, err
+	}
+	tok, err = s.getToken()
+	if err != nil {
+		return nil, err
+	}
+	if tok.kind != tkEOF {
+		return nil, fmt.Errorf("unexpected trailing content %s", tok.kind)
+	}
+	return v, nil
+}
+
+// FormatValue serializes a single Variant the way VariantWriter would, without
+// a trailing newline.
+func FormatValue(v Value) string {
+	var b strings.Builder
+	writeValue(&b, v)
 	return b.String()
 }
 
@@ -817,7 +859,7 @@ func (s *scanner) parseValue(tok token) (Value, error) {
 		case "PackedStringArray", "PoolStringArray", "StringArray":
 			return s.parsePackedStringArray()
 		default:
-			return nil, fmt.Errorf("unexpected identifier %q", tok.text)
+			return s.parseConstructor(tok.text)
 		}
 	case tkNumber:
 		if tok.isFloat {
@@ -954,6 +996,75 @@ func (s *scanner) parsePackedStringArray() (PackedStringArray, error) {
 		}
 		out = append(out, tok.text)
 		first = false
+	}
+}
+
+// parseConstructor captures an unsupported `Name(...)` Variant constructor as
+// its verbatim source text. It balances nested parentheses and copies quoted
+// strings whole, so `Object(InputEventKey, "resource_name": "a)b", ...)` is
+// captured intact.
+func (s *scanner) parseConstructor(name string) (Value, error) {
+	open, ok := s.getChar()
+	if !ok || open != '(' {
+		return nil, fmt.Errorf("unexpected identifier %q", name)
+	}
+	var b strings.Builder
+	b.WriteString(name)
+	b.WriteByte('(')
+	depth := 1
+	for {
+		c, ok := s.getChar()
+		if !ok || c == 0 {
+			return nil, fmt.Errorf("unexpected EOF in %s constructor", name)
+		}
+		switch c {
+		case '"':
+			b.WriteRune(c)
+			if err := s.copyQuoted(&b); err != nil {
+				return nil, err
+			}
+			continue
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				b.WriteByte(')')
+				return Opaque(b.String()), nil
+			}
+		case '\n':
+			s.line++
+		}
+		b.WriteRune(c)
+	}
+}
+
+// copyQuoted copies the remainder of a quoted string, starting after its
+// opening quote, into b, including the closing quote.
+func (s *scanner) copyQuoted(b *strings.Builder) error {
+	for {
+		c, ok := s.getChar()
+		if !ok || c == 0 {
+			return errors.New("unterminated string")
+		}
+		b.WriteRune(c)
+		if c == '\\' {
+			next, ok := s.getChar()
+			if !ok || next == 0 {
+				return errors.New("unterminated string")
+			}
+			b.WriteRune(next)
+			if next == '\n' {
+				s.line++
+			}
+			continue
+		}
+		if c == '"' {
+			return nil
+		}
+		if c == '\n' {
+			s.line++
+		}
 	}
 }
 

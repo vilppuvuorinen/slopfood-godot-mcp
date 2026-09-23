@@ -225,6 +225,75 @@ Player={"deadzone": 0.5}
 	})
 }
 
+// TestManageAutoloadsEscaping covers caller names that need encoding: a double
+// quote and a literal newline. Godot quotes and escapes such keys, and the list
+// action must decode them again without compounding escapes.
+func TestManageAutoloadsEscaping(t *testing.T) {
+	t.Run("quote in name", func(t *testing.T) {
+		root := t.TempDir()
+		makeProject(t, root)
+
+		result := callToolArgs(t, manageAutoloads(), `{"projectPath":`+jsonString(root)+`,"action":"add","name":"Evil\"Name","path":"res://evil.gd"}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		content, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		if !strings.Contains(string(content), `"Evil\"Name"="*res://evil.gd"`) {
+			t.Errorf("project.godot = %q, want the escaped name", content)
+		}
+
+		list := callToolArgs(t, manageAutoloads(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+		var autoloads map[string]string
+		if unmarshalErr := json.Unmarshal([]byte(list.Content[0].Text), &autoloads); unmarshalErr != nil {
+			t.Fatalf("unmarshal %q: %v", list.Content[0].Text, unmarshalErr)
+		}
+		if got := autoloads[`Evil"Name`]; got != `"*res://evil.gd"` {
+			t.Errorf("autoloads = %v", autoloads)
+		}
+	})
+
+	t.Run("newline in name", func(t *testing.T) {
+		root := t.TempDir()
+		makeProject(t, root)
+
+		result := callToolArgs(t, manageAutoloads(), `{"projectPath":`+jsonString(root)+`,"action":"add","name":"Evil\nName","path":"res://evil.gd"}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		content, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		if !strings.Contains(string(content), "\"Evil\nName\"=\"*res://evil.gd\"") {
+			t.Errorf("project.godot = %q, want the quoted multi-line key", content)
+		}
+
+		list := callToolArgs(t, manageAutoloads(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+		var autoloads map[string]string
+		if unmarshalErr := json.Unmarshal([]byte(list.Content[0].Text), &autoloads); unmarshalErr != nil {
+			t.Fatalf("unmarshal %q: %v", list.Content[0].Text, unmarshalErr)
+		}
+		if got := autoloads["Evil\nName"]; got != `"*res://evil.gd"` {
+			t.Errorf("autoloads = %v", autoloads)
+		}
+
+		removed := callToolArgs(t, manageAutoloads(), `{"projectPath":`+jsonString(root)+`,"action":"remove","name":"Evil\nName"}`)
+		if removed.IsError {
+			t.Fatalf("unexpected error: %+v", removed.Content)
+		}
+		after, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		if strings.Contains(string(after), "evil.gd") {
+			t.Errorf("autoload not removed:\n%s", after)
+		}
+	})
+}
+
 func TestManageAutoloadsErrors(t *testing.T) {
 	project := t.TempDir()
 	makeProject(t, project)

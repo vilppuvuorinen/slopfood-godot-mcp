@@ -149,6 +149,60 @@ MyPlugin/enabled=true
 	}
 }
 
+// TestManagePluginsEscaping covers plugin names that need an encoded key and
+// checks they round-trip through list and disable.
+func TestManagePluginsEscaping(t *testing.T) {
+	tests := []struct {
+		name     string
+		plugin   string
+		wantLine string
+	}{
+		{name: "quote in name", plugin: `My"Plugin`, wantLine: `"My\"Plugin/enabled"=true`},
+		{name: "newline in name", plugin: "My\nPlugin", wantLine: "\"My\nPlugin/enabled\"=true"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			makeProject(t, root)
+
+			result := callToolArgs(t, managePlugins(),
+				`{"projectPath":`+jsonString(root)+`,"action":"enable","pluginName":`+jsonString(tt.plugin)+`}`)
+			if result.IsError {
+				t.Fatalf("unexpected error: %+v", result.Content)
+			}
+			data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+			if err != nil {
+				t.Fatalf("read project.godot: %v", err)
+			}
+			if !strings.Contains(string(data), tt.wantLine) {
+				t.Errorf("project.godot = %q, want it to contain %q", data, tt.wantLine)
+			}
+
+			list := callToolArgs(t, managePlugins(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+			var decoded pluginList
+			if unmarshalErr := json.Unmarshal([]byte(list.Content[0].Text), &decoded); unmarshalErr != nil {
+				t.Fatalf("unmarshal %q: %v", list.Content[0].Text, unmarshalErr)
+			}
+			if len(decoded.Enabled) != 1 || decoded.Enabled[0] != tt.plugin {
+				t.Errorf("enabled = %v, want %q", decoded.Enabled, tt.plugin)
+			}
+
+			disable := callToolArgs(t, managePlugins(),
+				`{"projectPath":`+jsonString(root)+`,"action":"disable","pluginName":`+jsonString(tt.plugin)+`}`)
+			if disable.IsError {
+				t.Fatalf("unexpected error: %+v", disable.Content)
+			}
+			data, err = os.ReadFile(filepath.Join(root, "project.godot"))
+			if err != nil {
+				t.Fatalf("read project.godot: %v", err)
+			}
+			if strings.Contains(string(data), "=true") {
+				t.Errorf("plugin not disabled:\n%s", data)
+			}
+		})
+	}
+}
+
 func TestManagePluginsErrors(t *testing.T) {
 	projectRoot := t.TempDir()
 	makeProject(t, projectRoot)

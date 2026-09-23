@@ -136,6 +136,57 @@ func TestManageLayersSetAppendsSection(t *testing.T) {
 	}
 }
 
+// TestManageLayersEscaping covers a quoted layer name and a key that needs
+// quoting, and checks the existing escaped value round-trips through list.
+func TestManageLayersEscaping(t *testing.T) {
+	t.Run("quote in name round trips", func(t *testing.T) {
+		root := t.TempDir()
+		makeProject(t, root)
+
+		result := callToolArgs(t, manageLayers(),
+			`{"projectPath":`+jsonString(root)+`,"action":"set","layerType":"2d_render","layer":1,"name":`+jsonString(`Ground "A"`)+`}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		if !strings.Contains(string(data), `layer_names/2d_render/layer_1="Ground \"A\""`) {
+			t.Errorf("project.godot = %q, want the escaped name", data)
+		}
+
+		list := callToolArgs(t, manageLayers(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+		var out struct {
+			Layers []layerDefinition `json:"layers"`
+		}
+		if err := json.Unmarshal([]byte(list.Content[0].Text), &out); err != nil {
+			t.Fatalf("unmarshal %q: %v", list.Content[0].Text, err)
+		}
+		if len(out.Layers) != 1 || out.Layers[0].Name != `Ground "A"` {
+			t.Errorf("layers = %+v", out.Layers)
+		}
+	})
+
+	t.Run("newline in key", func(t *testing.T) {
+		root := t.TempDir()
+		makeProject(t, root)
+
+		result := callToolArgs(t, manageLayers(),
+			`{"projectPath":`+jsonString(root)+`,"action":"set","layerType":`+jsonString("2d\nrender")+`,"layer":1,"name":"Ground"}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		if !strings.Contains(string(data), "\"layer_names/2d\nrender/layer_1\"=\"Ground\"") {
+			t.Errorf("project.godot = %q, want the quoted multi-line key", data)
+		}
+	})
+}
+
 func TestManageLayersErrors(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

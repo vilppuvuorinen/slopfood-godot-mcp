@@ -59,7 +59,7 @@ jump={"deadzone": 0.5}
 			t.Errorf("text = %q, want %q", text, want)
 		}
 		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireContains(t, content, `move_left={"deadzone": 0.5, "events": [Object(InputEventKey,`, `"physical_keycode":87`)
+		requireContains(t, content, "move_left={\n\"deadzone\": 0.5,\n\"events\": [Object(InputEventKey,", `"physical_keycode":87`)
 	})
 
 	t.Run("add without key", func(t *testing.T) {
@@ -75,7 +75,7 @@ jump={"deadzone": 0.5}
 			t.Errorf("text = %q, want %q", text, want)
 		}
 		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireContains(t, content, `jump={"deadzone": 1}`)
+		requireContains(t, content, "jump={\n\"deadzone\": 1.0\n}")
 	})
 
 	t.Run("merge existing action", func(t *testing.T) {

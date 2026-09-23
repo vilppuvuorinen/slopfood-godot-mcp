@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
@@ -37,10 +37,6 @@ type setMainSceneArgs struct {
 	ScenePath   string `json:"scenePath"`
 }
 
-// mainScenePattern matches a single run/main_scene="..." entry. The reference
-// server uses a non-global regex, so only the first occurrence is replaced.
-var mainScenePattern = regexp.MustCompile(`run/main_scene="[^"]*"`)
-
 func handleSetMainScene(_ context.Context, raw json.RawMessage) (any, error) {
 	raw, err := aliasParams(raw, settingsAliases)
 	if err != nil {
@@ -65,10 +61,10 @@ func handleSetMainScene(_ context.Context, raw json.RawMessage) (any, error) {
 	if !strings.HasPrefix(resPath, "res://") {
 		resPath = "res://" + resPath
 	}
-	settingLine := `run/main_scene="` + resPath + `"`
+	settingLine := godotconfig.EncodePropertyName("run/main_scene") + "=" + godotconfig.FormatValue(godotconfig.String(resPath))
 
-	if loc := mainScenePattern.FindStringIndex(content); loc != nil {
-		content = content[:loc[0]] + settingLine + content[loc[1]:]
+	if updated, ok := setSectionValue(content, "application", "run/main_scene", godotconfig.String(resPath)); ok {
+		content = updated
 	} else if idx := strings.Index(content, "[application]"); idx >= 0 {
 		content = content[:idx] + "[application]\n\n" + settingLine + content[idx+len("[application]"):]
 	} else {

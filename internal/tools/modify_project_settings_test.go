@@ -137,6 +137,60 @@ config/name="Demo"
 	}
 }
 
+// TestModifyProjectSettingsEscaping covers encoded section and key names, and
+// replacing an existing value that itself contains an escaped quote. The value
+// argument stays a raw Godot literal, as documented.
+func TestModifyProjectSettingsEscaping(t *testing.T) {
+	t.Run("encoded section and key", func(t *testing.T) {
+		root := t.TempDir()
+		makeProject(t, root)
+		seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n")
+
+		result := callToolArgs(t, modifyProjectSettings(),
+			`{"projectPath":`+jsonString(root)+`,"section":`+jsonString("weird]section")+`,"key":`+jsonString("a\nb")+`,"value":"1280"}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		content := string(data)
+		if !strings.Contains(content, "[weird\\]section]") {
+			t.Errorf("project.godot = %q, want the escaped section header", content)
+		}
+		if !strings.Contains(content, "\"a\nb\"=1280") {
+			t.Errorf("project.godot = %q, want the quoted multi-line key", content)
+		}
+	})
+
+	t.Run("replaces escaped existing value", func(t *testing.T) {
+		root := t.TempDir()
+		makeProject(t, root)
+		seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[application]\n\nconfig/description=\"say \\\"hi\\\"\"\nconfig/name=\"Demo\"\n")
+
+		result := callToolArgs(t, modifyProjectSettings(),
+			`{"projectPath":`+jsonString(root)+`,"section":"application","key":"config/description","value":"\"bye\""}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		content := string(data)
+		if strings.Contains(content, "say") {
+			t.Errorf("old escaped value still present:\n%s", content)
+		}
+		if !strings.Contains(content, `config/description="bye"`) {
+			t.Errorf("project.godot = %q", content)
+		}
+		if !strings.Contains(content, `config/name="Demo"`) {
+			t.Errorf("unrelated key lost:\n%s", content)
+		}
+	})
+}
+
 func TestModifyProjectSettingsErrors(t *testing.T) {
 	valid := t.TempDir()
 	makeProject(t, valid)
