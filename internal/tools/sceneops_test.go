@@ -19,22 +19,20 @@ func fakeGodotOps(t *testing.T, body string) string {
 }
 
 // TestScriptFailed covers the shared failure check: the script's quit(1) is the
-// authoritative signal, and the "Failed to" marker is a secondary check.
+// authoritative and only signal.
 func TestScriptFailed(t *testing.T) {
 	tests := []struct {
 		name     string
-		stderr   string
 		exitCode int
 		want     bool
 	}{
-		{name: "clean success", stderr: "", exitCode: 0, want: false},
-		{name: "failed marker with clean exit", stderr: "Failed to load resource", exitCode: 0, want: true},
-		{name: "non-zero exit without marker", stderr: "Unknown manage_resource action: bogus", exitCode: 1, want: true},
+		{name: "clean success", exitCode: 0, want: false},
+		{name: "failure exit", exitCode: 1, want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := scriptFailed(tt.stderr, tt.exitCode); got != tt.want {
-				t.Errorf("scriptFailed(%q, %d) = %v, want %v", tt.stderr, tt.exitCode, got, tt.want)
+			if got := scriptFailed(tt.exitCode); got != tt.want {
+				t.Errorf("scriptFailed(%d) = %v, want %v", tt.exitCode, got, tt.want)
 			}
 		})
 	}

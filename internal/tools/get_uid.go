@@ -100,7 +100,7 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(stderr, exitCode) {
+	if scriptFailed(exitCode) {
 		return mcp.ErrorResult(
 			"Failed to get UID: "+stderr,
 			"Check if the file is a valid Godot resource",

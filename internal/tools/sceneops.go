@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotops"
@@ -25,11 +24,11 @@ func runOperation(ctx context.Context, projectPath, operation string, params map
 }
 
 // scriptFailed reports whether the operations script failed. The script calls
-// quit(1) on every error branch and quit() on success, so a non-zero exit is
-// the authoritative signal. The "Failed to" stderr marker is kept as a
-// secondary check for error paths that print a failure but still exit cleanly.
-func scriptFailed(stderr string, exitCode int) bool {
-	return exitCode != 0 || strings.Contains(stderr, "Failed to")
+// quit(1) on every error branch and quit() on success, so the exit code is the
+// authoritative and only signal. Diagnostics that print a failure but recover
+// deliberately do not call quit(1), so they are not misreported here.
+func scriptFailed(exitCode int) bool {
+	return exitCode != 0
 }
 
 // headlessSolutions are the shared "Possible solutions" lines for a Godot
@@ -50,7 +49,7 @@ func runHeadlessOperation(ctx context.Context, projectPath, operation string, pa
 	if err != nil {
 		return mcp.ErrorResult(operation+" failed: "+err.Error(), headlessSolutions...), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	if scriptFailed(stderr, exitCode) {
+	if scriptFailed(exitCode) {
 		return mcp.ErrorResult(operation+" failed: "+stderr, headlessSolutions...), nil
 	}
 	return mcp.TextResult(operation + " succeeded.\n\nOutput: " + stdout), nil

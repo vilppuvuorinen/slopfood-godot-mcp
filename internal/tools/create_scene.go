@@ -93,7 +93,7 @@ func handleCreateScene(ctx context.Context, raw json.RawMessage) (any, error) {
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(stderr, exitCode) {
+	if scriptFailed(exitCode) {
 		return mcp.ErrorResult(
 			"Failed to create scene: "+stderr,
 			"Check if the root node type is valid",

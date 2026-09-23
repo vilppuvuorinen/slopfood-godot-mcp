@@ -87,7 +87,7 @@ func handleUpdateProjectUIDs(ctx context.Context, raw json.RawMessage) (any, err
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(stderr, exitCode) {
+	if scriptFailed(exitCode) {
 		return mcp.ErrorResult(
 			"Failed to update project UIDs: "+stderr,
 			"Check if the project is valid",

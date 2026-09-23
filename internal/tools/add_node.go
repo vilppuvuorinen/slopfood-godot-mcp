@@ -115,7 +115,7 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(stderr, exitCode) {
+	if scriptFailed(exitCode) {
 		return mcp.ErrorResult(
 			"Failed to add node: "+stderr,
 			"Check if the node type is valid",

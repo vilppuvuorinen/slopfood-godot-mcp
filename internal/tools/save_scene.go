@@ -95,7 +95,7 @@ func handleSaveScene(ctx context.Context, raw json.RawMessage) (any, error) {
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(stderr, exitCode) {
+	if scriptFailed(exitCode) {
 		return mcp.ErrorResult(
 			"Failed to save scene: "+stderr,
 			"Check if the scene file is valid",
