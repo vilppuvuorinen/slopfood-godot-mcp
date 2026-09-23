@@ -136,6 +136,12 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 }
 
 func (s *Server) handle(ctx context.Context, req request) (response, bool) {
+	// A request without an id is a JSON-RPC notification: process it but never
+	// send a response, even for unknown methods.
+	if len(req.ID) == 0 {
+		return response{}, false
+	}
+
 	resp := response{JSONRPC: "2.0", ID: req.ID}
 
 	switch req.Method {
@@ -147,8 +153,6 @@ func (s *Server) handle(ctx context.Context, req request) (response, bool) {
 			},
 			"serverInfo": s.info,
 		}
-	case "notifications/initialized":
-		return response{}, false
 	case "ping":
 		resp.Result = map[string]any{}
 	case "tools/list":

@@ -74,3 +74,19 @@ func TestServeUnknownMethod(t *testing.T) {
 		t.Fatalf("expected method-not-found, got %+v", resp.Error)
 	}
 }
+
+func TestServeNotificationsGetNoResponse(t *testing.T) {
+	in := strings.NewReader(
+		`{"jsonrpc":"2.0","method":"notifications/initialized"}` + "\n" +
+			`{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":1}}` + "\n" +
+			`{"jsonrpc":"2.0","method":"nope"}` + "\n",
+	)
+	var out bytes.Buffer
+
+	if err := testServer().Serve(context.Background(), in, &out); err != nil {
+		t.Fatalf("Serve: %v", err)
+	}
+	if out.Len() != 0 {
+		t.Errorf("expected no response for notifications, got %q", out.String())
+	}
+}
