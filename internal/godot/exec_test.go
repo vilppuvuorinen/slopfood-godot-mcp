@@ -37,7 +37,6 @@ func TestRunOperationArgsAndSuccess(t *testing.T) {
 		"--script /script.gd",
 		"create_scene",
 		`{"scene_path":"main.tscn"}`,
-		"--debug-godot",
 	} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("stdout = %q, want it to contain %q", stdout, want)

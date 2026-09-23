@@ -1,9 +1,7 @@
 package e2e
 
 import (
-	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -92,23 +90,5 @@ func TestCreateSceneFailsWithoutGodot(t *testing.T) {
 	requirePrefix(t, firstText(t, res), "Failed to create scene:")
 	if len(res.Content) != 2 {
 		t.Errorf("content = %+v", res.Content)
-	}
-}
-
-// TestCreateSceneDebugModeLeavesNoTempFiles asserts the debug-mode write probe
-// is cleaned up, matching the reference's GODOT_DEBUG_MODE behavior.
-func TestCreateSceneDebugModeLeavesNoTempFiles(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
-	root := seedScene(t, session, "main.tscn")
-
-	entries, err := os.ReadDir(root)
-	if err != nil {
-		t.Fatalf("read project dir: %v", err)
-	}
-	for _, entry := range entries {
-		if strings.HasSuffix(entry.Name(), ".tmp") {
-			t.Errorf("leftover temp file: %s", entry.Name())
-		}
 	}
 }

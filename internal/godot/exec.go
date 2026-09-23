@@ -50,8 +50,13 @@ func Export(ctx context.Context, executable, projectPath, presetName, outputPath
 
 // RunOperation invokes
 // `<executable> --headless --path <project> --script <script> <operation>
-// <params-json> --debug-godot`, mirroring the reference server's
-// executeOperation.
+// <params-json>`, mirroring the reference server's executeOperation.
+//
+// The operations script's `--debug-godot` mode is deliberately not enabled:
+// it is a manual troubleshooting aid that writes probe files into the project
+// and dumps environment variables, so the server always runs the script in its
+// default (non-debug) mode. The feature remains available when running the
+// script by hand.
 //
 // A non-zero exit is not a wrapper failure: the operations script calls quit(1)
 // on every error and quit() on success, so the exit code is returned for the
@@ -69,7 +74,6 @@ func RunOperation(ctx context.Context, executable, projectPath, scriptPath, oper
 		"--script", scriptPath,
 		operation,
 		string(payload),
-		"--debug-godot",
 	}
 	cmd := exec.CommandContext(ctx, executable, args...) //nolint:gosec // executable is operator-controlled via GODOT_PATH.
 	var stdoutBuf, stderrBuf bytes.Buffer
