@@ -1,4 +1,7 @@
 #!/usr/bin/env -S godot --headless --script
+# Copied verbatim from tugcantopaloglu/godot-mcp (src/scripts/validate_script.gd),
+# a fork of Coding-Solo/godot-mcp (both MIT-licensed); only indentation was
+# changed (tabs to spaces).
 extends SceneTree
 ## Static-checks a single GDScript file for compile errors.
 ##
