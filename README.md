@@ -84,19 +84,31 @@ go-dot-mcp --enable all                        # everything
 
 ## Testing
 
-`make test` runs the unit tests in the server module, which stays dependency-free.
+```
+make test
+make e2e
+```
 
-`make e2e` builds the server and drives the resulting binary as a subprocess
-with a real client from the official
-[`modelcontextprotocol/go-sdk`](https://github.com/modelcontextprotocol/go-sdk).
-The test is a standalone black-box module under `e2e/` with its own `go.mod`; it
-never imports the server, so the SDK stays out of the server's module graph and
-build. To run it by hand, build first and pass the path:
+Godot-dependent tests need an engine and export templates in the repo-local
+`.godot/`; templates are opt-in:
+
+```
+GODOT_TEMPLATES=1 make godot
+```
+
+To run the e2e suite by hand, build first and set both variables (an absolute,
+`..`-free path is required):
 
 ```
 make build
-GO_DOT_MCP_BIN=$PWD/bin/go-dot-mcp go test ./e2e/...
+cd e2e
+XDG_DATA_HOME="$(cd .. && pwd)/.godot" GO_DOT_MCP_BIN="$(cd .. && pwd)/bin/go-dot-mcp" go test ./...
 ```
+
+CI tests against the latest Godot builds rather than a pinned manifest:
+`.github/workflows/godot-latest.yml` resolves the supported minor lines and
+downloads the newest matching release (dev/beta/rc included), so a future
+release surfaces breakage with no manifest change.
 
 ## Tooling
 

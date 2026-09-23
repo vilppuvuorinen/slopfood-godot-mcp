@@ -1,13 +1,21 @@
 # Godot builds to download, one entry per line:
 #
-#   <minor>  <version>  <sha256>
+#   <minor>  <version>  <sha256>  [<templates-sha256>]
 #
-# <minor>   install directory, e.g. 4.7 (point releases share one directory so
-#           upgrades replace in place with a smaller footprint).
-# <version> godot-builds release tag, e.g. 4.7.2-stable or 4.8-dev6.
-# <sha256>  checksum of the Linux x86_64 zip.
+# <minor>            install directory, e.g. 4.7 (point releases share one
+#                    directory so upgrades replace in place with a smaller
+#                    footprint).
+# <version>          godot-builds release tag, e.g. 4.7.2-stable or 4.8-dev6.
+#                    May be omitted: the newest release for <minor> is then
+#                    resolved from the godot-builds git tags.
+# <sha256>           checksum of the Linux x86_64 zip. May be omitted: it is
+#                    then taken from the godot-builds release manifest for
+#                    <version>, which records the sha512 of every asset.
+# <templates-sha256> optional checksum of the export templates .tpz, used when
+#                    GODOT_TEMPLATES=1; likewise filled from the release
+#                    manifest when omitted.
 #
 # These are Linux x86_64 builds only.
 
-4.7 4.7.2-stable cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4
-4.8 4.8-dev6     d3678019d0a6501d754db36807110a02a1cfa24d49886be8d3a72d91faa80ca3
+4.7 4.7.2-stable cadd3204e728a35d3f13adb7fd0d7902636b79f6b95c40c265eb73b6c35329e4 f298490b8d44d934be425a5a65a51bf15f422428b229a06a6e11d9ffea248011
+4.8 4.8-dev6     d3678019d0a6501d754db36807110a02a1cfa24d49886be8d3a72d91faa80ca3 b3cff9b3756fbcf2adefb374bdec7f1b7221fd1d17218606ab19be95f0048a06

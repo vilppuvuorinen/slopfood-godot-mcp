@@ -1,6 +1,8 @@
 bin/
 coverage.out
 .godot/
+__pycache__/
+*.pyc
 *.out
 *.test
 *.prof

@@ -29,12 +29,19 @@ run:
 test:
 	$(GO) test $(GOFLAGS) -covermode=atomic -coverprofile=coverage.out ./...
 
+# godot downloads the pinned engine builds into .godot/. With GODOT_TEMPLATES=1
+# it also fetches the matching export templates into .godot/godot/export_templates,
+# where the e2e target's XDG_DATA_HOME points Godot.
+.PHONY: godot
+godot:
+	scripts/download-godot.py install
+
 # e2e drives a pre-built server binary with the official MCP SDK client. It is
 # a standalone black-box module, so the SDK never enters the server's module
 # graph. The binary is built first and handed to the tests via GO_DOT_MCP_BIN.
 .PHONY: e2e
 e2e: build
-	cd e2e && GO_DOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)' $(GO) test $(GOFLAGS) -covermode=atomic ./...
+	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GO_DOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)' $(GO) test $(GOFLAGS) -covermode=atomic ./...
 
 .PHONY: bench
 bench:
@@ -80,6 +87,7 @@ help:
 	@printf '  build    compile %s into bin/\n' '$(BINARY)'
 	@printf '  run      run the server (ARGS=...)\n'
 	@printf '  test     run tests with coverage\n'
+	@printf '  godot    download pinned Godot builds (GODOT_TEMPLATES=1 adds export templates)\n'
 	@printf '  e2e      build, then run the SDK-backed black-box tests\n'
 	@printf '  fmt/vet/lint/check  code quality\n'
 	@printf '  clean    remove build artifacts\n'
