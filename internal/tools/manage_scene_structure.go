@@ -73,7 +73,8 @@ func handleManageSceneStructure(ctx context.Context, raw json.RawMessage) (any, 
 			"Provide projectPath, scenePath, action, and nodePath",
 		), nil
 	}
-	if !validPath(args.ProjectPath) || !validPath(args.ScenePath) {
+	sceneFull, pathOK := confinePath(args.ProjectPath, args.ScenePath)
+	if !validPath(args.ProjectPath) || !pathOK {
 		return mcp.ErrorResult(
 			"Invalid path.",
 			`Provide valid paths without ".." or other potentially unsafe characters`,
@@ -82,7 +83,7 @@ func handleManageSceneStructure(ctx context.Context, raw json.RawMessage) (any, 
 	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
 		return notAProjectResult(args.ProjectPath), nil
 	}
-	if !pathExists(filepath.Join(args.ProjectPath, args.ScenePath)) {
+	if !pathExists(sceneFull) {
 		return sceneMissingResult(args.ScenePath), nil
 	}
 

@@ -74,14 +74,14 @@ func handleCreateScript(_ context.Context, raw json.RawMessage) (any, error) {
 	if args.ProjectPath == "" || args.ScriptPath == "" {
 		return mcp.ErrorResult("projectPath and scriptPath are required."), nil
 	}
-	if !validPath(args.ProjectPath) || !validPath(args.ScriptPath) {
+	fullPath, pathOK := confinePath(args.ProjectPath, args.ScriptPath)
+	if !validPath(args.ProjectPath) || !pathOK {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
 	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
 		return notAProjectResult(args.ProjectPath), nil
 	}
 
-	fullPath := filepath.Join(args.ProjectPath, args.ScriptPath)
 	source := args.Source
 	if source == "" {
 		source = buildScriptTemplate(args)

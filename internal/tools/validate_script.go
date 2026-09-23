@@ -60,7 +60,8 @@ func handleValidateScript(ctx context.Context, raw json.RawMessage) (any, error)
 	if args.ProjectPath == "" || args.ScriptPath == "" {
 		return mcp.ErrorResult("projectPath and scriptPath are required."), nil
 	}
-	if !validPath(args.ProjectPath) || !validPath(args.ScriptPath) {
+	scriptFull, pathOK := confinePath(args.ProjectPath, args.ScriptPath)
+	if !validPath(args.ProjectPath) || !pathOK {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
 	if !strings.HasSuffix(strings.ToLower(args.ScriptPath), ".gd") {
@@ -69,7 +70,6 @@ func handleValidateScript(ctx context.Context, raw json.RawMessage) (any, error)
 	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
 		return notAProjectResult(args.ProjectPath), nil
 	}
-	scriptFull := filepath.Join(args.ProjectPath, args.ScriptPath)
 	if !pathExists(scriptFull) {
 		return mcp.ErrorResult("Script does not exist: " + args.ScriptPath), nil
 	}

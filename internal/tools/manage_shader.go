@@ -66,14 +66,14 @@ func handleManageShader(_ context.Context, raw json.RawMessage) (any, error) {
 	if args.ProjectPath == "" || args.ShaderPath == "" || args.Action == "" {
 		return mcp.ErrorResult("projectPath, shaderPath, and action are required."), nil
 	}
-	if !validPath(args.ProjectPath) || !validPath(args.ShaderPath) {
+	fullPath, pathOK := confinePath(args.ProjectPath, args.ShaderPath)
+	if !validPath(args.ProjectPath) || !pathOK {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
 	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
 		return notAProjectResult(args.ProjectPath), nil
 	}
 
-	fullPath := filepath.Join(args.ProjectPath, args.ShaderPath)
 	switch args.Action {
 	case "read":
 		data, err := os.ReadFile(fullPath)

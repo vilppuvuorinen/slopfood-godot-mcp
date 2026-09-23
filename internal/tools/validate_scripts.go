@@ -120,14 +120,15 @@ func handleValidateScripts(ctx context.Context, raw json.RawMessage) (any, error
 	allChecked := true
 	toCheck := make([]string, 0, len(candidates))
 	for _, rel := range candidates {
-		if !strings.HasSuffix(strings.ToLower(rel), ".gd") || !validPath(rel) {
+		relFull, relOK := confinePath(args.ProjectPath, rel)
+		if !strings.HasSuffix(strings.ToLower(rel), ".gd") || !relOK {
 			if explicit {
 				results = append(results, validateScriptSkip{ScriptPath: rel, Checked: false, Error: "Not a valid .gd path"})
 				allChecked = false
 			}
 			continue
 		}
-		if !pathExists(filepath.Join(args.ProjectPath, rel)) {
+		if !pathExists(relFull) {
 			if explicit {
 				results = append(results, validateScriptSkip{ScriptPath: rel, Checked: false, Error: "Script does not exist"})
 				allChecked = false

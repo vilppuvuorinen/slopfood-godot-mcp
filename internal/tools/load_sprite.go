@@ -63,7 +63,9 @@ func handleLoadSprite(ctx context.Context, raw json.RawMessage) (any, error) {
 			"Provide projectPath, scenePath, nodePath, and texturePath",
 		), nil
 	}
-	if !validPath(args.ProjectPath) || !validPath(args.ScenePath) || !validPath(args.NodePath) || !validPath(args.TexturePath) {
+	sceneFull, sceneOK := confinePath(args.ProjectPath, args.ScenePath)
+	textureFull, textureOK := confinePath(args.ProjectPath, args.TexturePath)
+	if !validPath(args.ProjectPath) || !validPath(args.NodePath) || !sceneOK || !textureOK {
 		return mcp.ErrorResult(
 			"Invalid path",
 			`Provide valid paths without ".." or other potentially unsafe characters`,
@@ -74,11 +76,11 @@ func handleLoadSprite(ctx context.Context, raw json.RawMessage) (any, error) {
 		return notAProjectResult(args.ProjectPath), nil
 	}
 
-	if !pathExists(filepath.Join(args.ProjectPath, args.ScenePath)) {
+	if !pathExists(sceneFull) {
 		return sceneMissingResult(args.ScenePath), nil
 	}
 
-	if !pathExists(filepath.Join(args.ProjectPath, args.TexturePath)) {
+	if !pathExists(textureFull) {
 		return mcp.ErrorResult(
 			"Texture file does not exist: "+args.TexturePath,
 			"Ensure the texture path is correct",

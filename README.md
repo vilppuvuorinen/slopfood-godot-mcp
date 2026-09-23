@@ -82,6 +82,13 @@ go-dot-mcp --enable all                        # everything
 - [x] `get_uid`
 - [x] `update_project_uids`
 
+## Security
+
+Path validation (`validPath`/`confinePath`) is a lexical convenience check, not
+a security boundary. It is easily bypassed (symlinks, platform-specific path
+forms) and must not be relied on for isolation. Run the server under an
+unprivileged user or sandbox and treat that as the real line of defense.
+
 ## Testing
 
 ```

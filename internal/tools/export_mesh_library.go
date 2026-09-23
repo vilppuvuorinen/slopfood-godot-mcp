@@ -64,7 +64,8 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 			"Provide projectPath, scenePath, and outputPath",
 		), nil
 	}
-	if !validPath(args.ProjectPath) || !validPath(args.ScenePath) || !validPath(args.OutputPath) {
+	sceneFull, sceneOK := confinePath(args.ProjectPath, args.ScenePath)
+	if !validPath(args.ProjectPath) || !validPath(args.OutputPath) || !sceneOK {
 		return mcp.ErrorResult(
 			"Invalid path",
 			`Provide valid paths without ".." or other potentially unsafe characters`,
@@ -75,7 +76,7 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 		return notAProjectResult(args.ProjectPath), nil
 	}
 
-	if !pathExists(filepath.Join(args.ProjectPath, args.ScenePath)) {
+	if !pathExists(sceneFull) {
 		return sceneMissingResult(args.ScenePath), nil
 	}
 

@@ -55,7 +55,8 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 			"Provide projectPath and filePath",
 		), nil
 	}
-	if !validPath(args.ProjectPath) || !validPath(args.FilePath) {
+	fileFull, pathOK := confinePath(args.ProjectPath, args.FilePath)
+	if !validPath(args.ProjectPath) || !pathOK {
 		return mcp.ErrorResult(
 			"Invalid path",
 			`Provide valid paths without ".." or other potentially unsafe characters`,
@@ -66,7 +67,7 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 		return notAProjectResult(args.ProjectPath), nil
 	}
 
-	if !pathExists(filepath.Join(args.ProjectPath, args.FilePath)) {
+	if !pathExists(fileFull) {
 		return mcp.ErrorResult(
 			"File does not exist: "+args.FilePath,
 			"Ensure the file path is correct",

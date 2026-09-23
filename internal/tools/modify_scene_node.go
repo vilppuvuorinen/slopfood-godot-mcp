@@ -60,13 +60,14 @@ func handleModifySceneNode(ctx context.Context, raw json.RawMessage) (any, error
 	if args.ProjectPath == "" || args.ScenePath == "" || args.NodePath == "" || args.Properties == nil {
 		return mcp.ErrorResult("projectPath, scenePath, nodePath, and properties are required."), nil
 	}
-	if !validPath(args.ProjectPath) || !validPath(args.ScenePath) {
+	sceneFull, pathOK := confinePath(args.ProjectPath, args.ScenePath)
+	if !validPath(args.ProjectPath) || !pathOK {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
 	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
 		return notAProjectResult(args.ProjectPath), nil
 	}
-	if !pathExists(filepath.Join(args.ProjectPath, args.ScenePath)) {
+	if !pathExists(sceneFull) {
 		return sceneMissingResult(args.ScenePath), nil
 	}
 	return runHeadlessOperation(ctx, args.ProjectPath, "modify_node", map[string]any{

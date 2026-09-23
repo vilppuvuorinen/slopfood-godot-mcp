@@ -78,7 +78,8 @@ func handleCreateCSharpScript(ctx context.Context, raw json.RawMessage) (any, er
 	if args.ProjectPath == "" || args.ScriptPath == "" {
 		return mcp.ErrorResult("projectPath and scriptPath are required."), nil
 	}
-	if !validPath(args.ProjectPath) || !validPath(args.ScriptPath) {
+	fullPath, pathOK := confinePath(args.ProjectPath, args.ScriptPath)
+	if !validPath(args.ProjectPath) || !pathOK {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
 	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
@@ -100,7 +101,6 @@ func handleCreateCSharpScript(ctx context.Context, raw json.RawMessage) (any, er
 		return mcp.ErrorResult(fmt.Sprintf(`className "%s" must match the script file name "%s" for Godot to attach the script.`, args.ClassName, fileBase)), nil
 	}
 
-	fullPath := filepath.Join(args.ProjectPath, args.ScriptPath)
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil { //nolint:gosec // scriptPath is caller-controlled.
 		return nil, fmt.Errorf("create script directory: %w", err)
 	}
