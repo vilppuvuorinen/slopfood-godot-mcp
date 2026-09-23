@@ -166,6 +166,65 @@ Music="*res://music.gd"
 	}
 }
 
+func TestManageAutoloadsRemoveScoped(t *testing.T) {
+	t.Run("does not match longer key", func(t *testing.T) {
+		root := t.TempDir()
+		makeProject(t, root)
+		seedFile(t, filepath.Join(root, "project.godot"), `config_version=5
+
+[autoload]
+
+Player="*res://player.gd"
+MyPlayer="*res://my_player.gd"
+`)
+		result := callToolArgs(t, manageAutoloads(), `{"projectPath":`+jsonString(root)+`,"action":"remove","name":"Player"}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		content := string(data)
+		if strings.Contains(content, "Player=\"*res://player.gd\"") {
+			t.Errorf("Player not removed in:\n%s", content)
+		}
+		if !strings.Contains(content, `MyPlayer="*res://my_player.gd"`) {
+			t.Errorf("MyPlayer was corrupted or removed in:\n%s", content)
+		}
+	})
+
+	t.Run("does not match another section", func(t *testing.T) {
+		root := t.TempDir()
+		makeProject(t, root)
+		seedFile(t, filepath.Join(root, "project.godot"), `config_version=5
+
+[autoload]
+
+Player="*res://player.gd"
+
+[input]
+
+Player={"deadzone": 0.5}
+`)
+		result := callToolArgs(t, manageAutoloads(), `{"projectPath":`+jsonString(root)+`,"action":"remove","name":"Player"}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		content := string(data)
+		if strings.Contains(content, `Player="*res://player.gd"`) {
+			t.Errorf("autoload Player not removed in:\n%s", content)
+		}
+		if !strings.Contains(content, `Player={"deadzone": 0.5}`) {
+			t.Errorf("input Player unexpectedly removed in:\n%s", content)
+		}
+	})
+}
+
 func TestManageAutoloadsErrors(t *testing.T) {
 	project := t.TempDir()
 	makeProject(t, project)

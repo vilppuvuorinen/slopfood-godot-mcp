@@ -187,6 +187,65 @@ jump={"deadzone": 0.5}
 	}
 }
 
+func TestManageInputMapRemoveScoped(t *testing.T) {
+	t.Run("does not match longer key", func(t *testing.T) {
+		root := t.TempDir()
+		makeProject(t, root)
+		seedFile(t, filepath.Join(root, "project.godot"), `config_version=5
+
+[input]
+
+jump={"deadzone": 0.5}
+double_jump={"deadzone": 0.5}
+`)
+		result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"remove","actionName":"jump"}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		content := string(data)
+		if strings.Contains(content, "\njump={\"deadzone\": 0.5}") {
+			t.Errorf("jump not removed in:\n%s", content)
+		}
+		if !strings.Contains(content, `double_jump={"deadzone": 0.5}`) {
+			t.Errorf("double_jump was corrupted or removed in:\n%s", content)
+		}
+	})
+
+	t.Run("does not match another section", func(t *testing.T) {
+		root := t.TempDir()
+		makeProject(t, root)
+		seedFile(t, filepath.Join(root, "project.godot"), `config_version=5
+
+[input]
+
+jump={"deadzone": 0.5}
+
+[autoload]
+
+jump="*res://jump.gd"
+`)
+		result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"remove","actionName":"jump"}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		content := string(data)
+		if strings.Contains(content, `jump={"deadzone": 0.5}`) {
+			t.Errorf("input jump not removed in:\n%s", content)
+		}
+		if !strings.Contains(content, `jump="*res://jump.gd"`) {
+			t.Errorf("autoload jump unexpectedly removed in:\n%s", content)
+		}
+	})
+}
+
 func TestManageInputMapErrors(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

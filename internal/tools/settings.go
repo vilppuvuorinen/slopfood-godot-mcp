@@ -54,6 +54,31 @@ var sectionHeaderPattern = regexp.MustCompile(`^\[(.+)\]$`)
 // keyValuePattern matches a project.godot "key=value" line.
 var keyValuePattern = regexp.MustCompile(`^([^=]+)=(.*)$`)
 
+// removeSectionKey removes a whole key from a single project.godot section,
+// matching only exact key names inside that section. Unlike a global regexp it
+// cannot delete a longer key that merely contains key as a substring (e.g.
+// "Player" vs "MyPlayer") or a same-named key in another section.
+func removeSectionKey(content, section, key string) string {
+	lines := strings.Split(content, "\n")
+	current := ""
+	kept := make([]string, 0, len(lines))
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if match := sectionHeaderPattern.FindStringSubmatch(trimmed); match != nil {
+			current = match[1]
+			kept = append(kept, line)
+			continue
+		}
+		if current == section {
+			if match := keyValuePattern.FindStringSubmatch(trimmed); match != nil && strings.TrimSpace(match[1]) == key {
+				continue
+			}
+		}
+		kept = append(kept, line)
+	}
+	return strings.Join(kept, "\n")
+}
+
 // parseProjectSections parses project.godot into section -> key -> raw value,
 // mirroring the reference server's line-based parser used by
 // read_project_settings and the manage_* list actions. Blank lines and

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
@@ -84,8 +83,7 @@ func handleManageAutoloads(_ context.Context, raw json.RawMessage) (any, error) 
 		if args.Name == "" {
 			return mcp.ErrorResult("name is required for remove action."), nil
 		}
-		pattern := regexp.MustCompile(`\n?` + regexp.QuoteMeta(args.Name) + `\s*=.*\n?`)
-		content = pattern.ReplaceAllString(content, "\n")
+		content = removeSectionKey(content, "autoload", args.Name)
 		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 			return mcp.ErrorResult("Failed to manage autoloads: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}

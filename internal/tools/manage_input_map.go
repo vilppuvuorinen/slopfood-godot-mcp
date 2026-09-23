@@ -161,8 +161,7 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 		if args.ActionName == "" {
 			return mcp.ErrorResult("actionName is required for remove action."), nil
 		}
-		pattern := regexp.MustCompile(`\n?` + regexp.QuoteMeta(args.ActionName) + `\s*=.*\n?`)
-		content = pattern.ReplaceAllString(content, "\n")
+		content = removeSectionKey(content, "input", args.ActionName)
 		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
