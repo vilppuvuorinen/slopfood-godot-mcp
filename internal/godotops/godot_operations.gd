@@ -1968,8 +1968,12 @@ func manage_theme_resource(params):
         if theme == null:
             printerr("Failed to load theme: " + full_path)
             quit(1)
+        var props = {}
+        for prop in theme.get_property_list():
+            if prop["usage"] & PROPERTY_USAGE_STORAGE:
+                props[prop["name"]] = str(theme.get(prop["name"]))
         print(JSON_START)
-        print(JSON.stringify({"type": theme.get_class(), "path": full_path}))
+        print(JSON.stringify({"type": theme.get_class(), "path": full_path, "properties": props}))
         print(JSON_END)
     elif action == "modify":
         if not ResourceLoader.exists(full_path):

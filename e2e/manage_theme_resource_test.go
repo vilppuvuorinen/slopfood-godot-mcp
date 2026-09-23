@@ -41,6 +41,8 @@ func TestManageThemeResourceTool(t *testing.T) {
 		"action":       "read",
 	})
 	requireContains(t, readText, `"type": "Theme"`)
+	requireContains(t, readText, `"properties"`)
+	requireContains(t, readText, `"default_font_size": "16"`)
 	requireNotContains(t, readText, "THEME_JSON_START")
 
 	modifyText := requireToolText(t, session, "manage_theme_resource", map[string]any{
@@ -57,6 +59,7 @@ func TestManageThemeResourceTool(t *testing.T) {
 		"action":       "read",
 	})
 	requireContains(t, reReadText, `"type": "Theme"`)
+	requireContains(t, reReadText, `"default_font_size": "20"`)
 	requireNotContains(t, reReadText, "THEME_JSON_START")
 }
 
