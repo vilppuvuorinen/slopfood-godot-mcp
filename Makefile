@@ -41,7 +41,7 @@ godot:
 # graph. The binary is built first and handed to the tests via GO_DOT_MCP_BIN.
 .PHONY: e2e
 e2e: build
-	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GO_DOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)' $(GO) test $(GOFLAGS) -covermode=atomic ./...
+	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GO_DOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)' $(GO) test $(GOFLAGS) -count=1 -covermode=atomic ./...
 
 .PHONY: bench
 bench:
