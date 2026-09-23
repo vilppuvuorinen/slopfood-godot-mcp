@@ -1851,12 +1851,18 @@ func manage_resource(params):
             printerr("Resource not found: " + full_path)
             quit(1)
         var res = ResourceLoader.load(full_path)
+        if res == null:
+            printerr("Failed to load resource: " + full_path)
+            quit(1)
         var properties = params.get("properties", {})
         for prop_name in properties:
             var raw_value = properties[prop_name]
             var converted_value = _convert_property_value(res, prop_name, raw_value)
             res.set(prop_name, converted_value)
-        ResourceSaver.save(res, full_path)
+        var save_error = ResourceSaver.save(res, full_path)
+        if save_error != OK:
+            printerr("Failed to save resource: " + str(save_error))
+            quit(1)
         print("Resource modified: " + full_path)
     else:
         printerr("Unknown manage_resource action: " + action)
@@ -1881,13 +1887,19 @@ func manage_theme_resource(params):
             var dir = DirAccess.open("res://")
             if dir and not dir.dir_exists(dir_relative):
                 dir.make_dir_recursive(dir_relative)
-        ResourceSaver.save(theme, full_path)
+        var save_error = ResourceSaver.save(theme, full_path)
+        if save_error != OK:
+            printerr("Failed to save theme: " + str(save_error))
+            quit(1)
         print("Theme created at: " + full_path)
     elif action == "read":
         if not ResourceLoader.exists(full_path):
             printerr("Theme not found: " + full_path)
             quit(1)
         var theme = ResourceLoader.load(full_path)
+        if theme == null:
+            printerr("Failed to load theme: " + full_path)
+            quit(1)
         print(JSON_START)
         print(JSON.stringify({"type": theme.get_class(), "path": full_path}))
         print(JSON_END)
@@ -1896,10 +1908,16 @@ func manage_theme_resource(params):
             printerr("Theme not found: " + full_path)
             quit(1)
         var theme = ResourceLoader.load(full_path)
+        if theme == null:
+            printerr("Failed to load theme: " + full_path)
+            quit(1)
         var properties = params.get("properties", {})
         for key in properties:
             theme.set(key, properties[key])
-        ResourceSaver.save(theme, full_path)
+        var save_error = ResourceSaver.save(theme, full_path)
+        if save_error != OK:
+            printerr("Failed to save theme: " + str(save_error))
+            quit(1)
         print("Theme modified: " + full_path)
     else:
         printerr("Unknown manage_theme_resource action: " + action)
