@@ -1569,10 +1569,45 @@ func manage_scene_signals(params):
         print(JSON_END)
     elif action == "add":
         var signal_name = params.get("signal_name", "")
-        var source_path = params.get("source_path", ".")
-        var target_path = params.get("target_path", ".")
+        var source_path = params.get("source_path", "")
+        var target_path = params.get("target_path", "")
         var method = params.get("method", "")
-        var conn_line = '[connection signal="%s" from="%s" to="%s" method="%s"]' % [signal_name, source_path, target_path, method]
+        for field in [signal_name, source_path, target_path, method]:
+            if field.is_empty():
+                printerr("signal_name, source_path, target_path, and method are required for add")
+                quit(1)
+                return
+            if not _connection_field_is_safe(field):
+                printerr("Signal connection fields cannot contain quotes, backslashes, or newlines")
+                quit(1)
+                return
+
+        var scene = load(full_path) as PackedScene
+        if scene == null:
+            printerr("Failed to load scene: " + full_path)
+            quit(1)
+            return
+        var scene_root = scene.instantiate()
+        if scene_root == null:
+            printerr("Failed to instantiate scene: " + full_path)
+            quit(1)
+            return
+        if _resolve_scene_node(scene_root, source_path) == null:
+            printerr("Source node not found: " + source_path)
+            quit(1)
+            return
+        if _resolve_scene_node(scene_root, target_path) == null:
+            printerr("Target node not found: " + target_path)
+            quit(1)
+            return
+
+        var from_path = _connection_node_path(source_path)
+        var to_path = _connection_node_path(target_path)
+        var conn_line = '[connection signal="%s" from="%s" to="%s" method="%s"]' % [signal_name, from_path, to_path, method]
+        for line in content.split("\n"):
+            if line.strip_edges() == conn_line:
+                print("Signal connection already exists: " + conn_line)
+                return
         content += "\n" + conn_line + "\n"
         var file = FileAccess.open(full_path, FileAccess.WRITE)
         file.store_string(content)
@@ -1580,18 +1615,51 @@ func manage_scene_signals(params):
         print("Signal connection added: " + conn_line)
     elif action == "remove":
         var signal_name = params.get("signal_name", "")
+        if signal_name.is_empty():
+            printerr("signal_name is required for remove")
+            quit(1)
+            return
         var lines = content.split("\n")
         var new_lines = []
+        var removed = 0
         for line in lines:
-            if not (line.begins_with("[connection") and signal_name in line):
-                new_lines.append(line)
+            if line.begins_with("[connection") and _connection_signal_name(line) == signal_name:
+                removed += 1
+                continue
+            new_lines.append(line)
         var file = FileAccess.open(full_path, FileAccess.WRITE)
         file.store_string("\n".join(new_lines))
         file.close()
-        print("Signal connections for '%s' removed" % signal_name)
+        print("Signal connections for '%s' removed: %d" % [signal_name, removed])
     else:
         printerr("Unknown manage_scene_signals action: " + action)
         quit(1)
+
+# Signal-connection helpers: keep the hand-written [connection] lines safe and
+# resolve the tool's "root/Child" node paths to the scene-relative paths Godot
+# actually stores ("." for the root, "Child" for a child).
+func _connection_field_is_safe(value):
+    return not ("\"" in value or "\\" in value or "\n" in value or "\r" in value)
+
+func _connection_node_path(tool_path):
+    if tool_path == "" or tool_path == "root" or tool_path == ".":
+        return "."
+    if tool_path.begins_with("root/"):
+        return tool_path.substr(5)
+    if tool_path.begins_with("./"):
+        return tool_path.substr(2)
+    return tool_path
+
+func _connection_signal_name(line):
+    var marker = 'signal="'
+    var start = line.find(marker)
+    if start == -1:
+        return ""
+    start += marker.length()
+    var end = line.find('"', start)
+    if end == -1:
+        return ""
+    return line.substr(start, end - start)
 
 # Rename/duplicate/move nodes within a scene file
 func manage_scene_structure(params):

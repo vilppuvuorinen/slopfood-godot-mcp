@@ -75,6 +75,19 @@ func handleManageSceneSignals(ctx context.Context, raw json.RawMessage) (any, er
 	if args.ProjectPath == "" || args.ScenePath == "" || args.Action == "" {
 		return mcp.ErrorResult("projectPath, scenePath, and action are required."), nil
 	}
+	switch args.Action {
+	case "list":
+	case "add":
+		if args.SignalName == "" || args.SourcePath == "" || args.TargetPath == "" || args.Method == "" {
+			return mcp.ErrorResult("signalName, sourcePath, targetPath, and method are required for add."), nil
+		}
+	case "remove":
+		if args.SignalName == "" {
+			return mcp.ErrorResult("signalName is required for remove."), nil
+		}
+	default:
+		return mcp.ErrorResult("Unknown action: " + args.Action + ". Use list, add, or remove."), nil
+	}
 	sceneFull, pathOK := confinePath(args.ProjectPath, args.ScenePath)
 	if !validPath(args.ProjectPath) || !pathOK {
 		return mcp.ErrorResult("Invalid path."), nil

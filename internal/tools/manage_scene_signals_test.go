@@ -128,6 +128,9 @@ func TestManageSceneSignalsValidation(t *testing.T) {
 		{name: "invalid scene path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"../escape.tscn","action":"list"}`, want: "Invalid path."},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn","action":"list"}`, want: "Not a valid Godot project"},
 		{name: "missing scene file", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"missing.tscn","action":"list"}`, want: "Scene file does not exist: missing.tscn"},
+		{name: "add missing fields", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","action":"add","signalName":"pressed"}`, want: "signalName, sourcePath, targetPath, and method are required for add."},
+		{name: "remove missing signal", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","action":"remove"}`, want: "signalName is required for remove."},
+		{name: "unknown action", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","action":"frobnicate"}`, want: "Unknown action: frobnicate. Use list, add, or remove."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -148,7 +151,7 @@ func TestManageSceneSignalsScriptFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, manageSceneSignals(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","action":"add","signalName":"pressed"}`)
+	result := callToolArgs(t, manageSceneSignals(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","action":"add","signalName":"pressed","sourcePath":"root","targetPath":"root","method":"on_pressed"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

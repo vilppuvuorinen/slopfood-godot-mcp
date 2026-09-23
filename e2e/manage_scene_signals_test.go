@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -45,7 +46,7 @@ func TestManageSceneSignalsTool(t *testing.T) {
 		})
 		requirePrefix(t, addText, "manage_scene_signals succeeded.")
 
-		connection := `[connection signal="pressed" from="root" to="root" method="on_pressed"]`
+		connection := `[connection signal="pressed" from="." to="." method="on_pressed"]`
 		sceneFile := filepath.Join(root, "scenes", "connections.tscn")
 		requireContains(t, readFile(t, sceneFile), connection)
 
@@ -57,6 +58,82 @@ func TestManageSceneSignalsTool(t *testing.T) {
 		})
 		requirePrefix(t, removeText, "manage_scene_signals succeeded.")
 		requireNotContains(t, readFile(t, sceneFile), connection)
+	})
+
+	t.Run("duplicate add is idempotent", func(t *testing.T) {
+		root := seedScene(t, session, "scenes/duplicate.tscn", "Node2D")
+		args := map[string]any{
+			"projectPath": root,
+			"scenePath":   "scenes/duplicate.tscn",
+			"action":      "add",
+			"signalName":  "pressed",
+			"sourcePath":  "root",
+			"targetPath":  "root",
+			"method":      "on_pressed",
+		}
+		requireToolText(t, session, "manage_scene_signals", args)
+		requireToolText(t, session, "manage_scene_signals", args)
+
+		connection := `[connection signal="pressed" from="." to="." method="on_pressed"]`
+		scene := readFile(t, filepath.Join(root, "scenes", "duplicate.tscn"))
+		if got := strings.Count(scene, connection); got != 1 {
+			t.Errorf("connection count = %d, want 1 in:\n%s", got, scene)
+		}
+	})
+
+	t.Run("remove without signal keeps connections", func(t *testing.T) {
+		root := seedScene(t, session, "scenes/keep.tscn", "Node2D")
+		connection := `[connection signal="pressed" from="." to="." method="on_pressed"]`
+		requireToolText(t, session, "manage_scene_signals", map[string]any{
+			"projectPath": root,
+			"scenePath":   "scenes/keep.tscn",
+			"action":      "add",
+			"signalName":  "pressed",
+			"sourcePath":  "root",
+			"targetPath":  "root",
+			"method":      "on_pressed",
+		})
+
+		requireToolError(t, session, "manage_scene_signals", map[string]any{
+			"projectPath": root,
+			"scenePath":   "scenes/keep.tscn",
+			"action":      "remove",
+		}, "signalName is required for remove.")
+		requireContains(t, readFile(t, filepath.Join(root, "scenes", "keep.tscn")), connection)
+	})
+
+	t.Run("rejects missing source node", func(t *testing.T) {
+		root := seedScene(t, session, "scenes/dangling.tscn", "Node2D")
+		res := callTool(t, session, "manage_scene_signals", map[string]any{
+			"projectPath": root,
+			"scenePath":   "scenes/dangling.tscn",
+			"action":      "add",
+			"signalName":  "pressed",
+			"sourcePath":  "root/Missing",
+			"targetPath":  "root",
+			"method":      "on_pressed",
+		})
+		if !res.IsError {
+			t.Fatalf("expected an error result: %s", firstText(t, res))
+		}
+		requireContains(t, firstText(t, res), "Source node not found: root/Missing")
+	})
+
+	t.Run("rejects unsafe field", func(t *testing.T) {
+		root := seedScene(t, session, "scenes/unsafe.tscn", "Node2D")
+		res := callTool(t, session, "manage_scene_signals", map[string]any{
+			"projectPath": root,
+			"scenePath":   "scenes/unsafe.tscn",
+			"action":      "add",
+			"signalName":  `pr"essed`,
+			"sourcePath":  "root",
+			"targetPath":  "root",
+			"method":      "on_pressed",
+		})
+		if !res.IsError {
+			t.Fatalf("expected an error result: %s", firstText(t, res))
+		}
+		requireContains(t, firstText(t, res), "cannot contain quotes")
 	})
 }
 
@@ -94,5 +171,36 @@ func TestManageSceneSignalsErrors(t *testing.T) {
 			"scenePath":   "missing.tscn",
 			"action":      "list",
 		}, "Scene file does not exist: missing.tscn")
+	})
+
+	t.Run("add missing fields", func(t *testing.T) {
+		root := t.TempDir()
+		seedProject(t, root)
+		requireToolError(t, session, "manage_scene_signals", map[string]any{
+			"projectPath": root,
+			"scenePath":   "main.tscn",
+			"action":      "add",
+			"signalName":  "pressed",
+		}, "signalName, sourcePath, targetPath, and method are required for add.")
+	})
+
+	t.Run("remove missing signal", func(t *testing.T) {
+		root := t.TempDir()
+		seedProject(t, root)
+		requireToolError(t, session, "manage_scene_signals", map[string]any{
+			"projectPath": root,
+			"scenePath":   "main.tscn",
+			"action":      "remove",
+		}, "signalName is required for remove.")
+	})
+
+	t.Run("unknown action", func(t *testing.T) {
+		root := t.TempDir()
+		seedProject(t, root)
+		requireToolError(t, session, "manage_scene_signals", map[string]any{
+			"projectPath": root,
+			"scenePath":   "main.tscn",
+			"action":      "frobnicate",
+		}, "Unknown action: frobnicate. Use list, add, or remove.")
 	})
 }
