@@ -1,12 +1,10 @@
 package tools
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
@@ -84,17 +82,8 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 		), nil
 	}
 
-	const startMarker = "SCENE_JSON_START"
-	const endMarker = "SCENE_JSON_END"
-	startIdx := strings.Index(stdout, startMarker)
-	endIdx := strings.Index(stdout, endMarker)
-	if startIdx != -1 && endIdx != -1 {
-		jsonStr := strings.TrimSpace(stdout[startIdx+len(startMarker) : endIdx])
-		var pretty bytes.Buffer
-		if indentErr := json.Indent(&pretty, []byte(jsonStr), "", "  "); indentErr == nil {
-			return mcp.TextResult(pretty.String()), nil
-		}
-		return mcp.TextResult("Raw scene data:\n" + jsonStr), nil
+	if payload, ok := markerJSON(stdout); ok {
+		return mcp.TextResult(payload), nil
 	}
 
 	text := "Scene read output:\n" + stdout

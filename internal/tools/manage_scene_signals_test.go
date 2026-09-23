@@ -90,6 +90,27 @@ func TestManageSceneSignalsSuccess(t *testing.T) {
 	}
 }
 
+func TestManageSceneSignalsListStructured(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"connections":["[connection signal=\"pressed\" from=\"root\" to=\"root\" method=\"on_pressed\"]"]}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, manageSceneSignals(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","action":"list"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	for _, want := range []string{`"connections"`, `[connection signal=\"pressed\" from=\"root\" to=\"root\" method=\"on_pressed\"]`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text = %q, want it to contain %q", text, want)
+		}
+	}
+	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
+		t.Errorf("text still contains markers: %q", text)
+	}
+}
+
 func TestManageSceneSignalsValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

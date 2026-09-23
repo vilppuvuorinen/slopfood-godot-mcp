@@ -38,7 +38,7 @@ func TestGetUIDSchema(t *testing.T) {
 }
 
 func TestGetUIDSuccess(t *testing.T) {
-	fake := fakeGodotOps(t, fakeUIDVersion+"\necho '{\"file\":\"res://player.gd\",\"uid\":\"uid://abc\",\"exists\":true}'")
+	fake := fakeGodotOps(t, fakeUIDVersion+"\nprintf '<<<GO_DOT_MCP_JSON_START>>>\n{\"file\":\"res://player.gd\",\"uid\":\"uid://abc\",\"exists\":true}\n<<<GO_DOT_MCP_JSON_END>>>\n'")
 	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)
@@ -52,11 +52,14 @@ func TestGetUIDSuccess(t *testing.T) {
 		t.Fatalf("content = %+v", result.Content)
 	}
 	text := result.Content[0].Text
-	if !strings.HasPrefix(text, "UID for player.gd: ") {
-		t.Errorf("text = %q", text)
+	if !strings.Contains(text, `"uid": "uid://abc"`) {
+		t.Errorf("text = %q, want it to contain pretty uid field", text)
 	}
-	if !strings.Contains(text, "uid://abc") {
-		t.Errorf("text = %q, want it to contain uid://abc", text)
+	if !strings.Contains(text, `"exists": true`) {
+		t.Errorf("text = %q, want it to contain pretty exists field", text)
+	}
+	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
+		t.Errorf("text still contains markers: %q", text)
 	}
 }
 
@@ -80,7 +83,7 @@ func TestGetUIDVersionGate(t *testing.T) {
 }
 
 func TestGetUIDSnakeCaseAliases(t *testing.T) {
-	fake := fakeGodotOps(t, fakeUIDVersion+"\necho '{\"file\":\"res://player.gd\",\"uid\":\"uid://abc\",\"exists\":true}'")
+	fake := fakeGodotOps(t, fakeUIDVersion+"\nprintf '<<<GO_DOT_MCP_JSON_START>>>\n{\"file\":\"res://player.gd\",\"uid\":\"uid://abc\",\"exists\":true}\n<<<GO_DOT_MCP_JSON_END>>>\n'")
 	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)
@@ -90,8 +93,8 @@ func TestGetUIDSnakeCaseAliases(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	if !strings.HasPrefix(result.Content[0].Text, "UID for player.gd: ") {
-		t.Errorf("text = %q", result.Content[0].Text)
+	if !strings.Contains(result.Content[0].Text, `"uid": "uid://abc"`) {
+		t.Errorf("text = %q, want converted aliases and pretty payload", result.Content[0].Text)
 	}
 }
 

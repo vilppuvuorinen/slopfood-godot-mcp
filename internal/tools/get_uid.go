@@ -109,6 +109,10 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 		), nil
 	}
 
+	if payload, ok := markerJSON(stdout); ok {
+		return mcp.TextResult(payload), nil
+	}
+
 	message := fmt.Sprintf("UID for %s: %s", args.FilePath, strings.TrimSpace(stdout))
 	return mcp.TextResult(message), nil
 }

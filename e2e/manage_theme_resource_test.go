@@ -40,7 +40,8 @@ func TestManageThemeResourceTool(t *testing.T) {
 		"resourcePath": "themes/main.tres",
 		"action":       "read",
 	})
-	requireContains(t, readText, "THEME_JSON_START")
+	requireContains(t, readText, `"type": "Theme"`)
+	requireNotContains(t, readText, "THEME_JSON_START")
 
 	modifyText := requireToolText(t, session, "manage_theme_resource", map[string]any{
 		"projectPath":  root,
@@ -55,7 +56,8 @@ func TestManageThemeResourceTool(t *testing.T) {
 		"resourcePath": "themes/main.tres",
 		"action":       "read",
 	})
-	requireContains(t, reReadText, "THEME_JSON_START")
+	requireContains(t, reReadText, `"type": "Theme"`)
+	requireNotContains(t, reReadText, "THEME_JSON_START")
 }
 
 // TestManageThemeResourceErrors covers the reference's validation and failure

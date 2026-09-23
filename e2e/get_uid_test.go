@@ -31,8 +31,7 @@ func TestGetUIDTool(t *testing.T) {
 			"projectPath": root,
 			"filePath":    "player.gd",
 		})
-		requirePrefix(t, text, "UID for player.gd: ")
-		requireContains(t, text, "uid://e2etestuid")
+		requireContains(t, text, `"uid": "uid://e2etestuid"`)
 	})
 
 	t.Run("reports a missing UID sidecar", func(t *testing.T) {
@@ -42,7 +41,7 @@ func TestGetUIDTool(t *testing.T) {
 			"projectPath": root,
 			"filePath":    "orphan.gd",
 		})
-		requireContains(t, text, `"exists":false`)
+		requireContains(t, text, `"exists": false`)
 	})
 }
 

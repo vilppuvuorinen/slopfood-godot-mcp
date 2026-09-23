@@ -28,7 +28,7 @@ func TestManageSceneSignalsTool(t *testing.T) {
 			"scenePath":   "scenes/signals.tscn",
 			"action":      "list",
 		})
-		requirePrefix(t, text, "manage_scene_signals succeeded.")
+		requireContains(t, text, `"connections"`)
 	})
 
 	t.Run("adds then removes a connection", func(t *testing.T) {

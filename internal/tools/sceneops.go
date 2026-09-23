@@ -1,13 +1,42 @@
 package tools
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotops"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
+
+const (
+	jsonStartMarker = "<<<GO_DOT_MCP_JSON_START>>>"
+	jsonEndMarker   = "<<<GO_DOT_MCP_JSON_END>>>"
+)
+
+// markerJSON returns the JSON payload between jsonStartMarker and
+// jsonEndMarker, pretty-printed with two-space indentation, and whether both
+// markers were present. Invalid JSON is returned verbatim.
+func markerJSON(stdout string) (string, bool) {
+	startIdx := strings.Index(stdout, jsonStartMarker)
+	if startIdx == -1 {
+		return "", false
+	}
+	rest := stdout[startIdx+len(jsonStartMarker):]
+	endIdx := strings.Index(rest, jsonEndMarker)
+	if endIdx == -1 {
+		return "", false
+	}
+	raw := strings.TrimSpace(rest[:endIdx])
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, []byte(raw), "", "  "); err != nil {
+		return raw, true
+	}
+	return buf.String(), true
+}
 
 // runOperation executes an operations-script operation against a project,
 // converting camelCase parameters to snake_case first.
@@ -40,10 +69,12 @@ var headlessSolutions = []string{
 }
 
 // runHeadlessOperation runs an operations-script operation and returns the
-// reference server's generic result: "<operation> succeeded.\n\nOutput:
-// <stdout>" on success, or "<operation> failed: <detail>" with the shared
-// solutions on failure. Callers validate arguments, paths, and project/scene
-// existence first.
+// reference server's generic result. On success it first attempts structured
+// payload extraction via markerJSON, returning the pretty-printed JSON when the
+// markers are present; otherwise it falls back to "<operation>
+// succeeded.\n\nOutput: <stdout>". On failure it returns "<operation> failed:
+// <detail>" with the shared solutions. Callers validate arguments, paths, and
+// project/scene existence first.
 func runHeadlessOperation(ctx context.Context, projectPath, operation string, params map[string]any) (any, error) {
 	stdout, stderr, exitCode, err := runOperation(ctx, projectPath, operation, params)
 	if err != nil {
@@ -51,6 +82,9 @@ func runHeadlessOperation(ctx context.Context, projectPath, operation string, pa
 	}
 	if scriptFailed(exitCode) {
 		return mcp.ErrorResult(operation+" failed: "+stderr, headlessSolutions...), nil
+	}
+	if payload, ok := markerJSON(stdout); ok {
+		return mcp.TextResult(payload), nil
 	}
 	return mcp.TextResult(operation + " succeeded.\n\nOutput: " + stdout), nil
 }

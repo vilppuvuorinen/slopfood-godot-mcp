@@ -91,6 +91,26 @@ func TestManageThemeResourceSuccess(t *testing.T) {
 	}
 }
 
+func TestManageThemeResourceReadStructured(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"type":"Theme","path":"res://themes/main.tres"}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, manageThemeResource(), `{"projectPath":`+jsonString(root)+`,"resourcePath":"themes/main.tres","action":"read"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	for _, want := range []string{`"type": "Theme"`, `"path": "res://themes/main.tres"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text = %q, want it to contain %q", text, want)
+		}
+	}
+	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
+		t.Errorf("text still contains markers: %q", text)
+	}
+}
+
 func TestManageThemeResourceValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

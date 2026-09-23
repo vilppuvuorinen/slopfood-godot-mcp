@@ -7,6 +7,9 @@ extends SceneTree
 # Debug mode flag
 var debug_mode = false
 
+const JSON_START = "<<<GO_DOT_MCP_JSON_START>>>"
+const JSON_END = "<<<GO_DOT_MCP_JSON_END>>>"
+
 func _init():
     var args = OS.get_cmdline_args()
     
@@ -977,7 +980,9 @@ func get_uid(params):
         }
         if debug_mode:
             print("UID result: " + JSON.stringify(result))
+        print(JSON_START)
         print(JSON.stringify(result))
+        print(JSON_END)
     else:
         if debug_mode:
             print("UID file does not exist or could not be opened")
@@ -991,7 +996,9 @@ func get_uid(params):
         }
         if debug_mode:
             print("UID result: " + JSON.stringify(result))
+        print(JSON_START)
         print(JSON.stringify(result))
+        print(JSON_END)
 
 # Resave all resources to update UID references
 func resave_resources(params):
@@ -1254,9 +1261,9 @@ func read_scene(params):
         if f:
             var raw_content = f.get_as_text()
             f.close()
-            print("SCENE_JSON_START")
+            print(JSON_START)
             print(JSON.stringify({"error": "Failed to instantiate scene, returning raw text", "raw": raw_content.substr(0, 4096)}))
-            print("SCENE_JSON_END")
+            print(JSON_END)
             return
         quit(1)
 
@@ -1267,9 +1274,9 @@ func read_scene(params):
 
     var tree_data = _walk_scene_tree(scene_root)
 
-    print("SCENE_JSON_START")
+    print(JSON_START)
     print(JSON.stringify(tree_data))
-    print("SCENE_JSON_END")
+    print(JSON_END)
 
     scene_root.queue_free()
 
@@ -1557,9 +1564,9 @@ func manage_scene_signals(params):
         for line in lines:
             if line.begins_with("[connection"):
                 connections.append(line.strip_edges())
-        print("SIGNALS_JSON_START")
+        print(JSON_START)
         print(JSON.stringify({"connections": connections}))
-        print("SIGNALS_JSON_END")
+        print(JSON_END)
     elif action == "add":
         var signal_name = params.get("signal_name", "")
         var source_path = params.get("source_path", ".")
@@ -1836,9 +1843,9 @@ func manage_resource(params):
         for prop in res.get_property_list():
             if prop["usage"] & PROPERTY_USAGE_STORAGE:
                 props[prop["name"]] = str(res.get(prop["name"]))
-        print("RESOURCE_JSON_START")
+        print(JSON_START)
         print(JSON.stringify({"type": res.get_class(), "path": full_path, "properties": props}))
-        print("RESOURCE_JSON_END")
+        print(JSON_END)
     elif action == "modify":
         if not ResourceLoader.exists(full_path):
             printerr("Resource not found: " + full_path)
@@ -1881,9 +1888,9 @@ func manage_theme_resource(params):
             printerr("Theme not found: " + full_path)
             quit(1)
         var theme = ResourceLoader.load(full_path)
-        print("THEME_JSON_START")
+        print(JSON_START)
         print(JSON.stringify({"type": theme.get_class(), "path": full_path}))
-        print("THEME_JSON_END")
+        print(JSON_END)
     elif action == "modify":
         if not ResourceLoader.exists(full_path):
             printerr("Theme not found: " + full_path)

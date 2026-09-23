@@ -33,7 +33,7 @@ func TestReadSceneSchema(t *testing.T) {
 }
 
 func TestReadSceneSuccess(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf 'SCENE_JSON_START\n{"name":"root","type":"Node2D","children":[{"name":"Child","type":"Sprite2D"}]}\nSCENE_JSON_END\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","children":[{"name":"Child","type":"Sprite2D"}]}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
@@ -51,7 +51,7 @@ func TestReadSceneSuccess(t *testing.T) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
 	}
-	if strings.Contains(text, "SCENE_JSON") {
+	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
 		t.Errorf("text still contains markers: %q", text)
 	}
 }
@@ -87,7 +87,7 @@ func TestReadSceneRawWhenNoMarkers(t *testing.T) {
 }
 
 func TestReadSceneRawWhenMarkersInvalid(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf 'SCENE_JSON_START\nnot-json\nSCENE_JSON_END\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\nnot-json\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
@@ -96,8 +96,12 @@ func TestReadSceneRawWhenMarkersInvalid(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	if !strings.Contains(result.Content[0].Text, "Raw scene data:\nnot-json") {
-		t.Errorf("text = %q", result.Content[0].Text)
+	text := result.Content[0].Text
+	if !strings.Contains(text, "not-json") {
+		t.Errorf("text = %q, want the raw invalid JSON payload", text)
+	}
+	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
+		t.Errorf("text still contains markers: %q", text)
 	}
 }
 

@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 )
@@ -38,8 +39,14 @@ func TestManageResourceTool(t *testing.T) {
 			"resourcePath": "resources/mat.tres",
 			"action":       "read",
 		})
-		requirePrefix(t, text, "manage_resource succeeded.")
-		requireContains(t, text, "RESOURCE_JSON_START", `"type"`)
+		var payload map[string]any
+		if err := json.Unmarshal([]byte(text), &payload); err != nil {
+			t.Fatalf("unmarshal resource payload: %v\n%s", err, text)
+		}
+		if payload["type"] != "StandardMaterial3D" {
+			t.Errorf("type = %v, want StandardMaterial3D", payload["type"])
+		}
+		requireContains(t, text, `"type": "StandardMaterial3D"`)
 	})
 
 	t.Run("modifies then re-reads a resource", func(t *testing.T) {
@@ -60,7 +67,7 @@ func TestManageResourceTool(t *testing.T) {
 			"resourcePath": "resources/mat.tres",
 			"action":       "read",
 		})
-		requireContains(t, readText, `"metallic":"0.75"`)
+		requireContains(t, readText, `"metallic": "0.75"`)
 	})
 }
 
