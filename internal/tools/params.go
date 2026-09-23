@@ -60,11 +60,34 @@ var uppercaseLetter = regexp.MustCompile(`[A-Z]`)
 
 // aliasParams rewrites snake_case argument keys to their camelCase equivalents
 // so handlers accept both spellings, mirroring the reference server's
-// normalizeParameters. Nested objects are rewritten recursively; arrays and
-// scalars are left untouched. When both spellings are present the camelCase
-// value wins.
+// normalizeParameters. Nested objects and objects inside arrays are rewritten
+// recursively; scalars are left untouched. When both spellings are present the
+// camelCase value wins.
 func aliasParams(raw json.RawMessage, aliases map[string]string) (json.RawMessage, error) {
-	if !isJSONObject(raw) {
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 {
+		return raw, nil
+	}
+	switch trimmed[0] {
+	case '[':
+		var arr []json.RawMessage
+		if err := json.Unmarshal(raw, &arr); err != nil {
+			return nil, fmt.Errorf("invalid arguments: %w", err)
+		}
+		for i, elem := range arr {
+			nested, err := aliasParams(elem, aliases)
+			if err != nil {
+				return nil, err
+			}
+			arr[i] = nested
+		}
+		encoded, err := json.Marshal(arr)
+		if err != nil {
+			return nil, fmt.Errorf("encode normalized arguments: %w", err)
+		}
+		return encoded, nil
+	case '{':
+	default:
 		return raw, nil
 	}
 	var obj map[string]json.RawMessage
@@ -98,15 +121,10 @@ func aliasParams(raw json.RawMessage, aliases map[string]string) (json.RawMessag
 	return encoded, nil
 }
 
-// isJSONObject reports whether raw is a JSON object literal.
-func isJSONObject(raw json.RawMessage) bool {
-	trimmed := bytes.TrimSpace(raw)
-	return len(trimmed) > 0 && trimmed[0] == '{'
-}
-
 // toSnakeCase recursively converts camelCase keys to snake_case before they
 // are handed to the Godot script, mirroring the reference server's
-// convertCamelToSnakeCase. Explicit aliases win; otherwise every uppercase
+// convertCamelToSnakeCase. Objects and objects nested inside arrays are
+// converted recursively. Explicit aliases win; otherwise every uppercase
 // letter becomes an underscore-prefixed lowercase letter.
 func toSnakeCase(params map[string]any) map[string]any {
 	out := make(map[string]any, len(params))
@@ -117,11 +135,24 @@ func toSnakeCase(params map[string]any) map[string]any {
 				return "_" + strings.ToLower(letter)
 			})
 		}
-		if nested, ok := value.(map[string]any); ok {
-			out[snake] = toSnakeCase(nested)
-			continue
-		}
-		out[snake] = value
+		out[snake] = toSnakeCaseValue(value)
 	}
 	return out
+}
+
+// toSnakeCaseValue applies toSnakeCase to objects and arrays, leaving scalars
+// untouched so nested objects inside arrays are normalized too.
+func toSnakeCaseValue(value any) any {
+	switch typed := value.(type) {
+	case map[string]any:
+		return toSnakeCase(typed)
+	case []any:
+		out := make([]any, len(typed))
+		for i, elem := range typed {
+			out[i] = toSnakeCaseValue(elem)
+		}
+		return out
+	default:
+		return value
+	}
 }
