@@ -81,6 +81,38 @@ func TestCreateScriptClassNameAndMethods(t *testing.T) {
 	}
 }
 
+func TestCreateScriptQuotedExtendsPath(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, createScript(),
+		`{"projectPath":`+jsonString(root)+`,"scriptPath":"child.gd","extends":`+jsonString(`"res://base.gd"`)+`}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "child.gd"))
+	if err != nil {
+		t.Fatalf("read script: %v", err)
+	}
+	if got, want := string(data), "extends \"res://base.gd\"\n\n"; got != want {
+		t.Errorf("content = %q, want %q", got, want)
+	}
+}
+
+func TestCreateScriptValidatesClassNameWithSource(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, createScript(),
+		`{"projectPath":`+jsonString(root)+`,"scriptPath":"a.gd","className":"2Bad","source":"extends Node\n"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "Invalid className") {
+		t.Errorf("message = %q", result.Content[0].Text)
+	}
+}
+
 func TestCreateScriptSourceOverride(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
@@ -134,6 +166,10 @@ func TestCreateScriptErrors(t *testing.T) {
 		{name: "missing script path", args: `{"projectPath":` + jsonString(root) + `}`, want: "projectPath and scriptPath are required."},
 		{name: "invalid project path", args: `{"projectPath":"../escape","scriptPath":"a.gd"}`, want: "Invalid path."},
 		{name: "invalid script path", args: `{"projectPath":` + jsonString(root) + `,"scriptPath":"../escape.gd"}`, want: "Invalid path."},
+		{name: "invalid class name", args: `{"projectPath":` + jsonString(root) + `,"scriptPath":"a.gd","className":"2Bad"}`, want: "Invalid className"},
+		{name: "injecting class name", args: `{"projectPath":` + jsonString(root) + `,"scriptPath":"a.gd","className":` + jsonString("Player\nfunc evil():") + `}`, want: "Invalid className"},
+		{name: "invalid extends", args: `{"projectPath":` + jsonString(root) + `,"scriptPath":"a.gd","extends":"res://base.gd"}`, want: "Invalid extends"},
+		{name: "injecting extends", args: `{"projectPath":` + jsonString(root) + `,"scriptPath":"a.gd","extends":` + jsonString("Node2D\nfunc evil():") + `}`, want: "Invalid extends"},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scriptPath":"a.gd"}`, want: "Not a valid Godot project: "},
 	}
 	for _, tt := range tests {

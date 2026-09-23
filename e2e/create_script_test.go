@@ -69,6 +69,21 @@ func TestCreateScriptTool(t *testing.T) {
 			t.Errorf("content = %q, want %q", content, source)
 		}
 	})
+
+	t.Run("extends a quoted script path", func(t *testing.T) {
+		root := t.TempDir()
+		seedProject(t, root)
+
+		requireToolText(t, session, "create_script", map[string]any{
+			"projectPath": root,
+			"scriptPath":  "child.gd",
+			"extends":     `"res://base.gd"`,
+		})
+		content := readFile(t, filepath.Join(root, "child.gd"))
+		if want := "extends \"res://base.gd\"\n\n"; content != want {
+			t.Errorf("content = %q, want %q", content, want)
+		}
+	})
 }
 
 // TestCreateScriptErrors covers the reference's validation messages.
@@ -87,6 +102,22 @@ func TestCreateScriptErrors(t *testing.T) {
 			"projectPath": root,
 			"scriptPath":  "../escape.gd",
 		}, "Invalid path.")
+	})
+
+	t.Run("invalid class name", func(t *testing.T) {
+		requireToolError(t, session, "create_script", map[string]any{
+			"projectPath": root,
+			"scriptPath":  "player.gd",
+			"className":   "2Bad",
+		}, `Invalid className "2Bad": must be a valid Godot identifier (letters, digits, underscore; not starting with a digit).`)
+	})
+
+	t.Run("invalid extends", func(t *testing.T) {
+		requireToolError(t, session, "create_script", map[string]any{
+			"projectPath": root,
+			"scriptPath":  "player.gd",
+			"extends":     "res://base.gd",
+		}, `Invalid extends "res://base.gd": must be a built-in Godot class name or a quoted script path such as "res://base.gd".`)
 	})
 
 	t.Run("not a project", func(t *testing.T) {

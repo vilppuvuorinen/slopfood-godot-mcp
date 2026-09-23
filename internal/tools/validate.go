@@ -69,3 +69,15 @@ var classNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 func validClassName(name string) bool {
 	return classNamePattern.MatchString(name)
 }
+
+// extendsPathPattern matches a quoted Godot script path such as
+// `"res://base.gd"`, the other form an "extends" clause may take.
+var extendsPathPattern = regexp.MustCompile(`^"(res|user)://[^"\r\n]+"$`)
+
+// validExtends reports whether name is a valid target for an "extends" clause:
+// either a bare class identifier (built-in or class_name) or a quoted Godot
+// script path. Rejecting anything else keeps the value from breaking out of the
+// generated GDScript line.
+func validExtends(name string) bool {
+	return validClassName(name) || extendsPathPattern.MatchString(name)
+}

@@ -78,3 +78,30 @@ func TestValidClassName(t *testing.T) {
 		}
 	}
 }
+
+func TestValidExtends(t *testing.T) {
+	tests := []struct {
+		name string
+		want bool
+	}{
+		{name: "Node2D", want: true},
+		{name: "CharacterBody3D", want: true},
+		{name: "Player", want: true},
+		{name: `"res://base.gd"`, want: true},
+		{name: `"user://base.gd"`, want: true},
+		{name: `"res://scripts/my base.gd"`, want: true},
+		{name: "", want: false},
+		{name: "res://base.gd", want: false},
+		{name: `"res://base.gd`, want: false},
+		{name: `res://base.gd"`, want: false},
+		{name: `"res://base.tscn"`, want: true},
+		{name: "\"res://a\nb.gd\"", want: false},
+		{name: "Node2D\nfunc evil():", want: false},
+		{name: "Node2D/Child", want: false},
+	}
+	for _, tt := range tests {
+		if got := validExtends(tt.name); got != tt.want {
+			t.Errorf("validExtends(%q) = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}

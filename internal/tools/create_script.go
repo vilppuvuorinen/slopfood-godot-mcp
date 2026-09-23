@@ -78,6 +78,12 @@ func handleCreateScript(_ context.Context, raw json.RawMessage) (any, error) {
 	if !validPath(args.ProjectPath) || !pathOK {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
+	if args.ClassName != "" && !validClassName(args.ClassName) {
+		return mcp.ErrorResult(fmt.Sprintf("Invalid className %q: must be a valid Godot identifier (letters, digits, underscore; not starting with a digit).", args.ClassName)), nil
+	}
+	if args.Extends != "" && !validExtends(args.Extends) {
+		return mcp.ErrorResult(fmt.Sprintf(`Invalid extends %q: must be a built-in Godot class name or a quoted script path such as "res://base.gd".`, args.Extends)), nil
+	}
 	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
 		return notAProjectResult(args.ProjectPath), nil
 	}
