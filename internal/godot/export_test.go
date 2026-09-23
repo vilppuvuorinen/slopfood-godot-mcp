@@ -20,9 +20,12 @@ func TestExportArgsAndSuccess(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			stdout, stderr, err := Export(context.Background(), bin, "/proj", "Linux", "build/game", tt.debug)
+			stdout, stderr, exitCode, err := Export(context.Background(), bin, "/proj", "Linux", "build/game", tt.debug)
 			if err != nil {
 				t.Fatalf("Export: %v", err)
+			}
+			if exitCode != 0 {
+				t.Errorf("exitCode = %d, want 0", exitCode)
 			}
 			if stderr != "" {
 				t.Errorf("stderr = %q, want empty", stderr)
@@ -39,9 +42,12 @@ func TestExportArgsAndSuccess(t *testing.T) {
 func TestExportCapturesOutputOnNonZeroExit(t *testing.T) {
 	bin := writeExecutable(t, "echo out\necho 'ERROR: no template' >&2\nexit 1")
 
-	stdout, stderr, err := Export(context.Background(), bin, "/proj", "Linux", "build/game", false)
+	stdout, stderr, exitCode, err := Export(context.Background(), bin, "/proj", "Linux", "build/game", false)
 	if err != nil {
-		t.Fatalf("Export: %v, want nil (the caller inspects stderr)", err)
+		t.Fatalf("Export: %v, want nil (the exit code reports the failure)", err)
+	}
+	if exitCode != 1 {
+		t.Errorf("exitCode = %d, want 1", exitCode)
 	}
 	if !strings.Contains(stdout, "out") {
 		t.Errorf("stdout = %q", stdout)
@@ -52,7 +58,7 @@ func TestExportCapturesOutputOnNonZeroExit(t *testing.T) {
 }
 
 func TestExportSpawnFailure(t *testing.T) {
-	_, _, err := Export(context.Background(), filepath.Join(t.TempDir(), "nope"), "/proj", "Linux", "build/game", false)
+	_, _, _, err := Export(context.Background(), filepath.Join(t.TempDir(), "nope"), "/proj", "Linux", "build/game", false)
 	if err == nil {
 		t.Fatal("expected an error when the executable cannot be started")
 	}

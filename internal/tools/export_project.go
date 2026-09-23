@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
@@ -69,11 +68,11 @@ func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) 
 		return mcp.ErrorResult("Not a valid Godot project: " + args.ProjectPath), nil
 	}
 
-	stdout, stderr, err := godot.Export(ctx, godot.Path(), args.ProjectPath, args.PresetName, args.OutputPath, args.Debug)
+	stdout, stderr, exitCode, err := godot.Export(ctx, godot.Path(), args.ProjectPath, args.PresetName, args.OutputPath, args.Debug)
 	if err != nil {
 		return mcp.ErrorResult("Export failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	if strings.Contains(stderr, "ERROR") {
+	if exitCode != 0 {
 		return mcp.ErrorResult("Export failed: " + stderr), nil
 	}
 	output := stdout

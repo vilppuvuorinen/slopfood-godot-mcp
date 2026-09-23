@@ -15,8 +15,10 @@ type OperationParams map[string]any
 // Export runs
 // `<executable> --headless --path <project> --export-release|--export-debug
 // <preset> <output>` and returns the captured streams. A non-zero exit is not a
-// wrapper failure: the caller inspects stderr for ERROR markers.
-func Export(ctx context.Context, executable, projectPath, presetName, outputPath string, debug bool) (stdout, stderr string, err error) {
+// wrapper failure: Godot's editor calls quit(EXIT_FAILURE) when the export
+// fails, so the exit code is returned for the caller to interpret. Only a
+// failure to start the process is returned as an error.
+func Export(ctx context.Context, executable, projectPath, presetName, outputPath string, debug bool) (stdout, stderr string, exitCode int, err error) {
 	exportFlag := "--export-release"
 	if debug {
 		exportFlag = "--export-debug"
@@ -38,12 +40,12 @@ func Export(ctx context.Context, executable, projectPath, presetName, outputPath
 
 	var exitErr *exec.ExitError
 	if errors.As(runErr, &exitErr) {
-		return stdout, stderr, nil
+		return stdout, stderr, exitErr.ExitCode(), nil
 	}
 	if runErr != nil {
-		return stdout, stderr, fmt.Errorf("run godot: %w", runErr)
+		return stdout, stderr, 0, fmt.Errorf("run godot: %w", runErr)
 	}
-	return stdout, stderr, nil
+	return stdout, stderr, 0, nil
 }
 
 // RunOperation invokes

@@ -84,8 +84,8 @@ func TestExportProjectUsesOutputPathWhenStdoutEmpty(t *testing.T) {
 	}
 }
 
-func TestExportProjectScriptError(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo 'ERROR: no export template' >&2; exit 1`))
+func TestExportProjectNonZeroExit(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo 'could not pack project' >&2; exit 1`))
 	root := t.TempDir()
 	makeProject(t, root)
 
@@ -93,8 +93,19 @@ func TestExportProjectScriptError(t *testing.T) {
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
-	if got := result.Content[0].Text; !strings.HasPrefix(got, "Export failed: ") || !strings.Contains(got, "no export template") {
+	if got := result.Content[0].Text; !strings.HasPrefix(got, "Export failed: ") || !strings.Contains(got, "could not pack project") {
 		t.Errorf("message = %q", got)
+	}
+}
+
+func TestExportProjectBenignStderrError(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo 'ERROR: harmless diagnostic' >&2; exit 0`))
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, exportProject(), `{"projectPath":`+jsonString(root)+`,"presetName":"Linux","outputPath":"build/game.x86_64"}`)
+	if result.IsError {
+		t.Fatalf("exit code 0 must be reported as success: %+v", result.Content)
 	}
 }
 
