@@ -4,46 +4,10 @@
 package e2e
 
 import (
-	"encoding/json"
 	"os"
 	"strings"
 	"testing"
 )
-
-func TestHelloWorldTool(t *testing.T) {
-	session := connect(t)
-	findTool(t, session, "hello")
-
-	tests := []struct {
-		name string
-		args map[string]any
-		want string
-	}{
-		{name: "default", want: "Hello, World!"},
-		{name: "named", args: map[string]any{"name": "MCP"}, want: "Hello, MCP!"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			res := callTool(t, session, "hello", tt.args)
-			if res.IsError {
-				t.Fatalf("tool reported an error: %+v", res.Content)
-			}
-			if len(res.Content) != 1 {
-				t.Fatalf("content = %+v", res.Content)
-			}
-			var got struct {
-				Message string `json:"message"`
-			}
-			if err := json.Unmarshal([]byte(firstText(t, res)), &got); err != nil {
-				t.Fatalf("unmarshal %q: %v", firstText(t, res), err)
-			}
-			if got.Message != tt.want {
-				t.Errorf("message = %q, want %q", got.Message, tt.want)
-			}
-		})
-	}
-}
 
 // TestGetGodotVersionTool drives the real get_godot_version tool against the
 // repository-pinned Godot build. The suite is expected to run with Godot 4.7

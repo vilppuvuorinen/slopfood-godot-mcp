@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -67,56 +66,6 @@ func run() error {
 		Name:    "go-dot-mcp",
 		Version: version,
 	}, logger)
-
-	srv.RegisterTool(mcp.Tool{
-		Name:        "hello",
-		Description: "Say hello. Returns a friendly greeting, optionally addressed to a name.",
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"name": map[string]any{
-					"type":        "string",
-					"description": `Who to greet. Defaults to "World".`,
-				},
-			},
-		},
-		Handler: func(_ context.Context, args json.RawMessage) (any, error) {
-			name := "World"
-			if len(args) > 0 && string(args) != "null" {
-				var in struct {
-					Name string `json:"name"`
-				}
-				if err := json.Unmarshal(args, &in); err != nil {
-					return nil, fmt.Errorf("invalid arguments: %w", err)
-				}
-				if in.Name != "" {
-					name = in.Name
-				}
-			}
-			return map[string]any{"message": "Hello, " + name + "!"}, nil
-		},
-	})
-
-	srv.RegisterTool(mcp.Tool{
-		Name:        "echo",
-		Description: "Echo back the provided message.",
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"message": map[string]any{"type": "string"},
-			},
-			"required": []string{"message"},
-		},
-		Handler: func(_ context.Context, args json.RawMessage) (any, error) {
-			var in struct {
-				Message string `json:"message"`
-			}
-			if err := json.Unmarshal(args, &in); err != nil {
-				return nil, fmt.Errorf("invalid arguments: %w", err)
-			}
-			return in.Message, nil
-		},
-	})
 
 	tools.Register(srv, categories...)
 
