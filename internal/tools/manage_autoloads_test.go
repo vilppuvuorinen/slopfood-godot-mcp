@@ -134,6 +134,54 @@ Game="*res://game.gd"
 			t.Errorf("missing added autoload in:\n%s", content)
 		}
 	})
+
+	t.Run("normalizes bare path to res://", func(t *testing.T) {
+		root := t.TempDir()
+		makeProject(t, root)
+		seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n")
+
+		result := callToolArgs(t, manageAutoloads(), `{"projectPath":`+jsonString(root)+`,"action":"add","name":"Globals","path":"globals.gd"}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		if got, want := result.Content[0].Text, `Autoload "Globals" added: res://globals.gd`; got != want {
+			t.Errorf("text = %q, want %q", got, want)
+		}
+		data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		content := string(data)
+		if !strings.Contains(content, `Globals="*res://globals.gd"`) {
+			t.Errorf("missing normalized autoload in:\n%s", content)
+		}
+		if strings.Contains(content, "res://res://") {
+			t.Errorf("path double prefixed in:\n%s", content)
+		}
+	})
+
+	t.Run("does not double prefix res://", func(t *testing.T) {
+		root := t.TempDir()
+		makeProject(t, root)
+		seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n")
+
+		result := callToolArgs(t, manageAutoloads(), `{"projectPath":`+jsonString(root)+`,"action":"add","name":"Globals","path":"res://globals.gd"}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		if got, want := result.Content[0].Text, `Autoload "Globals" added: res://globals.gd`; got != want {
+			t.Errorf("text = %q, want %q", got, want)
+		}
+		data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+		if err != nil {
+			t.Fatalf("read project.godot: %v", err)
+		}
+		if content := string(data); !strings.Contains(content, `Globals="*res://globals.gd"`) {
+			t.Errorf("missing autoload in:\n%s", content)
+		} else if strings.Contains(content, "res://res://") {
+			t.Errorf("path double prefixed in:\n%s", content)
+		}
+	})
 }
 
 func TestManageAutoloadsRemove(t *testing.T) {

@@ -99,7 +99,11 @@ func addAutoload(args manageAutoloadsArgs, content string) (any, error) {
 	if args.Name == "" || args.Path == "" {
 		return mcp.ErrorResult("name and path are required for add action."), nil
 	}
-	autoloadLine := godotconfig.EncodePropertyName(args.Name) + "=" + godotconfig.FormatValue(godotconfig.String("*"+args.Path))
+	resPath := args.Path
+	if !strings.HasPrefix(resPath, "res://") {
+		resPath = "res://" + resPath
+	}
+	autoloadLine := godotconfig.EncodePropertyName(args.Name) + "=" + godotconfig.FormatValue(godotconfig.String("*"+resPath))
 	if idx := strings.Index(content, "[autoload]"); idx >= 0 {
 		content = content[:idx] + "[autoload]\n\n" + autoloadLine + content[idx+len("[autoload]"):]
 	} else {
@@ -108,5 +112,5 @@ func addAutoload(args manageAutoloadsArgs, content string) (any, error) {
 	if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 		return mcp.ErrorResult("Failed to manage autoloads: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	return mcp.TextResult(fmt.Sprintf("Autoload %q added: %s", args.Name, args.Path)), nil
+	return mcp.TextResult(fmt.Sprintf("Autoload %q added: %s", args.Name, resPath)), nil
 }
