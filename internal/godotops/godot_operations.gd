@@ -1155,7 +1155,7 @@ func _walk_scene_tree(node) -> Dictionary:
         if usage & PROPERTY_USAGE_EDITOR and usage & PROPERTY_USAGE_STORAGE:
             var value = node.get(prop_name)
             if value != null:
-                props[prop_name] = _variant_to_string(value)
+                props[prop_name] = _variant_to_json(value)
 
     if props.size() > 0:
         info["properties"] = props
@@ -1176,17 +1176,35 @@ func _walk_scene_tree(node) -> Dictionary:
 
     return info
 
-# Convert a Variant value to a string representation
-func _variant_to_string(value) -> String:
-    if value == null:
-        return "null"
-    if value is String:
-        return value
-    if value is bool:
-        return "true" if value else "false"
-    if value is NodePath:
-        return str(value)
-    return str(value)
+# Convert a Variant value to a JSON-serializable value. JSON-native types
+# (String, bool, numbers, Array, Dictionary) are converted recursively so they
+# survive as real JSON; every other Variant has no JSON equivalent (Vector2,
+# Color, NodePath, ...) and is kept as its exact engine string via str().
+func _variant_to_json(value):
+    match typeof(value):
+        TYPE_NIL:
+            return null
+        TYPE_BOOL, TYPE_INT, TYPE_STRING:
+            return value
+        TYPE_FLOAT:
+            # JSON has no NaN/Infinity; stringify would warn on NaN.
+            if not is_finite(value):
+                return str(value)
+            return value
+        TYPE_STRING_NAME:
+            return String(value)
+        TYPE_ARRAY:
+            var items = []
+            for item in value:
+                items.append(_variant_to_json(item))
+            return items
+        TYPE_DICTIONARY:
+            var result = {}
+            for key in value:
+                result[str(key)] = _variant_to_json(value[key])
+            return result
+        _:
+            return str(value)
 
 # Helper: Convert a JSON value to the correct Godot type based on a node's property type
 func _convert_property_value(node, prop_name, value):

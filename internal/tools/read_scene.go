@@ -36,8 +36,10 @@ func readScene() mcp.Tool {
 				"type":   map[string]any{"type": "string"},
 				"script": map[string]any{"type": "string"},
 				"properties": map[string]any{
-					"type":                 "object",
-					"additionalProperties": map[string]any{"type": "string"},
+					"type": "object",
+					"additionalProperties": map[string]any{
+						"description": "JSON-native values (strings, numbers, bools, arrays, dictionaries) are nested; engine-only types (Vector2, Color, NodePath, ...) are their engine string form",
+					},
 				},
 				"groups": map[string]any{
 					"type":  "array",

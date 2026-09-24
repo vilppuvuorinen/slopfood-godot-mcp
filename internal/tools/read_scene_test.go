@@ -56,6 +56,43 @@ func TestReadSceneSuccess(t *testing.T) {
 	}
 }
 
+func TestReadScenePreservesNestedPropertyValues(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","properties":{"config":{"myKey":1,"nested":{"a":[1,2,3]}},"position":"(0.0, 0.0)"}}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, readScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	for _, want := range []string{`"config": {`, `"myKey": 1`, `"a": [`, `"position": "(0.0, 0.0)"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text = %q, want it to contain %q", text, want)
+		}
+	}
+
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+	}
+	props, ok := structured["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T, want object", structured["properties"])
+	}
+	config, ok := props["config"].(map[string]any)
+	if !ok {
+		t.Fatalf("config = %T, want nested object", props["config"])
+	}
+	if got := config["myKey"]; got != float64(1) {
+		t.Errorf("config.myKey = %v, want 1", got)
+	}
+	if _, ok := props["position"].(string); !ok {
+		t.Errorf("position = %T, want engine string", props["position"])
+	}
+}
+
 func TestReadSceneSnakeCaseAliases(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
 	root := t.TempDir()
