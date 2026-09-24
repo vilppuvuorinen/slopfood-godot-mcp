@@ -15,9 +15,10 @@ func TestSetMainSceneSchema(t *testing.T) {
 }
 
 // TestSetMainSceneTool drives the real set_main_scene tool and reads the
-// rewritten project.godot back from disk.
+// rewritten project.godot back through Godot, proving the engine accepts it.
 func TestSetMainSceneTool(t *testing.T) {
 	session := connect(t)
+	requireGodot(t, session)
 
 	t.Run("replaces existing main scene", func(t *testing.T) {
 		root := t.TempDir()
@@ -34,9 +35,13 @@ run/main_scene="res://old.tscn"
 		})
 		requirePrefix(t, text, "Main scene set to res://scenes/main.tscn")
 
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireContains(t, content, `run/main_scene="res://scenes/main.tscn"`, `config/name="Demo"`)
-		requireNotContains(t, content, `run/main_scene="res://old.tscn"`)
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		if got := sections["application"]["run/main_scene"]; got != `"res://scenes/main.tscn"` {
+			t.Errorf("run/main_scene = %q, want %q", got, `"res://scenes/main.tscn"`)
+		}
+		if got := sections["application"]["config/name"]; got != `"Demo"` {
+			t.Errorf("config/name = %q, want it preserved", got)
+		}
 	})
 
 	t.Run("appends application section", func(t *testing.T) {
@@ -50,8 +55,10 @@ run/main_scene="res://old.tscn"
 			t.Errorf("text = %q", text)
 		}
 
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireContains(t, content, "[application]", `run/main_scene="res://scenes/main.tscn"`)
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		if got := sections["application"]["run/main_scene"]; got != `"res://scenes/main.tscn"` {
+			t.Errorf("run/main_scene = %q", got)
+		}
 	})
 }
 

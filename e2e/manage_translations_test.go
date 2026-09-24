@@ -45,6 +45,7 @@ translations=PackedStringArray("res://en.translation", "res://fi.translation")
 	})
 
 	t.Run("add to existing list", func(t *testing.T) {
+		requireGodot(t, session)
 		root := t.TempDir()
 		writeE2EFile(t, filepath.Join(root, "project.godot"), `config_version=5
 
@@ -60,11 +61,12 @@ translations=PackedStringArray("res://en.translation")
 		if want := "Translation added: res://fi.translation"; text != want {
 			t.Errorf("text = %q, want %q", text, want)
 		}
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireContains(t, content, `translations=PackedStringArray("res://en.translation", "res://fi.translation")`)
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		requireContains(t, sections["internationalization"]["translations"], `"res://en.translation"`, `"res://fi.translation"`)
 	})
 
 	t.Run("add creates section", func(t *testing.T) {
+		requireGodot(t, session)
 		root := t.TempDir()
 		seedProject(t, root)
 		text := requireToolText(t, session, "manage_translations", map[string]any{
@@ -75,11 +77,12 @@ translations=PackedStringArray("res://en.translation")
 		if want := "Translation added: res://en.translation"; text != want {
 			t.Errorf("text = %q, want %q", text, want)
 		}
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireContains(t, content, "[internationalization]\n\ntranslations=PackedStringArray(\"res://en.translation\")")
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		requireContains(t, sections["internationalization"]["translations"], `"res://en.translation"`)
 	})
 
 	t.Run("remove", func(t *testing.T) {
+		requireGodot(t, session)
 		root := t.TempDir()
 		writeE2EFile(t, filepath.Join(root, "project.godot"), `config_version=5
 
@@ -95,9 +98,9 @@ translations=PackedStringArray("res://en.translation", "res://fi.translation")
 		if want := "Translation removed: res://en.translation"; text != want {
 			t.Errorf("text = %q, want %q", text, want)
 		}
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireNotContains(t, content, "res://en.translation")
-		requireContains(t, content, `"res://fi.translation"`)
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		requireNotContains(t, sections["internationalization"]["translations"], "res://en.translation")
+		requireContains(t, sections["internationalization"]["translations"], `"res://fi.translation"`)
 	})
 }
 

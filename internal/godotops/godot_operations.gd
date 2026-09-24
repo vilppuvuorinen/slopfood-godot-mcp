@@ -95,6 +95,8 @@ func _init():
             manage_resource(params)
         "manage_theme_resource":
             manage_theme_resource(params)
+        "validate_project":
+            validate_project(params)
         _:
             log_error("Unknown operation: " + operation)
             quit(1)
@@ -1994,3 +1996,27 @@ func manage_theme_resource(params):
     else:
         printerr("Unknown manage_theme_resource action: " + action)
         quit(1)
+
+# Validate that Godot itself loaded project.godot cleanly and report the
+# settings the engine actually applied. PropertySettings parses project.godot
+# during engine startup, before _init runs; when the file is malformed the
+# engine logs "Error parsing '<path>/project.godot'" to stderr and leaves the
+# affected settings at their defaults. This operation surfaces the settings
+# that differ from the engine defaults, so a caller can confirm both that the
+# project parsed and what Godot read back. A value is emitted as its Godot
+# literal (var_to_str) via JSON so the payload stays single-line.
+func validate_project(_params):
+    var settings = {}
+    for prop in ProjectSettings.get_property_list():
+        var setting_name = prop.name
+        var value = ProjectSettings.get_setting(setting_name)
+        if value != ProjectSettings.property_get_revert(setting_name):
+            settings[setting_name] = var_to_str(value)
+    var result = {
+        "projectPath": ProjectSettings.globalize_path("res://"),
+        "settingCount": settings.size(),
+        "settings": settings,
+    }
+    print(JSON_START)
+    print(JSON.stringify(result))
+    print(JSON_END)

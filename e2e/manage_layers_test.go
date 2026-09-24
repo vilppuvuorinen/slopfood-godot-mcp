@@ -31,6 +31,7 @@ func TestManageLayersTool(t *testing.T) {
 	})
 
 	t.Run("replaces an existing layer", func(t *testing.T) {
+		requireGodot(t, session)
 		root := t.TempDir()
 		writeE2EFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[layer_names]\n\n"+`layer_names/2d_render/layer_1="Old"`+"\n")
 
@@ -44,12 +45,14 @@ func TestManageLayersTool(t *testing.T) {
 		if want := `Layer set: layer_names/2d_render/layer_1="Ground"`; text != want {
 			t.Errorf("message = %q, want %q", text, want)
 		}
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireContains(t, content, `layer_names/2d_render/layer_1="Ground"`)
-		requireNotContains(t, content, `"Old"`)
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		if got := sections["layer_names"]["layer_names/2d_render/layer_1"]; got != `"Ground"` {
+			t.Errorf("layer_1 = %q, want %q", got, `"Ground"`)
+		}
 	})
 
 	t.Run("appends a missing section", func(t *testing.T) {
+		requireGodot(t, session)
 		root := t.TempDir()
 		writeE2EFile(t, filepath.Join(root, "project.godot"), "config_version=5\n")
 
@@ -60,8 +63,10 @@ func TestManageLayersTool(t *testing.T) {
 			"layer":       2,
 			"name":        "Water",
 		})
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireContains(t, content, "[layer_names]\n"+`layer_names/3d_physics/layer_2="Water"`)
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		if got := sections["layer_names"]["layer_names/3d_physics/layer_2"]; got != `"Water"` {
+			t.Errorf("layer_2 = %q", got)
+		}
 	})
 }
 

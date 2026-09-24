@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -16,9 +15,12 @@ func TestModifyProjectSettingsSchema(t *testing.T) {
 }
 
 // TestModifyProjectSettingsTool drives the real modify_project_settings tool
-// against a seeded project.godot.
+// against a seeded project.godot. After each write it reads the project back
+// through Godot (via read_project_settings), proving the rewritten file is one
+// the engine accepts.
 func TestModifyProjectSettingsTool(t *testing.T) {
 	session := connect(t)
+	requireGodot(t, session)
 
 	t.Run("update existing key", func(t *testing.T) {
 		root := t.TempDir()
@@ -38,9 +40,10 @@ run/main_scene="res://main.tscn"
 		if want := `Setting updated: [application] config/name="New"`; text != want {
 			t.Errorf("text = %q, want %q", text, want)
 		}
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		if !strings.Contains(content, `config/name="New"`) {
-			t.Errorf("config/name not updated:\n%s", content)
+
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		if got := sections["application"]["config/name"]; got != `"New"` {
+			t.Errorf("config/name = %q, want %q", got, `"New"`)
 		}
 	})
 
@@ -58,9 +61,10 @@ config/name="Demo"
 			"key":         "config/description",
 			"value":       `"Hi"`,
 		})
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		if !strings.Contains(content, "\nconfig/description=\"Hi\"\n") {
-			t.Errorf("new key not inserted:\n%s", content)
+
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		if got := sections["application"]["config/description"]; got != `"Hi"` {
+			t.Errorf("config/description = %q, want %q", got, `"Hi"`)
 		}
 	})
 }

@@ -182,6 +182,41 @@ func requireNotContains(t *testing.T, s, unwanted string) {
 	}
 }
 
+// requireProjectSettingsRoundTrip reads project.godot back through
+// read_project_settings, which loads the file with the real Godot engine and
+// fails when the engine rejects it. It decodes the engine's settings payload and
+// folds each "section/key" property name back into the section -> key map the
+// callers assert against.
+//
+// It asserts nothing itself beyond "Godot parsed the file": the returned map is
+// the settings Godot actually applied, which is only reached when the engine
+// loaded project.godot cleanly. Callers must be Godot-gated (requireGodot)
+// because the tool always invokes the engine and fails when it is unavailable.
+func requireProjectSettingsRoundTrip(t *testing.T, session *mcp.ClientSession, projectPath string) map[string]map[string]string {
+	t.Helper()
+	text := requireToolText(t, session, "read_project_settings", map[string]any{
+		"projectPath": projectPath,
+	})
+	var payload struct {
+		Settings map[string]string `json:"settings"`
+	}
+	if err := json.Unmarshal([]byte(text), &payload); err != nil {
+		t.Fatalf("unmarshal project settings %q: %v", text, err)
+	}
+	sections := make(map[string]map[string]string)
+	for name, value := range payload.Settings {
+		section, key, found := strings.Cut(name, "/")
+		if !found {
+			section, key = "", name
+		}
+		if sections[section] == nil {
+			sections[section] = make(map[string]string)
+		}
+		sections[section][key] = value
+	}
+	return sections
+}
+
 // toolSchema is the subset of a tool's JSON schema the tests assert against.
 type toolSchema struct {
 	Type       string                    `json:"type"`

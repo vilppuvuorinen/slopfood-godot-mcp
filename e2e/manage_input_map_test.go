@@ -47,6 +47,7 @@ jump={"deadzone": 0.5}
 	})
 
 	t.Run("add with key", func(t *testing.T) {
+		requireGodot(t, session)
 		root := t.TempDir()
 		seedProject(t, root)
 		text := requireToolText(t, session, "manage_input_map", map[string]any{
@@ -58,11 +59,12 @@ jump={"deadzone": 0.5}
 		if want := `Input action "move_left" added.`; text != want {
 			t.Errorf("text = %q, want %q", text, want)
 		}
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireContains(t, content, "move_left={\n\"deadzone\": 0.5,\n\"events\": [Object(InputEventKey,", `"physical_keycode":87`)
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		requireContains(t, sections["input"]["move_left"], `"physical_keycode":87`)
 	})
 
 	t.Run("add without key", func(t *testing.T) {
+		requireGodot(t, session)
 		root := t.TempDir()
 		seedProject(t, root)
 		text := requireToolText(t, session, "manage_input_map", map[string]any{
@@ -74,11 +76,12 @@ jump={"deadzone": 0.5}
 		if want := `Input action "jump" added.`; text != want {
 			t.Errorf("text = %q, want %q", text, want)
 		}
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireContains(t, content, "jump={\n\"deadzone\": 1.0\n}")
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		requireContains(t, sections["input"]["jump"], `"deadzone": 1.0`)
 	})
 
 	t.Run("merge existing action", func(t *testing.T) {
+		requireGodot(t, session)
 		root := t.TempDir()
 		existingEvent := `Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":87,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)`
 		writeE2EFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[input]\n\nmove_left={\"deadzone\": 0.5, \"events\": ["+existingEvent+"]}\n")
@@ -91,11 +94,12 @@ jump={"deadzone": 0.5}
 		if want := `Input action "move_left" updated (event merged into existing action).`; text != want {
 			t.Errorf("text = %q, want %q", text, want)
 		}
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireContains(t, content, `"physical_keycode":87`, `"physical_keycode":68`)
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		requireContains(t, sections["input"]["move_left"], `"physical_keycode":87`, `"physical_keycode":68`)
 	})
 
 	t.Run("remove", func(t *testing.T) {
+		requireGodot(t, session)
 		root := t.TempDir()
 		writeE2EFile(t, filepath.Join(root, "project.godot"), `config_version=5
 
@@ -112,9 +116,13 @@ jump={"deadzone": 0.5}
 		if want := `Input action "move_left" removed.`; text != want {
 			t.Errorf("text = %q, want %q", text, want)
 		}
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireNotContains(t, content, "move_left")
-		requireContains(t, content, "jump=")
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		if _, ok := sections["input"]["move_left"]; ok {
+			t.Errorf("move_left still present: %v", sections["input"])
+		}
+		if _, ok := sections["input"]["jump"]; !ok {
+			t.Errorf("jump missing: %v", sections["input"])
+		}
 	})
 }
 

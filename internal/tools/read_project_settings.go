@@ -4,9 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
+
+// projectSettingsReadTimeout bounds the Godot project-load probe.
+const projectSettingsReadTimeout = 30 * time.Second
 
 func readProjectSettings() mcp.Tool {
 	return mcp.Tool{
@@ -30,7 +34,7 @@ type readProjectSettingsArgs struct {
 	ProjectPath string `json:"projectPath"`
 }
 
-func handleReadProjectSettings(_ context.Context, raw json.RawMessage) (any, error) {
+func handleReadProjectSettings(ctx context.Context, raw json.RawMessage) (any, error) {
 	raw, err := aliasParams(raw, settingsAliases)
 	if err != nil {
 		return nil, err
@@ -45,14 +49,34 @@ func handleReadProjectSettings(_ context.Context, raw json.RawMessage) (any, err
 		return mcp.ErrorResult("projectPath is required."), nil
 	}
 
-	content, failure := readProjectGodot(args.ProjectPath)
-	if failure != nil {
+	// Internal sanity check: reject an unsafe path or a directory without
+	// project.godot before invoking the engine.
+	if _, failure := readProjectGodot(args.ProjectPath); failure != nil {
 		return *failure, nil
 	}
 
-	data, err := json.MarshalIndent(parseProjectSections(content), "", "  ")
-	if err != nil {
-		return mcp.ErrorResult("Failed to read project settings: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
+	// Always load the project through the real Godot engine and return the
+	// settings it actually applied. A project.godot the engine rejects, or an
+	// engine that cannot be run at all, is reported instead of a stale view.
+	probeCtx, cancel := context.WithTimeout(ctx, projectSettingsReadTimeout)
+	defer cancel()
+	probe, probeErr := probeProjectWithGodot(probeCtx, args.ProjectPath)
+	if probeErr != nil {
+		return mcp.ErrorResult("Failed to read project settings: "+probeErr.Error(), headlessSolutions...), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	return mcp.TextResult(string(data)), nil
+	if probe.ParseError != "" {
+		return mcp.ErrorResult(
+			"Godot could not parse project.godot: "+probe.ParseError,
+			"Ensure project.godot contains valid Godot ConfigFile syntax",
+			"Use modify_project_settings to repair the offending setting",
+		), nil
+	}
+	if payload, ok := markerJSON(probe.Output); ok {
+		return mcp.TextResult(payload), nil
+	}
+	return mcp.ErrorResult(
+		"Failed to read project settings: no settings payload from Godot",
+		"Ensure Godot is installed correctly",
+		"Check if the GODOT_PATH environment variable is set correctly",
+	), nil
 }

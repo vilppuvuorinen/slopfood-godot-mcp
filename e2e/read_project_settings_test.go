@@ -1,7 +1,7 @@
 package e2e
 
 import (
-	"encoding/json"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -16,9 +16,12 @@ func TestReadProjectSettingsSchema(t *testing.T) {
 }
 
 // TestReadProjectSettingsTool drives the real read_project_settings tool and
-// parses the resulting JSON document.
+// parses the resulting JSON document. read_project_settings loads the file with
+// the real Godot engine, so these subtests are Godot-gated and also prove the
+// engine accepts the seeded project.godot.
 func TestReadProjectSettingsTool(t *testing.T) {
 	session := connect(t)
+	requireGodot(t, session)
 
 	t.Run("parses sections", func(t *testing.T) {
 		root := t.TempDir()
@@ -33,14 +36,8 @@ run/main_scene="res://main.tscn"
 
 Game="*res://game.gd"
 `)
-		text := requireToolText(t, session, "read_project_settings", map[string]any{
-			"projectPath": root,
-		})
+		sections := requireProjectSettingsRoundTrip(t, session, root)
 
-		var sections map[string]map[string]string
-		if err := json.Unmarshal([]byte(text), &sections); err != nil {
-			t.Fatalf("unmarshal %q: %v", text, err)
-		}
 		if got := sections["application"]["config/name"]; got != `"Demo"` {
 			t.Errorf("config/name = %q", got)
 		}
@@ -57,6 +54,45 @@ Game="*res://game.gd"
 			"project_path": root,
 		})
 	})
+}
+
+// TestReadProjectSettingsRejectsUnparseableProject proves the Godot load probe
+// is load-bearing: a project.godot the engine rejects must fail rather than
+// come back as a parsed document.
+func TestReadProjectSettingsRejectsUnparseableProject(t *testing.T) {
+	session := connect(t)
+	requireGodot(t, session)
+
+	root := t.TempDir()
+	writeE2EFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[application\n\nconfig/name=\"Demo\"\n")
+
+	res := callTool(t, session, "read_project_settings", map[string]any{
+		"projectPath": root,
+	})
+	if !res.IsError {
+		t.Fatalf("expected an error for an unparseable project.godot, got: %s", firstText(t, res))
+	}
+	requirePrefix(t, firstText(t, res), "Godot could not parse project.godot:")
+}
+
+// TestReadProjectSettingsReportsEngineFailure points GODOT_PATH at a missing
+// binary so the probe cannot start, and asserts the tool reports the failure
+// rather than silently succeeding with the Go parser's view.
+func TestReadProjectSettingsReportsEngineFailure(t *testing.T) {
+	session := connectWithEnv(t, "GODOT_PATH="+filepath.Join(t.TempDir(), "missing-godot"))
+	root := t.TempDir()
+	seedProject(t, root)
+
+	res := callTool(t, session, "read_project_settings", map[string]any{
+		"projectPath": root,
+	})
+	if !res.IsError {
+		t.Fatalf("expected an error, got: %s", firstText(t, res))
+	}
+	requirePrefix(t, firstText(t, res), "Failed to read project settings:")
+	if _, err := os.Stat(filepath.Join(root, "project.godot")); err != nil {
+		t.Errorf("project.godot should be untouched: %v", err)
+	}
 }
 
 // TestReadProjectSettingsErrors covers the reference's validation and failure

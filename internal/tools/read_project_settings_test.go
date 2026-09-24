@@ -1,10 +1,11 @@
 package tools
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
 )
 
 func TestReadProjectSettingsSchema(t *testing.T) {
@@ -22,40 +23,27 @@ func TestReadProjectSettingsSchema(t *testing.T) {
 }
 
 func TestReadProjectSettingsSuccess(t *testing.T) {
+	fake := fakeGodotOps(t, "printf '<<<GO_DOT_MCP_JSON_START>>>\\n{\"projectPath\":\"/proj/\",\"settingCount\":1,\"settings\":{\"application/config/name\":\"\\\"Demo\\\"\"}}\\n<<<GO_DOT_MCP_JSON_END>>>\\n'")
+	t.Setenv(godot.PathEnv, fake)
+
 	root := t.TempDir()
 	makeProject(t, root)
-	seedFile(t, filepath.Join(root, "project.godot"), `config_version=5
-
-[application]
-
-config/name="Demo"
-run/main_scene="res://main.tscn"
-
-[autoload]
-
-Game="*res://game.gd"
-`)
 
 	result := callToolArgs(t, readProjectSettings(), `{"projectPath":`+jsonString(root)+`}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	var sections map[string]map[string]string
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &sections); err != nil {
-		t.Fatalf("unmarshal %q: %v", result.Content[0].Text, err)
+	if got := result.Content[0].Text; !strings.Contains(got, `"settingCount": 1`) {
+		t.Errorf("text = %q, want pretty settingCount", got)
 	}
-	if got := sections["application"]["config/name"]; got != `"Demo"` {
-		t.Errorf("config/name = %q", got)
-	}
-	if got := sections["application"]["run/main_scene"]; got != `"res://main.tscn"` {
-		t.Errorf("run/main_scene = %q", got)
-	}
-	if got := sections["autoload"]["Game"]; got != `"*res://game.gd"` {
-		t.Errorf("autoload Game = %q", got)
+	if got := result.Content[0].Text; !strings.Contains(got, `"application/config/name": "\"Demo\""`) {
+		t.Errorf("text = %q, want the Godot-loaded setting", got)
 	}
 }
 
 func TestReadProjectSettingsSnakeCaseAlias(t *testing.T) {
+	fake := fakeGodotOps(t, "printf '<<<GO_DOT_MCP_JSON_START>>>\\n{\"settingCount\":0}\\n<<<GO_DOT_MCP_JSON_END>>>\\n'")
+	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)
 
@@ -65,7 +53,45 @@ func TestReadProjectSettingsSnakeCaseAlias(t *testing.T) {
 	}
 }
 
+// TestReadProjectSettingsRejectsUnparseableProject confirms the Godot load
+// probe surfaces a project.godot the engine rejects instead of returning the
+// Go parser's view. The fake engine reports a fixed parse diagnostic.
+func TestReadProjectSettingsRejectsUnparseableProject(t *testing.T) {
+	fake := fakeGodotOps(t, "echo \"ERROR: Error parsing '/proj/project.godot' at line 2\" >&2")
+	t.Setenv(godot.PathEnv, fake)
+
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, readProjectSettings(), `{"projectPath":`+jsonString(root)+`}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if got := result.Content[0].Text; !strings.HasPrefix(got, "Godot could not parse project.godot:") {
+		t.Errorf("message = %q", got)
+	}
+}
+
+// TestReadProjectSettingsReportsEngineFailure points GODOT_PATH at a missing
+// binary so the probe cannot start, and asserts the tool reports the failure
+// instead of silently falling back to the Go parser's view.
+func TestReadProjectSettingsReportsEngineFailure(t *testing.T) {
+	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
+
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, readProjectSettings(), `{"projectPath":`+jsonString(root)+`}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if got := result.Content[0].Text; !strings.HasPrefix(got, "Failed to read project settings:") {
+		t.Errorf("message = %q", got)
+	}
+}
+
 func TestReadProjectSettingsErrors(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodot(t))
 	tests := []struct {
 		name string
 		args string

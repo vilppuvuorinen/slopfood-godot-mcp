@@ -16,7 +16,9 @@ func TestManageAutoloadsSchema(t *testing.T) {
 }
 
 // TestManageAutoloadsTool drives the real manage_autoloads tool through a
-// list/add/remove round-trip, including the snake_case alias.
+// list/add/remove round-trip, including the snake_case alias. Writes are read
+// back through Godot (via read_project_settings) to prove the engine accepts
+// the rewritten project.godot.
 func TestManageAutoloadsTool(t *testing.T) {
 	session := connect(t)
 
@@ -47,6 +49,8 @@ Music="*res://music.gd"
 	})
 
 	t.Run("add and remove round trip", func(t *testing.T) {
+		requireGodot(t, session)
+
 		root := t.TempDir()
 		seedProject(t, root)
 
@@ -59,7 +63,10 @@ Music="*res://music.gd"
 		if added != `Autoload "Game" added: res://game.gd` {
 			t.Errorf("add text = %q", added)
 		}
-		requireContains(t, readFile(t, filepath.Join(root, "project.godot")), `Game="*res://game.gd"`)
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		if got := sections["autoload"]["Game"]; got != `"*res://game.gd"` {
+			t.Errorf("autoload Game = %q, want %q", got, `"*res://game.gd"`)
+		}
 
 		removed := requireToolText(t, session, "manage_autoloads", map[string]any{
 			"projectPath": root,
@@ -69,10 +76,15 @@ Music="*res://music.gd"
 		if removed != `Autoload "Game" removed.` {
 			t.Errorf("remove text = %q", removed)
 		}
-		requireNotContains(t, readFile(t, filepath.Join(root, "project.godot")), `Game="*res://game.gd"`)
+		sections = requireProjectSettingsRoundTrip(t, session, root)
+		if _, ok := sections["autoload"]["Game"]; ok {
+			t.Errorf("autoload Game still present: %v", sections["autoload"])
+		}
 	})
 
 	t.Run("add preserves existing section", func(t *testing.T) {
+		requireGodot(t, session)
+
 		root := t.TempDir()
 		writeE2EFile(t, filepath.Join(root, "project.godot"), `config_version=5
 
@@ -86,8 +98,13 @@ Game="*res://game.gd"
 			"name":         "Music",
 			"path":         "res://music.gd",
 		})
-		content := readFile(t, filepath.Join(root, "project.godot"))
-		requireContains(t, content, `Game="*res://game.gd"`, `Music="*res://music.gd"`)
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		if got := sections["autoload"]["Game"]; got != `"*res://game.gd"` {
+			t.Errorf("autoload Game = %q, want it preserved", got)
+		}
+		if got := sections["autoload"]["Music"]; got != `"*res://music.gd"` {
+			t.Errorf("autoload Music = %q", got)
+		}
 	})
 
 	t.Run("snake_case alias", func(t *testing.T) {

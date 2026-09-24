@@ -54,6 +54,7 @@ MyPlugin/enabled=true
 	})
 
 	t.Run("enable", func(t *testing.T) {
+		requireGodot(t, session)
 		root := t.TempDir()
 		seedProject(t, root)
 
@@ -65,10 +66,14 @@ MyPlugin/enabled=true
 		if text != "Plugin Foo enabled." {
 			t.Errorf("text = %q", text)
 		}
-		requireContains(t, readFile(t, filepath.Join(root, "project.godot")), "[editor_plugins]\nFoo/enabled=true")
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		if got := sections["editor_plugins"]["Foo/enabled"]; got != "true" {
+			t.Errorf("Foo/enabled = %q, want true", got)
+		}
 	})
 
 	t.Run("disable", func(t *testing.T) {
+		requireGodot(t, session)
 		root := t.TempDir()
 		writeE2EFile(t, filepath.Join(root, "project.godot"), `config_version=5
 
@@ -85,7 +90,10 @@ Foo/enabled=true
 		if text != "Plugin Foo disabled." {
 			t.Errorf("text = %q", text)
 		}
-		requireContains(t, readFile(t, filepath.Join(root, "project.godot")), "Foo/enabled=false")
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+		if got := sections["editor_plugins"]["Foo/enabled"]; got != "false" {
+			t.Errorf("Foo/enabled = %q, want false", got)
+		}
 	})
 }
 
