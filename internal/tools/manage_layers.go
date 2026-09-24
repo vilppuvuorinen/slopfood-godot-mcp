@@ -44,6 +44,22 @@ func manageLayers() mcp.Tool {
 			},
 			"required": []string{"projectPath", "action"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"layers": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"type":  map[string]any{"type": "string"},
+						"layer": map[string]any{"type": "integer"},
+						"name":  map[string]any{"type": "string"},
+					},
+				},
+			},
+			"layerType": map[string]any{"type": "string"},
+			"layer":     map[string]any{"type": "integer"},
+			"name":      map[string]any{"type": "string"},
+		}),
 		Handler: handleManageLayers,
 	}
 }
@@ -109,7 +125,7 @@ func handleManageLayers(_ context.Context, raw json.RawMessage) (any, error) {
 		if err != nil {
 			return mcp.ErrorResult("manage_layers failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return mcp.TextResult(string(encoded)), nil
+		return mcp.JSONResult(string(encoded)), nil
 	case "set":
 		if args.LayerType == "" || args.Layer == 0 || args.Name == "" {
 			return mcp.ErrorResult("layerType, layer, and name are required for set."), nil
@@ -127,7 +143,11 @@ func handleManageLayers(_ context.Context, raw json.RawMessage) (any, error) {
 		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 			return mcp.ErrorResult("manage_layers failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return mcp.TextResult("Layer set: " + settingLine), nil
+		return statusResult("Layer set: "+settingLine, map[string]any{
+			"layerType": args.LayerType,
+			"layer":     args.Layer,
+			"name":      args.Name,
+		}), nil
 	}
 	return mcp.ErrorResult("Unknown action: " + args.Action), nil
 }

@@ -42,6 +42,12 @@ func manageShader() mcp.Tool {
 			},
 			"required": []string{"projectPath", "shaderPath", "action"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"shaderPath": map[string]any{"type": "string"},
+			"shaderType": map[string]any{"type": "string"},
+			"action":     map[string]any{"type": "string"},
+			"source":     map[string]any{"type": "string"},
+		}),
 		Handler: handleManageShader,
 	}
 }
@@ -85,11 +91,15 @@ func handleManageShader(_ context.Context, raw json.RawMessage) (any, error) {
 			}
 			return manageShaderFailure(err), nil
 		}
-		return mcp.TextResult(string(data)), nil
+		return statusResult(string(data), map[string]any{
+			"shaderPath": args.ShaderPath,
+			"action":     args.Action,
+			"source":     string(data),
+		}), nil
 	case "create":
 		source := args.Source
+		shaderType := args.ShaderType
 		if source == "" {
-			shaderType := args.ShaderType
 			if shaderType == "" {
 				shaderType = "spatial"
 			}
@@ -101,7 +111,12 @@ func handleManageShader(_ context.Context, raw json.RawMessage) (any, error) {
 		if err := os.WriteFile(fullPath, []byte(source), 0o644); err != nil { //nolint:gosec // user-facing shader file.
 			return manageShaderFailure(err), nil
 		}
-		return mcp.TextResult("Shader created at " + args.ShaderPath), nil
+		return statusResult("Shader created at "+args.ShaderPath, map[string]any{
+			"shaderPath": args.ShaderPath,
+			"action":     args.Action,
+			"shaderType": shaderType,
+			"source":     source,
+		}), nil
 	}
 	return mcp.ErrorResult("Unknown action: " + args.Action), nil
 }

@@ -37,6 +37,12 @@ func loadSprite() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scenePath", "nodePath", "texturePath"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"scenePath":   map[string]any{"type": "string"},
+			"nodePath":    map[string]any{"type": "string"},
+			"texturePath": map[string]any{"type": "string"},
+			"output":      map[string]any{"type": "string"},
+		}),
 		Handler: handleLoadSprite,
 	}
 }
@@ -114,5 +120,10 @@ func handleLoadSprite(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 
 	message := fmt.Sprintf("Sprite loaded successfully with texture: %s\n\nOutput: %s", args.TexturePath, stdout)
-	return mcp.TextResult(message), nil
+	return statusResult(message, map[string]any{
+		"scenePath":   args.ScenePath,
+		"nodePath":    args.NodePath,
+		"texturePath": args.TexturePath,
+		"output":      stdout,
+	}), nil
 }

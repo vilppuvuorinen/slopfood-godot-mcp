@@ -36,6 +36,12 @@ func managePlugins() mcp.Tool {
 			},
 			"required": []string{"projectPath", "action"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"enabled":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"available":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"pluginName":    map[string]any{"type": "string"},
+			"pluginEnabled": map[string]any{"type": "boolean"},
+		}),
 		Handler: handleManagePlugins,
 	}
 }
@@ -103,7 +109,7 @@ func handleManagePlugins(_ context.Context, raw json.RawMessage) (any, error) {
 		if err != nil {
 			return mcp.ErrorResult("manage_plugins failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return mcp.TextResult(string(encoded)), nil
+		return mcp.JSONResult(string(encoded)), nil
 	case "enable", "disable":
 		if args.PluginName == "" {
 			return mcp.ErrorResult("pluginName is required."), nil
@@ -122,7 +128,10 @@ func handleManagePlugins(_ context.Context, raw json.RawMessage) (any, error) {
 		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 			return mcp.ErrorResult("manage_plugins failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return mcp.TextResult(fmt.Sprintf("Plugin %s %sd.", args.PluginName, args.Action)), nil
+		return statusResult(fmt.Sprintf("Plugin %s %sd.", args.PluginName, args.Action), map[string]any{
+			"pluginName":    args.PluginName,
+			"pluginEnabled": args.Action == "enable",
+		}), nil
 	}
 	return mcp.ErrorResult("Unknown action: " + args.Action), nil
 }

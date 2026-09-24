@@ -46,6 +46,21 @@ func manageExportPresets() mcp.Tool {
 			},
 			"required": []string{"projectPath", "action"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"presets": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"name":     map[string]any{"type": "string"},
+						"platform": map[string]any{"type": "string"},
+					},
+				},
+			},
+			"name":     map[string]any{"type": "string"},
+			"platform": map[string]any{"type": "string"},
+			"runnable": map[string]any{"type": "boolean"},
+		}),
 		Handler: handleManageExportPresets,
 	}
 }
@@ -134,7 +149,7 @@ func listExportPresets(presetsFile string) mcp.ToolResult {
 	if err != nil {
 		return exportPresetsFailure(err)
 	}
-	return mcp.TextResult(string(encoded))
+	return mcp.JSONResult(string(encoded))
 }
 
 // exportPresetBlocks splits content into its [preset.N] blocks, preserving
@@ -174,7 +189,11 @@ func addExportPreset(presetsFile string, args manageExportPresetsArgs) mcp.ToolR
 	if err := os.WriteFile(presetsFile, []byte(content), 0o644); err != nil { //nolint:gosec // user-facing project file.
 		return exportPresetsFailure(err)
 	}
-	return mcp.TextResult(fmt.Sprintf("Export preset \"%s\" added for platform \"%s\".", args.Name, args.Platform))
+	return statusResult(fmt.Sprintf("Export preset \"%s\" added for platform \"%s\".", args.Name, args.Platform), map[string]any{
+		"name":     args.Name,
+		"platform": args.Platform,
+		"runnable": args.Runnable,
+	})
 }
 
 func removeExportPreset(presetsFile, name string) mcp.ToolResult {
@@ -192,7 +211,9 @@ func removeExportPreset(presetsFile, name string) mcp.ToolResult {
 	if err := os.WriteFile(presetsFile, []byte(content), 0o644); err != nil { //nolint:gosec // user-facing project file.
 		return exportPresetsFailure(err)
 	}
-	return mcp.TextResult(fmt.Sprintf("Export preset \"%s\" removed.", name))
+	return statusResult(fmt.Sprintf("Export preset \"%s\" removed.", name), map[string]any{
+		"name": name,
+	})
 }
 
 // exportPresetsFailure is the reference server's catch-all message for an

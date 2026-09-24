@@ -26,6 +26,10 @@ func updateProjectUIDs() mcp.Tool {
 			},
 			"required": []string{"projectPath"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"projectPath": map[string]any{"type": "string"},
+			"output":      map[string]any{"type": "string"},
+		}),
 		Handler: handleUpdateProjectUIDs,
 	}
 }
@@ -97,5 +101,8 @@ func handleUpdateProjectUIDs(ctx context.Context, raw json.RawMessage) (any, err
 		), nil
 	}
 
-	return mcp.TextResult("Project UIDs updated successfully.\n\nOutput: " + stdout), nil
+	return statusResult("Project UIDs updated successfully.\n\nOutput: "+stdout, map[string]any{
+		"projectPath": args.ProjectPath,
+		"output":      stdout,
+	}), nil
 }

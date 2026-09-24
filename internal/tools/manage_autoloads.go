@@ -38,6 +38,10 @@ func manageAutoloads() mcp.Tool {
 			},
 			"required": []string{"projectPath", "action"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"name": map[string]any{"type": "string"},
+			"path": map[string]any{"type": "string"},
+		}),
 		Handler: handleManageAutoloads,
 	}
 }
@@ -79,7 +83,7 @@ func handleManageAutoloads(_ context.Context, raw json.RawMessage) (any, error) 
 		if err != nil {
 			return mcp.ErrorResult("Failed to manage autoloads: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return mcp.TextResult(string(data)), nil
+		return mcp.JSONResult(string(data)), nil
 	case "add":
 		return addAutoload(args, content)
 	case "remove":
@@ -90,7 +94,9 @@ func handleManageAutoloads(_ context.Context, raw json.RawMessage) (any, error) 
 		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 			return mcp.ErrorResult("Failed to manage autoloads: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return mcp.TextResult(fmt.Sprintf("Autoload %q removed.", args.Name)), nil
+		return statusResult(fmt.Sprintf("Autoload %q removed.", args.Name), map[string]any{
+			"name": args.Name,
+		}), nil
 	}
 	return mcp.ErrorResult(`Invalid action. Use "list", "add", or "remove".`), nil
 }
@@ -114,5 +120,8 @@ func addAutoload(args manageAutoloadsArgs, content string) (any, error) {
 	if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 		return mcp.ErrorResult("Failed to manage autoloads: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	return mcp.TextResult(fmt.Sprintf("Autoload %q added: %s", args.Name, resPath)), nil
+	return statusResult(fmt.Sprintf("Autoload %q added: %s", args.Name, resPath), map[string]any{
+		"name": args.Name,
+		"path": resPath,
+	}), nil
 }

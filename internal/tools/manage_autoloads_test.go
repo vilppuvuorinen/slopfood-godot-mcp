@@ -59,6 +59,13 @@ Music="*res://music.gd"
 		if got := autoloads["Music"]; got != `"*res://music.gd"` {
 			t.Errorf("Music = %q", got)
 		}
+		structured, ok := result.StructuredContent.(map[string]any)
+		if !ok {
+			t.Fatalf("structuredContent type %T, want map[string]any", result.StructuredContent)
+		}
+		if structured["Game"] != `"*res://game.gd"` {
+			t.Errorf("structured Game = %v", structured["Game"])
+		}
 	})
 
 	t.Run("absent section is empty object", func(t *testing.T) {

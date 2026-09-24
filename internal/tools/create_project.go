@@ -54,6 +54,11 @@ func createProject() mcp.Tool {
 			},
 			"required": []string{"projectPath", "projectName"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"projectPath": map[string]any{"type": "string"},
+			"projectName": map[string]any{"type": "string"},
+			"dotnet":      map[string]any{"type": "boolean"},
+		}),
 		Handler: handleCreateProject,
 	}
 }
@@ -122,7 +127,11 @@ func handleCreateProject(ctx context.Context, raw json.RawMessage) (any, error) 
 	if isDotnet {
 		message += " (Godot .NET / C#)"
 	}
-	return mcp.TextResult(message), nil
+	return statusResult(message, map[string]any{
+		"projectPath": args.ProjectPath,
+		"projectName": args.ProjectName,
+		"dotnet":      isDotnet,
+	}), nil
 }
 
 var (

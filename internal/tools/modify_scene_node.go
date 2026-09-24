@@ -37,6 +37,10 @@ func modifySceneNode() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scenePath", "nodePath", "properties"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"scenePath": map[string]any{"type": "string"},
+			"nodePath":  map[string]any{"type": "string"},
+		}),
 		Handler: handleModifySceneNode,
 	}
 }
@@ -76,5 +80,8 @@ func handleModifySceneNode(ctx context.Context, raw json.RawMessage) (any, error
 		"scenePath":  args.ScenePath,
 		"nodePath":   args.NodePath,
 		"properties": args.Properties,
+	}, map[string]any{
+		"scenePath": args.ScenePath,
+		"nodePath":  args.NodePath,
 	})
 }

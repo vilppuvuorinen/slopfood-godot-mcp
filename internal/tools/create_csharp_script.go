@@ -52,6 +52,10 @@ func createCSharpScript() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scriptPath"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"scriptPath": map[string]any{"type": "string"},
+			"className":  map[string]any{"type": "string"},
+		}),
 		Handler: handleCreateCSharpScript,
 	}
 }
@@ -118,7 +122,10 @@ func handleCreateCSharpScript(ctx context.Context, raw json.RawMessage) (any, er
 	if err := os.WriteFile(fullPath, []byte(source), 0o644); err != nil { //nolint:gosec // user-facing script file.
 		return nil, fmt.Errorf("write script file: %w", err)
 	}
-	return mcp.TextResult("C# script created at " + args.ScriptPath), nil
+	return statusResult("C# script created at "+args.ScriptPath, map[string]any{
+		"scriptPath": args.ScriptPath,
+		"className":  fileBase,
+	}), nil
 }
 
 // csharpScriptOptions are the inputs to the C# template generator, mirroring

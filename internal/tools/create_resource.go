@@ -37,6 +37,10 @@ func createResource() mcp.Tool {
 			},
 			"required": []string{"projectPath", "resourceType", "resourcePath"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"resourceType": map[string]any{"type": "string"},
+			"resourcePath": map[string]any{"type": "string"},
+		}),
 		Handler: handleCreateResource,
 	}
 }
@@ -77,5 +81,8 @@ func handleCreateResource(ctx context.Context, raw json.RawMessage) (any, error)
 		params["properties"] = args.Properties
 	}
 
-	return runHeadlessOperation(ctx, args.ProjectPath, "create_resource", params)
+	return runHeadlessOperation(ctx, args.ProjectPath, "create_resource", params, map[string]any{
+		"resourceType": args.ResourceType,
+		"resourcePath": args.ResourcePath,
+	})
 }

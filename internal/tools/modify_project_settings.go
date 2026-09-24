@@ -38,6 +38,11 @@ func modifyProjectSettings() mcp.Tool {
 			},
 			"required": []string{"projectPath", "section", "key", "value"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"section": map[string]any{"type": "string"},
+			"key":     map[string]any{"type": "string"},
+			"value":   map[string]any{"type": "string"},
+		}),
 		Handler: handleModifyProjectSettings,
 	}
 }
@@ -84,5 +89,9 @@ func handleModifyProjectSettings(_ context.Context, raw json.RawMessage) (any, e
 		return mcp.ErrorResult("Failed to modify project settings: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 
-	return mcp.TextResult(fmt.Sprintf("Setting updated: [%s] %s=%s", args.Section, args.Key, *args.Value)), nil
+	return statusResult(fmt.Sprintf("Setting updated: [%s] %s=%s", args.Section, args.Key, *args.Value), map[string]any{
+		"section": args.Section,
+		"key":     args.Key,
+		"value":   *args.Value,
+	}), nil
 }

@@ -38,6 +38,11 @@ func exportMeshLibrary() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scenePath", "outputPath"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"scenePath":  map[string]any{"type": "string"},
+			"outputPath": map[string]any{"type": "string"},
+			"output":     map[string]any{"type": "string"},
+		}),
 		Handler: handleExportMeshLibrary,
 	}
 }
@@ -109,5 +114,9 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 	}
 
 	message := fmt.Sprintf("MeshLibrary exported successfully to: %s\n\nOutput: %s", args.OutputPath, stdout)
-	return mcp.TextResult(message), nil
+	return statusResult(message, map[string]any{
+		"scenePath":  args.ScenePath,
+		"outputPath": args.OutputPath,
+		"output":     stdout,
+	}), nil
 }

@@ -45,6 +45,13 @@ func manageSceneStructure() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scenePath", "action", "nodePath"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"scenePath":     map[string]any{"type": "string"},
+			"action":        map[string]any{"type": "string"},
+			"nodePath":      map[string]any{"type": "string"},
+			"newName":       map[string]any{"type": "string"},
+			"newParentPath": map[string]any{"type": "string"},
+		}),
 		Handler: handleManageSceneStructure,
 	}
 }
@@ -101,5 +108,16 @@ func handleManageSceneStructure(ctx context.Context, raw json.RawMessage) (any, 
 		params["newParentPath"] = args.NewParentPath
 	}
 
-	return runHeadlessOperation(ctx, args.ProjectPath, "manage_scene_structure", params)
+	fields := map[string]any{
+		"scenePath": args.ScenePath,
+		"action":    args.Action,
+		"nodePath":  args.NodePath,
+	}
+	if args.NewName != "" {
+		fields["newName"] = args.NewName
+	}
+	if args.NewParentPath != "" {
+		fields["newParentPath"] = args.NewParentPath
+	}
+	return runHeadlessOperation(ctx, args.ProjectPath, "manage_scene_structure", params, fields)
 }

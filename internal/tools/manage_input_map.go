@@ -44,6 +44,11 @@ func manageInputMap() mcp.Tool {
 			},
 			"required": []string{"projectPath", "action"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"actionName": map[string]any{"type": "string"},
+			"key":        map[string]any{"type": "string"},
+			"deadzone":   map[string]any{"type": "number"},
+		}),
 		Handler: handleManageInputMap,
 	}
 }
@@ -159,7 +164,7 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 		if err != nil {
 			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return mcp.TextResult(string(data)), nil
+		return mcp.JSONResult(string(data)), nil
 	case "add":
 		if args.ActionName == "" {
 			return mcp.ErrorResult("actionName is required for add action."), nil
@@ -185,7 +190,9 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 			if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 				return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 			}
-			return mcp.TextResult(fmt.Sprintf(`Input action "%s" updated (event merged into existing action).`, args.ActionName)), nil
+			return statusResult(fmt.Sprintf(`Input action "%s" updated (event merged into existing action).`, args.ActionName), map[string]any{
+				"actionName": args.ActionName,
+			}), nil
 		}
 
 		action := godotconfig.Dictionary{Entries: []godotconfig.DictEntry{
@@ -206,7 +213,9 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return mcp.TextResult(fmt.Sprintf(`Input action "%s" added.`, args.ActionName)), nil
+		return statusResult(fmt.Sprintf(`Input action "%s" added.`, args.ActionName), map[string]any{
+			"actionName": args.ActionName,
+		}), nil
 	case "remove":
 		if args.ActionName == "" {
 			return mcp.ErrorResult("actionName is required for remove action."), nil
@@ -215,7 +224,9 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return mcp.TextResult(fmt.Sprintf(`Input action "%s" removed.`, args.ActionName)), nil
+		return statusResult(fmt.Sprintf(`Input action "%s" removed.`, args.ActionName), map[string]any{
+			"actionName": args.ActionName,
+		}), nil
 	}
 	return mcp.ErrorResult(`Invalid action. Use "list", "add", or "remove".`), nil
 }

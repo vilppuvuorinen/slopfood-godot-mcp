@@ -87,11 +87,11 @@ go-dot-mcp --enable all                        # everything
 The server speaks the MCP stdio transport and negotiates protocol revisions
 `2024-11-05` through `2025-11-25`: it echoes the client's requested revision
 when supported and otherwise offers its newest supported revision, `2025-11-25`.
-Tools advertise human-readable titles and behavior annotations, and the
-read-only tools return structured results through `outputSchema` and
-`structuredContent` alongside their text. The stateless `server/discover`
-handshake introduced in `2026-07-28` is not implemented; newer clients fall back
-to the legacy `initialize` handshake and negotiate `2025-11-25`.
+Every tool advertises a human-readable title, behavior annotations, and an
+`outputSchema`, and returns structured results through `structuredContent`
+alongside its text. The stateless `server/discover` handshake introduced in
+`2026-07-28` is not implemented; newer clients fall back to the legacy
+`initialize` handshake and negotiate `2025-11-25`.
 
 ## Security
 

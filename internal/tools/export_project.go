@@ -38,6 +38,12 @@ func exportProject() mcp.Tool {
 			},
 			"required": []string{"projectPath", "presetName", "outputPath"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"presetName": map[string]any{"type": "string"},
+			"outputPath": map[string]any{"type": "string"},
+			"debug":      map[string]any{"type": "boolean"},
+			"output":     map[string]any{"type": "string"},
+		}),
 		Handler: handleExportProject,
 	}
 }
@@ -84,5 +90,10 @@ func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) 
 	if output == "" {
 		output = args.OutputPath
 	}
-	return mcp.TextResult("Export succeeded.\n\nOutput: " + output), nil
+	return statusResult("Export succeeded.\n\nOutput: "+output, map[string]any{
+		"presetName": args.PresetName,
+		"outputPath": args.OutputPath,
+		"debug":      args.Debug,
+		"output":     output,
+	}), nil
 }

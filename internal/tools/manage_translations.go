@@ -34,6 +34,10 @@ func manageTranslations() mcp.Tool {
 			},
 			"required": []string{"projectPath", "action"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"translations":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"translationPath": map[string]any{"type": "string"},
+		}),
 		Handler: handleManageTranslations,
 	}
 }
@@ -90,7 +94,7 @@ func handleManageTranslations(_ context.Context, raw json.RawMessage) (any, erro
 		if err != nil {
 			return mcp.ErrorResult("manage_translations failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return mcp.TextResult(string(data)), nil
+		return mcp.JSONResult(string(data)), nil
 
 	case "add":
 		if args.TranslationPath == "" {
@@ -115,7 +119,9 @@ func handleManageTranslations(_ context.Context, raw json.RawMessage) (any, erro
 		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 			return mcp.ErrorResult("manage_translations failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return mcp.TextResult("Translation added: " + resPath), nil
+		return statusResult("Translation added: "+resPath, map[string]any{
+			"translationPath": resPath,
+		}), nil
 
 	case "remove":
 		if args.TranslationPath == "" {
@@ -137,7 +143,9 @@ func handleManageTranslations(_ context.Context, raw json.RawMessage) (any, erro
 		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 			return mcp.ErrorResult("manage_translations failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return mcp.TextResult("Translation removed: " + resPath), nil
+		return statusResult("Translation removed: "+resPath, map[string]any{
+			"translationPath": resPath,
+		}), nil
 	}
 
 	return mcp.ErrorResult("Unknown action: " + args.Action), nil

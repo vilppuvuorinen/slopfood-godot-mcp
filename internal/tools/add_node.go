@@ -45,6 +45,13 @@ func addNode() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scenePath", "nodeType", "nodeName"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"scenePath":      map[string]any{"type": "string"},
+			"nodeName":       map[string]any{"type": "string"},
+			"nodeType":       map[string]any{"type": "string"},
+			"parentNodePath": map[string]any{"type": "string"},
+			"output":         map[string]any{"type": "string"},
+		}),
 		Handler: handleAddNode,
 	}
 }
@@ -128,5 +135,14 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 
 	message := fmt.Sprintf("Node '%s' of type '%s' added successfully to '%s'.\n\nOutput: %s", args.NodeName, args.NodeType, args.ScenePath, stdout)
-	return mcp.TextResult(message), nil
+	fields := map[string]any{
+		"scenePath": args.ScenePath,
+		"nodeName":  args.NodeName,
+		"nodeType":  args.NodeType,
+		"output":    stdout,
+	}
+	if args.ParentNodePath != "" {
+		fields["parentNodePath"] = args.ParentNodePath
+	}
+	return statusResult(message, fields), nil
 }

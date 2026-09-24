@@ -29,6 +29,27 @@ func readScene() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scenePath"},
 		},
+		OutputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"name":   map[string]any{"type": "string"},
+				"type":   map[string]any{"type": "string"},
+				"script": map[string]any{"type": "string"},
+				"properties": map[string]any{
+					"type":                 "object",
+					"additionalProperties": map[string]any{"type": "string"},
+				},
+				"groups": map[string]any{
+					"type":  "array",
+					"items": map[string]any{"type": "string"},
+				},
+				"children": map[string]any{
+					"type":  "array",
+					"items": map[string]any{"type": "object"},
+				},
+			},
+			"required": []string{"name", "type"},
+		},
 		Handler: handleReadScene,
 	}
 }

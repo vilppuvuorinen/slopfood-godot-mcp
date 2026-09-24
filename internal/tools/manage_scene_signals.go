@@ -49,6 +49,15 @@ func manageSceneSignals() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scenePath", "action"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"connections": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"scenePath":   map[string]any{"type": "string"},
+			"action":      map[string]any{"type": "string"},
+			"signalName":  map[string]any{"type": "string"},
+			"sourcePath":  map[string]any{"type": "string"},
+			"targetPath":  map[string]any{"type": "string"},
+			"method":      map[string]any{"type": "string"},
+		}),
 		Handler: handleManageSceneSignals,
 	}
 }
@@ -118,5 +127,21 @@ func handleManageSceneSignals(ctx context.Context, raw json.RawMessage) (any, er
 		params["method"] = args.Method
 	}
 
-	return runHeadlessOperation(ctx, args.ProjectPath, "manage_scene_signals", params)
+	fields := map[string]any{
+		"scenePath": args.ScenePath,
+		"action":    args.Action,
+	}
+	if args.SignalName != "" {
+		fields["signalName"] = args.SignalName
+	}
+	if args.SourcePath != "" {
+		fields["sourcePath"] = args.SourcePath
+	}
+	if args.TargetPath != "" {
+		fields["targetPath"] = args.TargetPath
+	}
+	if args.Method != "" {
+		fields["method"] = args.Method
+	}
+	return runHeadlessOperation(ctx, args.ProjectPath, "manage_scene_signals", params, fields)
 }

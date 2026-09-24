@@ -99,3 +99,38 @@ func TestStructuredContent(t *testing.T) {
 		t.Fatalf("projects = %+v", projects)
 	}
 }
+
+// TestMutationToolMetadata asserts a mutation tool advertises an output schema
+// and non-read-only annotations.
+func TestMutationToolMetadata(t *testing.T) {
+	tool := findTool(t, connect(t), "set_main_scene")
+	if tool.OutputSchema == nil {
+		t.Error("outputSchema missing")
+	}
+	if tool.Annotations == nil || tool.Annotations.ReadOnlyHint {
+		t.Errorf("annotations = %+v", tool.Annotations)
+	}
+}
+
+// TestMutationStructuredContent asserts a mutation tool returns
+// structuredContent alongside its text block.
+func TestMutationStructuredContent(t *testing.T) {
+	session := connect(t)
+	root := t.TempDir()
+	seedProject(t, root)
+
+	res := callTool(t, session, "set_main_scene", map[string]any{
+		"projectPath": root,
+		"scenePath":   "scenes/main.tscn",
+	})
+	if res.IsError {
+		t.Fatalf("set_main_scene error: %s", firstText(t, res))
+	}
+	structured, ok := res.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent type %T", res.StructuredContent)
+	}
+	if structured["scenePath"] != "res://scenes/main.tscn" {
+		t.Errorf("scenePath = %v", structured["scenePath"])
+	}
+}

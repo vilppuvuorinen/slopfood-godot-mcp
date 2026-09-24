@@ -37,6 +37,16 @@ func manageThemeResource() mcp.Tool {
 			},
 			"required": []string{"projectPath", "resourcePath", "action"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"resourcePath": map[string]any{"type": "string"},
+			"action":       map[string]any{"type": "string"},
+			"type":         map[string]any{"type": "string"},
+			"path":         map[string]any{"type": "string"},
+			"properties": map[string]any{
+				"type":                 "object",
+				"additionalProperties": map[string]any{"type": "string"},
+			},
+		}),
 		Handler: handleManageThemeResource,
 	}
 }
@@ -77,5 +87,8 @@ func handleManageThemeResource(ctx context.Context, raw json.RawMessage) (any, e
 		params["properties"] = args.Properties
 	}
 
-	return runHeadlessOperation(ctx, args.ProjectPath, "manage_theme_resource", params)
+	return runHeadlessOperation(ctx, args.ProjectPath, "manage_theme_resource", params, map[string]any{
+		"resourcePath": args.ResourcePath,
+		"action":       args.Action,
+	})
 }

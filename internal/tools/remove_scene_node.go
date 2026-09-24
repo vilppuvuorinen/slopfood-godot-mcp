@@ -33,6 +33,10 @@ func removeSceneNode() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scenePath", "nodePath"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"scenePath": map[string]any{"type": "string"},
+			"nodePath":  map[string]any{"type": "string"},
+		}),
 		Handler: handleRemoveSceneNode,
 	}
 }
@@ -72,5 +76,8 @@ func handleRemoveSceneNode(ctx context.Context, raw json.RawMessage) (any, error
 		"scenePath": args.ScenePath,
 		"nodePath":  args.NodePath,
 	}
-	return runHeadlessOperation(ctx, args.ProjectPath, "remove_node", params)
+	return runHeadlessOperation(ctx, args.ProjectPath, "remove_node", params, map[string]any{
+		"scenePath": args.ScenePath,
+		"nodePath":  args.NodePath,
+	})
 }

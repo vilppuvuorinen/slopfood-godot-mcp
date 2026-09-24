@@ -64,16 +64,16 @@ var headlessSolutions = []string{
 // runHeadlessOperation runs an operations-script operation and returns the
 // reference server's generic result. On success it first attempts structured
 // payload extraction via markerJSON, returning the pretty-printed JSON when the
-// markers are present; otherwise it falls back to "<operation>
-// succeeded.\n\nOutput: <stdout>". On failure it returns "<operation> failed:
-// <detail>" with the shared solutions. Callers validate arguments, paths, and
-// project/scene existence first.
+// markers are present; otherwise it falls back to a status result carrying
+// "<operation> succeeded.\n\nOutput: <stdout>" plus the given fields. On
+// failure it returns "<operation> failed: <detail>" with the shared solutions.
+// Callers validate arguments, paths, and project/scene existence first.
 //
 // allowed lists stderr line patterns the operation may emit without it counting
 // as a failure; any other stderr line fails the operation even on exit 0.
 //
 //nolint:unparam // allowed is the per-tool hook for known-benign stderr; no operation needs one yet.
-func runHeadlessOperation(ctx context.Context, projectPath, operation string, params map[string]any, allowed ...*regexp.Regexp) (any, error) {
+func runHeadlessOperation(ctx context.Context, projectPath, operation string, params, fields map[string]any, allowed ...*regexp.Regexp) (any, error) {
 	stdout, stderr, exitCode, err := runOperation(ctx, projectPath, operation, params)
 	if err != nil {
 		return mcp.ErrorResult(operation+" failed: "+err.Error(), headlessSolutions...), nil //nolint:nilerr // the failure is reported through the tool result.
@@ -82,9 +82,40 @@ func runHeadlessOperation(ctx context.Context, projectPath, operation string, pa
 		return mcp.ErrorResult(operation+" failed: "+stderr, headlessSolutions...), nil
 	}
 	if payload, ok := markerJSON(stdout); ok {
-		return mcp.TextResult(payload), nil
+		return mcp.JSONResult(payload), nil
 	}
-	return mcp.TextResult(operation + " succeeded.\n\nOutput: " + stdout), nil
+	return statusResult(operation+" succeeded.\n\nOutput: "+stdout, fields), nil
+}
+
+// statusResult builds a successful result whose structured content reports the
+// operation outcome: a success flag, the human-readable message, and any
+// tool-specific fields.
+func statusResult(message string, fields map[string]any) mcp.ToolResult {
+	value := make(map[string]any, len(fields)+2)
+	value["success"] = true
+	value["message"] = message
+	for name, field := range fields {
+		value[name] = field
+	}
+	return mcp.StructuredResult(message, value)
+}
+
+// statusOutputSchema returns the object output schema shared by the mutation
+// tools. It always allows the success and message fields plus any tool-specific
+// properties, and deliberately requires none so a single schema can describe
+// tools whose structured result varies by action.
+func statusOutputSchema(properties map[string]any) map[string]any {
+	props := map[string]any{
+		"success": map[string]any{"type": "boolean"},
+		"message": map[string]any{"type": "string"},
+	}
+	for name, schema := range properties {
+		props[name] = schema
+	}
+	return map[string]any{
+		"type":       "object",
+		"properties": props,
+	}
 }
 
 // sceneMissingResult is the shared error for a scene file that does not exist,

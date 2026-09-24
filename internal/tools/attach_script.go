@@ -37,6 +37,11 @@ func attachScript() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scenePath", "nodePath", "scriptPath"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"scenePath":  map[string]any{"type": "string"},
+			"nodePath":   map[string]any{"type": "string"},
+			"scriptPath": map[string]any{"type": "string"},
+		}),
 		Handler: handleAttachScript,
 	}
 }
@@ -78,5 +83,9 @@ func handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
 		"nodePath":   args.NodePath,
 		"scriptPath": args.ScriptPath,
 	}
-	return runHeadlessOperation(ctx, args.ProjectPath, "attach_script", params)
+	return runHeadlessOperation(ctx, args.ProjectPath, "attach_script", params, map[string]any{
+		"scenePath":  args.ScenePath,
+		"nodePath":   args.NodePath,
+		"scriptPath": args.ScriptPath,
+	})
 }

@@ -116,3 +116,23 @@ func TestCategoryToolsUnique(t *testing.T) {
 		t.Errorf("registered %d tools, want 35", len(seen))
 	}
 }
+
+// TestToolsAdvertiseMetadata verifies every tool carries the metadata modern
+// clients rely on: a title, behavior annotations, and an output schema so
+// structured results can be consumed programmatically.
+func TestToolsAdvertiseMetadata(t *testing.T) {
+	for _, category := range AllCategories {
+		for _, newTool := range categoryTools[category] {
+			tool := newTool()
+			if tool.Title == "" {
+				t.Errorf("tool %q has no title", tool.Name)
+			}
+			if tool.Annotations == nil {
+				t.Errorf("tool %q has no annotations", tool.Name)
+			}
+			if tool.OutputSchema == nil {
+				t.Errorf("tool %q has no output schema", tool.Name)
+			}
+		}
+	}
+}

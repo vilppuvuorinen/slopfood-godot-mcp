@@ -30,6 +30,9 @@ func setMainScene() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scenePath"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"scenePath": map[string]any{"type": "string"},
+		}),
 		Handler: handleSetMainScene,
 	}
 }
@@ -76,5 +79,7 @@ func handleSetMainScene(_ context.Context, raw json.RawMessage) (any, error) {
 	if err := writeProjectGodot(args.ProjectPath, content); err != nil {
 		return mcp.ErrorResult("set_main_scene failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	return mcp.TextResult("Main scene set to " + resPath), nil
+	return statusResult("Main scene set to "+resPath, map[string]any{
+		"scenePath": resPath,
+	}), nil
 }

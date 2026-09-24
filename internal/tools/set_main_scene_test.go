@@ -179,6 +179,26 @@ run/main_scene="res://old.tscn"
 	}
 }
 
+func TestSetMainSceneStructuredContent(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, setMainScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent type %T, want map[string]any", result.StructuredContent)
+	}
+	if structured["success"] != true {
+		t.Errorf("success = %v", structured["success"])
+	}
+	if structured["scenePath"] != "res://scenes/main.tscn" {
+		t.Errorf("scenePath = %v", structured["scenePath"])
+	}
+}
+
 func TestSetMainSceneSnakeCaseAliases(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

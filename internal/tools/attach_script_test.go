@@ -59,6 +59,28 @@ func TestAttachScriptSuccess(t *testing.T) {
 	}
 }
 
+func TestAttachScriptStructuredContent(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
+
+	result := callToolArgs(t, attachScript(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent type %T, want map[string]any", result.StructuredContent)
+	}
+	if structured["success"] != true {
+		t.Errorf("success = %v", structured["success"])
+	}
+	if structured["scenePath"] != "scenes/main.tscn" || structured["scriptPath"] != "scripts/player.gd" {
+		t.Errorf("structuredContent = %v", structured)
+	}
+}
+
 func TestAttachScriptValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

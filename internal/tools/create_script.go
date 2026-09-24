@@ -49,6 +49,9 @@ func createScript() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scriptPath"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"scriptPath": map[string]any{"type": "string"},
+		}),
 		Handler: handleCreateScript,
 	}
 }
@@ -100,7 +103,9 @@ func handleCreateScript(_ context.Context, raw json.RawMessage) (any, error) {
 	if err := os.WriteFile(fullPath, []byte(source), 0o644); err != nil { //nolint:gosec // user-facing script file.
 		return mcp.ErrorResult("create_script failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	return mcp.TextResult("Script created at " + args.ScriptPath), nil
+	return statusResult("Script created at "+args.ScriptPath, map[string]any{
+		"scriptPath": args.ScriptPath,
+	}), nil
 }
 
 // buildScriptTemplate assembles the reference server's GDScript template: an

@@ -33,6 +33,11 @@ func saveScene() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scenePath"},
 		},
+		OutputSchema: statusOutputSchema(map[string]any{
+			"scenePath": map[string]any{"type": "string"},
+			"newPath":   map[string]any{"type": "string"},
+			"output":    map[string]any{"type": "string"},
+		}),
 		Handler: handleSaveScene,
 	}
 }
@@ -112,5 +117,12 @@ func handleSaveScene(ctx context.Context, raw json.RawMessage) (any, error) {
 		savePath = args.NewPath
 	}
 	message := fmt.Sprintf("Scene saved successfully to: %s\n\nOutput: %s", savePath, stdout)
-	return mcp.TextResult(message), nil
+	fields := map[string]any{
+		"scenePath": savePath,
+		"output":    stdout,
+	}
+	if args.NewPath != "" {
+		fields["newPath"] = args.NewPath
+	}
+	return statusResult(message, fields), nil
 }
