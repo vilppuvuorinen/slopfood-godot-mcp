@@ -142,7 +142,13 @@ func EncodePropertyName(s string) string {
 	return s
 }
 
-// EscapeSectionName escapes a section header, mirroring ConfigFile::_internal_save.
+// EscapeSectionName escapes a section header, mirroring ConfigFile::_internal_save
+// (core/io/config_file.cpp), which escapes only ']'. A backslash is written
+// literally, and the parser treats the character after any backslash as escaped,
+// so a name ending in a backslash produces a tag whose closing bracket never
+// terminates; Godot itself cannot round-trip such a name. Callers that accept
+// arbitrary names must reject that case rather than try to escape it (see
+// encodeSettingSection).
 func EscapeSectionName(s string) string {
 	return strings.ReplaceAll(s, "]", `\]`)
 }

@@ -51,6 +51,20 @@ func TestWriteProjectGodotRejectsUnsupportedSchema(t *testing.T) {
 	}
 }
 
+// TestWriteProjectGodotRejectsUnparseableContent checks the write path refuses
+// content the line-based schema check accepts but the strict ConfigFile parser
+// rejects, leaving no file behind. A section name ending in a backslash escapes
+// the closing bracket for Godot's parser, so the tag never terminates.
+func TestWriteProjectGodotRejectsUnparseableContent(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeProjectGodot(dir, "config_version=5\n\n[trail\\]\n\nkey=1\n"); err == nil {
+		t.Fatal("expected an error for a section tag that never terminates")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "project.godot")); !os.IsNotExist(err) {
+		t.Fatalf("project.godot written despite invalid content: %v", err)
+	}
+}
+
 // TestScanValueTrailingBackslash guards against a value whose quoted string
 // ends with a lone backslash at EOF; the scanner must not return an offset past
 // the end of the content.

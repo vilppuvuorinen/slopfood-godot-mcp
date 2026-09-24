@@ -94,10 +94,17 @@ func readProjectGodot(projectPath string) (string, *mcp.ToolResult) {
 
 // writeProjectGodot persists content to projectPath/project.godot after
 // confirming its schema is one this server implements, so a version-specific
-// writer can never emit a file the engine would misread.
+// writer can never emit a file the engine would misread. The content is then
+// parsed with the full ConfigFile parser as a final gate: projectSchema only
+// checks config_version through the line-based scanner, which tolerates
+// malformed tags (for example a section name ending in a backslash) that Godot
+// rejects outright. Nothing is written unless the whole document parses.
 func writeProjectGodot(projectPath, content string) error {
 	if _, err := projectSchema(content); err != nil {
 		return err
+	}
+	if _, err := godotconfig.Parse(content); err != nil {
+		return fmt.Errorf("refusing to write project.godot the engine cannot parse: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(projectPath, "project.godot"), []byte(content), 0o644); err != nil { //nolint:gosec // user-facing project file.
 		return fmt.Errorf("write project.godot: %w", err)

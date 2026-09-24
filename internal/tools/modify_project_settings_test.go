@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 )
 
 func TestModifyProjectSettingsSchema(t *testing.T) {
@@ -114,7 +116,11 @@ config/name="Demo"
 	}
 }
 
-func TestModifyProjectSettingsEmptyValueCountsAsProvided(t *testing.T) {
+// TestModifyProjectSettingsEmptyValueRejected proves an empty value is not a
+// Godot Variant: it is reported as an invalid value (the argument was provided,
+// so this is not the "required" error) and the file is left untouched. An empty
+// string is written as the literal `""`.
+func TestModifyProjectSettingsEmptyValueRejected(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "project.godot"), `config_version=5
@@ -123,17 +129,24 @@ func TestModifyProjectSettingsEmptyValueCountsAsProvided(t *testing.T) {
 
 config/name="Demo"
 `)
-	result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
-		`,"section":"application","key":"config/name","value":""}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	content, err := os.ReadFile(filepath.Join(root, "project.godot"))
+	before, err := os.ReadFile(filepath.Join(root, "project.godot"))
 	if err != nil {
 		t.Fatalf("read project.godot: %v", err)
 	}
-	if !strings.Contains(string(content), "config/name=\n") {
-		t.Errorf("empty value not written:\n%s", content)
+	result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
+		`,"section":"application","key":"config/name","value":""}`)
+	if !result.IsError {
+		t.Fatalf("expected an error for an empty value, got: %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "Invalid value:") {
+		t.Errorf("message = %q, want an 'Invalid value:' prefix", result.Content[0].Text)
+	}
+	after, err := os.ReadFile(filepath.Join(root, "project.godot"))
+	if err != nil {
+		t.Fatalf("read project.godot: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("project.godot was modified by a rejected value:\n%s", after)
 	}
 }
 
@@ -239,6 +252,73 @@ config/name="Demo"
 	}
 	if !strings.Contains(string(content), `config/name="say \"hi\""`) {
 		t.Errorf("escaped value not written:\n%s", content)
+	}
+}
+
+// TestModifyProjectSettingsSectionInjection proves the section name is
+// validated: a line break is rejected (the server's line-based scanner cannot
+// represent a multi-line header) and a trailing backslash is rejected (Godot's
+// ConfigFile format cannot round-trip it, and Godot itself writes an
+// unreadable file). A rejected section must leave the file untouched.
+func TestModifyProjectSettingsSectionInjection(t *testing.T) {
+	cases := []struct{ name, section string }{
+		{name: "newline", section: "x]\n[application"},
+		{name: "trailing backslash", section: `trail\`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			makeProject(t, root)
+			seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[application]\n\nconfig/name=\"Demo\"\n")
+			before, err := os.ReadFile(filepath.Join(root, "project.godot"))
+			if err != nil {
+				t.Fatalf("read project.godot: %v", err)
+			}
+			result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
+				`,"section":`+jsonString(tc.section)+`,"key":"k","value":"1"}`)
+			if !result.IsError {
+				t.Fatalf("expected an error for section %q, got: %+v", tc.section, result.Content)
+			}
+			if !strings.HasPrefix(result.Content[0].Text, "Invalid section:") {
+				t.Errorf("message = %q, want an 'Invalid section:' prefix", result.Content[0].Text)
+			}
+			after, err := os.ReadFile(filepath.Join(root, "project.godot"))
+			if err != nil {
+				t.Fatalf("read project.godot: %v", err)
+			}
+			if string(after) != string(before) {
+				t.Errorf("project.godot was modified by a rejected section:\n%s", after)
+			}
+		})
+	}
+}
+
+// TestModifyProjectSettingsSectionWithBackslash proves an embedded backslash
+// (not adjacent to the closing bracket) is literal in Godot's format and
+// round-trips through the written file.
+func TestModifyProjectSettingsSectionWithBackslash(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n")
+	result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
+		`,"section":`+jsonString(`back\mid`)+`,"key":"k","value":"1"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+	if err != nil {
+		t.Fatalf("read project.godot: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, `[back\mid]`) {
+		t.Errorf("project.godot = %q, want the literal backslash section", content)
+	}
+	cfg, err := godotconfig.Parse(content)
+	if err != nil {
+		t.Fatalf("written file did not parse: %v", err)
+	}
+	if v, ok := cfg.Get(`back\mid`, "k"); !ok || v != godotconfig.Int(1) {
+		t.Errorf(`back\mid/k = %#v, %v`, v, ok)
 	}
 }
 
