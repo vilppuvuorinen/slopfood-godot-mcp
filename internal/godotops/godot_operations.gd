@@ -56,7 +56,7 @@ func _init():
         log_error("JSON Error: " + json.get_error_message() + " at line " + str(json.get_error_line()))
         quit(1)
     
-    if not params:
+    if params == null:
         log_error("Failed to parse JSON parameters: " + params_json)
         quit(1)
     
@@ -922,17 +922,21 @@ func find_files(path, extension):
     var files = []
     var dir = DirAccess.open(path)
     
-    if dir:
-        dir.list_dir_begin()
-        var file_name = dir.get_next()
+    if not dir:
+        printerr("Failed to open directory: " + path)
+        quit(1)
+        return files
+    
+    dir.list_dir_begin()
+    var file_name = dir.get_next()
+    
+    while file_name != "":
+        if dir.current_is_dir() and not file_name.begins_with("."):
+            files.append_array(find_files(path + file_name + "/", extension))
+        elif file_name.ends_with(extension):
+            files.append(path + file_name)
         
-        while file_name != "":
-            if dir.current_is_dir() and not file_name.begins_with("."):
-                files.append_array(find_files(path + file_name + "/", extension))
-            elif file_name.ends_with(extension):
-                files.append(path + file_name)
-            
-            file_name = dir.get_next()
+        file_name = dir.get_next()
     
     return files
 
@@ -1017,14 +1021,9 @@ func get_uid(params):
 func resave_resources(params):
     print("Resaving all resources to update UID references...")
     
-    # Get project path if provided
+    # The engine is launched with --path <project>, so res:// is always the
+    # project root; a filesystem path is not a valid resource path.
     var project_path = "res://"
-    if params.has("project_path"):
-        project_path = params.project_path
-        if not project_path.begins_with("res://"):
-            project_path = "res://" + project_path
-        if not project_path.ends_with("/"):
-            project_path += "/"
     
     if debug_mode:
         print("Using project path: " + project_path)

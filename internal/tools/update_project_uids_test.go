@@ -50,8 +50,8 @@ func TestUpdateProjectUIDsSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "Project UIDs updated successfully.") {
 		t.Errorf("text = %q", text)
 	}
-	if !strings.Contains(text, `"project_path":`) {
-		t.Errorf("text = %q, want it to contain the project_path parameter", text)
+	if strings.Contains(text, "project_path") {
+		t.Errorf("text = %q, want no project_path parameter", text)
 	}
 	if !strings.Contains(text, root) {
 		t.Errorf("text = %q, want it to contain the project root", text)

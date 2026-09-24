@@ -3,6 +3,7 @@ package e2e
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -22,11 +23,25 @@ func TestUpdateProjectUIDsTool(t *testing.T) {
 	requireGodot(t, session)
 	root := seedScene(t, session, "scenes/main.tscn")
 
+	// Overwrite the scene with a non-canonical load_steps so that a real
+	// resave rewrites it. The old absolute-path bug never found the file, so
+	// the bogus value would survive a vacuous success.
+	scenePath := filepath.Join(root, "scenes", "main.tscn")
+	writeE2EFile(t, scenePath, "[gd_scene load_steps=99 format=3]\n\n[node name=\"root\" type=\"Node2D\"]\n")
+
 	text := requireToolText(t, session, "update_project_uids", map[string]any{"projectPath": root})
 	requirePrefix(t, text, "Project UIDs updated successfully.")
 	requireContains(t, text, "Resave operation complete")
-	if _, err := os.Stat(filepath.Join(root, "scenes", "main.tscn")); err != nil {
-		t.Errorf("scene file missing after resave: %v", err)
+
+	after, err := os.ReadFile(scenePath)
+	if err != nil {
+		t.Fatalf("read scene after resave: %v", err)
+	}
+	if strings.Contains(string(after), "load_steps=99") {
+		t.Errorf("scene was not resaved, bogus load_steps survived: %q", after)
+	}
+	if !strings.Contains(string(after), `[node name="root" type="Node2D"]`) {
+		t.Errorf("scene root node missing after resave: %q", after)
 	}
 }
 
