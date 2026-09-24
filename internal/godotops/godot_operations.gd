@@ -87,8 +87,6 @@ func _init():
             attach_script(params)
         "get_uid":
             get_uid(params)
-        "resave_resources":
-            resave_resources(params)
         "create_resource":
             create_resource(params)
         "manage_resource":
@@ -917,29 +915,6 @@ func export_mesh_library(params):
         printerr("No valid meshes found in the scene")
         quit(1)
 
-# Find files with a specific extension recursively
-func find_files(path, extension):
-    var files = []
-    var dir = DirAccess.open(path)
-    
-    if not dir:
-        printerr("Failed to open directory: " + path)
-        quit(1)
-        return files
-    
-    dir.list_dir_begin()
-    var file_name = dir.get_next()
-    
-    while file_name != "":
-        if dir.current_is_dir() and not file_name.begins_with("."):
-            files.append_array(find_files(path + file_name + "/", extension))
-        elif file_name.ends_with(extension):
-            files.append(path + file_name)
-        
-        file_name = dir.get_next()
-    
-    return files
-
 # Get UID for a specific file
 func get_uid(params):
     if not params.has("file_path"):
@@ -1009,143 +984,13 @@ func get_uid(params):
             "file": file_path,
             "absolutePath": absolute_path,
             "exists": false,
-            "message": "UID file does not exist for this file. Use resave_resources to generate UIDs."
+            "message": "UID file does not exist for this file. Use update_project_uids to scan the project and generate UIDs."
         }
         if debug_mode:
             print("UID result: " + JSON.stringify(result))
         print(JSON_START)
         print(JSON.stringify(result))
         print(JSON_END)
-
-# Resave all resources to update UID references
-func resave_resources(params):
-    print("Resaving all resources to update UID references...")
-    
-    # The engine is launched with --path <project>, so res:// is always the
-    # project root; a filesystem path is not a valid resource path.
-    var project_path = "res://"
-    
-    if debug_mode:
-        print("Using project path: " + project_path)
-    
-    # Get all .tscn files
-    if debug_mode:
-        print("Searching for scene files in: " + project_path)
-    var scenes = find_files(project_path, ".tscn")
-    if debug_mode:
-        print("Found " + str(scenes.size()) + " scenes")
-    
-    # Resave each scene
-    var success_count = 0
-    var error_count = 0
-    
-    for scene_path in scenes:
-        if debug_mode:
-            print("Processing scene: " + scene_path)
-        
-        # Check if the scene file exists
-        var file_check = FileAccess.file_exists(scene_path)
-        if debug_mode:
-            print("Scene file exists check: " + str(file_check))
-        
-        if not file_check:
-            printerr("Scene file does not exist at: " + scene_path)
-            quit(1)
-            error_count += 1
-            continue
-        
-        # Load the scene
-        var scene = load(scene_path)
-        if scene:
-            if debug_mode:
-                print("Scene loaded successfully, saving...")
-            var error = ResourceSaver.save(scene, scene_path)
-            if debug_mode:
-                print("Save result: " + str(error) + " (OK=" + str(OK) + ")")
-            
-            if error == OK:
-                success_count += 1
-                if debug_mode:
-                    print("Scene saved successfully: " + scene_path)
-                
-                    # Verify the file was actually updated
-                    var file_check_after = FileAccess.file_exists(scene_path)
-                    print("File exists check after save: " + str(file_check_after))
-                
-                    if not file_check_after:
-                        printerr("File reported as saved but does not exist at: " + scene_path)
-                        quit(1)
-            else:
-                error_count += 1
-                printerr("Failed to save: " + scene_path + ", error: " + str(error))
-                quit(1)
-        else:
-            error_count += 1
-            printerr("Failed to load: " + scene_path)
-            quit(1)
-    
-    # Get all .gd and .shader files
-    if debug_mode:
-        print("Searching for script and shader files in: " + project_path)
-    var scripts = find_files(project_path, ".gd") + find_files(project_path, ".shader") + find_files(project_path, ".gdshader")
-    if debug_mode:
-        print("Found " + str(scripts.size()) + " scripts/shaders")
-    
-    # Check for missing .uid files
-    var missing_uids = 0
-    var generated_uids = 0
-    
-    for script_path in scripts:
-        if debug_mode:
-            print("Checking UID for: " + script_path)
-        var uid_path = script_path + ".uid"
-        
-        var uid_check = FileAccess.file_exists(uid_path)
-        if debug_mode:
-            print("UID file exists check: " + str(uid_check))
-        
-        var f = FileAccess.open(uid_path, FileAccess.READ)
-        if not f:
-            missing_uids += 1
-            if debug_mode:
-                print("Missing UID file for: " + script_path + ", generating...")
-            
-            # Force a save to generate UID
-            var res = load(script_path)
-            if res:
-                var error = ResourceSaver.save(res, script_path)
-                if debug_mode:
-                    print("Save result: " + str(error) + " (OK=" + str(OK) + ")")
-                
-                if error == OK:
-                    generated_uids += 1
-                    if debug_mode:
-                        print("Generated UID for: " + script_path)
-                    
-                        # Verify the UID file was actually created
-                        var uid_check_after = FileAccess.file_exists(uid_path)
-                        print("UID file exists check after save: " + str(uid_check_after))
-                    
-                        if not uid_check_after:
-                            printerr("UID file reported as generated but does not exist at: " + uid_path)
-                            quit(1)
-                else:
-                    printerr("Failed to generate UID for: " + script_path + ", error: " + str(error))
-                    quit(1)
-            else:
-                printerr("Failed to load resource: " + script_path)
-                quit(1)
-        elif debug_mode:
-            print("UID file already exists for: " + script_path)
-    
-    if debug_mode:
-        print("Summary:")
-        print("- Scenes processed: " + str(scenes.size()))
-        print("- Scenes successfully saved: " + str(success_count))
-        print("- Scenes with errors: " + str(error_count))
-        print("- Scripts/shaders missing UIDs: " + str(missing_uids))
-        print("- UIDs successfully generated: " + str(generated_uids))
-    print("Resave operation complete")
 
 # Save changes to a scene file
 func save_scene(params):

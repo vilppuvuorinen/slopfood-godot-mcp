@@ -13,7 +13,7 @@ func TestUpdateProjectUIDsSchema(t *testing.T) {
 	if tool.Name != "update_project_uids" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Update UID references in a Godot project by resaving resources (for Godot 4.4+)" {
+	if tool.Description != "Generate missing resource UIDs in a Godot project by scanning it in the editor (for Godot 4.4+)" {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
@@ -50,8 +50,13 @@ func TestUpdateProjectUIDsSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "Project UIDs updated successfully.") {
 		t.Errorf("text = %q", text)
 	}
-	if strings.Contains(text, "project_path") {
-		t.Errorf("text = %q, want no project_path parameter", text)
+	// The scan must be driven by --import: a runtime script (resave_resources)
+	// cannot generate UIDs, and resaving resources would strip existing ones.
+	if !strings.Contains(text, "--import") {
+		t.Errorf("text = %q, want it to contain --import", text)
+	}
+	if strings.Contains(text, "--script") {
+		t.Errorf("text = %q, want no --script invocation", text)
 	}
 	if !strings.Contains(text, root) {
 		t.Errorf("text = %q, want it to contain the project root", text)

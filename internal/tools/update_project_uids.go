@@ -5,16 +5,29 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"regexp"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
+// importAllowedStderr lists editor-mode stderr lines that do not indicate a
+// failed scan. `--import` starts the full editor, which initializes editor-only
+// subsystems (the ObjectDB profiler among them) that can fail to set up a
+// `user://` directory without affecting the filesystem scan. The exit code
+// remains authoritative: a real scan failure calls quit(EXIT_FAILURE).
+var importAllowedStderr = []*regexp.Regexp{
+	regexp.MustCompile(`Could not create ObjectDB Snapshots directory:`),
+	// The engine prints a stack-trace continuation line under the diagnostic
+	// above; it is part of the same benign warning.
+	regexp.MustCompile(`^at: _get_and_create_snapshot_storage_dir`),
+}
+
 func updateProjectUIDs() mcp.Tool {
 	return mcp.Tool{
 		Name:        "update_project_uids",
 		Title:       "Update Project UIDs",
-		Description: "Update UID references in a Godot project by resaving resources (for Godot 4.4+)",
+		Description: "Generate missing resource UIDs in a Godot project by scanning it in the editor (for Godot 4.4+)",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
@@ -83,7 +96,13 @@ func handleUpdateProjectUIDs(ctx context.Context, raw json.RawMessage) (any, err
 		), nil
 	}
 
-	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "resave_resources", nil)
+	// `--import` drives the editor filesystem scan, which is the only headless
+	// mechanism that writes `.uid` sidecars for scripts and shaders. Resaving
+	// resources at runtime cannot do it: ResourceSaver.save has no UID logic,
+	// and without EditorFileSystem the text saver actively strips existing
+	// `uid=` references. Scanning is non-destructive, so this leaves every
+	// already-assigned UID untouched.
+	stdout, stderr, exitCode, err := godot.Import(ctx, godot.Path(), args.ProjectPath)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to update project UIDs: "+err.Error(),
@@ -92,7 +111,7 @@ func handleUpdateProjectUIDs(ctx context.Context, raw json.RawMessage) (any, err
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(exitCode, stderr) {
+	if scriptFailed(exitCode, stderr, importAllowedStderr...) {
 		return mcp.ErrorResult(
 			"Failed to update project UIDs: "+stderr,
 			"Check if the project is valid",

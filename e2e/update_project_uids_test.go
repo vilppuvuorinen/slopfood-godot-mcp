@@ -3,46 +3,55 @@ package e2e
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
 // TestUpdateProjectUIDsSchema ports the reference's tool-definition
 // expectations for update_project_uids over the real stdio surface.
 func TestUpdateProjectUIDsSchema(t *testing.T) {
-	schema := requireSchema(t, "update_project_uids", "Update UID references in a Godot project by resaving resources (for Godot 4.4+)")
+	schema := requireSchema(t, "update_project_uids", "Generate missing resource UIDs in a Godot project by scanning it in the editor (for Godot 4.4+)")
 	schema.requireRequired(t, "projectPath")
 	schema.requirePropCount(t, 1)
 	schema.requireStringProps(t, "projectPath")
 }
 
 // TestUpdateProjectUIDsTool drives the real update_project_uids tool against
-// Godot after creating a scene with create_scene.
+// Godot. It verifies the two properties the scan must have: it generates a
+// missing .uid sidecar for an un-UID'd script, and it leaves existing UIDs
+// (a scene's own header uid and an ext_resource uid) untouched.
 func TestUpdateProjectUIDsTool(t *testing.T) {
 	session := connect(t)
 	requireGodot(t, session)
 	root := seedScene(t, session, "scenes/main.tscn")
 
-	// Overwrite the scene with a non-canonical load_steps so that a real
-	// resave rewrites it. The old absolute-path bug never found the file, so
-	// the bogus value would survive a vacuous success.
+	// An un-UID'd script that the scan must give a sidecar.
+	scriptPath := filepath.Join(root, "player.gd")
+	writeE2EFile(t, scriptPath, "extends Node\n")
+
+	// A script that already has a .uid sidecar, referenced by a scene that
+	// already carries uid= attributes. The scan must not rewrite them.
+	usedPath := filepath.Join(root, "used.gd")
+	writeE2EFile(t, usedPath, "extends Node\n")
+	writeE2EFile(t, usedPath+".uid", "uid://e2euseduid\n")
+
 	scenePath := filepath.Join(root, "scenes", "main.tscn")
-	writeE2EFile(t, scenePath, "[gd_scene load_steps=99 format=3]\n\n[node name=\"root\" type=\"Node2D\"]\n")
+	beforeScene := "[gd_scene load_steps=2 format=3 uid=\"uid://e2esceneuid\"]\n\n" +
+		"[ext_resource type=\"Script\" uid=\"uid://e2euseduid\" path=\"res://used.gd\" id=\"1_used\"]\n\n" +
+		"[node name=\"root\" type=\"Node2D\"]\nscript = ExtResource(\"1_used\")\n"
+	writeE2EFile(t, scenePath, beforeScene)
 
 	text := requireToolText(t, session, "update_project_uids", map[string]any{"projectPath": root})
 	requirePrefix(t, text, "Project UIDs updated successfully.")
-	requireContains(t, text, "Resave operation complete")
 
-	after, err := os.ReadFile(scenePath)
-	if err != nil {
-		t.Fatalf("read scene after resave: %v", err)
+	if _, err := os.Stat(scriptPath + ".uid"); err != nil {
+		t.Errorf("expected %s.uid to be generated: %v", scriptPath, err)
 	}
-	if strings.Contains(string(after), "load_steps=99") {
-		t.Errorf("scene was not resaved, bogus load_steps survived: %q", after)
+
+	afterScene := readFile(t, scenePath)
+	if afterScene != beforeScene {
+		t.Errorf("existing UIDs were changed by the scan:\nbefore:\n%s\nafter:\n%s", beforeScene, afterScene)
 	}
-	if !strings.Contains(string(after), `[node name="root" type="Node2D"]`) {
-		t.Errorf("scene root node missing after resave: %q", after)
-	}
+	requireContains(t, afterScene, `uid="uid://e2euseduid"`)
 }
 
 // TestUpdateProjectUIDsVersionGate checks the Godot 4.4 requirement with a fake
