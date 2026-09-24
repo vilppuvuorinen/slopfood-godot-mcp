@@ -66,7 +66,7 @@ Music="*res://music.gd"
 		// Seed the autoload script so the read-back probe has clean stderr.
 		writeE2EFile(t, filepath.Join(root, "game.gd"), "extends Node\n")
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		if got := sections["autoload"]["Game"]; got != `"*res://game.gd"` {
+		if got := sections["autoload"]["Game"]; got != "*res://game.gd" {
 			t.Errorf("autoload Game = %q, want %q", got, `"*res://game.gd"`)
 		}
 
@@ -104,10 +104,10 @@ Game="*res://game.gd"
 		writeE2EFile(t, filepath.Join(root, "game.gd"), "extends Node\n")
 		writeE2EFile(t, filepath.Join(root, "music.gd"), "extends Node\n")
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		if got := sections["autoload"]["Game"]; got != `"*res://game.gd"` {
+		if got := sections["autoload"]["Game"]; got != "*res://game.gd" {
 			t.Errorf("autoload Game = %q, want it preserved", got)
 		}
-		if got := sections["autoload"]["Music"]; got != `"*res://music.gd"` {
+		if got := sections["autoload"]["Music"]; got != "*res://music.gd" {
 			t.Errorf("autoload Music = %q", got)
 		}
 	})

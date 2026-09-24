@@ -20,10 +20,17 @@ func TestReadProjectSettingsSchema(t *testing.T) {
 	if !ok || len(required) != 1 || required[0] != "projectPath" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
+	output, ok := tool.OutputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("output properties = %T", tool.OutputSchema["properties"])
+	}
+	if _, ok := output["sections"]; !ok {
+		t.Errorf("output schema has no sections property: %v", output)
+	}
 }
 
 func TestReadProjectSettingsSuccess(t *testing.T) {
-	fake := fakeGodotOps(t, "printf '<<<GO_DOT_MCP_JSON_START>>>\\n{\"projectPath\":\"/proj/\",\"settingCount\":1,\"settings\":{\"application/config/name\":\"\\\"Demo\\\"\"}}\\n<<<GO_DOT_MCP_JSON_END>>>\\n'")
+	fake := fakeGodotOps(t, "printf '<<<GO_DOT_MCP_JSON_START>>>\\n{\"projectPath\":\"/proj/\",\"settingCount\":1,\"sections\":{\"application\":{\"config/name\":\"Demo\"}}}\\n<<<GO_DOT_MCP_JSON_END>>>\\n'")
 	t.Setenv(godot.PathEnv, fake)
 
 	root := t.TempDir()
@@ -36,13 +43,13 @@ func TestReadProjectSettingsSuccess(t *testing.T) {
 	if got := result.Content[0].Text; !strings.Contains(got, `"settingCount": 1`) {
 		t.Errorf("text = %q, want pretty settingCount", got)
 	}
-	if got := result.Content[0].Text; !strings.Contains(got, `"application/config/name": "\"Demo\""`) {
-		t.Errorf("text = %q, want the Godot-loaded setting", got)
+	if got := result.Content[0].Text; !strings.Contains(got, `"config/name": "Demo"`) {
+		t.Errorf("text = %q, want the structured setting", got)
 	}
 }
 
 func TestReadProjectSettingsSnakeCaseAlias(t *testing.T) {
-	fake := fakeGodotOps(t, "printf '<<<GO_DOT_MCP_JSON_START>>>\\n{\"settingCount\":0}\\n<<<GO_DOT_MCP_JSON_END>>>\\n'")
+	fake := fakeGodotOps(t, "printf '<<<GO_DOT_MCP_JSON_START>>>\\n{\"settingCount\":0,\"sections\":{}}\\n<<<GO_DOT_MCP_JSON_END>>>\\n'")
 	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)

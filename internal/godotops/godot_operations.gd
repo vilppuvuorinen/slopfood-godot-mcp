@@ -61,7 +61,11 @@ func _init():
         quit(1)
     
     log_info("Executing operation: " + operation)
-    
+
+    # Decoding a caller-supplied value is fallible; reset the shared error so a
+    # stale message from a prior decode can never be mistaken for a current one.
+    _decode_error = ""
+
     match operation:
         "create_scene":
             create_scene(params)
@@ -108,6 +112,12 @@ func _init():
 # here before the main loop exits; they are never added to the scene tree, so
 # without this the engine reports ObjectDB/RID leaks at exit.
 var _temp_nodes = []
+
+# _decode_error is set by the value decoder when a caller-supplied value cannot
+# be turned into the Variant a property expects. Handlers check it after
+# applying properties and abort before saving, so a rejected value never leaves
+# a partially-written file behind.
+var _decode_error = ""
 
 func track_temp(node):
     _temp_nodes.append(node)
@@ -553,17 +563,11 @@ func add_node(params):
     if params.has("properties"):
         if debug_mode:
             print("Setting properties on node")
-        var properties = params.properties
-        for property in properties:
-            if debug_mode:
-                print("Setting property: " + property + " = " + str(properties[property]))
-            var value = properties[property]
-            if typeof(value) == TYPE_STRING and value.begins_with("res://"):
-                value = load(value)
-                if debug_mode:
-                    print("Loaded resource for property: " + property + " -> " + str(value))
-            new_node.set(property, value)
-    
+        if not _apply_properties(new_node, params.properties):
+            printerr("Invalid property value: " + _decode_error)
+            quit(1)
+            return
+
     parent.add_child(new_node)
     new_node.owner = scene_root
     if debug_mode:
@@ -1192,10 +1196,12 @@ func _walk_scene_tree(node) -> Dictionary:
 
     return info
 
-# Convert a Variant value to a JSON-serializable value. JSON-native types
-# (String, bool, numbers, Array, Dictionary) are converted recursively so they
-# survive as real JSON; every other Variant has no JSON equivalent (Vector2,
-# Color, NodePath, ...) and is kept as its exact engine string via str().
+# The tool value contract. A Variant is encoded as JSON-native data where one
+# exists, and as a tagged object {"$type": "...", ...} for engine-only types.
+# _decode_value inverts this exactly, so a value read from a scene or resource
+# can be written back without reinterpretation. Types with no structured
+# mapping are wrapped in the single GodotText escape hatch rather than being
+# handed back as a bare engine string.
 func _variant_to_json(value):
     match typeof(value):
         TYPE_NIL:
@@ -1203,12 +1209,56 @@ func _variant_to_json(value):
         TYPE_BOOL, TYPE_INT, TYPE_STRING:
             return value
         TYPE_FLOAT:
-            # JSON has no NaN/Infinity; stringify would warn on NaN.
+            # JSON has no NaN/Infinity, so those use the escape hatch.
             if not is_finite(value):
-                return str(value)
+                return _godot_text(value)
             return value
         TYPE_STRING_NAME:
-            return String(value)
+            return {"$type": "StringName", "value": String(value)}
+        TYPE_VECTOR2:
+            return {"$type": "Vector2", "x": value.x, "y": value.y}
+        TYPE_VECTOR2I:
+            return {"$type": "Vector2i", "x": value.x, "y": value.y}
+        TYPE_VECTOR3:
+            return {"$type": "Vector3", "x": value.x, "y": value.y, "z": value.z}
+        TYPE_VECTOR3I:
+            return {"$type": "Vector3i", "x": value.x, "y": value.y, "z": value.z}
+        TYPE_VECTOR4:
+            return {"$type": "Vector4", "x": value.x, "y": value.y, "z": value.z, "w": value.w}
+        TYPE_VECTOR4I:
+            return {"$type": "Vector4i", "x": value.x, "y": value.y, "z": value.z, "w": value.w}
+        TYPE_COLOR:
+            return {"$type": "Color", "r": value.r, "g": value.g, "b": value.b, "a": value.a}
+        TYPE_RECT2:
+            return {"$type": "Rect2", "position": _variant_to_json(value.position), "size": _variant_to_json(value.size)}
+        TYPE_RECT2I:
+            return {"$type": "Rect2i", "position": _variant_to_json(value.position), "size": _variant_to_json(value.size)}
+        TYPE_TRANSFORM2D:
+            return {
+                "$type": "Transform2D",
+                "x": _variant_to_json(value.x),
+                "y": _variant_to_json(value.y),
+                "origin": _variant_to_json(value.origin),
+            }
+        TYPE_QUATERNION:
+            return {"$type": "Quaternion", "x": value.x, "y": value.y, "z": value.z, "w": value.w}
+        TYPE_BASIS:
+            return {
+                "$type": "Basis",
+                "x": _variant_to_json(value.x),
+                "y": _variant_to_json(value.y),
+                "z": _variant_to_json(value.z),
+            }
+        TYPE_TRANSFORM3D:
+            return {"$type": "Transform3D", "basis": _variant_to_json(value.basis), "origin": _variant_to_json(value.origin)}
+        TYPE_AABB:
+            return {"$type": "AABB", "position": _variant_to_json(value.position), "size": _variant_to_json(value.size)}
+        TYPE_PLANE:
+            return {"$type": "Plane", "normal": _variant_to_json(value.normal), "d": value.d}
+        TYPE_NODE_PATH:
+            return {"$type": "NodePath", "path": String(value)}
+        TYPE_PACKED_STRING_ARRAY:
+            return {"$type": "PackedStringArray", "values": Array(value)}
         TYPE_ARRAY:
             var items = []
             for item in value:
@@ -1219,162 +1269,254 @@ func _variant_to_json(value):
             for key in value:
                 result[str(key)] = _variant_to_json(value[key])
             return result
+        TYPE_OBJECT:
+            if value == null:
+                return null
+            if value is Resource and value.resource_path != "":
+                return {"$type": "Resource", "path": value.resource_path}
+            return _godot_text(value)
         _:
-            return str(value)
+            return _godot_text(value)
 
-# Helper: Convert a JSON value to the correct Godot type based on a node's property type
-func _convert_property_value(node, prop_name, value):
-    for prop in node.get_property_list():
+# _godot_text is the single, named escape hatch for an engine value with no
+# structured mapping (an InputEvent, a callable, a non-finite float, ...). It
+# carries var_to_str output, the engine's own Variant serialization, so it is
+# both complete and reparsable rather than an opaque <Object#id> address.
+func _godot_text(value):
+    return {"$type": "GodotText", "text": var_to_str(value)}
+
+# Set every property, decoding each one first. Returns false and leaves the
+# shared decode error set when a value cannot be decoded, so the caller aborts
+# before writing anything.
+func _apply_properties(target, properties) -> bool:
+    for prop_name in properties:
+        var decoded = _convert_property_value(target, prop_name, properties[prop_name])
+        if _decode_error != "":
+            return false
+        target.set(prop_name, decoded)
+    return true
+
+# Convert a caller-supplied value into the type a target property expects. The
+# value must already be in the tool value contract, with a $type tag for any
+# engine-only type; a bare JSON object is a plain Dictionary, never a Vector2.
+func _convert_property_value(target, prop_name, value):
+    for prop in target.get_property_list():
         if prop["name"] == prop_name:
             return _convert_value_for_type(prop.get("type", 0), value)
-    return value
+    return _decode_value(value)
 
-# Convert a JSON value to the Godot type identified by a Variant type id. This
-# is the shared conversion table for scene node, resource, and theme
-# properties; a value with no matching conversion passes through unchanged.
+# Convert a value to the Godot type identified by a Variant type id. Native
+# JSON scalars are coerced to the property's declared type; engine-only types
+# must arrive as a matching $type object.
 func _convert_value_for_type(type_id, value):
+    if value is Dictionary and value.has("$type"):
+        return _decode_typed(value)
     match type_id:
-        TYPE_VECTOR2:
-            if value is Dictionary and value.has("x") and value.has("y"):
-                return Vector2(float(value.get("x", 0)), float(value.get("y", 0)))
-        TYPE_VECTOR2I:
-            if value is Dictionary and value.has("x") and value.has("y"):
-                return Vector2i(int(value.get("x", 0)), int(value.get("y", 0)))
-        TYPE_VECTOR3:
-            if value is Dictionary and value.has("x") and value.has("y"):
-                return Vector3(float(value.get("x", 0)), float(value.get("y", 0)), float(value.get("z", 0)))
-        TYPE_VECTOR3I:
-            if value is Dictionary and value.has("x") and value.has("y"):
-                return Vector3i(int(value.get("x", 0)), int(value.get("y", 0)), int(value.get("z", 0)))
-        TYPE_COLOR:
-            var color = _parse_color(value)
-            if color != null:
-                return color
-        TYPE_QUATERNION:
-            if value is Dictionary:
-                return Quaternion(float(value.get("x", 0)), float(value.get("y", 0)), float(value.get("z", 0)), float(value.get("w", 1)))
-        TYPE_RECT2:
-            if value is Dictionary and value.has("position") and value.has("size"):
-                var pos = value["position"]
-                var sz = value["size"]
-                return Rect2(float(pos.get("x", 0)), float(pos.get("y", 0)), float(sz.get("x", 0)), float(sz.get("y", 0)))
-        TYPE_AABB:
-            if value is Dictionary and value.has("position") and value.has("size"):
-                var pos = value["position"]
-                var sz = value["size"]
-                return AABB(
-                    Vector3(float(pos.get("x", 0)), float(pos.get("y", 0)), float(pos.get("z", 0))),
-                    Vector3(float(sz.get("x", 0)), float(sz.get("y", 0)), float(sz.get("z", 0)))
-                )
-        TYPE_BASIS:
-            if value is Dictionary and value.has("x") and value.has("y") and value.has("z"):
-                var bx = value["x"]
-                var by = value["y"]
-                var bz = value["z"]
-                return Basis(
-                    Vector3(float(bx.get("x", 0)), float(bx.get("y", 0)), float(bx.get("z", 0))),
-                    Vector3(float(by.get("x", 0)), float(by.get("y", 0)), float(by.get("z", 0))),
-                    Vector3(float(bz.get("x", 0)), float(bz.get("y", 0)), float(bz.get("z", 0)))
-                )
-        TYPE_TRANSFORM3D:
-            if value is Dictionary and value.has("basis") and value.has("origin"):
-                var basis_d = value["basis"]
-                var origin_d = value["origin"]
-                var basis = Basis.IDENTITY
-                if basis_d is Dictionary and basis_d.has("x"):
-                    var bx = basis_d["x"]
-                    var by = basis_d["y"]
-                    var bz = basis_d["z"]
-                    basis = Basis(
-                        Vector3(float(bx.get("x", 0)), float(bx.get("y", 0)), float(bx.get("z", 0))),
-                        Vector3(float(by.get("x", 0)), float(by.get("y", 0)), float(by.get("z", 0))),
-                        Vector3(float(bz.get("x", 0)), float(bz.get("y", 0)), float(bz.get("z", 0)))
-                    )
-                var origin = Vector3(float(origin_d.get("x", 0)), float(origin_d.get("y", 0)), float(origin_d.get("z", 0)))
-                return Transform3D(basis, origin)
-        TYPE_TRANSFORM2D:
-            if value is Dictionary and value.has("x") and value.has("y") and value.has("origin"):
-                var tx = value["x"]
-                var ty = value["y"]
-                var t_origin = value["origin"]
-                return Transform2D(
-                    Vector2(float(tx.get("x", 0)), float(tx.get("y", 0))),
-                    Vector2(float(ty.get("x", 0)), float(ty.get("y", 0))),
-                    Vector2(float(t_origin.get("x", 0)), float(t_origin.get("y", 0)))
-                )
+        TYPE_VECTOR2, TYPE_VECTOR2I, TYPE_VECTOR3, TYPE_VECTOR3I, TYPE_VECTOR4, TYPE_VECTOR4I, \
+        TYPE_COLOR, TYPE_RECT2, TYPE_RECT2I, TYPE_TRANSFORM2D, TYPE_QUATERNION, \
+        TYPE_BASIS, TYPE_TRANSFORM3D, TYPE_AABB, TYPE_PLANE:
+            return _decode_fail("expected a tagged {\"$type\": ...} value for a %s property" % type_string(type_id))
         TYPE_BOOL:
-            if value is String:
-                return value.to_lower() == "true"
-            return bool(value)
+            if value is bool:
+                return value
+            return _decode_fail("expected a boolean")
         TYPE_INT:
-            return int(value)
+            if value is int or value is float:
+                return int(value)
+            return _decode_fail("expected an integer")
         TYPE_FLOAT:
-            return float(value)
+            if value is int or value is float:
+                return float(value)
+            return _decode_fail("expected a number")
         TYPE_STRING:
-            return str(value)
+            if value is String:
+                return value
+            return _decode_fail("expected a string")
+        TYPE_STRING_NAME:
+            if value is String:
+                return StringName(value)
+            return _decode_fail("expected a string")
         TYPE_NODE_PATH:
-            return NodePath(str(value))
+            if value is String:
+                return NodePath(value)
+            return _decode_fail("expected a string path")
+        TYPE_PACKED_STRING_ARRAY:
+            if value is Array:
+                var out = PackedStringArray()
+                for item in value:
+                    if not (item is String):
+                        return _decode_fail("expected an array of strings")
+                    out.append(item)
+                return out
+            return _decode_fail("expected an array of strings")
         TYPE_OBJECT:
-            return _convert_resource_value(value)
+            return _decode_object(value)
+    return _decode_value(value)
+
+# Decode a value with no destination type. Tagged objects dispatch on their
+# $type; plain dictionaries and arrays are decoded recursively so tagged values
+# nested inside them still work. An unrecognized $type is an error, never a
+# silent pass-through.
+func _decode_value(value):
+    if value is Dictionary:
+        if value.has("$type"):
+            return _decode_typed(value)
+        var result = {}
+        for key in value:
+            var decoded = _decode_value(value[key])
+            if _decode_error != "":
+                return null
+            result[key] = decoded
+        return result
+    if value is Array:
+        var items = []
+        for item in value:
+            var decoded = _decode_value(item)
+            if _decode_error != "":
+                return null
+            items.append(decoded)
+        return items
     return value
 
-# Parse a Color from the JSON shapes callers can send: a {r,g,b,a} dictionary,
-# a "#rrggbb" string, a "(r, g, b, a)" string (the form read emits via str()),
-# or a named color such as "red". Returns null when value is not a color.
-func _parse_color(value):
-    if value is Color:
-        return value
-    if value is Dictionary and value.has("r") and value.has("g") and value.has("b"):
-        return Color(float(value.get("r", 0)), float(value.get("g", 0)), float(value.get("b", 0)), float(value.get("a", 1.0)))
-    if value is String:
-        var text = value.strip_edges()
-        if text.begins_with("#"):
-            return Color.html(text)
-        if text.begins_with("(") and text.ends_with(")"):
-            var parts = text.substr(1, text.length() - 2).split(",")
-            if parts.size() >= 3:
-                var parsed = Color(
-                    float(parts[0].strip_edges()),
-                    float(parts[1].strip_edges()),
-                    float(parts[2].strip_edges()),
-                    1.0
-                )
-                if parts.size() >= 4:
-                    parsed.a = float(parts[3].strip_edges())
+# Decode a tagged value by its $type. Every branch validates its fields and
+# reports through _decode_error; an unlisted tag is rejected.
+func _decode_typed(value):
+    var tag = value.get("$type", "")
+    match tag:
+        "Vector2":
+            return Vector2(_number_field(value, "x"), _number_field(value, "y"))
+        "Vector2i":
+            return Vector2i(int(_number_field(value, "x")), int(_number_field(value, "y")))
+        "Vector3":
+            return Vector3(_number_field(value, "x"), _number_field(value, "y"), _number_field(value, "z"))
+        "Vector3i":
+            return Vector3i(int(_number_field(value, "x")), int(_number_field(value, "y")), int(_number_field(value, "z")))
+        "Vector4":
+            return Vector4(_number_field(value, "x"), _number_field(value, "y"), _number_field(value, "z"), _number_field(value, "w"))
+        "Vector4i":
+            return Vector4i(int(_number_field(value, "x")), int(_number_field(value, "y")), int(_number_field(value, "z")), int(_number_field(value, "w")))
+        "Color":
+            return Color(_number_field(value, "r"), _number_field(value, "g"), _number_field(value, "b"), _number_field_or(value, "a", 1.0))
+        "Rect2":
+            return Rect2(_vector_field(value, "position", TYPE_VECTOR2), _vector_field(value, "size", TYPE_VECTOR2))
+        "Rect2i":
+            return Rect2i(_vector_field(value, "position", TYPE_VECTOR2I), _vector_field(value, "size", TYPE_VECTOR2I))
+        "Transform2D":
+            return Transform2D(_vector_field(value, "x", TYPE_VECTOR2), _vector_field(value, "y", TYPE_VECTOR2), _vector_field(value, "origin", TYPE_VECTOR2))
+        "Quaternion":
+            return Quaternion(_number_field(value, "x"), _number_field(value, "y"), _number_field(value, "z"), _number_field_or(value, "w", 1.0))
+        "Basis":
+            return Basis(_vector_field(value, "x", TYPE_VECTOR3), _vector_field(value, "y", TYPE_VECTOR3), _vector_field(value, "z", TYPE_VECTOR3))
+        "Transform3D":
+            return Transform3D(_typed_field(value, "basis", "Basis"), _vector_field(value, "origin", TYPE_VECTOR3))
+        "AABB":
+            return AABB(_vector_field(value, "position", TYPE_VECTOR3), _vector_field(value, "size", TYPE_VECTOR3))
+        "Plane":
+            return Plane(_vector_field(value, "normal", TYPE_VECTOR3), _number_field(value, "d"))
+        "NodePath":
+            return NodePath(_string_field(value, "path"))
+        "StringName":
+            return StringName(_string_field(value, "value"))
+        "PackedStringArray":
+            var raw = value.get("values", null)
+            if not (raw is Array):
+                return _decode_fail("$type PackedStringArray needs a \"values\" array")
+            var out = PackedStringArray()
+            for item in raw:
+                if not (item is String):
+                    return _decode_fail("PackedStringArray values must be strings")
+                out.append(item)
+            return out
+        "Resource":
+            return _decode_resource(value)
+        "GodotText":
+            # Best-effort reparsing lets a scene or resource slot accept an
+            # escape-hatch value; a type var_to_str cannot rebuild (an Object)
+            # falls back to the literal text.
+            var text = _string_field(value, "text")
+            if _decode_error != "":
+                return null
+            var parsed = str_to_var(text)
+            if parsed != null:
                 return parsed
-        var named = Color.from_string(text, Color(-1, -1, -1, -1))
-        if named.r >= 0.0:
-            return named
-    return null
+            return text
+        "Dictionary":
+            var inner = value.get("value", null)
+            if inner is Dictionary:
+                return _decode_value(inner)
+            return _decode_fail("$type Dictionary needs a \"value\" object")
+    return _decode_fail("unknown $type: " + str(tag))
 
-# Load the Resource a JSON value refers to. Strings may be a bare "res://"
-# path or the "(res://path):<Class#id>" form Godot's str() produces for an
-# object read back from disk, so a read-then-modify round trip resolves the
-# same resource. Unknown strings pass through for the caller's set() to reject.
-func _convert_resource_value(value):
-    if value is Resource:
-        return value
+# Decode a nested tagged value, requiring the given tag.
+func _typed_field(value, field, tag):
+    var inner = value.get(field, null)
+    if inner is Dictionary and inner.get("$type", "") == tag:
+        return _decode_typed(inner)
+    return _decode_fail("field \"" + field + "\" must be a {\"$type\": \"" + tag + "\"} value")
+
+# Decode a nested Vector field, requiring and converting the given type.
+func _vector_field(value, field, type_id):
+    var inner = value.get(field, null)
+    if inner is Dictionary and inner.has("$type"):
+        var decoded = _decode_typed(inner)
+        if _decode_error != "":
+            return null
+        if typeof(decoded) == type_id:
+            return decoded
+        return _decode_fail("field \"" + field + "\" has the wrong vector type")
+    return _decode_fail("field \"" + field + "\" must be a tagged vector value")
+
+# Decode an object-typed value. A bare res:// or user:// string is sugar for a
+# Resource reference; a tagged Resource or GodotText also decodes.
+func _decode_object(value):
     if value is String:
-        var path = _resource_path_in_string(value)
-        if not path.is_empty():
-            if ResourceLoader.exists(path):
-                var res = load(path)
-                if res != null:
-                    return res
-            printerr("Failed to load resource from path: " + path)
-            quit(1)
-    return value
+        if value.begins_with("res://") or value.begins_with("user://"):
+            return _decode_resource_path(value)
+        return _decode_fail("expected a res:// path or a tagged value for an object property")
+    return _decode_value(value)
 
-# Extract the "res://..." path embedded in a string, stopping at the ")" that
-# closes the parenthesized form, or at the end for a bare path.
-func _resource_path_in_string(text) -> String:
-    var start = text.find("res://")
-    if start == -1:
-        return ""
-    var end = text.find(")", start)
-    if end == -1:
-        return text.substr(start)
-    return text.substr(start, end - start)
+func _decode_resource(value):
+    var path = value.get("path", null)
+    if not (path is String):
+        return _decode_fail("$type Resource needs a \"path\" string")
+    return _decode_resource_path(path)
+
+func _decode_resource_path(path):
+    if ResourceLoader.exists(path):
+        var res = load(path)
+        if res != null:
+            return res
+    return _decode_fail("failed to load resource: " + path)
+
+# Field readers. Each reports through _decode_error and returns a zero value on
+# failure; the caller's error check discards that zero value.
+func _number_field(value, field) -> float:
+    var raw = value.get(field, null)
+    if raw is int or raw is float:
+        return float(raw)
+    _decode_error = "expected a number for \"" + field + "\" in " + _tag_label(value)
+    return 0.0
+
+func _number_field_or(value, field, fallback) -> float:
+    if not value.has(field):
+        return fallback
+    return _number_field(value, field)
+
+func _string_field(value, field) -> String:
+    var raw = value.get(field, null)
+    if raw is String:
+        return raw
+    _decode_error = "expected a string for \"" + field + "\" in " + _tag_label(value)
+    return ""
+
+func _tag_label(value) -> String:
+    return "$type " + str(value.get("$type", "value"))
+
+# _decode_fail records a decode error and returns null; handlers check
+# _decode_error and abort before saving.
+func _decode_fail(message):
+    _decode_error = message
+    return null
 
 # Modify a node's properties in a scene file
 func modify_node(params):
@@ -1412,12 +1554,10 @@ func modify_node(params):
         quit(1)
 
     # Set properties with type conversion
-    var properties = params.properties
-    for prop_name in properties:
-        var raw_value = properties[prop_name]
-        var converted_value = _convert_property_value(target, prop_name, raw_value)
-        log_info("Setting " + prop_name + " = " + str(converted_value) + " (from " + str(raw_value) + ")")
-        target.set(prop_name, converted_value)
+    if not _apply_properties(target, params.properties):
+        printerr("Invalid property value: " + _decode_error)
+        quit(1)
+        return
 
     # Repack and save
     var packed_scene = PackedScene.new()
@@ -1840,12 +1980,10 @@ func create_resource(params):
 
     # Set properties if provided
     if params.has("properties"):
-        var properties = params.properties
-        for prop_name in properties:
-            var raw_value = properties[prop_name]
-            var converted_value = _convert_property_value(resource, prop_name, raw_value)
-            log_info("Setting " + prop_name + " = " + str(converted_value))
-            resource.set(prop_name, converted_value)
+        if not _apply_properties(resource, params.properties):
+            printerr("Invalid property value: " + _decode_error)
+            quit(1)
+            return
 
     # Ensure directory exists
     var dir_path = full_resource_path.get_base_dir()
@@ -1882,7 +2020,7 @@ func manage_resource(params):
         var props = {}
         for prop in res.get_property_list():
             if prop["usage"] & PROPERTY_USAGE_STORAGE:
-                props[prop["name"]] = str(res.get(prop["name"]))
+                props[prop["name"]] = _variant_to_json(res.get(prop["name"]))
         print(JSON_START)
         print(JSON.stringify({"type": res.get_class(), "path": full_path, "properties": props}))
         print(JSON_END)
@@ -1894,11 +2032,10 @@ func manage_resource(params):
         if res == null:
             printerr("Failed to load resource: " + full_path)
             quit(1)
-        var properties = params.get("properties", {})
-        for prop_name in properties:
-            var raw_value = properties[prop_name]
-            var converted_value = _convert_property_value(res, prop_name, raw_value)
-            res.set(prop_name, converted_value)
+        if not _apply_properties(res, params.get("properties", {})):
+            printerr("Invalid property value: " + _decode_error)
+            quit(1)
+            return
         var save_error = ResourceSaver.save(res, full_path)
         if save_error != OK:
             printerr("Failed to save resource: " + str(save_error))
@@ -1918,7 +2055,10 @@ func manage_theme_resource(params):
 
     if action == "create":
         var theme = Theme.new()
-        _set_theme_properties(theme, params.get("properties", {}))
+        if not _apply_theme_properties(theme, params.get("properties", {})):
+            printerr("Invalid property value: " + _decode_error)
+            quit(1)
+            return
         var dir_path = full_path.get_base_dir()
         var dir_relative = dir_path.substr(6)
         if not dir_relative.is_empty():
@@ -1941,7 +2081,7 @@ func manage_theme_resource(params):
         var props = {}
         for prop in theme.get_property_list():
             if prop["usage"] & PROPERTY_USAGE_STORAGE:
-                props[prop["name"]] = str(theme.get(prop["name"]))
+                props[prop["name"]] = _variant_to_json(theme.get(prop["name"]))
         print(JSON_START)
         print(JSON.stringify({"type": theme.get_class(), "path": full_path, "properties": props}))
         print(JSON_END)
@@ -1953,7 +2093,10 @@ func manage_theme_resource(params):
         if theme == null:
             printerr("Failed to load theme: " + full_path)
             quit(1)
-        _set_theme_properties(theme, params.get("properties", {}))
+        if not _apply_theme_properties(theme, params.get("properties", {})):
+            printerr("Invalid property value: " + _decode_error)
+            quit(1)
+            return
         var save_error = ResourceSaver.save(theme, full_path)
         if save_error != OK:
             printerr("Failed to save theme: " + str(save_error))
@@ -1967,10 +2110,15 @@ func manage_theme_resource(params):
 # Apply a caller's properties map to a Theme with type conversion. Theme items
 # are keyed by composite names such as "Label/colors/font_color", so the value
 # type is derived from the matching property entry when the item already exists
-# and from the key's category when this call creates it.
-func _set_theme_properties(theme, properties):
+# and from the key's category when this call creates it. Returns false and
+# leaves the decode error set when a value cannot be decoded.
+func _apply_theme_properties(theme, properties) -> bool:
     for key in properties:
-        theme.set(key, _convert_theme_property(theme, key, properties[key]))
+        var decoded = _convert_theme_property(theme, key, properties[key])
+        if _decode_error != "":
+            return false
+        theme.set(key, decoded)
+    return true
 
 func _convert_theme_property(theme, key, value):
     var type_id = -1
@@ -1998,19 +2146,29 @@ func _convert_theme_property(theme, key, value):
 # engine logs "Error parsing '<path>/project.godot'" to stderr and leaves the
 # affected settings at their defaults. This operation surfaces the settings
 # that differ from the engine defaults, so a caller can confirm both that the
-# project parsed and what Godot read back. A value is emitted as its Godot
-# literal (var_to_str) via JSON so the payload stays single-line.
+# project parsed and what Godot read back. Values use the tool value contract,
+# so a read value can be handed straight back to modify_project_settings.
 func validate_project(_params):
-    var settings = {}
+    var sections = {}
+    var count = 0
     for prop in ProjectSettings.get_property_list():
         var setting_name = prop.name
         var value = ProjectSettings.get_setting(setting_name)
         if value != ProjectSettings.property_get_revert(setting_name):
-            settings[setting_name] = var_to_str(value)
+            var section = ""
+            var key = setting_name
+            var slash = setting_name.find("/")
+            if slash != -1:
+                section = setting_name.substr(0, slash)
+                key = setting_name.substr(slash + 1)
+            if not sections.has(section):
+                sections[section] = {}
+            sections[section][key] = _variant_to_json(value)
+            count += 1
     var result = {
         "projectPath": ProjectSettings.globalize_path("res://"),
-        "settingCount": settings.size(),
-        "settings": settings,
+        "settingCount": count,
+        "sections": sections,
     }
     print(JSON_START)
     print(JSON.stringify(result))

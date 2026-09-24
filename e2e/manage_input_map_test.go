@@ -60,7 +60,12 @@ jump={"deadzone": 0.5}
 			t.Errorf("text = %q, want %q", text, want)
 		}
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		requireContains(t, sections["input"]["move_left"], `"physical_keycode":87`)
+		action := godotMap(t, sections["input"]["move_left"])
+		events := godotTexts(t, action["events"])
+		if len(events) != 1 {
+			t.Fatalf("events = %v, want 1", events)
+		}
+		requireContains(t, events[0], `"physical_keycode":87`)
 	})
 
 	t.Run("add without key", func(t *testing.T) {
@@ -77,7 +82,10 @@ jump={"deadzone": 0.5}
 			t.Errorf("text = %q, want %q", text, want)
 		}
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		requireContains(t, sections["input"]["jump"], `"deadzone": 1.0`)
+		action := godotMap(t, sections["input"]["jump"])
+		if got := action["deadzone"]; got != float64(1) {
+			t.Errorf("deadzone = %v, want 1", got)
+		}
 	})
 
 	t.Run("merge existing action", func(t *testing.T) {
@@ -95,7 +103,12 @@ jump={"deadzone": 0.5}
 			t.Errorf("text = %q, want %q", text, want)
 		}
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		requireContains(t, sections["input"]["move_left"], `"physical_keycode":87`, `"physical_keycode":68`)
+		action := godotMap(t, sections["input"]["move_left"])
+		events := godotTexts(t, action["events"])
+		if len(events) != 2 {
+			t.Fatalf("events = %v, want 2", events)
+		}
+		requireContains(t, events[0]+"\n"+events[1], `"physical_keycode":87`, `"physical_keycode":68`)
 	})
 
 	t.Run("remove", func(t *testing.T) {

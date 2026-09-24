@@ -36,10 +36,10 @@ run/main_scene="res://old.tscn"
 		requirePrefix(t, text, "Main scene set to res://scenes/main.tscn")
 
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		if got := sections["application"]["run/main_scene"]; got != `"res://scenes/main.tscn"` {
+		if got := sections["application"]["run/main_scene"]; got != "res://scenes/main.tscn" {
 			t.Errorf("run/main_scene = %q, want %q", got, `"res://scenes/main.tscn"`)
 		}
-		if got := sections["application"]["config/name"]; got != `"Demo"` {
+		if got := sections["application"]["config/name"]; got != "Demo" {
 			t.Errorf("config/name = %q, want it preserved", got)
 		}
 	})
@@ -56,7 +56,7 @@ run/main_scene="res://old.tscn"
 		}
 
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		if got := sections["application"]["run/main_scene"]; got != `"res://scenes/main.tscn"` {
+		if got := sections["application"]["run/main_scene"]; got != "res://scenes/main.tscn" {
 			t.Errorf("run/main_scene = %q", got)
 		}
 	})

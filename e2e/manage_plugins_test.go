@@ -67,8 +67,8 @@ MyPlugin/enabled=true
 			t.Errorf("text = %q", text)
 		}
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		if got := sections["editor_plugins"]["Foo/enabled"]; got != "true" {
-			t.Errorf("Foo/enabled = %q, want true", got)
+		if got := sections["editor_plugins"]["Foo/enabled"]; got != true {
+			t.Errorf("Foo/enabled = %v, want true", got)
 		}
 	})
 
@@ -91,8 +91,8 @@ Foo/enabled=true
 			t.Errorf("text = %q", text)
 		}
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		if got := sections["editor_plugins"]["Foo/enabled"]; got != "false" {
-			t.Errorf("Foo/enabled = %q, want false", got)
+		if got := sections["editor_plugins"]["Foo/enabled"]; got != false {
+			t.Errorf("Foo/enabled = %v, want false", got)
 		}
 	})
 }

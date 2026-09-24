@@ -100,6 +100,24 @@ func statusResult(message string, fields map[string]any) mcp.ToolResult {
 	return mcp.StructuredResult(message, value)
 }
 
+// godotValueSchema describes one value in the tool value contract for schema
+// consumers: JSON-native data, or a tagged object such as
+// {"$type":"Vector2","x":1,"y":2} for an engine-only type. It is deliberately
+// permissive; the decoder enforces which $type a slot accepts.
+func godotValueSchema(description string) map[string]any {
+	return map[string]any{"description": description}
+}
+
+// propertiesSchema is the input schema shared by every tool that takes a map
+// of property name to godotValue.
+func propertiesSchema(description string) map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"description":          description,
+		"additionalProperties": godotValueSchema("A value in the tool value contract"),
+	}
+}
+
 // statusOutputSchema returns the object output schema shared by the mutation
 // tools. It always allows the success and message fields plus any tool-specific
 // properties, and deliberately requires none so a single schema can describe

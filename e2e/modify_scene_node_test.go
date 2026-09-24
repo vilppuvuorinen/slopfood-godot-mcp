@@ -35,7 +35,7 @@ func TestModifySceneNodeTool(t *testing.T) {
 		"scenePath":   "scenes/main.tscn",
 		"nodePath":    "root/Player",
 		"properties": map[string]any{
-			"position": map[string]any{"x": 10, "y": 20},
+			"position": map[string]any{"$type": "Vector2", "x": 10, "y": 20},
 			"visible":  false,
 		},
 	})

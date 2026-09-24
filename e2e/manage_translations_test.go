@@ -62,7 +62,7 @@ translations=PackedStringArray("res://en.translation")
 			t.Errorf("text = %q, want %q", text, want)
 		}
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		requireContains(t, sections["internationalization"]["translations"], `"res://en.translation"`, `"res://fi.translation"`)
+		requireContains(t, packedStrings(t, sections["internationalization"]["translations"]), "res://en.translation", "res://fi.translation")
 	})
 
 	t.Run("add creates section", func(t *testing.T) {
@@ -78,7 +78,7 @@ translations=PackedStringArray("res://en.translation")
 			t.Errorf("text = %q, want %q", text, want)
 		}
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		requireContains(t, sections["internationalization"]["translations"], `"res://en.translation"`)
+		requireContains(t, packedStrings(t, sections["internationalization"]["translations"]), "res://en.translation")
 	})
 
 	t.Run("remove", func(t *testing.T) {
@@ -99,8 +99,9 @@ translations=PackedStringArray("res://en.translation", "res://fi.translation")
 			t.Errorf("text = %q, want %q", text, want)
 		}
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		requireNotContains(t, sections["internationalization"]["translations"], "res://en.translation")
-		requireContains(t, sections["internationalization"]["translations"], `"res://fi.translation"`)
+		translations := packedStrings(t, sections["internationalization"]["translations"])
+		requireNotContains(t, translations, "res://en.translation")
+		requireContains(t, translations, "res://fi.translation")
 	})
 }
 

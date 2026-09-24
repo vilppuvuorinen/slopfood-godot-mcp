@@ -29,7 +29,7 @@ func TestCreateResourceTool(t *testing.T) {
 		"resourceType": "StandardMaterial3D",
 		"resourcePath": "materials/red.tres",
 		"properties": map[string]any{
-			"albedo_color": map[string]any{"r": 1, "g": 0, "b": 0, "a": 1},
+			"albedo_color": map[string]any{"$type": "Color", "r": 1, "g": 0, "b": 0, "a": 1},
 		},
 	})
 

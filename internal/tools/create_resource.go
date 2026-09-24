@@ -30,10 +30,7 @@ func createResource() mcp.Tool {
 					"type":        "string",
 					"description": "Where to save the .tres file (relative to project)",
 				},
-				"properties": map[string]any{
-					"type":        "object",
-					"description": "Optional properties to set on the resource",
-				},
+				"properties": propertiesSchema("Optional properties to set on the resource, as name to godotValue pairs"),
 			},
 			"required": []string{"projectPath", "resourceType", "resourcePath"},
 		},

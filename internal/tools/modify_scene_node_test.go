@@ -66,12 +66,12 @@ func TestModifySceneNodeVector2Properties(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, modifySceneNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root/Player","properties":{"position":{"x":10,"y":20}}}`)
+	result := callToolArgs(t, modifySceneNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root/Player","properties":{"position":{"$type":"Vector2","x":10,"y":20}}}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	if !strings.Contains(result.Content[0].Text, `"properties":{"position":{"x":10,"y":20}}`) {
-		t.Errorf("text = %q, want the Vector2 dict to round-trip", result.Content[0].Text)
+	if !strings.Contains(result.Content[0].Text, `"properties":{"position":{"$type":"Vector2","x":10,"y":20}}`) {
+		t.Errorf("text = %q, want the tagged Vector2 to round-trip", result.Content[0].Text)
 	}
 }
 

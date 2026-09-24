@@ -67,7 +67,7 @@ func TestManageResourceTool(t *testing.T) {
 			"resourcePath": "resources/mat.tres",
 			"action":       "read",
 		})
-		requireContains(t, readText, `"metallic": "0.75"`)
+		requireContains(t, readText, `"metallic": 0.75`)
 	})
 }
 

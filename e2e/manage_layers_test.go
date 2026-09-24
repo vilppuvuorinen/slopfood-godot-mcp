@@ -46,7 +46,7 @@ func TestManageLayersTool(t *testing.T) {
 			t.Errorf("message = %q, want %q", text, want)
 		}
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		if got := sections["layer_names"]["layer_names/2d_render/layer_1"]; got != `"Ground"` {
+		if got := sections["layer_names"]["layer_names/2d_render/layer_1"]; got != "Ground" {
 			t.Errorf("layer_1 = %q, want %q", got, `"Ground"`)
 		}
 	})
@@ -64,7 +64,7 @@ func TestManageLayersTool(t *testing.T) {
 			"name":        "Water",
 		})
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		if got := sections["layer_names"]["layer_names/3d_physics/layer_2"]; got != `"Water"` {
+		if got := sections["layer_names"]["layer_names/3d_physics/layer_2"]; got != "Water" {
 			t.Errorf("layer_2 = %q", got)
 		}
 	})

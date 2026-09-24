@@ -30,10 +30,7 @@ func manageThemeResource() mcp.Tool {
 					"type":        "string",
 					"description": "Action: create, read, modify",
 				},
-				"properties": map[string]any{
-					"type":        "object",
-					"description": "Theme properties to set",
-				},
+				"properties": propertiesSchema("Theme properties to set, as name to godotValue pairs"),
 			},
 			"required": []string{"projectPath", "resourcePath", "action"},
 		},
@@ -44,7 +41,8 @@ func manageThemeResource() mcp.Tool {
 			"path":         map[string]any{"type": "string"},
 			"properties": map[string]any{
 				"type":                 "object",
-				"additionalProperties": map[string]any{"type": "string"},
+				"description":          "Theme properties in the tool value contract",
+				"additionalProperties": godotValueSchema("JSON-native values are nested; engine-only types are tagged objects"),
 			},
 		}),
 		Handler: handleManageThemeResource,

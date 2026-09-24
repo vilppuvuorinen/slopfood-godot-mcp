@@ -57,7 +57,7 @@ func TestReadSceneSuccess(t *testing.T) {
 }
 
 func TestReadScenePreservesNestedPropertyValues(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","properties":{"config":{"myKey":1,"nested":{"a":[1,2,3]}},"position":"(0.0, 0.0)"}}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","properties":{"config":{"myKey":1,"nested":{"a":[1,2,3]}},"position":{"$type":"Vector2","x":0,"y":0}}}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
@@ -67,7 +67,7 @@ func TestReadScenePreservesNestedPropertyValues(t *testing.T) {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
 	text := result.Content[0].Text
-	for _, want := range []string{`"config": {`, `"myKey": 1`, `"a": [`, `"position": "(0.0, 0.0)"`} {
+	for _, want := range []string{`"config": {`, `"myKey": 1`, `"a": [`, `"position": {`, `"$type": "Vector2"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
@@ -88,8 +88,9 @@ func TestReadScenePreservesNestedPropertyValues(t *testing.T) {
 	if got := config["myKey"]; got != float64(1) {
 		t.Errorf("config.myKey = %v, want 1", got)
 	}
-	if _, ok := props["position"].(string); !ok {
-		t.Errorf("position = %T, want engine string", props["position"])
+	position, ok := props["position"].(map[string]any)
+	if !ok || position["$type"] != "Vector2" {
+		t.Errorf("position = %#v, want a tagged Vector2 object", props["position"])
 	}
 }
 

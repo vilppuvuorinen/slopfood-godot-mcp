@@ -209,37 +209,79 @@ func requireNotContains(t *testing.T, s, unwanted string) {
 
 // requireProjectSettingsRoundTrip reads project.godot back through
 // read_project_settings, which loads the file with the real Godot engine and
-// fails when the engine rejects it. It decodes the engine's settings payload and
-// folds each "section/key" property name back into the section -> key map the
-// callers assert against.
+// fails when the engine rejects it. It returns the engine's settings grouped by
+// section, with each value in the tool value contract.
 //
 // It asserts nothing itself beyond "Godot parsed the file": the returned map is
 // the settings Godot actually applied, which is only reached when the engine
 // loaded project.godot cleanly. Callers must be Godot-gated (requireGodot)
 // because the tool always invokes the engine and fails when it is unavailable.
-func requireProjectSettingsRoundTrip(t *testing.T, session *mcp.ClientSession, projectPath string) map[string]map[string]string {
+func requireProjectSettingsRoundTrip(t *testing.T, session *mcp.ClientSession, projectPath string) map[string]map[string]any {
 	t.Helper()
 	text := requireToolText(t, session, "read_project_settings", map[string]any{
 		"projectPath": projectPath,
 	})
 	var payload struct {
-		Settings map[string]string `json:"settings"`
+		Sections map[string]map[string]any `json:"sections"`
 	}
 	if err := json.Unmarshal([]byte(text), &payload); err != nil {
 		t.Fatalf("unmarshal project settings %q: %v", text, err)
 	}
-	sections := make(map[string]map[string]string)
-	for name, value := range payload.Settings {
-		section, key, found := strings.Cut(name, "/")
-		if !found {
-			section, key = "", name
-		}
-		if sections[section] == nil {
-			sections[section] = make(map[string]string)
-		}
-		sections[section][key] = value
+	return payload.Sections
+}
+
+// godotMap asserts value is a JSON object and returns it, optionally failing
+// when a required field is missing or the wrong type.
+func godotMap(t *testing.T, value any) map[string]any {
+	t.Helper()
+	obj, ok := value.(map[string]any)
+	if !ok {
+		t.Fatalf("value = %#v, want an object", value)
 	}
-	return sections
+	return obj
+}
+
+// godotTexts asserts value is an array of GodotText escape-hatch objects and
+// returns their text.
+func godotTexts(t *testing.T, value any) []string {
+	t.Helper()
+	items, ok := value.([]any)
+	if !ok {
+		t.Fatalf("value = %#v, want an array", value)
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		obj, ok := item.(map[string]any)
+		if !ok || obj["$type"] != "GodotText" {
+			t.Fatalf("item = %#v, want a GodotText object", item)
+		}
+		text, _ := obj["text"].(string)
+		out = append(out, text)
+	}
+	return out
+}
+
+// packedStrings asserts value is a PackedStringArray object and returns its
+// strings, joined for substring assertions.
+func packedStrings(t *testing.T, value any) string {
+	t.Helper()
+	obj := godotMap(t, value)
+	if obj["$type"] != "PackedStringArray" {
+		t.Fatalf("value = %#v, want a PackedStringArray object", value)
+	}
+	values, ok := obj["values"].([]any)
+	if !ok {
+		t.Fatalf("values = %#v, want an array", obj["values"])
+	}
+	parts := make([]string, 0, len(values))
+	for _, v := range values {
+		s, ok := v.(string)
+		if !ok {
+			t.Fatalf("value = %#v, want a string", v)
+		}
+		parts = append(parts, s)
+	}
+	return strings.Join(parts, ",")
 }
 
 // toolSchema is the subset of a tool's JSON schema the tests assert against.

@@ -11,7 +11,8 @@ func TestModifyProjectSettingsSchema(t *testing.T) {
 	schema := requireSchema(t, "modify_project_settings", "Modify a project.godot setting")
 	schema.requireRequired(t, "projectPath", "section", "key", "value")
 	schema.requirePropCount(t, 4)
-	schema.requireStringProps(t, "projectPath", "section", "key", "value")
+	schema.requireStringProps(t, "projectPath", "section", "key")
+	schema.requireProps(t, "value")
 }
 
 // TestModifyProjectSettingsTool drives the real modify_project_settings tool
@@ -35,15 +36,15 @@ run/main_scene="res://main.tscn"
 			"projectPath": root,
 			"section":     "application",
 			"key":         "config/name",
-			"value":       `"New"`,
+			"value":       "New",
 		})
 		if want := `Setting updated: [application] config/name="New"`; text != want {
 			t.Errorf("text = %q, want %q", text, want)
 		}
 
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		if got := sections["application"]["config/name"]; got != `"New"` {
-			t.Errorf("config/name = %q, want %q", got, `"New"`)
+		if got := sections["application"]["config/name"]; got != "New" {
+			t.Errorf("config/name = %v, want New", got)
 		}
 	})
 
@@ -59,12 +60,12 @@ config/name="Demo"
 			"projectPath": root,
 			"section":     "application",
 			"key":         "config/description",
-			"value":       `"Hi"`,
+			"value":       "Hi",
 		})
 
 		sections := requireProjectSettingsRoundTrip(t, session, root)
-		if got := sections["application"]["config/description"]; got != `"Hi"` {
-			t.Errorf("config/description = %q, want %q", got, `"Hi"`)
+		if got := sections["application"]["config/description"]; got != "Hi" {
+			t.Errorf("config/description = %v, want Hi", got)
 		}
 	})
 }

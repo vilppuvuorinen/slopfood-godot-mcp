@@ -119,8 +119,9 @@ func TestReadSceneNestedProperties(t *testing.T) {
 	if got := nested["a"]; !reflect.DeepEqual(got, []any{float64(1), float64(2), float64(3)}) {
 		t.Errorf("config.nested.a = %v, want [1 2 3]", got)
 	}
-	if _, ok := tree.Properties["position"].(string); !ok {
-		t.Errorf("position = %T, want engine string", tree.Properties["position"])
+	position, ok := tree.Properties["position"].(map[string]any)
+	if !ok || position["$type"] != "Vector2" {
+		t.Errorf("position = %#v, want a tagged Vector2 object", tree.Properties["position"])
 	}
 }
 

@@ -41,11 +41,11 @@ Game="*res://game.gd"
 `)
 		sections := requireProjectSettingsRoundTrip(t, session, root)
 
-		if got := sections["application"]["config/name"]; got != `"Demo"` {
-			t.Errorf("config/name = %q", got)
+		if got := sections["application"]["config/name"]; got != "Demo" {
+			t.Errorf("config/name = %v", got)
 		}
-		if got := sections["autoload"]["Game"]; got != `"*res://game.gd"` {
-			t.Errorf("autoload Game = %q", got)
+		if got := sections["autoload"]["Game"]; got != "*res://game.gd" {
+			t.Errorf("autoload Game = %v", got)
 		}
 	})
 

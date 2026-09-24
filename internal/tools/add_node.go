@@ -38,10 +38,7 @@ func addNode() mcp.Tool {
 					"type":        "string",
 					"description": "Name for the new node",
 				},
-				"properties": map[string]any{
-					"type":        "object",
-					"description": "Optional properties to set on the node",
-				},
+				"properties": propertiesSchema("Optional properties to set on the node, as name to godotValue pairs"),
 			},
 			"required": []string{"projectPath", "scenePath", "nodeType", "nodeName"},
 		},

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -31,10 +32,7 @@ func modifyProjectSettings() mcp.Tool {
 					"type":        "string",
 					"description": `Setting key (e.g., "run/main_scene", "window/size/viewport_width")`,
 				},
-				"value": map[string]any{
-					"type":        "string",
-					"description": `Value to set, as a single Godot literal (for example "\"text\"", "1280" or "true"); it is parsed and re-serialized`,
-				},
+				"value": godotValueSchema(`Value to set in the tool value contract (for example "text", 1280, true, or {"$type":"Vector2","x":1,"y":2})`),
 			},
 			"required": []string{"projectPath", "section", "key", "value"},
 		},
@@ -48,10 +46,10 @@ func modifyProjectSettings() mcp.Tool {
 }
 
 type modifyProjectSettingsArgs struct {
-	ProjectPath string  `json:"projectPath"`
-	Section     string  `json:"section"`
-	Key         string  `json:"key"`
-	Value       *string `json:"value"`
+	ProjectPath string          `json:"projectPath"`
+	Section     string          `json:"section"`
+	Key         string          `json:"key"`
+	Value       json.RawMessage `json:"value"`
 }
 
 func handleModifyProjectSettings(_ context.Context, raw json.RawMessage) (any, error) {
@@ -65,7 +63,7 @@ func handleModifyProjectSettings(_ context.Context, raw json.RawMessage) (any, e
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.Section == "" || args.Key == "" || args.Value == nil {
+	if args.ProjectPath == "" || args.Section == "" || args.Key == "" || len(bytes.TrimSpace(args.Value)) == 0 {
 		return mcp.ErrorResult("projectPath, section, key, and value are required."), nil
 	}
 
@@ -74,10 +72,11 @@ func handleModifyProjectSettings(_ context.Context, raw json.RawMessage) (any, e
 		return *failure, nil
 	}
 
-	value, err := encodeSettingValue(*args.Value)
+	settingValue, err := godotconfig.DecodeJSONValue(args.Value)
 	if err != nil {
 		return mcp.ErrorResult("Invalid value: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
+	value := godotconfig.FormatValue(settingValue)
 	section, err := encodeSettingSection(args.Section)
 	if err != nil {
 		return mcp.ErrorResult("Invalid section: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
@@ -103,21 +102,6 @@ func handleModifyProjectSettings(_ context.Context, raw json.RawMessage) (any, e
 		"key":     args.Key,
 		"value":   value,
 	}), nil
-}
-
-// encodeSettingValue validates a caller-supplied project.godot value as a
-// single Godot Variant and re-serializes it with the same writer Godot uses.
-// The raw literal is never copied through verbatim: a value such as
-// "1280\n[input]\nfoo=1" is rejected instead of injecting a new key or
-// section, and a quoted string is re-escaped so embedded quotes and newlines
-// stay inside the string. An empty value is not a Variant (Godot rejects
-// "key=" as "Expected value, got 'EOF'"); an empty string is written as `""`.
-func encodeSettingValue(raw string) (string, error) {
-	value, err := godotconfig.ParseValue(raw)
-	if err != nil {
-		return "", fmt.Errorf("not a valid Godot literal: %w", err)
-	}
-	return godotconfig.FormatValue(value), nil
 }
 
 // encodeSettingSection validates a caller-supplied section name and returns the

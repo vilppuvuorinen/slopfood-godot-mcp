@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 )
@@ -42,7 +43,7 @@ func TestManageThemeResourceTool(t *testing.T) {
 	})
 	requireContains(t, readText, `"type": "Theme"`)
 	requireContains(t, readText, `"properties"`)
-	requireContains(t, readText, `"default_font_size": "16"`)
+	requireContains(t, readText, `"default_font_size": 16`)
 	requireNotContains(t, readText, "THEME_JSON_START")
 
 	modifyText := requireToolText(t, session, "manage_theme_resource", map[string]any{
@@ -59,7 +60,7 @@ func TestManageThemeResourceTool(t *testing.T) {
 		"action":       "read",
 	})
 	requireContains(t, reReadText, `"type": "Theme"`)
-	requireContains(t, reReadText, `"default_font_size": "20"`)
+	requireContains(t, reReadText, `"default_font_size": 20`)
 	requireNotContains(t, reReadText, "THEME_JSON_START")
 }
 
@@ -85,7 +86,7 @@ func TestManageThemeResourceConvertsTypes(t *testing.T) {
 		"resourcePath": "themes/main.tres",
 		"action":       "create",
 		"properties": map[string]any{
-			"Label/colors/font_color":    map[string]any{"r": 1, "g": 0, "b": 0, "a": 1},
+			"Label/colors/font_color":    map[string]any{"$type": "Color", "r": 1, "g": 0, "b": 0, "a": 1},
 			"Label/font_sizes/font_size": 24,
 			"Panel/styles/panel":         "res://themes/panel_box.tres",
 		},
@@ -106,14 +107,23 @@ func TestManageThemeResourceConvertsTypes(t *testing.T) {
 		"resourcePath": "themes/main.tres",
 		"action":       "read",
 	})
-	requireContains(t, readText, `"Label/colors/font_color": "(1.0, 0.0, 0.0, 1.0)"`)
+	var readPayload struct {
+		Properties map[string]any `json:"properties"`
+	}
+	if err := json.Unmarshal([]byte(readText), &readPayload); err != nil {
+		t.Fatalf("unmarshal theme payload: %v\n%s", err, readText)
+	}
+	fontColor, ok := readPayload.Properties["Label/colors/font_color"].(map[string]any)
+	if !ok || fontColor["$type"] != "Color" || fontColor["r"] != float64(1) {
+		t.Errorf("font_color = %#v, want a tagged red Color", readPayload.Properties["Label/colors/font_color"])
+	}
 
 	modifyText := requireToolText(t, session, "manage_theme_resource", map[string]any{
 		"projectPath":  root,
 		"resourcePath": "themes/main.tres",
 		"action":       "modify",
 		"properties": map[string]any{
-			"Label/colors/font_color": "(0.0, 0.0, 1.0, 1.0)",
+			"Label/colors/font_color": map[string]any{"$type": "Color", "r": 0, "g": 0, "b": 1, "a": 1},
 		},
 	})
 	requirePrefix(t, modifyText, "manage_theme_resource succeeded.")

@@ -34,12 +34,13 @@ func readProjectSettings() mcp.Tool {
 			"properties": map[string]any{
 				"projectPath":  map[string]any{"type": "string"},
 				"settingCount": map[string]any{"type": "integer"},
-				"settings": map[string]any{
+				"sections": map[string]any{
 					"type":                 "object",
-					"additionalProperties": map[string]any{"type": "string"},
+					"description":          "Settings the engine applied, grouped by section, with values in the tool value contract",
+					"additionalProperties": map[string]any{"type": "object"},
 				},
 			},
-			"required": []string{"projectPath", "settingCount", "settings"},
+			"required": []string{"projectPath", "settingCount", "sections"},
 		},
 		Handler: handleReadProjectSettings,
 	}
