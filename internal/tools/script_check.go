@@ -70,8 +70,10 @@ func parseGodotScriptDiagnostics(output string) []scriptDiagnostic {
 
 // runGDScriptCheck static-checks scriptFull with the embedded validate_script
 // checker and returns the parsed diagnostics. It only returns an error when the
-// checker could not be materialized or Godot could not be started; a non-zero
-// checker exit is expected and reported through the diagnostics.
+// checker could not be materialized, Godot could not be started, or the checker
+// failed without producing a recognizable diagnostic. The engine still exits 0
+// when the target script fails to compile, so the exit code and stderr are
+// combined: diagnostics are parsed from stderr, where Godot logs them.
 func runGDScriptCheck(ctx context.Context, projectPath, scriptFull string) ([]scriptDiagnostic, error) {
 	rel, err := filepath.Rel(projectPath, scriptFull)
 	if err != nil {
@@ -83,11 +85,18 @@ func runGDScriptCheck(ctx context.Context, projectPath, scriptFull string) ([]sc
 	if err != nil {
 		return nil, fmt.Errorf("materialize validate script: %w", err)
 	}
-	output, err := godot.CheckScript(ctx, godot.Path(), projectPath, checkerPath, scriptRes)
+	_, stderr, exitCode, err := godot.CheckScript(ctx, godot.Path(), projectPath, checkerPath, scriptRes)
 	if err != nil {
 		return nil, fmt.Errorf("run script checker: %w", err)
 	}
-	return parseGodotScriptDiagnostics(output), nil
+	// Combine the exit code with stderr: Godot logs SCRIPT ERROR lines to
+	// stderr but still exits 0, while a usage/startup failure exits non-zero.
+	// Diagnostics are parsed first; any remaining stderr is unexpected.
+	diagnostics := parseGodotScriptDiagnostics(stderr)
+	if len(diagnostics) == 0 && scriptFailed(exitCode, stderr) {
+		return nil, fmt.Errorf("script checker failed (exit %d): %s", exitCode, strings.TrimSpace(stderr))
+	}
+	return diagnostics, nil
 }
 
 // collectGdPaths deduplicates .gd paths across git outputs, normalizing

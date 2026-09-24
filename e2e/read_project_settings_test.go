@@ -25,6 +25,9 @@ func TestReadProjectSettingsTool(t *testing.T) {
 
 	t.Run("parses sections", func(t *testing.T) {
 		root := t.TempDir()
+		// Seed the autoload script too: a missing one makes the engine log an
+		// error to stderr, which the strict stderr check treats as a failure.
+		writeE2EFile(t, filepath.Join(root, "game.gd"), "extends Node\n")
 		writeE2EFile(t, filepath.Join(root, "project.godot"), `config_version=5
 
 [application]

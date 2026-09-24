@@ -33,7 +33,9 @@ func TestManageSceneSignalsTool(t *testing.T) {
 	})
 
 	t.Run("adds then removes a connection", func(t *testing.T) {
-		root := seedScene(t, session, "scenes/connections.tscn", "Node2D")
+		// Button carries the "pressed" signal; connecting it must not make the
+		// engine log an error when the saved scene is re-instantiated.
+		root := seedScene(t, session, "scenes/connections.tscn", "Button")
 
 		addText := requireToolText(t, session, "manage_scene_signals", map[string]any{
 			"projectPath": root,
@@ -61,7 +63,7 @@ func TestManageSceneSignalsTool(t *testing.T) {
 	})
 
 	t.Run("duplicate add is idempotent", func(t *testing.T) {
-		root := seedScene(t, session, "scenes/duplicate.tscn", "Node2D")
+		root := seedScene(t, session, "scenes/duplicate.tscn", "Button")
 		args := map[string]any{
 			"projectPath": root,
 			"scenePath":   "scenes/duplicate.tscn",
@@ -82,7 +84,7 @@ func TestManageSceneSignalsTool(t *testing.T) {
 	})
 
 	t.Run("remove without signal keeps connections", func(t *testing.T) {
-		root := seedScene(t, session, "scenes/keep.tscn", "Node2D")
+		root := seedScene(t, session, "scenes/keep.tscn", "Button")
 		connection := `[connection signal="pressed" from="." to="." method="on_pressed"]`
 		requireToolText(t, session, "manage_scene_signals", map[string]any{
 			"projectPath": root,

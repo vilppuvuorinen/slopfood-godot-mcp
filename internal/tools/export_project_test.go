@@ -113,14 +113,17 @@ func TestExportProjectNonZeroExit(t *testing.T) {
 	}
 }
 
-func TestExportProjectBenignStderrError(t *testing.T) {
+func TestExportProjectUnexpectedStderrFails(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo 'ERROR: harmless diagnostic' >&2; exit 0`))
 	root := t.TempDir()
 	makeProject(t, root)
 
 	result := callToolArgs(t, exportProject(), `{"projectPath":`+jsonString(root)+`,"presetName":"Linux","outputPath":"build/game.x86_64"}`)
-	if result.IsError {
-		t.Fatalf("exit code 0 must be reported as success: %+v", result.Content)
+	if !result.IsError {
+		t.Fatalf("unexpected stderr must fail even on exit 0: %+v", result.Content)
+	}
+	if got := result.Content[0].Text; !strings.HasPrefix(got, "Export failed: ") || !strings.Contains(got, "harmless diagnostic") {
+		t.Errorf("message = %q", got)
 	}
 }
 

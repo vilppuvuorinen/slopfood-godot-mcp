@@ -75,7 +75,7 @@ func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) 
 	if err != nil {
 		return mcp.ErrorResult("Export failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	if exitCode != 0 {
+	if scriptFailed(exitCode, stderr) {
 		return mcp.ErrorResult("Export failed: " + stderr), nil
 	}
 	output := stdout

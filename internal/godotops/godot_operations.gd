@@ -105,7 +105,21 @@ func _init():
 # current call, so a trailing quit() here would reset the exit code to 0 and
 # mask every error. Ending the main loop from _process instead preserves the
 # code set by the handler while still exiting cleanly after success.
+#
+# Temporary nodes instantiated by handlers are tracked in _temp_nodes and freed
+# here before the main loop exits; they are never added to the scene tree, so
+# without this the engine reports ObjectDB/RID leaks at exit.
+var _temp_nodes = []
+
+func track_temp(node):
+    _temp_nodes.append(node)
+    return node
+
 func _process(_delta):
+    for node in _temp_nodes:
+        if is_instance_valid(node):
+            node.free()
+    _temp_nodes.clear()
     return true
 
 # Logging functions
@@ -266,7 +280,7 @@ func create_scene(params):
         print("Root node type: " + root_node_type)
     
     # Create the root node
-    var scene_root = instantiate_class(root_node_type)
+    var scene_root = track_temp(instantiate_class(root_node_type))
     if not scene_root:
         printerr("Failed to instantiate node of type: " + root_node_type)
         printerr("Make sure the class exists and can be instantiated")
@@ -276,9 +290,6 @@ func create_scene(params):
     scene_root.name = "root"
     if debug_mode:
         print("Root node created with name: " + scene_root.name)
-    
-    # Set the owner of the root node to itself (important for scene saving)
-    scene_root.owner = scene_root
     
     # Pack the scene
     var packed_scene = PackedScene.new()
@@ -509,7 +520,7 @@ func add_node(params):
     
     if debug_mode:
         print("Scene loaded successfully")
-    var scene_root = scene.instantiate()
+    var scene_root = track_temp(scene.instantiate())
     if debug_mode:
         print("Scene instantiated")
     
@@ -531,7 +542,7 @@ func add_node(params):
     
     if debug_mode:
         print("Instantiating node of type: " + params.node_type)
-    var new_node = instantiate_class(params.node_type)
+    var new_node = track_temp(instantiate_class(params.node_type))
     if not new_node:
         printerr("Failed to instantiate node of type: " + params.node_type)
         printerr("Make sure the class exists and can be instantiated")
@@ -631,7 +642,7 @@ func load_sprite(params):
         print("Scene loaded successfully")
     
     # Instance the scene
-    var scene_root = scene.instantiate()
+    var scene_root = track_temp(scene.instantiate())
     if debug_mode:
         print("Scene instantiated")
     
@@ -768,7 +779,7 @@ func export_mesh_library(params):
         print("Scene loaded successfully")
     
     # Instance the scene
-    var scene_root = scene.instantiate()
+    var scene_root = track_temp(scene.instantiate())
     if debug_mode:
         print("Scene instantiated")
     
@@ -1171,7 +1182,7 @@ func save_scene(params):
         print("Scene loaded successfully")
     
     # Instance the scene
-    var scene_root = scene.instantiate()
+    var scene_root = track_temp(scene.instantiate())
     if debug_mode:
         print("Scene instantiated")
     
@@ -1269,7 +1280,7 @@ func read_scene(params):
             return
         quit(1)
 
-    var scene_root = scene.instantiate()
+    var scene_root = track_temp(scene.instantiate())
     if scene_root == null:
         printerr("Failed to instantiate scene: " + full_scene_path)
         quit(1)
@@ -1453,7 +1464,7 @@ func modify_node(params):
         printerr("Failed to load scene: " + full_scene_path)
         quit(1)
 
-    var scene_root = scene.instantiate()
+    var scene_root = track_temp(scene.instantiate())
 
     # Find the target node
     var node_path = params.node_path
@@ -1510,7 +1521,7 @@ func remove_node(params):
         printerr("Failed to load scene: " + full_scene_path)
         quit(1)
 
-    var scene_root = scene.instantiate()
+    var scene_root = track_temp(scene.instantiate())
 
     # Find the target node
     var node_path = params.node_path
@@ -1589,7 +1600,7 @@ func manage_scene_signals(params):
             printerr("Failed to load scene: " + full_path)
             quit(1)
             return
-        var scene_root = scene.instantiate()
+        var scene_root = track_temp(scene.instantiate())
         if scene_root == null:
             printerr("Failed to instantiate scene: " + full_path)
             quit(1)
@@ -1683,7 +1694,7 @@ func manage_scene_structure(params):
         quit(1)
         return
 
-    var root = scene.instantiate()
+    var root = track_temp(scene.instantiate())
     var target = _resolve_scene_node(root, node_path_str)
     if target == null:
         printerr("Node not found: " + node_path_str)
@@ -1727,6 +1738,9 @@ func manage_scene_structure(params):
             quit(1)
             return
         target.get_parent().remove_child(target)
+        # Clear the owner before reparenting; keeping the old owner makes the
+        # engine warn that the owner is inconsistent. It is reset below.
+        target.owner = null
         new_parent.add_child(target, true)
         _set_owner_recursive(target, root)
         print("Node moved: %s -> parent %s (as '%s')" % [node_path_str, new_parent_path, target.name])
@@ -1800,7 +1814,7 @@ func attach_script(params):
         printerr("Failed to load scene: " + full_scene_path)
         quit(1)
 
-    var scene_root = scene.instantiate()
+    var scene_root = track_temp(scene.instantiate())
 
     # Find the target node
     var node_path = params.node_path

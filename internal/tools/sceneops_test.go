@@ -18,21 +18,23 @@ func fakeGodotOps(t *testing.T, body string) string {
 	return path
 }
 
-// TestScriptFailed covers the shared failure check: the script's quit(1) is the
-// authoritative and only signal.
+// TestScriptFailed covers the shared failure check: the exit code and stderr
+// are combined, so an unexpected stderr line fails even on exit 0.
 func TestScriptFailed(t *testing.T) {
 	tests := []struct {
 		name     string
 		exitCode int
+		stderr   string
 		want     bool
 	}{
-		{name: "clean success", exitCode: 0, want: false},
-		{name: "failure exit", exitCode: 1, want: true},
+		{name: "clean success", exitCode: 0, stderr: "", want: false},
+		{name: "failure exit", exitCode: 1, stderr: "", want: true},
+		{name: "unexpected stderr on exit 0", exitCode: 0, stderr: "ERROR: boom\n", want: true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := scriptFailed(tt.exitCode); got != tt.want {
-				t.Errorf("scriptFailed(%d) = %v, want %v", tt.exitCode, got, tt.want)
+			if got := scriptFailed(tt.exitCode, tt.stderr); got != tt.want {
+				t.Errorf("scriptFailed(%d, %q) = %v, want %v", tt.exitCode, tt.stderr, got, tt.want)
 			}
 		})
 	}

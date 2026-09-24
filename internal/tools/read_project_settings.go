@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
@@ -71,7 +72,14 @@ func handleReadProjectSettings(ctx context.Context, raw json.RawMessage) (any, e
 			"Use modify_project_settings to repair the offending setting",
 		), nil
 	}
-	if payload, ok := markerJSON(probe.Output); ok {
+	if probe.Failed() {
+		detail := strings.TrimSpace(probe.Stderr)
+		if detail == "" {
+			detail = fmt.Sprintf("Godot exited with code %d", probe.ExitCode)
+		}
+		return mcp.ErrorResult("Failed to read project settings: "+detail, headlessSolutions...), nil
+	}
+	if payload, ok := markerJSON(probe.Stdout); ok {
 		return mcp.TextResult(payload), nil
 	}
 	return mcp.ErrorResult(

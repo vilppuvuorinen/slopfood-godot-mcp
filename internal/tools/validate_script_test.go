@@ -59,9 +59,11 @@ func TestValidateScriptValid(t *testing.T) {
 }
 
 func TestValidateScriptDiagnostics(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "SCRIPT ERROR: Parse Error: boom"
-echo "   at: GDScript::reload (res://scripts/player.gd:3)"
-exit 1`))
+	// Godot exits 0 even when the script fails to compile, so the diagnostic on
+	// stderr is the only signal the checker reports.
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "SCRIPT ERROR: Parse Error: boom" >&2
+echo "   at: GDScript::reload (res://scripts/player.gd:3)" >&2
+exit 0`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scripts", "player.gd"), "extends Node\nfunc _ready(:\n")
@@ -80,6 +82,25 @@ exit 1`))
 	got := payload.Errors[0]
 	if got.Message != "boom" || got.File != "res://scripts/player.gd" || got.Line != 3 {
 		t.Errorf("diagnostic = %+v", got)
+	}
+}
+
+func TestValidateScriptCheckerFailure(t *testing.T) {
+	// A non-zero exit with no recognizable diagnostic is reported as a checker
+	// failure: the exit code and stderr are combined.
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "boom" >&2
+exit 3`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "scripts", "player.gd"), "extends Node\n")
+
+	result := callToolArgs(t, validateScript(), `{"projectPath":`+jsonString(root)+`,"scriptPath":"scripts/player.gd"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	want := "validate_script could not check the script; "
+	if !strings.HasPrefix(result.Content[0].Text, want) {
+		t.Errorf("message = %q, want prefix %q", result.Content[0].Text, want)
 	}
 }
 

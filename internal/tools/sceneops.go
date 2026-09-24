@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
@@ -52,14 +53,6 @@ func runOperation(ctx context.Context, projectPath, operation string, params map
 	return stdout, stderr, exitCode, nil
 }
 
-// scriptFailed reports whether the operations script failed. The script calls
-// quit(1) on every error branch and quit() on success, so the exit code is the
-// authoritative and only signal. Diagnostics that print a failure but recover
-// deliberately do not call quit(1), so they are not misreported here.
-func scriptFailed(exitCode int) bool {
-	return exitCode != 0
-}
-
 // headlessSolutions are the shared "Possible solutions" lines for a Godot
 // operation that could not run.
 var headlessSolutions = []string{
@@ -75,12 +68,17 @@ var headlessSolutions = []string{
 // succeeded.\n\nOutput: <stdout>". On failure it returns "<operation> failed:
 // <detail>" with the shared solutions. Callers validate arguments, paths, and
 // project/scene existence first.
-func runHeadlessOperation(ctx context.Context, projectPath, operation string, params map[string]any) (any, error) {
+//
+// allowed lists stderr line patterns the operation may emit without it counting
+// as a failure; any other stderr line fails the operation even on exit 0.
+//
+//nolint:unparam // allowed is the per-tool hook for known-benign stderr; no operation needs one yet.
+func runHeadlessOperation(ctx context.Context, projectPath, operation string, params map[string]any, allowed ...*regexp.Regexp) (any, error) {
 	stdout, stderr, exitCode, err := runOperation(ctx, projectPath, operation, params)
 	if err != nil {
 		return mcp.ErrorResult(operation+" failed: "+err.Error(), headlessSolutions...), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	if scriptFailed(exitCode) {
+	if scriptFailed(exitCode, stderr, allowed...) {
 		return mcp.ErrorResult(operation+" failed: "+stderr, headlessSolutions...), nil
 	}
 	if payload, ok := markerJSON(stdout); ok {

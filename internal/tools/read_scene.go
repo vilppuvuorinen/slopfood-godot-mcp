@@ -75,7 +75,7 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 			headlessSolutions...,
 		), nil
 	}
-	if scriptFailed(exitCode) {
+	if scriptFailed(exitCode, stderr) {
 		return mcp.ErrorResult(
 			"Failed to read scene: "+stderr,
 			headlessSolutions...,

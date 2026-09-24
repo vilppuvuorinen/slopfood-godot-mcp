@@ -72,6 +72,25 @@ func TestReadProjectSettingsRejectsUnparseableProject(t *testing.T) {
 	}
 }
 
+// TestReadProjectSettingsReportsProbeFailure confirms a failed probe is
+// reported: the exit code and stderr are combined, so a non-zero exit is a
+// failure even without a project.godot parse diagnostic.
+func TestReadProjectSettingsReportsProbeFailure(t *testing.T) {
+	fake := fakeGodotOps(t, "echo 'validate_project crashed' >&2; exit 2")
+	t.Setenv(godot.PathEnv, fake)
+
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, readProjectSettings(), `{"projectPath":`+jsonString(root)+`}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if got := result.Content[0].Text; !strings.HasPrefix(got, "Failed to read project settings:") || !strings.Contains(got, "validate_project crashed") {
+		t.Errorf("message = %q", got)
+	}
+}
+
 // TestReadProjectSettingsReportsEngineFailure points GODOT_PATH at a missing
 // binary so the probe cannot start, and asserts the tool reports the failure
 // instead of silently falling back to the Go parser's view.

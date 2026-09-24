@@ -18,10 +18,20 @@ var projectParseErrorPattern = regexp.MustCompile(`Error parsing '.+project\.god
 
 // projectSettingsProbe is the result of loading a project through Godot. Parse
 // error is non-empty when the engine logged a project.godot parse diagnostic;
-// Output always carries the combined stdout and stderr for diagnostics.
+// Stdout carries the settings payload and Stderr the engine diagnostics.
 type projectSettingsProbe struct {
+	Stdout     string
+	Stderr     string
+	ExitCode   int
 	ParseError string
-	Output     string
+}
+
+// Failed reports whether the probe failed, combining the exit code with stderr:
+// Godot exits 0 for an invalid project.godot and logs the parse diagnostic to
+// stderr instead, so a clean exit code is not proof of success. Any unexpected
+// stderr line is a failure.
+func (p projectSettingsProbe) Failed() bool {
+	return scriptFailed(p.ExitCode, p.Stderr)
 }
 
 // probeProjectWithGodot loads the project through the real Godot engine and
@@ -34,12 +44,13 @@ func probeProjectWithGodot(ctx context.Context, projectPath string) (projectSett
 	if err != nil {
 		return projectSettingsProbe{}, fmt.Errorf("materialize operations script: %w", err)
 	}
-	output, err := godot.ValidateProject(ctx, godot.Path(), projectPath, scriptPath)
+	stdout, stderr, exitCode, err := godot.ValidateProject(ctx, godot.Path(), projectPath, scriptPath)
 	if err != nil {
 		return projectSettingsProbe{}, fmt.Errorf("run godot: %w", err)
 	}
-	probe := projectSettingsProbe{Output: output}
-	if match := projectParseErrorPattern.FindString(output); match != "" {
+	probe := projectSettingsProbe{Stdout: stdout, Stderr: stderr, ExitCode: exitCode}
+	// The engine logs the parse diagnostic to stderr while still exiting 0.
+	if match := projectParseErrorPattern.FindString(stderr); match != "" {
 		probe.ParseError = match
 	}
 	return probe, nil

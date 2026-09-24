@@ -97,7 +97,7 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(exitCode) {
+	if scriptFailed(exitCode, stderr) {
 		return mcp.ErrorResult(
 			"Failed to export mesh library: "+stderr,
 			"Check if the scene contains valid 3D meshes",
