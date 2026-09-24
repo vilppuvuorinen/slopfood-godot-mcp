@@ -29,8 +29,11 @@ func TestAliasParamsRewritesSnakeCase(t *testing.T) {
 	if !ok {
 		t.Fatalf("properties = %T", obj["properties"])
 	}
-	if properties["texturePath"] != "res://icon.png" || properties["position"] != float64(1) {
-		t.Errorf("nested properties = %v", properties)
+	if properties["texture_path"] != "res://icon.png" || properties["position"] != float64(1) {
+		t.Errorf("nested properties = %v, want opaque payload untouched", properties)
+	}
+	if _, exists := properties["texturePath"]; exists {
+		t.Errorf("nested key was rewritten: %v", properties)
 	}
 	if _, exists := obj["project_path"]; exists {
 		t.Errorf("snake_case key survived: %v", obj)
@@ -70,7 +73,7 @@ func TestAliasParamsLeavesArraysUntouched(t *testing.T) {
 	}
 }
 
-func TestAliasParamsRewritesArraysOfObjects(t *testing.T) {
+func TestAliasParamsLeavesNestedDataUntouched(t *testing.T) {
 	raw := json.RawMessage(`{
 		"items": [
 			{"texture_path": "res://a.png", "position": 1},
@@ -91,8 +94,11 @@ func TestAliasParamsRewritesArraysOfObjects(t *testing.T) {
 		t.Fatalf("items = %#v", obj["items"])
 	}
 	first, _ := items[0].(map[string]any)
-	if first["texturePath"] != "res://a.png" {
-		t.Errorf("first = %v", first)
+	if first["texture_path"] != "res://a.png" {
+		t.Errorf("first = %v, want opaque entry untouched", first)
+	}
+	if _, exists := first["texturePath"]; exists {
+		t.Errorf("nested key was rewritten: %v", first)
 	}
 	second, _ := items[1].(map[string]any)
 	children, ok := second["children"].([]any)
@@ -100,12 +106,15 @@ func TestAliasParamsRewritesArraysOfObjects(t *testing.T) {
 		t.Fatalf("children = %#v", second["children"])
 	}
 	child, _ := children[0].(map[string]any)
-	if child["nodePath"] != "root/X" {
-		t.Errorf("child = %v", child)
+	if child["node_path"] != "root/X" {
+		t.Errorf("child = %v, want opaque entry untouched", child)
+	}
+	if _, exists := child["nodePath"]; exists {
+		t.Errorf("nested key was rewritten: %v", child)
 	}
 }
 
-func TestToSnakeCase(t *testing.T) {
+func TestToSnakeCaseConvertsTopLevelKeysOnly(t *testing.T) {
 	params := map[string]any{
 		"scenePath":    "main.tscn",
 		"rootNodeType": "Node2D",
@@ -123,8 +132,11 @@ func TestToSnakeCase(t *testing.T) {
 	if !ok {
 		t.Fatalf("properties = %T", got["properties"])
 	}
-	if properties["texture_path"] != "res://icon.png" || properties["position"] != 1 {
-		t.Errorf("nested = %v", properties)
+	if properties["texturePath"] != "res://icon.png" || properties["position"] != 1 {
+		t.Errorf("nested = %v, want opaque payload untouched", properties)
+	}
+	if _, exists := properties["texture_path"]; exists {
+		t.Errorf("nested key was rewritten: %v", properties)
 	}
 }
 
@@ -135,7 +147,7 @@ func TestToSnakeCaseGenericFallback(t *testing.T) {
 	}
 }
 
-func TestToSnakeCaseArraysOfObjects(t *testing.T) {
+func TestToSnakeCaseLeavesNestedDataUntouched(t *testing.T) {
 	params := map[string]any{
 		"meshItemNames": []any{"a"},
 		"properties": map[string]any{
@@ -159,8 +171,11 @@ func TestToSnakeCaseArraysOfObjects(t *testing.T) {
 		t.Fatalf("items = %#v", props["items"])
 	}
 	first, _ := items[0].(map[string]any)
-	if first["texture_path"] != "res://a.png" {
-		t.Errorf("first = %v", first)
+	if first["texturePath"] != "res://a.png" {
+		t.Errorf("first = %v, want opaque value untouched", first)
+	}
+	if _, exists := first["texture_path"]; exists {
+		t.Errorf("nested key was rewritten: %v", first)
 	}
 	second, _ := items[1].(map[string]any)
 	nested, ok := second["nested"].([]any)
@@ -168,7 +183,10 @@ func TestToSnakeCaseArraysOfObjects(t *testing.T) {
 		t.Fatalf("nested = %#v", second["nested"])
 	}
 	inner, _ := nested[0].(map[string]any)
-	if inner["node_path"] != "root/X" {
-		t.Errorf("inner = %v", inner)
+	if inner["nodePath"] != "root/X" {
+		t.Errorf("inner = %v, want opaque value untouched", inner)
+	}
+	if _, exists := inner["node_path"]; exists {
+		t.Errorf("nested key was rewritten: %v", inner)
 	}
 }

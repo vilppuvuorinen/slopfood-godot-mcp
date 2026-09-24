@@ -60,9 +60,13 @@ var uppercaseLetter = regexp.MustCompile(`[A-Z]`)
 
 // aliasParams rewrites snake_case argument keys to their camelCase equivalents
 // so handlers accept both spellings, mirroring the reference server's
-// normalizeParameters. Nested objects and objects inside arrays are rewritten
-// recursively; scalars are left untouched. When both spellings are present the
-// camelCase value wins.
+// normalizeParameters. Only the argument names at the top level are rewritten;
+// nested values (most importantly the opaque "properties" payload) are user
+// data and are left byte-for-byte untouched. When both spellings are present
+// the camelCase value wins.
+//
+// An array at the top level is treated as a list of argument objects, each of
+// whose top-level keys is normalized.
 func aliasParams(raw json.RawMessage, aliases map[string]string) (json.RawMessage, error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 {
@@ -94,41 +98,35 @@ func aliasParams(raw json.RawMessage, aliases map[string]string) (json.RawMessag
 	if err := json.Unmarshal(raw, &obj); err != nil {
 		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
-	out := make(map[string]json.RawMessage, len(obj))
-	for key, value := range obj {
-		nested, err := aliasParams(value, aliases)
-		if err != nil {
-			return nil, err
-		}
-		out[key] = nested
-	}
-	// Apply aliases last so a camelCase key always wins over its snake_case
-	// twin regardless of map iteration order.
+	// Apply aliases only to the top-level argument names. The camelCase alias
+	// always wins over a snake_case twin regardless of map iteration order.
 	for from, to := range aliases {
 		if from == to {
 			continue
 		}
-		value, ok := out[from]
+		value, ok := obj[from]
 		if !ok {
 			continue
 		}
-		if _, exists := out[to]; !exists {
-			out[to] = value
+		if _, exists := obj[to]; !exists {
+			obj[to] = value
 		}
-		delete(out, from)
+		delete(obj, from)
 	}
-	encoded, err := json.Marshal(out)
+	encoded, err := json.Marshal(obj)
 	if err != nil {
 		return nil, fmt.Errorf("encode normalized arguments: %w", err)
 	}
 	return encoded, nil
 }
 
-// toSnakeCase recursively converts camelCase keys to snake_case before they
-// are handed to the Godot script, mirroring the reference server's
-// convertCamelToSnakeCase. Objects and objects nested inside arrays are
-// converted recursively. Explicit aliases win; otherwise every uppercase
-// letter becomes an underscore-prefixed lowercase letter.
+// toSnakeCase converts the top-level camelCase argument names to snake_case
+// before they are handed to the Godot script, mirroring the reference server's
+// convertCamelToSnakeCase. Only the top-level keys are argument names; nested
+// values (most importantly the opaque "properties" payload) are user data and
+// are passed through untouched, so dictionary keys are never rewritten.
+// Explicit aliases win; otherwise every uppercase letter becomes an
+// underscore-prefixed lowercase letter.
 func toSnakeCase(params map[string]any) map[string]any {
 	out := make(map[string]any, len(params))
 	for key, value := range params {
@@ -138,24 +136,7 @@ func toSnakeCase(params map[string]any) map[string]any {
 				return "_" + strings.ToLower(letter)
 			})
 		}
-		out[snake] = toSnakeCaseValue(value)
+		out[snake] = value
 	}
 	return out
-}
-
-// toSnakeCaseValue applies toSnakeCase to objects and arrays, leaving scalars
-// untouched so nested objects inside arrays are normalized too.
-func toSnakeCaseValue(value any) any {
-	switch typed := value.(type) {
-	case map[string]any:
-		return toSnakeCase(typed)
-	case []any:
-		out := make([]any, len(typed))
-		for i, elem := range typed {
-			out[i] = toSnakeCaseValue(elem)
-		}
-		return out
-	default:
-		return value
-	}
 }

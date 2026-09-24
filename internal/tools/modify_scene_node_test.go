@@ -75,6 +75,25 @@ func TestModifySceneNodeVector2Properties(t *testing.T) {
 	}
 }
 
+func TestModifySceneNodeLeavesDictionaryValuedPropertiesUntouched(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
+
+	result := callToolArgs(t, modifySceneNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root/Player","properties":{"config":{"myKey":1}}}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	if !strings.Contains(text, `"myKey":1`) {
+		t.Errorf("text = %q, want dictionary key myKey preserved", text)
+	}
+	if strings.Contains(text, `"my_key"`) {
+		t.Errorf("text = %q, dictionary key was rewritten", text)
+	}
+}
+
 func TestModifySceneNodeAliases(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
 	root := t.TempDir()
