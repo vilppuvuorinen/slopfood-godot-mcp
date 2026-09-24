@@ -33,7 +33,7 @@ func modifyProjectSettings() mcp.Tool {
 				},
 				"value": map[string]any{
 					"type":        "string",
-					"description": "Value to set (as a string, will be written as-is)",
+					"description": `Value to set, as a single Godot literal (for example "\"text\"", "1280" or "true"); it is parsed and re-serialized`,
 				},
 			},
 			"required": []string{"projectPath", "section", "key", "value"},
@@ -74,10 +74,15 @@ func handleModifyProjectSettings(_ context.Context, raw json.RawMessage) (any, e
 		return *failure, nil
 	}
 
+	value, err := encodeSettingValue(*args.Value)
+	if err != nil {
+		return mcp.ErrorResult("Invalid value: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
+	}
+
 	sectionHeader := "[" + godotconfig.EscapeSectionName(args.Section) + "]"
-	keyLine := godotconfig.EncodePropertyName(args.Key) + "=" + *args.Value
+	keyLine := godotconfig.EncodePropertyName(args.Key) + "=" + value
 	if _, valStart, valEnd, ok := findSectionAssignment(content, args.Section, args.Key); ok {
-		content = content[:valStart] + *args.Value + content[valEnd:]
+		content = content[:valStart] + value + content[valEnd:]
 	} else if sectionIdx := strings.Index(content, sectionHeader); sectionIdx != -1 {
 		insertPos := sectionIdx + len(sectionHeader)
 		content = content[:insertPos] + "\n" + keyLine + content[insertPos:]
@@ -89,9 +94,26 @@ func handleModifyProjectSettings(_ context.Context, raw json.RawMessage) (any, e
 		return mcp.ErrorResult("Failed to modify project settings: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 
-	return statusResult(fmt.Sprintf("Setting updated: [%s] %s=%s", args.Section, args.Key, *args.Value), map[string]any{
+	return statusResult(fmt.Sprintf("Setting updated: [%s] %s=%s", args.Section, args.Key, value), map[string]any{
 		"section": args.Section,
 		"key":     args.Key,
-		"value":   *args.Value,
+		"value":   value,
 	}), nil
+}
+
+// encodeSettingValue validates a caller-supplied project.godot value as a
+// single Godot Variant and re-serializes it with the same writer Godot uses.
+// The raw literal is never copied through verbatim: a value such as
+// "1280\n[input]\nfoo=1" is rejected instead of injecting a new key or
+// section, and a quoted string is re-escaped so embedded quotes and newlines
+// stay inside the string. The empty string is passed through unchanged.
+func encodeSettingValue(raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+	value, err := godotconfig.ParseValue(raw)
+	if err != nil {
+		return "", fmt.Errorf("not a valid Godot literal: %w", err)
+	}
+	return godotconfig.FormatValue(value), nil
 }

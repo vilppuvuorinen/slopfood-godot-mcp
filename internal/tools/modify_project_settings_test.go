@@ -191,6 +191,57 @@ func TestModifyProjectSettingsEscaping(t *testing.T) {
 	})
 }
 
+// TestModifyProjectSettingsValueInjection proves the value is validated as a
+// single Godot literal, so a newline cannot smuggle extra keys or sections into
+// the file, and that the reported value is the re-serialized literal.
+func TestModifyProjectSettingsValueInjection(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "project.godot"), `config_version=5
+
+[application]
+
+config/name="Demo"
+`)
+	before, err := os.ReadFile(filepath.Join(root, "project.godot"))
+	if err != nil {
+		t.Fatalf("read project.godot: %v", err)
+	}
+
+	result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
+		`,"section":"application","key":"config/name","value":"1\n[input]\nmove_left=1"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error for a multi-value injection, got: %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "Invalid value:") {
+		t.Errorf("message = %q, want an 'Invalid value:' prefix", result.Content[0].Text)
+	}
+
+	after, err := os.ReadFile(filepath.Join(root, "project.godot"))
+	if err != nil {
+		t.Fatalf("read project.godot: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("project.godot was modified by a rejected value:\n%s", after)
+	}
+
+	result = callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
+		`,"section":"application","key":"config/name","value":`+jsonString(`"say \"hi\""`)+`}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if got, want := result.Content[0].Text, `Setting updated: [application] config/name="say \"hi\""`; got != want {
+		t.Errorf("message = %q, want %q", got, want)
+	}
+	content, err := os.ReadFile(filepath.Join(root, "project.godot"))
+	if err != nil {
+		t.Fatalf("read project.godot: %v", err)
+	}
+	if !strings.Contains(string(content), `config/name="say \"hi\""`) {
+		t.Errorf("escaped value not written:\n%s", content)
+	}
+}
+
 func TestModifyProjectSettingsErrors(t *testing.T) {
 	valid := t.TempDir()
 	makeProject(t, valid)
