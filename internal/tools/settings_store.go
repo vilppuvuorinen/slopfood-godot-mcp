@@ -71,8 +71,33 @@ func (s *settingsStore) Keys(section string) []godotconfig.KeyValue {
 // value contract, ready to be marshaled as a list action's JSON payload. An
 // absent section yields an empty (non-nil) map.
 func (s *settingsStore) SectionValues(section string) (map[string]any, error) {
-	out := make(map[string]any)
-	for _, kv := range s.config.SectionKeys(section) {
+	return encodeSectionValues(s.config.SectionKeys(section))
+}
+
+// AllSectionValues returns every parsed section with its keys encoded in the
+// tool value contract, along with the total number of keys. Unlike
+// SectionValues it is driven by the parsed document, so the section-less prefix
+// is keyed by "". This is the whole-document read; the specialized readers use
+// SectionValues so both share one encoding.
+func (s *settingsStore) AllSectionValues() (map[string]map[string]any, int, error) {
+	out := make(map[string]map[string]any, len(s.config.Sections))
+	count := 0
+	for _, sec := range s.config.Sections {
+		values, err := encodeSectionValues(sec.Keys)
+		if err != nil {
+			return nil, 0, err
+		}
+		out[sec.Name] = values
+		count += len(sec.Keys)
+	}
+	return out, count, nil
+}
+
+// encodeSectionValues encodes a section's key/value pairs in the tool value
+// contract.
+func encodeSectionValues(keys []godotconfig.KeyValue) (map[string]any, error) {
+	out := make(map[string]any, len(keys))
+	for _, kv := range keys {
 		value, err := godotconfig.ValueToJSON(kv.Value)
 		if err != nil {
 			return nil, fmt.Errorf("encode setting %q: %w", kv.Key, err)

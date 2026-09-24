@@ -57,6 +57,29 @@ Game="*res://game.gd"
 			"project_path": root,
 		})
 	})
+
+	t.Run("includes settings equal to the engine default", func(t *testing.T) {
+		root := t.TempDir()
+		// config/name defaults to "" in the engine, so a file that stores it
+		// explicitly must still be reported: reading the file's keys, not the
+		// engine's non-default settings, is the contract the specialized
+		// readers share.
+		writeE2EFile(t, filepath.Join(root, "project.godot"), `config_version=5
+
+[application]
+
+config/name=""
+`)
+		sections := requireProjectSettingsRoundTrip(t, session, root)
+
+		got, ok := sections["application"]["config/name"]
+		if !ok {
+			t.Fatalf("config/name missing from read-back; sections = %#v", sections)
+		}
+		if got != "" {
+			t.Errorf("config/name = %#v, want empty string", got)
+		}
+	})
 }
 
 // TestReadProjectSettingsRejectsUnparseableProject proves the Godot load probe

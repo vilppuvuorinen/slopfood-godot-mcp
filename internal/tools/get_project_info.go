@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"time"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
@@ -137,18 +137,27 @@ func handleGetProjectInfo(ctx context.Context, raw json.RawMessage) (any, error)
 	return mcp.StructuredResult(string(data), info), nil
 }
 
-var configNamePattern = regexp.MustCompile(`config/name="([^"]+)"`)
-
-// readProjectName returns the project's config/name value, falling back to the
-// directory basename when project.godot is unreadable or lacks a name.
+// readProjectName returns the project's application/config/name value, falling
+// back to the directory basename when project.godot is unreadable, is not valid
+// ConfigFile syntax, or lacks a name. The value is decoded through the same
+// parser as the settings tools, so escaped quotes and other escapes are read as
+// Godot wrote them rather than as raw source text.
 func readProjectName(projectPath, projectFile string) string {
 	name := filepath.Base(projectPath)
 	data, err := os.ReadFile(projectFile)
 	if err != nil {
 		return name
 	}
-	if match := configNamePattern.FindSubmatch(data); match != nil {
-		return string(match[1])
+	config, err := godotconfig.Parse(string(data))
+	if err != nil {
+		return name
+	}
+	value, ok := config.Get("application", "config/name")
+	if !ok {
+		return name
+	}
+	if s, ok := value.(godotconfig.String); ok && s != "" {
+		return string(s)
 	}
 	return name
 }

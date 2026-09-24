@@ -30,26 +30,38 @@ func TestReadProjectSettingsSchema(t *testing.T) {
 }
 
 func TestReadProjectSettingsSuccess(t *testing.T) {
-	fake := fakeGodotOps(t, "printf '<<<GO_DOT_MCP_JSON_START>>>\\n{\"projectPath\":\"/proj/\",\"settingCount\":1,\"sections\":{\"application\":{\"config/name\":\"Demo\"}}}\\n<<<GO_DOT_MCP_JSON_END>>>\\n'")
+	// The engine probe only validates the project; the settings come from the
+	// typed store, so the fake engine must simply succeed.
+	fake := fakeGodotOps(t, ":")
 	t.Setenv(godot.PathEnv, fake)
 
 	root := t.TempDir()
 	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "project.godot"), `config_version=5
+
+[application]
+
+config/name="Demo"
+`)
 
 	result := callToolArgs(t, readProjectSettings(), `{"projectPath":`+jsonString(root)+`}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	if got := result.Content[0].Text; !strings.Contains(got, `"settingCount": 1`) {
+	// config_version lives in the section-less prefix and must be reported too.
+	if got := result.Content[0].Text; !strings.Contains(got, `"settingCount": 2`) {
 		t.Errorf("text = %q, want pretty settingCount", got)
 	}
 	if got := result.Content[0].Text; !strings.Contains(got, `"config/name": "Demo"`) {
 		t.Errorf("text = %q, want the structured setting", got)
 	}
+	if got := result.Content[0].Text; !strings.Contains(got, `"config_version": 5`) {
+		t.Errorf("text = %q, want the stored config_version", got)
+	}
 }
 
 func TestReadProjectSettingsSnakeCaseAlias(t *testing.T) {
-	fake := fakeGodotOps(t, "printf '<<<GO_DOT_MCP_JSON_START>>>\\n{\"settingCount\":0,\"sections\":{}}\\n<<<GO_DOT_MCP_JSON_END>>>\\n'")
+	fake := fakeGodotOps(t, ":")
 	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)

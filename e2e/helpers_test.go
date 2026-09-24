@@ -209,13 +209,13 @@ func requireNotContains(t *testing.T, s, unwanted string) {
 
 // requireProjectSettingsRoundTrip reads project.godot back through
 // read_project_settings, which loads the file with the real Godot engine and
-// fails when the engine rejects it. It returns the engine's settings grouped by
+// fails when the engine rejects it. It returns every stored setting grouped by
 // section, with each value in the tool value contract.
 //
 // It asserts nothing itself beyond "Godot parsed the file": the returned map is
-// the settings Godot actually applied, which is only reached when the engine
-// loaded project.godot cleanly. Callers must be Godot-gated (requireGodot)
-// because the tool always invokes the engine and fails when it is unavailable.
+// the typed store's view, which is only reached when the engine loaded
+// project.godot cleanly. Callers must be Godot-gated (requireGodot) because the
+// tool always invokes the engine and fails when it is unavailable.
 func requireProjectSettingsRoundTrip(t *testing.T, session *mcp.ClientSession, projectPath string) map[string]map[string]any {
 	t.Helper()
 	text := requireToolText(t, session, "read_project_settings", map[string]any{

@@ -36,7 +36,7 @@ func readProjectSettings() mcp.Tool {
 				"settingCount": map[string]any{"type": "integer"},
 				"sections": map[string]any{
 					"type":                 "object",
-					"description":          "Settings the engine applied, grouped by section, with values in the tool value contract",
+					"description":          "Every setting stored in project.godot, grouped by section, with values in the tool value contract",
 					"additionalProperties": map[string]any{"type": "object"},
 				},
 			},
@@ -48,6 +48,14 @@ func readProjectSettings() mcp.Tool {
 
 type readProjectSettingsArgs struct {
 	ProjectPath string `json:"projectPath"`
+}
+
+// readProjectSettingsResult is the JSON payload returned on success. Field
+// order matches the engine payload's object literal.
+type readProjectSettingsResult struct {
+	ProjectPath  string                    `json:"projectPath"`
+	SettingCount int                       `json:"settingCount"`
+	Sections     map[string]map[string]any `json:"sections"`
 }
 
 func handleReadProjectSettings(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -71,9 +79,9 @@ func handleReadProjectSettings(ctx context.Context, raw json.RawMessage) (any, e
 		return *failure, nil
 	}
 
-	// Always load the project through the real Godot engine and return the
-	// settings it actually applied. A project.godot the engine rejects, or an
-	// engine that cannot be run at all, is reported instead of a stale view.
+	// Always load the project through the real Godot engine so a project.godot
+	// it rejects, or an engine that cannot be run at all, is reported instead
+	// of a stale view.
 	probeCtx, cancel := context.WithTimeout(ctx, projectSettingsReadTimeout)
 	defer cancel()
 	probe, probeErr := probeProjectWithGodot(probeCtx, args.ProjectPath)
@@ -94,12 +102,28 @@ func handleReadProjectSettings(ctx context.Context, raw json.RawMessage) (any, e
 		}
 		return mcp.ErrorResult("Failed to read project settings: "+detail, headlessSolutions...), nil
 	}
-	if payload, ok := markerJSON(probe.Stdout); ok {
-		return mcp.JSONResult(payload), nil
+
+	// The engine accepted the file, so report every key physically stored in it
+	// through the same typed store the specialized readers use. Returning the
+	// engine's applied settings instead would drop a key that is present in the
+	// file but equals its engine default, disagreeing with the specialized
+	// readers for the same project.
+	store, failure := openSettings(args.ProjectPath)
+	if failure != nil {
+		return *failure, nil
 	}
-	return mcp.ErrorResult(
-		"Failed to read project settings: no settings payload from Godot",
-		"Ensure Godot is installed correctly",
-		"Check if the GODOT_PATH environment variable is set correctly",
-	), nil
+	sections, count, err := store.AllSectionValues()
+	if err != nil {
+		return mcp.ErrorResult("Failed to read project settings: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
+	}
+	payload := readProjectSettingsResult{
+		ProjectPath:  args.ProjectPath,
+		SettingCount: count,
+		Sections:     sections,
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return mcp.ErrorResult("Failed to read project settings: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
+	}
+	return mcp.StructuredResult(string(data), payload), nil
 }
