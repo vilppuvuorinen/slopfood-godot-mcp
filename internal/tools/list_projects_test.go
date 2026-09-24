@@ -47,8 +47,16 @@ func TestListProjectsSchema(t *testing.T) {
 	if tool.InputSchema["type"] != "object" {
 		t.Errorf("schema type = %v", tool.InputSchema["type"])
 	}
-	if tool.OutputSchema["type"] != "array" {
+	if tool.OutputSchema["type"] != "object" {
 		t.Errorf("output schema type = %v", tool.OutputSchema["type"])
+	}
+	outProps, ok := tool.OutputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("output properties = %T", tool.OutputSchema["properties"])
+	}
+	projects, ok := outProps["projects"].(map[string]any)
+	if !ok || projects["type"] != "array" {
+		t.Errorf("projects property = %v", outProps["projects"])
 	}
 	required, ok := tool.InputSchema["required"].([]string)
 	if !ok || len(required) != 1 || required[0] != "directory" {
@@ -164,11 +172,11 @@ func TestListProjectsStructuredContent(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	projects, ok := result.StructuredContent.([]godotProject)
+	output, ok := result.StructuredContent.(listProjectsOutput)
 	if !ok {
-		t.Fatalf("structuredContent type %T, want []godotProject", result.StructuredContent)
+		t.Fatalf("structuredContent type %T, want listProjectsOutput", result.StructuredContent)
 	}
-	if paths := projectPaths(projects); !equalStrings(paths, []string{root}) {
+	if paths := projectPaths(output.Projects); !equalStrings(paths, []string{root}) {
 		t.Fatalf("paths = %v, want [%s]", paths, root)
 	}
 }

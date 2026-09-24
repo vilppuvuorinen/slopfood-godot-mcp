@@ -91,9 +91,13 @@ func TestStructuredContent(t *testing.T) {
 	if res.IsError {
 		t.Fatalf("list_projects error: %s", firstText(t, res))
 	}
-	projects, ok := res.StructuredContent.([]any)
+	structured, ok := res.StructuredContent.(map[string]any)
 	if !ok {
 		t.Fatalf("structuredContent type %T", res.StructuredContent)
+	}
+	projects, ok := structured["projects"].([]any)
+	if !ok {
+		t.Fatalf("projects type %T", structured["projects"])
 	}
 	if len(projects) != 1 {
 		t.Fatalf("projects = %+v", projects)

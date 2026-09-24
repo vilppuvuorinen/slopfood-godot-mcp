@@ -30,15 +30,21 @@ func listProjects() mcp.Tool {
 			"required": []string{"directory"},
 		},
 		OutputSchema: map[string]any{
-			"type": "array",
-			"items": map[string]any{
-				"type": "object",
-				"properties": map[string]any{
-					"path": map[string]any{"type": "string"},
-					"name": map[string]any{"type": "string"},
+			"type": "object",
+			"properties": map[string]any{
+				"projects": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"path": map[string]any{"type": "string"},
+							"name": map[string]any{"type": "string"},
+						},
+						"required": []string{"path", "name"},
+					},
 				},
-				"required": []string{"path", "name"},
 			},
+			"required": []string{"projects"},
 		},
 		Handler: handleListProjects,
 	}
@@ -47,6 +53,12 @@ func listProjects() mcp.Tool {
 type listProjectsArgs struct {
 	Directory string `json:"directory"`
 	Recursive bool   `json:"recursive"`
+}
+
+// listProjectsOutput is the object wrapper required by the MCP spec's
+// structuredContent field, which must be a JSON object rather than an array.
+type listProjectsOutput struct {
+	Projects []godotProject `json:"projects"`
 }
 
 func handleListProjects(_ context.Context, raw json.RawMessage) (any, error) {
@@ -90,7 +102,7 @@ func handleListProjects(_ context.Context, raw json.RawMessage) (any, error) {
 			"Check if you have permission to read the directory",
 		), nil
 	}
-	return mcp.StructuredResult(string(data), projects), nil
+	return mcp.StructuredResult(string(data), listProjectsOutput{Projects: projects}), nil
 }
 
 // pathExists mirrors the reference server's existsSync check: it reports
