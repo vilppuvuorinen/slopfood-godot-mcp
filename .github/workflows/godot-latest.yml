@@ -87,6 +87,7 @@ jobs:
         working-directory: e2e
         env:
           GO_DOT_MCP_BIN: ${{ github.workspace }}/bin/go-dot-mcp
+          GODOT_MINOR: ${{ matrix.minor }}
         run: |
           go mod download
           go test -race -covermode=atomic ./...

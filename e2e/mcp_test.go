@@ -9,10 +9,15 @@ import (
 	"testing"
 )
 
+// defaultGodotMinor mirrors the server's godot.DefaultMinor: the build used
+// when GODOT_PATH is unset. It is duplicated here because this black-box module
+// deliberately does not import the server.
+const defaultGodotMinor = "4.7"
+
 // TestGetGodotVersionTool drives the real get_godot_version tool against the
-// repository-pinned Godot build. The suite is expected to run with Godot 4.7
-// (the server's default); pointing GODOT_PATH at another minor makes this test
-// fail on purpose.
+// configured Godot build. The expected minor line comes from GODOT_MINOR (CI
+// sets it per matrix entry) and defaults to the server's local build, so the
+// suite passes against any supported release.
 func TestGetGodotVersionTool(t *testing.T) {
 	session := connect(t)
 	findTool(t, session, "get_godot_version")
@@ -24,7 +29,11 @@ func TestGetGodotVersionTool(t *testing.T) {
 	if len(res.Content) != 1 {
 		t.Fatalf("content = %+v", res.Content)
 	}
-	if got := firstText(t, res); !strings.HasPrefix(got, "4.7.") {
-		t.Errorf("version = %q, want a 4.7.x build (GODOT_PATH=%q)", got, os.Getenv("GODOT_PATH"))
+	minor := os.Getenv("GODOT_MINOR")
+	if minor == "" {
+		minor = defaultGodotMinor
+	}
+	if got := firstText(t, res); !strings.HasPrefix(got, minor+".") {
+		t.Errorf("version = %q, want a %s.x build (GODOT_PATH=%q)", got, minor, os.Getenv("GODOT_PATH"))
 	}
 }
