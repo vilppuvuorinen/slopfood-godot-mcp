@@ -1,16 +1,8 @@
 # go-dot-mcp
 
-A zero-dependency Go rewrite of the [Coding-Solo/godot-mcp](https://github.com/Coding-Solo/godot-mcp) forks.
-
-Zero dependencies is a hard requirement: the standard library is the only dependency, ever.
+A zero-dependency Go MCP server for Godot. Zero dependencies is a hard requirement: the standard library is the only dependency, ever.
 
 ## Tools and `--enable` categories
-
-This server implements the headless subset of the 157-tool
-[`tugcantopaloglu/godot-mcp`](https://github.com/tugcantopaloglu/godot-mcp) fork:
-tools that drive Godot with `--headless` and never need a running game or a
-display. The `game_*` runtime tools (TCP bridge), `launch_editor`, and the
-run/stop/debug process-control tools are out of scope.
 
 Tools are grouped into categories by what they act on. `project` is registered
 by default; passing `--enable` replaces that default, so `project` must be named
@@ -23,64 +15,6 @@ go-dot-mcp --enable scene,script               # scene and script, no project
 go-dot-mcp --enable project --enable node      # project and node
 go-dot-mcp --enable all                        # everything
 ```
-
-**Progress: 35/35 tools implemented.**
-
-### project (default) — project discovery and creation (4/4)
-
-- [x] `get_godot_version`
-- [x] `list_projects`
-- [x] `get_project_info`
-- [x] `create_project`
-
-### settings — project configuration (8/8)
-
-- [x] `read_project_settings`
-- [x] `modify_project_settings`
-- [x] `set_main_scene`
-- [x] `manage_autoloads`
-- [x] `manage_input_map`
-- [x] `manage_layers`
-- [x] `manage_plugins`
-- [x] `manage_translations`
-
-### export — export presets and builds (2/2)
-
-- [x] `manage_export_presets`
-- [x] `export_project`
-
-### scene — scene files (4/4)
-
-- [x] `create_scene`
-- [x] `read_scene`
-- [x] `save_scene`
-- [x] `export_mesh_library`
-
-### node — nodes within scenes (6/6)
-
-- [x] `add_node`
-- [x] `load_sprite`
-- [x] `modify_scene_node`
-- [x] `remove_scene_node`
-- [x] `manage_scene_structure`
-- [x] `manage_scene_signals`
-
-### script — GDScript and C# authoring (5/5)
-
-- [x] `create_script`
-- [x] `create_csharp_script`
-- [x] `attach_script`
-- [x] `validate_script`
-- [x] `validate_scripts`
-
-### resources — resources, shaders, and themes (6/6)
-
-- [x] `create_resource`
-- [x] `manage_resource`
-- [x] `manage_shader`
-- [x] `manage_theme_resource`
-- [x] `get_uid`
-- [x] `update_project_uids`
 
 ## Protocol
 
