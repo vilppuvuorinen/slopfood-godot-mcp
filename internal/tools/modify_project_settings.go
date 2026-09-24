@@ -67,7 +67,7 @@ func handleModifyProjectSettings(_ context.Context, raw json.RawMessage) (any, e
 		return mcp.ErrorResult("projectPath, section, key, and value are required."), nil
 	}
 
-	content, failure := readProjectGodot(args.ProjectPath)
+	store, failure := openSettings(args.ProjectPath)
 	if failure != nil {
 		return *failure, nil
 	}
@@ -77,23 +77,12 @@ func handleModifyProjectSettings(_ context.Context, raw json.RawMessage) (any, e
 		return mcp.ErrorResult("Invalid value: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 	value := godotconfig.FormatValue(settingValue)
-	section, err := encodeSettingSection(args.Section)
-	if err != nil {
+	if _, err = encodeSettingSection(args.Section); err != nil {
 		return mcp.ErrorResult("Invalid section: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 
-	sectionHeader := "[" + section + "]"
-	keyLine := godotconfig.EncodePropertyName(args.Key) + "=" + value
-	if _, valStart, valEnd, ok := findSectionAssignment(content, args.Section, args.Key); ok {
-		content = content[:valStart] + value + content[valEnd:]
-	} else if sectionIdx := strings.Index(content, sectionHeader); sectionIdx != -1 {
-		insertPos := sectionIdx + len(sectionHeader)
-		content = content[:insertPos] + "\n" + keyLine + content[insertPos:]
-	} else {
-		content += "\n\n" + sectionHeader + "\n\n" + keyLine + "\n"
-	}
-
-	if err := writeProjectGodot(args.ProjectPath, content); err != nil {
+	store.Set(args.Section, args.Key, settingValue)
+	if err := store.Save(); err != nil {
 		return mcp.ErrorResult("Failed to modify project settings: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 

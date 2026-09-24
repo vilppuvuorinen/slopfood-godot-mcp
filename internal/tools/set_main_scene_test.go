@@ -70,7 +70,7 @@ config/name="Demo"
 			name:     "inserts into existing application section",
 			seed:     withoutKey,
 			scene:    "scenes/main.tscn",
-			want:     "[application]\n\n" + `run/main_scene="res://scenes/main.tscn"`,
+			want:     `run/main_scene="res://scenes/main.tscn"`,
 			wantKept: []string{`config/name="Demo"`},
 		},
 		{

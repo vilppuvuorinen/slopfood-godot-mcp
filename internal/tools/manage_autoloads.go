@@ -68,16 +68,16 @@ func handleManageAutoloads(_ context.Context, raw json.RawMessage) (any, error) 
 		return mcp.ErrorResult("projectPath and action are required."), nil
 	}
 
-	content, failure := readProjectGodot(args.ProjectPath)
+	store, failure := openSettings(args.ProjectPath)
 	if failure != nil {
 		return *failure, nil
 	}
 
 	switch args.Action {
 	case "list":
-		autoloads := parseProjectSections(content)["autoload"]
-		if autoloads == nil {
-			autoloads = map[string]string{}
+		autoloads, err := store.SectionValues("autoload")
+		if err != nil {
+			return mcp.ErrorResult("Failed to manage autoloads: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
 		data, err := json.MarshalIndent(autoloads, "", "  ")
 		if err != nil {
@@ -85,13 +85,13 @@ func handleManageAutoloads(_ context.Context, raw json.RawMessage) (any, error) 
 		}
 		return mcp.JSONResult(string(data)), nil
 	case "add":
-		return addAutoload(args, content)
+		return addAutoload(store, args)
 	case "remove":
 		if args.Name == "" {
 			return mcp.ErrorResult("name is required for remove action."), nil
 		}
-		content = removeSectionKey(content, "autoload", args.Name)
-		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
+		store.Delete("autoload", args.Name)
+		if err := store.Save(); err != nil {
 			return mcp.ErrorResult("Failed to manage autoloads: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
 		return statusResult(fmt.Sprintf("Autoload %q removed.", args.Name), map[string]any{
@@ -101,9 +101,9 @@ func handleManageAutoloads(_ context.Context, raw json.RawMessage) (any, error) 
 	return mcp.ErrorResult(`Invalid action. Use "list", "add", or "remove".`), nil
 }
 
-// addAutoload inserts an autoload entry after the first [autoload] header
-// (creating the section when absent) and persists the result.
-func addAutoload(args manageAutoloadsArgs, content string) (any, error) {
+// addAutoload stores an autoload entry (creating the section when absent) and
+// persists the result.
+func addAutoload(store *settingsStore, args manageAutoloadsArgs) (any, error) {
 	if args.Name == "" || args.Path == "" {
 		return mcp.ErrorResult("name and path are required for add action."), nil
 	}
@@ -111,13 +111,8 @@ func addAutoload(args manageAutoloadsArgs, content string) (any, error) {
 	if !strings.HasPrefix(resPath, "res://") {
 		resPath = "res://" + resPath
 	}
-	autoloadLine := godotconfig.EncodePropertyName(args.Name) + "=" + godotconfig.FormatValue(godotconfig.String("*"+resPath))
-	if idx := strings.Index(content, "[autoload]"); idx >= 0 {
-		content = content[:idx] + "[autoload]\n\n" + autoloadLine + content[idx+len("[autoload]"):]
-	} else {
-		content += "\n[autoload]\n\n" + autoloadLine + "\n"
-	}
-	if err := writeProjectGodot(args.ProjectPath, content); err != nil {
+	store.Set("autoload", args.Name, godotconfig.String("*"+resPath))
+	if err := store.Save(); err != nil {
 		return mcp.ErrorResult("Failed to manage autoloads: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 	return statusResult(fmt.Sprintf("Autoload %q added: %s", args.Name, resPath), map[string]any{

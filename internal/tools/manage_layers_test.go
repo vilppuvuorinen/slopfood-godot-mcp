@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 )
 
 func TestManageLayersSchema(t *testing.T) {
@@ -110,9 +112,15 @@ func TestManageLayersSetInsertsIntoSection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read project.godot: %v", err)
 	}
-	content := string(data)
-	if !strings.Contains(content, "[layer_names]\n"+`layer_names/3d_physics/layer_2="Water"`) {
-		t.Errorf("content = %q", content)
+	cfg, err := godotconfig.Parse(string(data))
+	if err != nil {
+		t.Fatalf("parse project.godot: %v", err)
+	}
+	if v, ok := cfg.Get("layer_names", "layer_names/3d_physics/layer_2"); !ok || v != godotconfig.String("Water") {
+		t.Errorf("layer_2 = %#v (%v)", v, ok)
+	}
+	if v, ok := cfg.Get("layer_names", "layer_names/2d_render/layer_1"); !ok || v != godotconfig.String("Ground") {
+		t.Errorf("layer_1 = %#v (%v)", v, ok)
 	}
 }
 
@@ -130,9 +138,12 @@ func TestManageLayersSetAppendsSection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read project.godot: %v", err)
 	}
-	want := "config_version=5\n\n[layer_names]\n" + `layer_names/2d_render/layer_1="Ground"` + "\n"
-	if got := string(data); got != want {
-		t.Errorf("content = %q, want %q", got, want)
+	cfg, err := godotconfig.Parse(string(data))
+	if err != nil {
+		t.Fatalf("parse project.godot: %v", err)
+	}
+	if v, ok := cfg.Get("layer_names", "layer_names/2d_render/layer_1"); !ok || v != godotconfig.String("Ground") {
+		t.Errorf("layer_1 = %#v (%v)", v, ok)
 	}
 }
 

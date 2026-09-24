@@ -97,7 +97,7 @@ func TestManagePluginsEnableAbsent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read project.godot: %v", err)
 	}
-	if !strings.Contains(string(content), "[editor_plugins]\nFoo/enabled=true") {
+	if !strings.Contains(string(content), "[editor_plugins]\n\nFoo/enabled=true") {
 		t.Errorf("project.godot = %q", content)
 	}
 }
@@ -118,7 +118,7 @@ func TestManagePluginsEnableAppendsSection(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read project.godot: %v", err)
 	}
-	if !strings.Contains(string(content), "\n[editor_plugins]\nBar/enabled=true") {
+	if !strings.Contains(string(content), "\n[editor_plugins]\n\nBar/enabled=true") {
 		t.Errorf("project.godot = %q", content)
 	}
 }

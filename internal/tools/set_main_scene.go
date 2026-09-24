@@ -57,7 +57,7 @@ func handleSetMainScene(_ context.Context, raw json.RawMessage) (any, error) {
 		return mcp.ErrorResult("projectPath and scenePath are required."), nil
 	}
 
-	content, failure := readProjectGodot(args.ProjectPath)
+	store, failure := openSettings(args.ProjectPath)
 	if failure != nil {
 		return *failure, nil
 	}
@@ -66,17 +66,8 @@ func handleSetMainScene(_ context.Context, raw json.RawMessage) (any, error) {
 	if !strings.HasPrefix(resPath, "res://") {
 		resPath = "res://" + resPath
 	}
-	settingLine := godotconfig.EncodePropertyName("run/main_scene") + "=" + godotconfig.FormatValue(godotconfig.String(resPath))
-
-	if updated, ok := setSectionValue(content, "application", "run/main_scene", godotconfig.String(resPath)); ok {
-		content = updated
-	} else if idx := strings.Index(content, "[application]"); idx >= 0 {
-		content = content[:idx] + "[application]\n\n" + settingLine + content[idx+len("[application]"):]
-	} else {
-		content += "\n[application]\n\n" + settingLine + "\n"
-	}
-
-	if err := writeProjectGodot(args.ProjectPath, content); err != nil {
+	store.Set("application", "run/main_scene", godotconfig.String(resPath))
+	if err := store.Save(); err != nil {
 		return mcp.ErrorResult("set_main_scene failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 	return statusResult("Main scene set to "+resPath, map[string]any{

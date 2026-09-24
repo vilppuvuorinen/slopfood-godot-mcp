@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 )
 
 func TestProjectSchema(t *testing.T) {
@@ -74,27 +76,57 @@ func TestScanValueTrailingBackslash(t *testing.T) {
 		t.Fatalf("scanValue = %d, want <= %d", got, len(content))
 	}
 	// A malformed value must not panic downstream.
-	_ = parseProjectSections(content)
+	eachAssignment(content, func(_, _ string, _, _, _ int) bool { return true })
 }
 
-func TestParseProjectSectionsMultilineValue(t *testing.T) {
-	content := "config_version=5\n\n[input]\n\njump={\n\"deadzone\": 0.5,\n\"events\": []\n}\n\n[application]\n\nconfig/name=\"Demo\"\n"
-	sections := parseProjectSections(content)
-	if got, want := sections["input"]["jump"], "{\n\"deadzone\": 0.5,\n\"events\": []\n}"; got != want {
+// TestSettingsStoreMultilineValue checks the typed store treats a multi-line
+// dictionary value as a single value, so it never splices the file.
+func TestSettingsStoreMultilineValue(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "project.godot"),
+		"config_version=5\n\n[input]\n\njump={\n\"deadzone\": 0.5,\n\"events\": []\n}\n\n[application]\n\nconfig/name=\"Demo\"\n")
+
+	store, failure := openSettings(root)
+	if failure != nil {
+		t.Fatalf("openSettings: %+v", failure.Content)
+	}
+	value, ok := store.Get("input", "jump")
+	if !ok {
+		t.Fatal("jump is missing")
+	}
+	if got, want := godotconfig.FormatValue(value), "{\n\"deadzone\": 0.5,\n\"events\": []\n}"; got != want {
 		t.Errorf("jump = %q, want %q", got, want)
 	}
-	if got := sections["application"]["config/name"]; got != `"Demo"` {
-		t.Errorf("config/name = %q", got)
-	}
 }
 
-func TestRemoveSectionKeyMultiline(t *testing.T) {
-	content := "config_version=5\n\n[input]\n\njump={\n\"deadzone\": 0.5,\n\"events\": []\n}\nmove={\"deadzone\": 0.5}\n"
-	got := removeSectionKey(content, "input", "jump")
-	if strings.Contains(got, "jump") || strings.Contains(got, `"events"`) {
-		t.Errorf("jump not fully removed:\n%s", got)
+// TestSettingsStoreDeleteMultiline checks Delete removes a whole multi-line
+// value, leaves an unrelated key behind, and survives a reparse.
+func TestSettingsStoreDeleteMultiline(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "project.godot"),
+		"config_version=5\n\n[input]\n\njump={\n\"deadzone\": 0.5,\n\"events\": []\n}\nmove={\"deadzone\": 0.5}\n")
+
+	store, failure := openSettings(root)
+	if failure != nil {
+		t.Fatalf("openSettings: %+v", failure.Content)
 	}
-	if !strings.Contains(got, `move={"deadzone": 0.5}`) {
-		t.Errorf("other key lost:\n%s", got)
+	if !store.Delete("input", "jump") {
+		t.Fatal("Delete reported jump absent")
+	}
+	if err := store.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	reopened, failure := openSettings(root)
+	if failure != nil {
+		t.Fatalf("reopen: %+v", failure.Content)
+	}
+	if _, ok := reopened.Get("input", "jump"); ok {
+		t.Error("jump still present")
+	}
+	if _, ok := reopened.Get("input", "move"); !ok {
+		t.Error("move was removed")
 	}
 }

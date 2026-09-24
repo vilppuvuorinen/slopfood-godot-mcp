@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 )
 
 func TestManageAutoloadsSchema(t *testing.T) {
@@ -49,21 +51,21 @@ Music="*res://music.gd"
 		if result.IsError {
 			t.Fatalf("unexpected error: %+v", result.Content)
 		}
-		var autoloads map[string]string
+		var autoloads map[string]any
 		if err := json.Unmarshal([]byte(result.Content[0].Text), &autoloads); err != nil {
 			t.Fatalf("unmarshal %q: %v", result.Content[0].Text, err)
 		}
-		if got := autoloads["Game"]; got != `"*res://game.gd"` {
-			t.Errorf("Game = %q", got)
+		if got := autoloads["Game"]; got != "*res://game.gd" {
+			t.Errorf("Game = %#v", got)
 		}
-		if got := autoloads["Music"]; got != `"*res://music.gd"` {
-			t.Errorf("Music = %q", got)
+		if got := autoloads["Music"]; got != "*res://music.gd" {
+			t.Errorf("Music = %#v", got)
 		}
 		structured, ok := result.StructuredContent.(map[string]any)
 		if !ok {
 			t.Fatalf("structuredContent type %T, want map[string]any", result.StructuredContent)
 		}
-		if structured["Game"] != `"*res://game.gd"` {
+		if structured["Game"] != "*res://game.gd" {
 			t.Errorf("structured Game = %v", structured["Game"])
 		}
 	})
@@ -270,12 +272,15 @@ Player={"deadzone": 0.5}
 		if err != nil {
 			t.Fatalf("read project.godot: %v", err)
 		}
-		content := string(data)
-		if strings.Contains(content, `Player="*res://player.gd"`) {
-			t.Errorf("autoload Player not removed in:\n%s", content)
+		cfg, err := godotconfig.Parse(string(data))
+		if err != nil {
+			t.Fatalf("parse project.godot: %v", err)
 		}
-		if !strings.Contains(content, `Player={"deadzone": 0.5}`) {
-			t.Errorf("input Player unexpectedly removed in:\n%s", content)
+		if _, ok := cfg.Get("autoload", "Player"); ok {
+			t.Errorf("autoload Player not removed in:\n%s", data)
+		}
+		if _, ok := cfg.Get("input", "Player"); !ok {
+			t.Errorf("input Player unexpectedly removed in:\n%s", data)
 		}
 	})
 }
@@ -301,11 +306,11 @@ func TestManageAutoloadsEscaping(t *testing.T) {
 		}
 
 		list := callToolArgs(t, manageAutoloads(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
-		var autoloads map[string]string
+		var autoloads map[string]any
 		if unmarshalErr := json.Unmarshal([]byte(list.Content[0].Text), &autoloads); unmarshalErr != nil {
 			t.Fatalf("unmarshal %q: %v", list.Content[0].Text, unmarshalErr)
 		}
-		if got := autoloads[`Evil"Name`]; got != `"*res://evil.gd"` {
+		if got := autoloads[`Evil"Name`]; got != "*res://evil.gd" {
 			t.Errorf("autoloads = %v", autoloads)
 		}
 	})
@@ -327,11 +332,11 @@ func TestManageAutoloadsEscaping(t *testing.T) {
 		}
 
 		list := callToolArgs(t, manageAutoloads(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
-		var autoloads map[string]string
+		var autoloads map[string]any
 		if unmarshalErr := json.Unmarshal([]byte(list.Content[0].Text), &autoloads); unmarshalErr != nil {
 			t.Fatalf("unmarshal %q: %v", list.Content[0].Text, unmarshalErr)
 		}
-		if got := autoloads["Evil\nName"]; got != `"*res://evil.gd"` {
+		if got := autoloads["Evil\nName"]; got != "*res://evil.gd" {
 			t.Errorf("autoloads = %v", autoloads)
 		}
 

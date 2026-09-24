@@ -61,25 +61,19 @@ type manageInputMapArgs struct {
 	Deadzone    *float64 `json:"deadzone"`
 }
 
-// readInputAction parses the dictionary of an existing input action. found is
-// false when the action is absent; err is non-nil when it exists but its value
-// cannot be parsed, so callers never overwrite it blindly.
-func readInputAction(content, name string) (godotconfig.Dictionary, bool, error) {
-	for _, entry := range sectionEntries(content, "input") {
-		if decodePropertyName(entry.Key) != name {
-			continue
-		}
-		value, err := godotconfig.ParseValue(entry.Value)
-		if err != nil {
-			return godotconfig.Dictionary{}, false, fmt.Errorf("parse action %q: %w", name, err)
-		}
-		action, ok := value.(godotconfig.Dictionary)
-		if !ok {
-			return godotconfig.Dictionary{}, false, fmt.Errorf("action %q is not a dictionary", name)
-		}
-		return action, true, nil
+// readInputAction returns the dictionary of an existing input action. found is
+// false when the action is absent; err is non-nil when it exists but is not a
+// dictionary, so callers never overwrite it blindly.
+func readInputAction(store *settingsStore, name string) (godotconfig.Dictionary, bool, error) {
+	value, ok := store.Get("input", name)
+	if !ok {
+		return godotconfig.Dictionary{}, false, nil
 	}
-	return godotconfig.Dictionary{}, false, nil
+	action, ok := value.(godotconfig.Dictionary)
+	if !ok {
+		return godotconfig.Dictionary{}, false, fmt.Errorf("action %q is not a dictionary", name)
+	}
+	return action, true, nil
 }
 
 // inputEvent builds the Object(InputEventKey, ...) literal for a scancode in
@@ -145,20 +139,17 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 		return mcp.ErrorResult("projectPath and action are required."), nil
 	}
 
-	content, failure := readProjectGodot(args.ProjectPath)
+	store, failure := openSettings(args.ProjectPath)
 	if failure != nil {
 		return *failure, nil
 	}
-	schema, err := projectSchema(content)
-	if err != nil {
-		return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
-	}
+	schema := store.schema
 
 	switch args.Action {
 	case "list":
-		actions := map[string]string{}
-		if input, ok := parseProjectSections(content)["input"]; ok {
-			actions = input
+		actions, err := store.SectionValues("input")
+		if err != nil {
+			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
 		data, err := json.MarshalIndent(actions, "", "  ")
 		if err != nil {
@@ -181,13 +172,13 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 			newEvent = inputEvent(schema, scancode)
 		}
 
-		existing, found, parseErr := readInputAction(content, args.ActionName)
+		existing, found, parseErr := readInputAction(store, args.ActionName)
 		if parseErr != nil {
 			return mcp.ErrorResult("Failed to manage input map: " + parseErr.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
 		if found {
-			content, _ = setSectionValue(content, "input", args.ActionName, mergeInputAction(existing, newEvent, scancode))
-			if err := writeProjectGodot(args.ProjectPath, content); err != nil {
+			store.Set("input", args.ActionName, mergeInputAction(existing, newEvent, scancode))
+			if err := store.Save(); err != nil {
 				return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 			}
 			return statusResult(fmt.Sprintf(`Input action "%s" updated (event merged into existing action).`, args.ActionName), map[string]any{
@@ -204,13 +195,8 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 				Value: godotconfig.Array{godotconfig.Opaque(newEvent)},
 			})
 		}
-		inputLine := godotconfig.EncodePropertyName(args.ActionName) + "=" + godotconfig.FormatValue(action)
-		if idx := strings.Index(content, "[input]"); idx != -1 {
-			content = content[:idx] + "[input]\n\n" + inputLine + content[idx+len("[input]"):]
-		} else {
-			content += "\n[input]\n\n" + inputLine + "\n"
-		}
-		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
+		store.Set("input", args.ActionName, action)
+		if err := store.Save(); err != nil {
 			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
 		return statusResult(fmt.Sprintf(`Input action "%s" added.`, args.ActionName), map[string]any{
@@ -220,8 +206,8 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 		if args.ActionName == "" {
 			return mcp.ErrorResult("actionName is required for remove action."), nil
 		}
-		content = removeSectionKey(content, "input", args.ActionName)
-		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
+		store.Delete("input", args.ActionName)
+		if err := store.Save(); err != nil {
 			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
 		return statusResult(fmt.Sprintf(`Input action "%s" removed.`, args.ActionName), map[string]any{

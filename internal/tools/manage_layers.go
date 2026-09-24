@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
-	"strings"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
@@ -85,10 +84,10 @@ type manageLayersListResult struct {
 	Layers []layerDefinition `json:"layers"`
 }
 
-// layerDefinitionPattern matches a project.godot layer_names setting such as
-// layer_names/2d_render/layer_1="Ground". The value group accepts escaped
-// quotes so names survive a round trip.
-var layerDefinitionPattern = regexp.MustCompile(`layer_names/([\w_]+)/layer_(\d+)="((?:[^"\\]|\\.)*)"`)
+// layerDefinitionKeyPattern matches a layer_names setting key such as
+// layer_names/2d_render/layer_1. The value is read from the typed Config, so
+// only the key shape is matched here.
+var layerDefinitionKeyPattern = regexp.MustCompile(`^layer_names/([\w_]+)/layer_(\d+)$`)
 
 func handleManageLayers(_ context.Context, raw json.RawMessage) (any, error) {
 	raw, err := aliasParams(raw, settingsAliases)
@@ -105,21 +104,28 @@ func handleManageLayers(_ context.Context, raw json.RawMessage) (any, error) {
 		return mcp.ErrorResult("projectPath and action are required."), nil
 	}
 
-	content, failure := readProjectGodot(args.ProjectPath)
+	store, failure := openSettings(args.ProjectPath)
 	if failure != nil {
 		return *failure, nil
 	}
 
 	switch args.Action {
 	case "list":
-		matches := layerDefinitionPattern.FindAllStringSubmatch(content, -1)
-		layers := make([]layerDefinition, 0, len(matches))
-		for _, match := range matches {
+		layers := make([]layerDefinition, 0)
+		for _, kv := range store.Keys("layer_names") {
+			match := layerDefinitionKeyPattern.FindStringSubmatch(kv.Key)
+			if match == nil {
+				continue
+			}
 			layer, convErr := strconv.Atoi(match[2])
 			if convErr != nil {
 				continue
 			}
-			layers = append(layers, layerDefinition{Type: match[1], Layer: layer, Name: godotconfig.UnescapeString(match[3])})
+			name, ok := kv.Value.(godotconfig.String)
+			if !ok {
+				continue
+			}
+			layers = append(layers, layerDefinition{Type: match[1], Layer: layer, Name: string(name)})
 		}
 		encoded, err := json.MarshalIndent(manageLayersListResult{Layers: layers}, "", "  ")
 		if err != nil {
@@ -131,18 +137,11 @@ func handleManageLayers(_ context.Context, raw json.RawMessage) (any, error) {
 			return mcp.ErrorResult("layerType, layer, and name are required for set."), nil
 		}
 		key := fmt.Sprintf("layer_names/%s/layer_%d", args.LayerType, args.Layer)
-		settingLine := godotconfig.EncodePropertyName(key) + "=" + godotconfig.FormatValue(godotconfig.String(args.Name))
-		if updated, ok := setSectionValue(content, "layer_names", key, godotconfig.String(args.Name)); ok {
-			content = updated
-		} else {
-			if !strings.Contains(content, "[layer_names]") {
-				content += "\n[layer_names]\n"
-			}
-			content = strings.Replace(content, "[layer_names]", "[layer_names]\n"+settingLine, 1)
-		}
-		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
+		store.Set("layer_names", key, godotconfig.String(args.Name))
+		if err := store.Save(); err != nil {
 			return mcp.ErrorResult("manage_layers failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
+		settingLine := godotconfig.EncodePropertyName(key) + "=" + godotconfig.FormatValue(godotconfig.String(args.Name))
 		return statusResult("Layer set: "+settingLine, map[string]any{
 			"layerType": args.LayerType,
 			"layer":     args.Layer,

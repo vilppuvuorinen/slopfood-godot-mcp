@@ -35,7 +35,7 @@ func manageTranslations() mcp.Tool {
 			"required": []string{"projectPath", "action"},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
-			"translations":    map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"translations":    godotValueSchema(`The translations setting as a tagged {"$type":"PackedStringArray","values":[...]} value`),
 			"translationPath": map[string]any{"type": "string"},
 		}),
 		Handler: handleManageTranslations,
@@ -49,14 +49,10 @@ type manageTranslationsArgs struct {
 }
 
 // readTranslations returns the existing translations entry as a typed
-// PackedStringArray, or nil when it is absent or unparseable.
-func readTranslations(content string) godotconfig.PackedStringArray {
-	raw, ok := parseProjectSections(content)["internationalization"]["translations"]
+// PackedStringArray, or nil when it is absent or another type.
+func readTranslations(store *settingsStore) godotconfig.PackedStringArray {
+	value, ok := store.Get("internationalization", "translations")
 	if !ok {
-		return nil
-	}
-	value, err := godotconfig.ParseValue(raw)
-	if err != nil {
 		return nil
 	}
 	translations, _ := value.(godotconfig.PackedStringArray)
@@ -78,19 +74,19 @@ func handleManageTranslations(_ context.Context, raw json.RawMessage) (any, erro
 		return mcp.ErrorResult("projectPath and action are required."), nil
 	}
 
-	content, failure := readProjectGodot(args.ProjectPath)
+	store, failure := openSettings(args.ProjectPath)
 	if failure != nil {
 		return *failure, nil
 	}
 
 	switch args.Action {
 	case "list":
-		translations := make([]string, 0)
-		translations = append(translations, readTranslations(content)...)
-		payload := struct {
-			Translations []string `json:"translations"`
-		}{Translations: translations}
-		data, err := json.MarshalIndent(payload, "", "  ")
+		translations := append(godotconfig.PackedStringArray{}, readTranslations(store)...)
+		value, err := godotconfig.ValueToJSON(translations)
+		if err != nil {
+			return mcp.ErrorResult("manage_translations failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
+		}
+		data, err := json.MarshalIndent(map[string]any{"translations": value}, "", "  ")
 		if err != nil {
 			return mcp.ErrorResult("manage_translations failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
@@ -104,19 +100,9 @@ func handleManageTranslations(_ context.Context, raw json.RawMessage) (any, erro
 		if !strings.HasPrefix(resPath, "res://") {
 			resPath = "res://" + resPath
 		}
-		translations := append(readTranslations(content), resPath)
-		if updated, ok := setSectionValue(content, "internationalization", "translations", translations); ok {
-			content = updated
-		} else {
-			if !strings.Contains(content, "[internationalization]") {
-				content += "\n[internationalization]\n"
-			}
-			header := "[internationalization]"
-			idx := strings.Index(content, header)
-			insert := header + "\n\ntranslations=" + godotconfig.FormatValue(translations)
-			content = content[:idx] + insert + content[idx+len(header):]
-		}
-		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
+		translations := append(append(godotconfig.PackedStringArray{}, readTranslations(store)...), resPath)
+		store.Set("internationalization", "translations", translations)
+		if err := store.Save(); err != nil {
 			return mcp.ErrorResult("manage_translations failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
 		return statusResult("Translation added: "+resPath, map[string]any{
@@ -132,15 +118,13 @@ func handleManageTranslations(_ context.Context, raw json.RawMessage) (any, erro
 			resPath = "res://" + resPath
 		}
 		var kept godotconfig.PackedStringArray
-		for _, translation := range readTranslations(content) {
+		for _, translation := range readTranslations(store) {
 			if translation != resPath {
 				kept = append(kept, translation)
 			}
 		}
-		if updated, ok := setSectionValue(content, "internationalization", "translations", kept); ok {
-			content = updated
-		}
-		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
+		store.Set("internationalization", "translations", kept)
+		if err := store.Save(); err != nil {
 			return mcp.ErrorResult("manage_translations failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
 		return statusResult("Translation removed: "+resPath, map[string]any{

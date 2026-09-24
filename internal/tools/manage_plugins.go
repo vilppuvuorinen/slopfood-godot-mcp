@@ -73,7 +73,7 @@ func handleManagePlugins(_ context.Context, raw json.RawMessage) (any, error) {
 		return mcp.ErrorResult("projectPath and action are required."), nil
 	}
 
-	content, failure := readProjectGodot(args.ProjectPath)
+	store, failure := openSettings(args.ProjectPath)
 	if failure != nil {
 		return *failure, nil
 	}
@@ -81,14 +81,14 @@ func handleManagePlugins(_ context.Context, raw json.RawMessage) (any, error) {
 	switch args.Action {
 	case "list":
 		enabled := make([]string, 0)
-		for _, entry := range sectionEntries(content, "editor_plugins") {
-			if strings.TrimSpace(entry.Value) != "true" {
+		for _, kv := range store.Keys("editor_plugins") {
+			if !strings.HasSuffix(kv.Key, "/enabled") {
 				continue
 			}
-			name := decodePropertyName(entry.Key)
-			if strings.HasSuffix(name, "/enabled") {
-				enabled = append(enabled, strings.TrimSuffix(name, "/enabled"))
+			if on, ok := kv.Value.(godotconfig.Bool); !ok || !bool(on) {
+				continue
 			}
+			enabled = append(enabled, strings.TrimSuffix(kv.Key, "/enabled"))
 		}
 
 		available := make([]string, 0)
@@ -115,17 +115,8 @@ func handleManagePlugins(_ context.Context, raw json.RawMessage) (any, error) {
 			return mcp.ErrorResult("pluginName is required."), nil
 		}
 		key := args.PluginName + "/enabled"
-		value := godotconfig.Bool(args.Action == "enable")
-		replacement := godotconfig.EncodePropertyName(key) + "=" + godotconfig.FormatValue(value)
-		if updated, ok := setSectionValue(content, "editor_plugins", key, value); ok {
-			content = updated
-		} else {
-			if !strings.Contains(content, "[editor_plugins]") {
-				content += "\n[editor_plugins]\n"
-			}
-			content = strings.Replace(content, "[editor_plugins]", "[editor_plugins]\n"+replacement, 1)
-		}
-		if err := writeProjectGodot(args.ProjectPath, content); err != nil {
+		store.Set("editor_plugins", key, godotconfig.Bool(args.Action == "enable"))
+		if err := store.Save(); err != nil {
 			return mcp.ErrorResult("manage_plugins failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
 		return statusResult(fmt.Sprintf("Plugin %s %sd.", args.PluginName, args.Action), map[string]any{

@@ -3,7 +3,6 @@ package e2e
 import (
 	"encoding/json"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -33,13 +32,11 @@ translations=PackedStringArray("res://en.translation", "res://fi.translation")
 			"projectPath": root,
 			"action":      "list",
 		})
-		var payload struct {
-			Translations []string `json:"translations"`
-		}
+		var payload map[string]any
 		if err := json.Unmarshal([]byte(text), &payload); err != nil {
 			t.Fatalf("unmarshal %q: %v", text, err)
 		}
-		if got, want := strings.Join(payload.Translations, ","), "res://en.translation,res://fi.translation"; got != want {
+		if got, want := packedStrings(t, payload["translations"]), "res://en.translation,res://fi.translation"; got != want {
 			t.Errorf("translations = %q, want %q", got, want)
 		}
 	})

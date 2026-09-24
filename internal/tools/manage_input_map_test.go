@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 )
 
 func TestManageInputMapSchema(t *testing.T) {
@@ -58,18 +60,18 @@ config/name="Demo"
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	var actions map[string]string
+	var actions map[string]any
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &actions); err != nil {
 		t.Fatalf("unmarshal %q: %v", result.Content[0].Text, err)
 	}
 	if len(actions) != 2 {
 		t.Fatalf("actions = %v", actions)
 	}
-	if got := actions["move_left"]; got != `{"deadzone": 0.5}` {
-		t.Errorf("move_left = %q", got)
-	}
-	if got := actions["jump"]; got != `{"deadzone": 0.5}` {
-		t.Errorf("jump = %q", got)
+	for _, name := range []string{"move_left", "jump"} {
+		action, ok := actions[name].(map[string]any)
+		if !ok || action["deadzone"] != 0.5 {
+			t.Errorf("%s = %#v, want a dictionary with deadzone 0.5", name, actions[name])
+		}
 	}
 }
 
@@ -206,12 +208,15 @@ double_jump={"deadzone": 0.5}
 		if err != nil {
 			t.Fatalf("read project.godot: %v", err)
 		}
-		content := string(data)
-		if strings.Contains(content, "\njump={\"deadzone\": 0.5}") {
-			t.Errorf("jump not removed in:\n%s", content)
+		cfg, err := godotconfig.Parse(string(data))
+		if err != nil {
+			t.Fatalf("parse project.godot: %v", err)
 		}
-		if !strings.Contains(content, `double_jump={"deadzone": 0.5}`) {
-			t.Errorf("double_jump was corrupted or removed in:\n%s", content)
+		if _, ok := cfg.Get("input", "jump"); ok {
+			t.Errorf("jump not removed in:\n%s", data)
+		}
+		if _, ok := cfg.Get("input", "double_jump"); !ok {
+			t.Errorf("double_jump was corrupted or removed in:\n%s", data)
 		}
 	})
 
@@ -236,12 +241,15 @@ jump="*res://jump.gd"
 		if err != nil {
 			t.Fatalf("read project.godot: %v", err)
 		}
-		content := string(data)
-		if strings.Contains(content, `jump={"deadzone": 0.5}`) {
-			t.Errorf("input jump not removed in:\n%s", content)
+		cfg, err := godotconfig.Parse(string(data))
+		if err != nil {
+			t.Fatalf("parse project.godot: %v", err)
 		}
-		if !strings.Contains(content, `jump="*res://jump.gd"`) {
-			t.Errorf("autoload jump unexpectedly removed in:\n%s", content)
+		if _, ok := cfg.Get("input", "jump"); ok {
+			t.Errorf("input jump not removed in:\n%s", data)
+		}
+		if _, ok := cfg.Get("autoload", "jump"); !ok {
+			t.Errorf("autoload jump unexpectedly removed in:\n%s", data)
 		}
 	})
 }
@@ -276,7 +284,7 @@ func TestManageInputMapEscaping(t *testing.T) {
 			}
 
 			list := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
-			var actions map[string]string
+			var actions map[string]any
 			if unmarshalErr := json.Unmarshal([]byte(list.Content[0].Text), &actions); unmarshalErr != nil {
 				t.Fatalf("unmarshal %q: %v", list.Content[0].Text, unmarshalErr)
 			}

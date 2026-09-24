@@ -36,15 +36,15 @@ Music="*res://music.gd"
 			"action":      "list",
 		})
 
-		var autoloads map[string]string
+		var autoloads map[string]any
 		if err := json.Unmarshal([]byte(text), &autoloads); err != nil {
 			t.Fatalf("unmarshal %q: %v", text, err)
 		}
-		if got := autoloads["Game"]; got != `"*res://game.gd"` {
-			t.Errorf("Game = %q", got)
+		if got := autoloads["Game"]; got != "*res://game.gd" {
+			t.Errorf("Game = %#v", got)
 		}
-		if got := autoloads["Music"]; got != `"*res://music.gd"` {
-			t.Errorf("Music = %q", got)
+		if got := autoloads["Music"]; got != "*res://music.gd" {
+			t.Errorf("Music = %#v", got)
 		}
 	})
 
@@ -67,7 +67,7 @@ Music="*res://music.gd"
 		writeE2EFile(t, filepath.Join(root, "game.gd"), "extends Node\n")
 		sections := requireProjectSettingsRoundTrip(t, session, root)
 		if got := sections["autoload"]["Game"]; got != "*res://game.gd" {
-			t.Errorf("autoload Game = %q, want %q", got, `"*res://game.gd"`)
+			t.Errorf("autoload Game = %q, want %q", got, "*res://game.gd")
 		}
 
 		removed := requireToolText(t, session, "manage_autoloads", map[string]any{

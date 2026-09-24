@@ -1,6 +1,87 @@
 package godotconfig
 
-import "testing"
+import (
+	"encoding/json"
+	"math"
+	"testing"
+)
+
+// TestValueToJSONEncoding pins the JSON each Value encodes to. Floats keep a
+// decimal point so the decoder does not read an integral Float back as an Int,
+// and engine-only types use their tagged form.
+func TestValueToJSONEncoding(t *testing.T) {
+	tests := []struct {
+		name string
+		val  Value
+		want string
+	}{
+		{name: "nil", val: nil, want: `null`},
+		{name: "Nil", val: Nil{}, want: `null`},
+		{name: "bool", val: Bool(true), want: `true`},
+		{name: "int", val: Int(1280), want: `1280`},
+		{name: "float", val: Float(0.5), want: `0.5`},
+		{name: "integral float keeps decimal", val: Float(1280), want: `1280.0`},
+		{name: "string", val: String("hi"), want: `"hi"`},
+		{name: "string name", val: StringName("foo"), want: `{"$type":"StringName","value":"foo"}`},
+		{name: "array", val: Array{Int(1), String("a")}, want: `[1,"a"]`},
+		{name: "dictionary", val: Dictionary{Entries: []DictEntry{{Key: String("b"), Value: Int(2)}, {Key: String("a"), Value: Int(1)}}}, want: `{"a":1,"b":2}`},
+		{name: "packed string array", val: PackedStringArray{"a", "b"}, want: `{"$type":"PackedStringArray","values":["a","b"]}`},
+		{name: "opaque", val: Opaque(`Object(InputEventKey)`), want: `{"$type":"GodotText","text":"Object(InputEventKey)"}`},
+		{name: "nan", val: Float(math.NaN()), want: `{"$type":"GodotText","text":"nan"}`},
+		{name: "inf", val: Float(math.Inf(1)), want: `{"$type":"GodotText","text":"inf"}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tree, err := ValueToJSON(tt.val)
+			if err != nil {
+				t.Fatalf("ValueToJSON: %v", err)
+			}
+			data, err := json.Marshal(tree)
+			if err != nil {
+				t.Fatalf("marshal: %v", err)
+			}
+			if got := string(data); got != tt.want {
+				t.Errorf("json = %s, want %s", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestValueToJSONRoundTrip checks that encoding a Value and decoding it again
+// yields a Value that serializes identically, so reads and writes share one
+// contract.
+func TestValueToJSONRoundTrip(t *testing.T) {
+	values := []Value{
+		Nil{},
+		Bool(false),
+		Int(-3),
+		Float(0.25),
+		Float(1280),
+		String(`say "hi"`),
+		StringName("foo"),
+		Array{Int(1), String("a"), Array{Bool(true)}},
+		Dictionary{Entries: []DictEntry{{Key: String("deadzone"), Value: Float(0.5)}, {Key: String("events"), Value: Array{Opaque(`Object(InputEventKey)`)}}}},
+		PackedStringArray{"res://en.translation", "res://fi.translation"},
+		Opaque(`Object(InputEventKey,"physical_keycode":87)`),
+	}
+	for _, value := range values {
+		tree, err := ValueToJSON(value)
+		if err != nil {
+			t.Fatalf("ValueToJSON(%s): %v", FormatValue(value), err)
+		}
+		data, err := json.Marshal(tree)
+		if err != nil {
+			t.Fatalf("marshal %s: %v", FormatValue(value), err)
+		}
+		decoded, err := DecodeJSONValue(data)
+		if err != nil {
+			t.Fatalf("DecodeJSONValue(%s): %v", data, err)
+		}
+		if got, want := FormatValue(decoded), FormatValue(value); got != want {
+			t.Errorf("round trip = %s, want %s", got, want)
+		}
+	}
+}
 
 func TestDecodeJSONValueScalars(t *testing.T) {
 	tests := []struct {

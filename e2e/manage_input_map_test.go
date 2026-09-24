@@ -34,15 +34,15 @@ jump={"deadzone": 0.5}
 			"projectPath": root,
 			"action":      "list",
 		})
-		var actions map[string]string
+		var actions map[string]any
 		if err := json.Unmarshal([]byte(text), &actions); err != nil {
 			t.Fatalf("unmarshal %q: %v", text, err)
 		}
-		if got := actions["move_left"]; got != `{"deadzone": 0.5}` {
-			t.Errorf("move_left = %q", got)
-		}
-		if got := actions["jump"]; got != `{"deadzone": 0.5}` {
-			t.Errorf("jump = %q", got)
+		for _, name := range []string{"move_left", "jump"} {
+			action, ok := actions[name].(map[string]any)
+			if !ok || action["deadzone"] != 0.5 {
+				t.Errorf("%s = %#v, want a dictionary with deadzone 0.5", name, actions[name])
+			}
 		}
 	})
 

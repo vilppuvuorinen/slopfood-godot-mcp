@@ -32,6 +32,15 @@ func TestManageTranslationsSchema(t *testing.T) {
 	}
 }
 
+// translationsPayload is the list action's contract payload: the
+// internationalization/translations setting as a tagged PackedStringArray.
+type translationsPayload struct {
+	Translations struct {
+		Type   string   `json:"$type"`
+		Values []string `json:"values"`
+	} `json:"translations"`
+}
+
 func TestManageTranslationsList(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
@@ -45,15 +54,16 @@ translations=PackedStringArray("res://en.translation", "res://fi.translation")
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	var payload struct {
-		Translations []string `json:"translations"`
-	}
+	var payload translationsPayload
 	if err := json.Unmarshal([]byte(result.Content[0].Text), &payload); err != nil {
 		t.Fatalf("unmarshal %q: %v", result.Content[0].Text, err)
 	}
+	if payload.Translations.Type != "PackedStringArray" {
+		t.Errorf("$type = %q, want PackedStringArray", payload.Translations.Type)
+	}
 	want := []string{"res://en.translation", "res://fi.translation"}
-	if strings.Join(payload.Translations, ",") != strings.Join(want, ",") {
-		t.Errorf("translations = %v, want %v", payload.Translations, want)
+	if strings.Join(payload.Translations.Values, ",") != strings.Join(want, ",") {
+		t.Errorf("translations = %v, want %v", payload.Translations.Values, want)
 	}
 }
 
@@ -64,8 +74,9 @@ func TestManageTranslationsListEmpty(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	if got, want := result.Content[0].Text, "{\n  \"translations\": []\n}"; got != want {
-		t.Errorf("text = %q, want %q", got, want)
+	got := result.Content[0].Text
+	if !strings.Contains(got, `"$type": "PackedStringArray"`) || !strings.Contains(got, `"values": []`) {
+		t.Errorf("text = %q, want an empty PackedStringArray", got)
 	}
 }
 
@@ -179,15 +190,13 @@ translations=PackedStringArray("res://en.translation")
 			}
 
 			list := callToolArgs(t, manageTranslations(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
-			var payload struct {
-				Translations []string `json:"translations"`
-			}
+			var payload translationsPayload
 			if err := json.Unmarshal([]byte(list.Content[0].Text), &payload); err != nil {
 				t.Fatalf("unmarshal %q: %v", list.Content[0].Text, err)
 			}
 			want := []string{"res://en.translation", "res://" + tt.path}
-			if strings.Join(payload.Translations, ",") != strings.Join(want, ",") {
-				t.Errorf("translations = %q, want %q", payload.Translations, want)
+			if strings.Join(payload.Translations.Values, ",") != strings.Join(want, ",") {
+				t.Errorf("translations = %q, want %q", payload.Translations.Values, want)
 			}
 		})
 	}

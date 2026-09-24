@@ -91,6 +91,91 @@ func objectValue(obj map[string]any) (Value, error) {
 	return dict, nil
 }
 
+// ValueToJSON encodes a Value in the tool value contract, the inverse of
+// DecodeJSONValue: JSON-native data maps directly and engine-only types use a
+// tagged object. The result is a JSON-marshalable tree.
+//
+// Float keeps its decimal spelling (1.0, not 1) because the decoder tells Int
+// from Float by the JSON spelling; a non-finite float uses the GodotText escape
+// hatch, since JSON has no NaN or Infinity. Opaque uses GodotText too, so a
+// constructor the parser only captured verbatim still round-trips.
+func ValueToJSON(v Value) (any, error) {
+	switch t := v.(type) {
+	case nil, Nil:
+		return nil, nil
+	case Bool:
+		return bool(t), nil
+	case Int:
+		return int64(t), nil
+	case Float:
+		f := float64(t)
+		if math.IsNaN(f) || math.IsInf(f, 0) {
+			return godotTextJSON(formatFloat(f)), nil
+		}
+		return json.Number(formatFloat(f)), nil
+	case String:
+		return string(t), nil
+	case StringName:
+		return map[string]any{"$type": "StringName", "value": string(t)}, nil
+	case Array:
+		out := make([]any, 0, len(t))
+		for _, e := range t {
+			ev, err := ValueToJSON(e)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, ev)
+		}
+		return out, nil
+	case Dictionary:
+		return dictionaryToJSON(t)
+	case PackedStringArray:
+		values := make([]any, 0, len(t))
+		for _, s := range t {
+			values = append(values, s)
+		}
+		return map[string]any{"$type": "PackedStringArray", "values": values}, nil
+	case Opaque:
+		return godotTextJSON(string(t)), nil
+	default:
+		return nil, fmt.Errorf("cannot encode %T in the tool value contract", v)
+	}
+}
+
+// dictionaryToJSON encodes a Dictionary as a JSON object. Dictionary keys are
+// stringified the way the GDScript encoder's str(key) does, so the encoding
+// matches what _variant_to_json produces.
+func dictionaryToJSON(d Dictionary) (map[string]any, error) {
+	out := make(map[string]any, len(d.Entries))
+	for _, e := range d.Entries {
+		value, err := ValueToJSON(e.Value)
+		if err != nil {
+			return nil, err
+		}
+		out[dictionaryKey(e.Key)] = value
+	}
+	return out, nil
+}
+
+// dictionaryKey renders a Dictionary key as a JSON member name. String and
+// StringName keys carry their text unquoted; any other key uses its Godot
+// literal, mirroring str(key).
+func dictionaryKey(v Value) string {
+	switch k := v.(type) {
+	case String:
+		return string(k)
+	case StringName:
+		return string(k)
+	default:
+		return FormatValue(v)
+	}
+}
+
+// godotTextJSON builds the tagged GodotText escape-hatch object.
+func godotTextJSON(text string) map[string]any {
+	return map[string]any{"$type": "GodotText", "text": text}
+}
+
 // numberValue picks Int or Float from the number's JSON spelling.
 func numberValue(n json.Number) (Value, error) {
 	s := n.String()
