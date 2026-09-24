@@ -63,6 +63,64 @@ func TestManageThemeResourceTool(t *testing.T) {
 	requireNotContains(t, reReadText, "THEME_JSON_START")
 }
 
+// TestManageThemeResourceConvertsTypes covers theme properties whose JSON
+// values need conversion: a color sent as a component dictionary, a font size,
+// and a Theme item that references another resource by path. The saved .tres is
+// inspected so a silently-ignored or mis-typed value fails the test.
+func TestManageThemeResourceConvertsTypes(t *testing.T) {
+	session := connect(t)
+	requireGodot(t, session)
+
+	root := t.TempDir()
+	seedProject(t, root)
+
+	requireToolText(t, session, "create_resource", map[string]any{
+		"projectPath":  root,
+		"resourceType": "StyleBoxFlat",
+		"resourcePath": "themes/panel_box.tres",
+	})
+
+	createText := requireToolText(t, session, "manage_theme_resource", map[string]any{
+		"projectPath":  root,
+		"resourcePath": "themes/main.tres",
+		"action":       "create",
+		"properties": map[string]any{
+			"Label/colors/font_color":    map[string]any{"r": 1, "g": 0, "b": 0, "a": 1},
+			"Label/font_sizes/font_size": 24,
+			"Panel/styles/panel":         "res://themes/panel_box.tres",
+		},
+	})
+	requirePrefix(t, createText, "manage_theme_resource succeeded.")
+
+	themeFile := filepath.Join(root, "themes", "main.tres")
+	content := readFile(t, themeFile)
+	requireContains(t, content,
+		"Color(1, 0, 0, 1)",
+		"Label/font_sizes/font_size = 24",
+		"panel_box.tres",
+	)
+	requireNotContains(t, content, "Panel/styles/panel = null")
+
+	readText := requireToolText(t, session, "manage_theme_resource", map[string]any{
+		"projectPath":  root,
+		"resourcePath": "themes/main.tres",
+		"action":       "read",
+	})
+	requireContains(t, readText, `"Label/colors/font_color": "(1.0, 0.0, 0.0, 1.0)"`)
+
+	modifyText := requireToolText(t, session, "manage_theme_resource", map[string]any{
+		"projectPath":  root,
+		"resourcePath": "themes/main.tres",
+		"action":       "modify",
+		"properties": map[string]any{
+			"Label/colors/font_color": "(0.0, 0.0, 1.0, 1.0)",
+		},
+	})
+	requirePrefix(t, modifyText, "manage_theme_resource succeeded.")
+
+	requireContains(t, readFile(t, themeFile), "Color(0, 0, 1, 1)")
+}
+
 // TestManageThemeResourceErrors covers the reference's validation and failure
 // messages.
 func TestManageThemeResourceErrors(t *testing.T) {

@@ -1226,100 +1226,155 @@ func _variant_to_json(value):
 func _convert_property_value(node, prop_name, value):
     for prop in node.get_property_list():
         if prop["name"] == prop_name:
-            var type_id = prop.get("type", 0)
-            match type_id:
-                TYPE_VECTOR2:
-                    if value is Dictionary and value.has("x") and value.has("y"):
-                        return Vector2(float(value.get("x", 0)), float(value.get("y", 0)))
-                TYPE_VECTOR2I:
-                    if value is Dictionary and value.has("x") and value.has("y"):
-                        return Vector2i(int(value.get("x", 0)), int(value.get("y", 0)))
-                TYPE_VECTOR3:
-                    if value is Dictionary and value.has("x") and value.has("y"):
-                        return Vector3(float(value.get("x", 0)), float(value.get("y", 0)), float(value.get("z", 0)))
-                TYPE_VECTOR3I:
-                    if value is Dictionary and value.has("x") and value.has("y"):
-                        return Vector3i(int(value.get("x", 0)), int(value.get("y", 0)), int(value.get("z", 0)))
-                TYPE_COLOR:
-                    if value is Dictionary and value.has("r") and value.has("g") and value.has("b"):
-                        return Color(float(value.get("r", 0)), float(value.get("g", 0)), float(value.get("b", 0)), float(value.get("a", 1.0)))
-                    if value is String and value.begins_with("#"):
-                        return Color.html(value)
-                TYPE_QUATERNION:
-                    if value is Dictionary:
-                        return Quaternion(float(value.get("x", 0)), float(value.get("y", 0)), float(value.get("z", 0)), float(value.get("w", 1)))
-                TYPE_RECT2:
-                    if value is Dictionary and value.has("position") and value.has("size"):
-                        var pos = value["position"]
-                        var sz = value["size"]
-                        return Rect2(float(pos.get("x", 0)), float(pos.get("y", 0)), float(sz.get("x", 0)), float(sz.get("y", 0)))
-                TYPE_AABB:
-                    if value is Dictionary and value.has("position") and value.has("size"):
-                        var pos = value["position"]
-                        var sz = value["size"]
-                        return AABB(
-                            Vector3(float(pos.get("x", 0)), float(pos.get("y", 0)), float(pos.get("z", 0))),
-                            Vector3(float(sz.get("x", 0)), float(sz.get("y", 0)), float(sz.get("z", 0)))
-                        )
-                TYPE_BASIS:
-                    if value is Dictionary and value.has("x") and value.has("y") and value.has("z"):
-                        var bx = value["x"]
-                        var by = value["y"]
-                        var bz = value["z"]
-                        return Basis(
-                            Vector3(float(bx.get("x", 0)), float(bx.get("y", 0)), float(bx.get("z", 0))),
-                            Vector3(float(by.get("x", 0)), float(by.get("y", 0)), float(by.get("z", 0))),
-                            Vector3(float(bz.get("x", 0)), float(bz.get("y", 0)), float(bz.get("z", 0)))
-                        )
-                TYPE_TRANSFORM3D:
-                    if value is Dictionary and value.has("basis") and value.has("origin"):
-                        var basis_d = value["basis"]
-                        var origin_d = value["origin"]
-                        var basis = Basis.IDENTITY
-                        if basis_d is Dictionary and basis_d.has("x"):
-                            var bx = basis_d["x"]
-                            var by = basis_d["y"]
-                            var bz = basis_d["z"]
-                            basis = Basis(
-                                Vector3(float(bx.get("x", 0)), float(bx.get("y", 0)), float(bx.get("z", 0))),
-                                Vector3(float(by.get("x", 0)), float(by.get("y", 0)), float(by.get("z", 0))),
-                                Vector3(float(bz.get("x", 0)), float(bz.get("y", 0)), float(bz.get("z", 0)))
-                            )
-                        var origin = Vector3(float(origin_d.get("x", 0)), float(origin_d.get("y", 0)), float(origin_d.get("z", 0)))
-                        return Transform3D(basis, origin)
-                TYPE_TRANSFORM2D:
-                    if value is Dictionary and value.has("x") and value.has("y") and value.has("origin"):
-                        var tx = value["x"]
-                        var ty = value["y"]
-                        var t_origin = value["origin"]
-                        return Transform2D(
-                            Vector2(float(tx.get("x", 0)), float(tx.get("y", 0))),
-                            Vector2(float(ty.get("x", 0)), float(ty.get("y", 0))),
-                            Vector2(float(t_origin.get("x", 0)), float(t_origin.get("y", 0)))
-                        )
-                TYPE_BOOL:
-                    if value is String:
-                        return value.to_lower() == "true"
-                    return bool(value)
-                TYPE_INT:
-                    return int(value)
-                TYPE_FLOAT:
-                    return float(value)
-                TYPE_STRING:
-                    return str(value)
-                TYPE_NODE_PATH:
-                    return NodePath(str(value))
-                TYPE_OBJECT:
-                    if value is String and value.begins_with("res://"):
-                        if ResourceLoader.exists(value):
-                            var res = load(value)
-                            if res != null:
-                                return res
-                        printerr("Failed to load resource from path: " + value)
-                        quit(1)
-                    return value
-            break
+            return _convert_value_for_type(prop.get("type", 0), value)
     return value
+
+# Convert a JSON value to the Godot type identified by a Variant type id. This
+# is the shared conversion table for scene node, resource, and theme
+# properties; a value with no matching conversion passes through unchanged.
+func _convert_value_for_type(type_id, value):
+    match type_id:
+        TYPE_VECTOR2:
+            if value is Dictionary and value.has("x") and value.has("y"):
+                return Vector2(float(value.get("x", 0)), float(value.get("y", 0)))
+        TYPE_VECTOR2I:
+            if value is Dictionary and value.has("x") and value.has("y"):
+                return Vector2i(int(value.get("x", 0)), int(value.get("y", 0)))
+        TYPE_VECTOR3:
+            if value is Dictionary and value.has("x") and value.has("y"):
+                return Vector3(float(value.get("x", 0)), float(value.get("y", 0)), float(value.get("z", 0)))
+        TYPE_VECTOR3I:
+            if value is Dictionary and value.has("x") and value.has("y"):
+                return Vector3i(int(value.get("x", 0)), int(value.get("y", 0)), int(value.get("z", 0)))
+        TYPE_COLOR:
+            var color = _parse_color(value)
+            if color != null:
+                return color
+        TYPE_QUATERNION:
+            if value is Dictionary:
+                return Quaternion(float(value.get("x", 0)), float(value.get("y", 0)), float(value.get("z", 0)), float(value.get("w", 1)))
+        TYPE_RECT2:
+            if value is Dictionary and value.has("position") and value.has("size"):
+                var pos = value["position"]
+                var sz = value["size"]
+                return Rect2(float(pos.get("x", 0)), float(pos.get("y", 0)), float(sz.get("x", 0)), float(sz.get("y", 0)))
+        TYPE_AABB:
+            if value is Dictionary and value.has("position") and value.has("size"):
+                var pos = value["position"]
+                var sz = value["size"]
+                return AABB(
+                    Vector3(float(pos.get("x", 0)), float(pos.get("y", 0)), float(pos.get("z", 0))),
+                    Vector3(float(sz.get("x", 0)), float(sz.get("y", 0)), float(sz.get("z", 0)))
+                )
+        TYPE_BASIS:
+            if value is Dictionary and value.has("x") and value.has("y") and value.has("z"):
+                var bx = value["x"]
+                var by = value["y"]
+                var bz = value["z"]
+                return Basis(
+                    Vector3(float(bx.get("x", 0)), float(bx.get("y", 0)), float(bx.get("z", 0))),
+                    Vector3(float(by.get("x", 0)), float(by.get("y", 0)), float(by.get("z", 0))),
+                    Vector3(float(bz.get("x", 0)), float(bz.get("y", 0)), float(bz.get("z", 0)))
+                )
+        TYPE_TRANSFORM3D:
+            if value is Dictionary and value.has("basis") and value.has("origin"):
+                var basis_d = value["basis"]
+                var origin_d = value["origin"]
+                var basis = Basis.IDENTITY
+                if basis_d is Dictionary and basis_d.has("x"):
+                    var bx = basis_d["x"]
+                    var by = basis_d["y"]
+                    var bz = basis_d["z"]
+                    basis = Basis(
+                        Vector3(float(bx.get("x", 0)), float(bx.get("y", 0)), float(bx.get("z", 0))),
+                        Vector3(float(by.get("x", 0)), float(by.get("y", 0)), float(by.get("z", 0))),
+                        Vector3(float(bz.get("x", 0)), float(bz.get("y", 0)), float(bz.get("z", 0)))
+                    )
+                var origin = Vector3(float(origin_d.get("x", 0)), float(origin_d.get("y", 0)), float(origin_d.get("z", 0)))
+                return Transform3D(basis, origin)
+        TYPE_TRANSFORM2D:
+            if value is Dictionary and value.has("x") and value.has("y") and value.has("origin"):
+                var tx = value["x"]
+                var ty = value["y"]
+                var t_origin = value["origin"]
+                return Transform2D(
+                    Vector2(float(tx.get("x", 0)), float(tx.get("y", 0))),
+                    Vector2(float(ty.get("x", 0)), float(ty.get("y", 0))),
+                    Vector2(float(t_origin.get("x", 0)), float(t_origin.get("y", 0)))
+                )
+        TYPE_BOOL:
+            if value is String:
+                return value.to_lower() == "true"
+            return bool(value)
+        TYPE_INT:
+            return int(value)
+        TYPE_FLOAT:
+            return float(value)
+        TYPE_STRING:
+            return str(value)
+        TYPE_NODE_PATH:
+            return NodePath(str(value))
+        TYPE_OBJECT:
+            return _convert_resource_value(value)
+    return value
+
+# Parse a Color from the JSON shapes callers can send: a {r,g,b,a} dictionary,
+# a "#rrggbb" string, a "(r, g, b, a)" string (the form read emits via str()),
+# or a named color such as "red". Returns null when value is not a color.
+func _parse_color(value):
+    if value is Color:
+        return value
+    if value is Dictionary and value.has("r") and value.has("g") and value.has("b"):
+        return Color(float(value.get("r", 0)), float(value.get("g", 0)), float(value.get("b", 0)), float(value.get("a", 1.0)))
+    if value is String:
+        var text = value.strip_edges()
+        if text.begins_with("#"):
+            return Color.html(text)
+        if text.begins_with("(") and text.ends_with(")"):
+            var parts = text.substr(1, text.length() - 2).split(",")
+            if parts.size() >= 3:
+                var parsed = Color(
+                    float(parts[0].strip_edges()),
+                    float(parts[1].strip_edges()),
+                    float(parts[2].strip_edges()),
+                    1.0
+                )
+                if parts.size() >= 4:
+                    parsed.a = float(parts[3].strip_edges())
+                return parsed
+        var named = Color.from_string(text, Color(-1, -1, -1, -1))
+        if named.r >= 0.0:
+            return named
+    return null
+
+# Load the Resource a JSON value refers to. Strings may be a bare "res://"
+# path or the "(res://path):<Class#id>" form Godot's str() produces for an
+# object read back from disk, so a read-then-modify round trip resolves the
+# same resource. Unknown strings pass through for the caller's set() to reject.
+func _convert_resource_value(value):
+    if value is Resource:
+        return value
+    if value is String:
+        var path = _resource_path_in_string(value)
+        if not path.is_empty():
+            if ResourceLoader.exists(path):
+                var res = load(path)
+                if res != null:
+                    return res
+            printerr("Failed to load resource from path: " + path)
+            quit(1)
+    return value
+
+# Extract the "res://..." path embedded in a string, stopping at the ")" that
+# closes the parenthesized form, or at the end for a bare path.
+func _resource_path_in_string(text) -> String:
+    var start = text.find("res://")
+    if start == -1:
+        return ""
+    var end = text.find(")", start)
+    if end == -1:
+        return text.substr(start)
+    return text.substr(start, end - start)
 
 # Modify a node's properties in a scene file
 func modify_node(params):
@@ -1863,9 +1918,7 @@ func manage_theme_resource(params):
 
     if action == "create":
         var theme = Theme.new()
-        var properties = params.get("properties", {})
-        for key in properties:
-            theme.set(key, properties[key])
+        _set_theme_properties(theme, params.get("properties", {}))
         var dir_path = full_path.get_base_dir()
         var dir_relative = dir_path.substr(6)
         if not dir_relative.is_empty():
@@ -1900,9 +1953,7 @@ func manage_theme_resource(params):
         if theme == null:
             printerr("Failed to load theme: " + full_path)
             quit(1)
-        var properties = params.get("properties", {})
-        for key in properties:
-            theme.set(key, properties[key])
+        _set_theme_properties(theme, params.get("properties", {}))
         var save_error = ResourceSaver.save(theme, full_path)
         if save_error != OK:
             printerr("Failed to save theme: " + str(save_error))
@@ -1911,6 +1962,35 @@ func manage_theme_resource(params):
     else:
         printerr("Unknown manage_theme_resource action: " + action)
         quit(1)
+
+
+# Apply a caller's properties map to a Theme with type conversion. Theme items
+# are keyed by composite names such as "Label/colors/font_color", so the value
+# type is derived from the matching property entry when the item already exists
+# and from the key's category when this call creates it.
+func _set_theme_properties(theme, properties):
+    for key in properties:
+        theme.set(key, _convert_theme_property(theme, key, properties[key]))
+
+func _convert_theme_property(theme, key, value):
+    var type_id = -1
+    for prop in theme.get_property_list():
+        if prop["name"] == key:
+            type_id = prop.get("type", 0)
+            break
+    if type_id == -1:
+        var parts = key.split("/")
+        if parts.size() == 3:
+            match parts[1]:
+                "colors":
+                    type_id = TYPE_COLOR
+                "constants", "font_sizes":
+                    type_id = TYPE_INT
+                "fonts", "icons", "styles":
+                    type_id = TYPE_OBJECT
+    if type_id == -1:
+        return value
+    return _convert_value_for_type(type_id, value)
 
 # Validate that Godot itself loaded project.godot cleanly and report the
 # settings the engine actually applied. PropertySettings parses project.godot
