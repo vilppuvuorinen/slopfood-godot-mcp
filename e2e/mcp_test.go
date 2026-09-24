@@ -4,7 +4,9 @@
 package e2e
 
 import (
+	"context"
 	"os"
+	"os/exec"
 	"strings"
 	"testing"
 )
@@ -15,9 +17,11 @@ import (
 const defaultGodotMinor = "4.7"
 
 // TestGetGodotVersionTool drives the real get_godot_version tool against the
-// configured Godot build. The expected minor line comes from GODOT_MINOR (CI
-// sets it per matrix entry) and defaults to the server's local build, so the
-// suite passes against any supported release.
+// configured Godot build. When GODOT_PATH names the engine the server will use,
+// the tool must echo that engine's own `--version`, so the suite passes against
+// any installed release rather than only the server's default minor. Otherwise
+// the expected minor line comes from GODOT_MINOR (CI sets it per matrix entry)
+// and defaults to the server's local build.
 func TestGetGodotVersionTool(t *testing.T) {
 	session := connect(t)
 	findTool(t, session, "get_godot_version")
@@ -29,13 +33,30 @@ func TestGetGodotVersionTool(t *testing.T) {
 	if len(res.Content) != 1 {
 		t.Fatalf("content = %+v", res.Content)
 	}
+	got := firstText(t, res)
+	if path := os.Getenv("GODOT_PATH"); path != "" {
+		if want := godotVersion(t, path); got != want {
+			t.Errorf("version = %q, want %q (GODOT_PATH=%q)", got, want, path)
+		}
+		return
+	}
 	minor := os.Getenv("GODOT_MINOR")
 	if minor == "" {
 		minor = defaultGodotMinor
 	}
-	if got := firstText(t, res); !strings.HasPrefix(got, minor+".") {
+	if !strings.HasPrefix(got, minor+".") {
 		t.Errorf("version = %q, want a %s.x build (GODOT_PATH=%q)", got, minor, os.Getenv("GODOT_PATH"))
 	}
+}
+
+// godotVersion returns the trimmed `--version` output of the engine at path.
+func godotVersion(t *testing.T, path string) string {
+	t.Helper()
+	out, err := exec.CommandContext(context.Background(), path, "--version").Output() //nolint:gosec // the path comes from the test environment.
+	if err != nil {
+		t.Fatalf("run %s --version: %v", path, err)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // TestProtocolVersionNegotiationEchoesSupported pins a supported protocol
