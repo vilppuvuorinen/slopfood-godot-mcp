@@ -852,11 +852,15 @@ func export_mesh_library(params):
             if debug_mode and not collision_added:
                 print("No collision shape found for mesh: " + child.name)
             
-            # Add preview if available
-            if mesh_instance.mesh:
-                mesh_library.set_item_preview(item_id, mesh_instance.mesh)
+            # MeshLibrary previews must be textures. The mesh's albedo texture is
+            # the only texture available at runtime, so use it when present.
+            var preview_texture = _mesh_preview_texture(mesh_instance.mesh)
+            if preview_texture:
+                mesh_library.set_item_preview(item_id, preview_texture)
                 if debug_mode:
                     print("Added preview for mesh: " + child.name)
+            elif debug_mode:
+                print("No preview texture available for mesh: " + child.name)
             
             item_id += 1
         elif debug_mode:
@@ -914,6 +918,18 @@ func export_mesh_library(params):
     else:
         printerr("No valid meshes found in the scene")
         quit(1)
+
+# Pick a Texture2D to use as a MeshLibrary item preview. MeshLibrary previews
+# require a Texture2D, but meshes are not textures, so fall back to the first
+# albedo texture found on the mesh surfaces and return null when there is none.
+func _mesh_preview_texture(mesh) -> Texture2D:
+    if not mesh:
+        return null
+    for surface_index in range(mesh.get_surface_count()):
+        var material = mesh.surface_get_material(surface_index)
+        if material is BaseMaterial3D and material.albedo_texture:
+            return material.albedo_texture
+    return null
 
 # Get UID for a specific file
 func get_uid(params):
