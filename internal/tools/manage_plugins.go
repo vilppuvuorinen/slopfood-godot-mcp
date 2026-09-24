@@ -27,6 +27,7 @@ func managePlugins() mcp.Tool {
 				},
 				"action": map[string]any{
 					"type":        "string",
+					"enum":        []string{"list", "enable", "disable"},
 					"description": "Action: list, enable, disable",
 				},
 				"pluginName": map[string]any{

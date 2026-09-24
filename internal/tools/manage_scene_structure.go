@@ -28,6 +28,7 @@ func manageSceneStructure() mcp.Tool {
 				},
 				"action": map[string]any{
 					"type":        "string",
+					"enum":        []string{"rename", "duplicate", "move"},
 					"description": "Action: rename, duplicate, move",
 				},
 				"nodePath": map[string]any{

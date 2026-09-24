@@ -136,3 +136,32 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 		}
 	}
 }
+
+// TestToolsAdvertiseActionEnum verifies every tool whose schema has an "action"
+// property advertises the valid actions as an enum, so clients can discover
+// them without out-of-band documentation.
+func TestToolsAdvertiseActionEnum(t *testing.T) {
+	for _, category := range AllCategories {
+		for _, newTool := range categoryTools[category] {
+			tool := newTool()
+			props, ok := tool.InputSchema["properties"].(map[string]any)
+			if !ok {
+				t.Errorf("tool %q has no properties", tool.Name)
+				continue
+			}
+			action, ok := props["action"]
+			if !ok {
+				continue
+			}
+			actionProp, ok := action.(map[string]any)
+			if !ok {
+				t.Errorf("tool %q action property = %T", tool.Name, action)
+				continue
+			}
+			enum, ok := actionProp["enum"].([]string)
+			if !ok || len(enum) == 0 {
+				t.Errorf("tool %q action has no enum: %v", tool.Name, actionProp)
+			}
+		}
+	}
+}

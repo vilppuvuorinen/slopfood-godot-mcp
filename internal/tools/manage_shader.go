@@ -29,6 +29,7 @@ func manageShader() mcp.Tool {
 				},
 				"action": map[string]any{
 					"type":        "string",
+					"enum":        []string{"create", "read"},
 					"description": "Action: create or read",
 				},
 				"shaderType": map[string]any{

@@ -28,6 +28,7 @@ func manageSceneSignals() mcp.Tool {
 				},
 				"action": map[string]any{
 					"type":        "string",
+					"enum":        []string{"list", "add", "remove"},
 					"description": "Action: list, add, remove",
 				},
 				"signalName": map[string]any{

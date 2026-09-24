@@ -26,6 +26,7 @@ func manageLayers() mcp.Tool {
 				},
 				"action": map[string]any{
 					"type":        "string",
+					"enum":        []string{"list", "set"},
 					"description": "Action: list or set",
 				},
 				"layerType": map[string]any{

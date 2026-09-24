@@ -28,6 +28,7 @@ func manageResource() mcp.Tool {
 				},
 				"action": map[string]any{
 					"type":        "string",
+					"enum":        []string{"create", "read", "modify"},
 					"description": "Action: create, read, or modify",
 				},
 				"resourceType": map[string]any{

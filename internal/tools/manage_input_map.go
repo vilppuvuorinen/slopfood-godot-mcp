@@ -27,6 +27,7 @@ func manageInputMap() mcp.Tool {
 				},
 				"action": map[string]any{
 					"type":        "string",
+					"enum":        []string{"list", "add", "remove"},
 					"description": `"list", "add", or "remove"`,
 				},
 				"actionName": map[string]any{

@@ -25,6 +25,7 @@ func manageTranslations() mcp.Tool {
 				},
 				"action": map[string]any{
 					"type":        "string",
+					"enum":        []string{"list", "add", "remove"},
 					"description": "Action: list, add, remove",
 				},
 				"translationPath": map[string]any{
