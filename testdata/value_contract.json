@@ -1,0 +1,88 @@
+{
+  "description": "The tool value contract's conformance table. Every entry is a canonical tagged value: the JSON a read emits and a write must accept unchanged. internal/godotconfig/json_test.go feeds each entry to the Go decoder and pins the Godot literal it produces; e2e/value_contract_test.go feeds each entry through the real engine (the GDScript decoder) and asserts a read-write-read identity. Both halves must accept every entry, so a change to one codec that the other does not follow fails a test.",
+  "values": [
+    {"name": "null", "value": null, "godot": "null"},
+    {"name": "bool true", "value": true, "godot": "true"},
+    {"name": "bool false", "value": false, "godot": "false"},
+    {"name": "int", "value": 1280, "godot": "1280"},
+    {"name": "negative int", "value": -3, "godot": "-3"},
+    {"name": "float", "value": 0.5, "godot": "0.5"},
+    {"name": "integral float keeps decimal", "value": 1280.0, "godot": "1280.0"},
+    {"name": "string", "value": "hi", "godot": "\"hi\""},
+    {"name": "escaped string", "value": "say \"hi\"", "godot": "\"say \\\"hi\\\"\""},
+    {"name": "array", "value": [1, "a", true, null], "godot": "[1, \"a\", true, null]"},
+    {"name": "dictionary sorts keys", "value": {"b": 2, "a": 1}, "godot": "{\n\"a\": 1,\n\"b\": 2\n}"},
+    {
+      "name": "nested tagged values",
+      "value": {"deadzone": 0.5, "events": [{"$type": "Vector2", "x": 1, "y": 2}]},
+      "godot": "{\n\"deadzone\": 0.5,\n\"events\": [Vector2(1, 2)]\n}"
+    },
+    {"name": "StringName", "value": {"$type": "StringName", "value": "foo"}, "godot": "&\"foo\""},
+    {"name": "Vector2", "value": {"$type": "Vector2", "x": 1, "y": 2}, "godot": "Vector2(1, 2)"},
+    {"name": "Vector2i", "value": {"$type": "Vector2i", "x": 1, "y": 2}, "godot": "Vector2i(1, 2)"},
+    {"name": "Vector3", "value": {"$type": "Vector3", "x": 1, "y": 2, "z": 3}, "godot": "Vector3(1, 2, 3)"},
+    {"name": "Vector3i", "value": {"$type": "Vector3i", "x": 1, "y": 2, "z": 3}, "godot": "Vector3i(1, 2, 3)"},
+    {"name": "Vector4", "value": {"$type": "Vector4", "x": 1, "y": 2, "z": 3, "w": 4}, "godot": "Vector4(1, 2, 3, 4)"},
+    {"name": "Vector4i", "value": {"$type": "Vector4i", "x": 1, "y": 2, "z": 3, "w": 4}, "godot": "Vector4i(1, 2, 3, 4)"},
+    {"name": "Color", "value": {"$type": "Color", "r": 1, "g": 0, "b": 0, "a": 1}, "godot": "Color(1, 0, 0, 1)"},
+    {"name": "Quaternion", "value": {"$type": "Quaternion", "x": 0, "y": 0, "z": 0, "w": 1}, "godot": "Quaternion(0, 0, 0, 1)"},
+    {
+      "name": "Plane",
+      "value": {"$type": "Plane", "normal": {"$type": "Vector3", "x": 0, "y": 0, "z": 1}, "d": 2.5},
+      "godot": "Plane(0, 0, 1, 2.5)"
+    },
+    {
+      "name": "Rect2",
+      "value": {"$type": "Rect2", "position": {"$type": "Vector2", "x": 1, "y": 2}, "size": {"$type": "Vector2", "x": 3, "y": 4}},
+      "godot": "Rect2(1, 2, 3, 4)"
+    },
+    {
+      "name": "Rect2i",
+      "value": {"$type": "Rect2i", "position": {"$type": "Vector2i", "x": 1, "y": 2}, "size": {"$type": "Vector2i", "x": 3, "y": 4}},
+      "godot": "Rect2i(1, 2, 3, 4)"
+    },
+    {
+      "name": "Transform2D",
+      "value": {
+        "$type": "Transform2D",
+        "x": {"$type": "Vector2", "x": 1, "y": 0},
+        "y": {"$type": "Vector2", "x": 0, "y": 1},
+        "origin": {"$type": "Vector2", "x": 2, "y": 3}
+      },
+      "godot": "Transform2D(1, 0, 0, 1, 2, 3)"
+    },
+    {
+      "name": "Basis",
+      "value": {
+        "$type": "Basis",
+        "x": {"$type": "Vector3", "x": 1, "y": 0, "z": 0},
+        "y": {"$type": "Vector3", "x": 0, "y": 1, "z": 0},
+        "z": {"$type": "Vector3", "x": 0, "y": 0, "z": 1}
+      },
+      "godot": "Basis(1, 0, 0, 0, 1, 0, 0, 0, 1)"
+    },
+    {
+      "name": "Transform3D",
+      "value": {
+        "$type": "Transform3D",
+        "basis": {
+          "$type": "Basis",
+          "x": {"$type": "Vector3", "x": 1, "y": 0, "z": 0},
+          "y": {"$type": "Vector3", "x": 0, "y": 1, "z": 0},
+          "z": {"$type": "Vector3", "x": 0, "y": 0, "z": 1}
+        },
+        "origin": {"$type": "Vector3", "x": 5, "y": 6, "z": 7}
+      },
+      "godot": "Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 6, 7)"
+    },
+    {
+      "name": "AABB",
+      "value": {"$type": "AABB", "position": {"$type": "Vector3", "x": 0, "y": 0, "z": 0}, "size": {"$type": "Vector3", "x": 1, "y": 2, "z": 3}},
+      "godot": "AABB(0, 0, 0, 1, 2, 3)"
+    },
+    {"name": "NodePath", "value": {"$type": "NodePath", "path": "root/A"}, "godot": "NodePath(\"root/A\")"},
+    {"name": "PackedStringArray", "value": {"$type": "PackedStringArray", "values": ["a", "b"]}, "godot": "PackedStringArray(\"a\", \"b\")"},
+    {"name": "GodotText nan", "value": {"$type": "GodotText", "text": "nan"}, "godot": "nan"},
+    {"name": "GodotText inf", "value": {"$type": "GodotText", "text": "inf"}, "godot": "inf"}
+  ]
+}

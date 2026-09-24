@@ -3,8 +3,72 @@ package godotconfig
 import (
 	"encoding/json"
 	"math"
+	"os"
+	"path/filepath"
+	"runtime"
 	"testing"
 )
+
+// valueContract is the shared conformance fixture: the canonical tagged values
+// both halves of the codec must accept. It lives at the repository root so the
+// e2e suite (a separate module) reads the same bytes.
+type valueContract struct {
+	Values []struct {
+		Name  string          `json:"name"`
+		Value json.RawMessage `json:"value"`
+		Godot string          `json:"godot"`
+	} `json:"values"`
+}
+
+// loadValueContract reads the shared fixture, failing when it is missing or
+// empty so a renamed fixture cannot silently drop the conformance check.
+func loadValueContract(t *testing.T) valueContract {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("locate test file")
+	}
+	path := filepath.Join(filepath.Dir(file), "..", "..", "testdata", "value_contract.json")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read value contract: %v", err)
+	}
+	var contract valueContract
+	if err := json.Unmarshal(data, &contract); err != nil {
+		t.Fatalf("unmarshal value contract: %v", err)
+	}
+	if len(contract.Values) == 0 {
+		t.Fatal("value contract has no entries")
+	}
+	return contract
+}
+
+// TestValueContractGoHalf pins the Go half of the codec against the shared
+// conformance fixture: every tagged value DecodeJSONValue accepts must format
+// to the fixture's Godot literal, and that literal must parse back to itself.
+// e2e/value_contract_test.go runs the same entries through the GDScript half,
+// so a change to one decoder that the other does not follow fails here or
+// there.
+func TestValueContractGoHalf(t *testing.T) {
+	for _, entry := range loadValueContract(t).Values {
+		t.Run(entry.Name, func(t *testing.T) {
+			value, err := DecodeJSONValue(entry.Value)
+			if err != nil {
+				t.Fatalf("DecodeJSONValue(%s): %v", entry.Value, err)
+			}
+			if got := FormatValue(value); got != entry.Godot {
+				t.Fatalf("FormatValue = %q, want %q", got, entry.Godot)
+			}
+			parsed, err := ParseValue(entry.Godot)
+			if err != nil {
+				t.Fatalf("ParseValue(%q): %v", entry.Godot, err)
+			}
+			if got := FormatValue(parsed); got != entry.Godot {
+				t.Errorf("reparse = %q, want %q", got, entry.Godot)
+			}
+		})
+	}
+}
 
 // TestValueToJSONEncoding pins the JSON each Value encodes to. Floats keep a
 // decimal point so the decoder does not read an integral Float back as an Int,
