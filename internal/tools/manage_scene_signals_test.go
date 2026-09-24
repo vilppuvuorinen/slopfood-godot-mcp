@@ -60,10 +60,13 @@ func TestManageSceneSignalsSuccess(t *testing.T) {
 			},
 		},
 		{
-			name:    "remove",
-			args:    `{"projectPath":` + jsonString(root) + `,"scenePath":"scenes/main.tscn","action":"remove","signalName":"released"}`,
-			present: []string{`"action":"remove"`, `"signal_name":"released"`},
-			omitted: []string{"source_path", "target_path", "method"},
+			name: "remove",
+			args: `{"projectPath":` + jsonString(root) + `,"scenePath":"scenes/main.tscn","action":"remove","signalName":"released","sourcePath":"root","targetPath":"root/Player"}`,
+			present: []string{
+				`"action":"remove"`, `"signal_name":"released"`,
+				`"source_path":"root"`, `"target_path":"root/Player"`,
+			},
+			omitted: []string{"method"},
 		},
 	}
 	for _, tt := range tests {
@@ -129,7 +132,9 @@ func TestManageSceneSignalsValidation(t *testing.T) {
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn","action":"list"}`, want: "Not a valid Godot project"},
 		{name: "missing scene file", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"missing.tscn","action":"list"}`, want: "Scene file does not exist: missing.tscn"},
 		{name: "add missing fields", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","action":"add","signalName":"pressed"}`, want: "signalName, sourcePath, targetPath, and method are required for add."},
-		{name: "remove missing signal", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","action":"remove"}`, want: "signalName is required for remove."},
+		{name: "remove missing signal", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","action":"remove"}`, want: "signalName, sourcePath, and targetPath are required for remove."},
+		{name: "remove missing source", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","action":"remove","signalName":"released","targetPath":"root"}`, want: "signalName, sourcePath, and targetPath are required for remove."},
+		{name: "remove missing target", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","action":"remove","signalName":"released","sourcePath":"root"}`, want: "signalName, sourcePath, and targetPath are required for remove."},
 		{name: "unknown action", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","action":"frobnicate"}`, want: "Unknown action: frobnicate. Use list, add, or remove."},
 	}
 	for _, tt := range tests {

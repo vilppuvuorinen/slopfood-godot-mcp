@@ -1567,6 +1567,7 @@ func manage_scene_signals(params):
     if not FileAccess.file_exists(full_path):
         printerr("Scene not found: " + full_path)
         quit(1)
+        return
 
     var content = FileAccess.get_file_as_string(full_path)
 
@@ -1626,23 +1627,45 @@ func manage_scene_signals(params):
         file.close()
         print("Signal connection added: " + conn_line)
     elif action == "remove":
+        # A connection is identified by its signal, source, target, and (when
+        # given) method. Matching on the signal alone would delete every
+        # connection that shares a signal name, so source and target are
+        # required to keep removal precise.
         var signal_name = params.get("signal_name", "")
-        if signal_name.is_empty():
-            printerr("signal_name is required for remove")
-            quit(1)
-            return
+        var source_path = params.get("source_path", "")
+        var target_path = params.get("target_path", "")
+        var method = params.get("method", "")
+        for field in [signal_name, source_path, target_path]:
+            if field.is_empty():
+                printerr("signal_name, source_path, and target_path are required for remove")
+                quit(1)
+                return
+
+        var from_path = _connection_node_path(source_path)
+        var to_path = _connection_node_path(target_path)
         var lines = content.split("\n")
         var new_lines = []
         var removed = 0
         for line in lines:
-            if line.begins_with("[connection") and _connection_signal_name(line) == signal_name:
+            if line.begins_with("[connection") \
+                    and _connection_field(line, "signal") == signal_name \
+                    and _connection_field(line, "from") == from_path \
+                    and _connection_field(line, "to") == to_path \
+                    and (method.is_empty() or _connection_field(line, "method") == method):
                 removed += 1
                 continue
             new_lines.append(line)
+        if removed == 0:
+            print("No matching signal connection removed")
+            return
         var file = FileAccess.open(full_path, FileAccess.WRITE)
+        if file == null:
+            printerr("Failed to open scene for writing: " + full_path)
+            quit(1)
+            return
         file.store_string("\n".join(new_lines))
         file.close()
-        print("Signal connections for '%s' removed: %d" % [signal_name, removed])
+        print("Signal connection removed: %d" % [removed])
     else:
         printerr("Unknown manage_scene_signals action: " + action)
         quit(1)
@@ -1662,8 +1685,8 @@ func _connection_node_path(tool_path):
         return tool_path.substr(2)
     return tool_path
 
-func _connection_signal_name(line):
-    var marker = 'signal="'
+func _connection_field(line, field_name):
+    var marker = field_name + '="'
     var start = line.find(marker)
     if start == -1:
         return ""

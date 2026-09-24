@@ -57,9 +57,59 @@ func TestManageSceneSignalsTool(t *testing.T) {
 			"scenePath":   "scenes/connections.tscn",
 			"action":      "remove",
 			"signalName":  "pressed",
+			"sourcePath":  "root",
+			"targetPath":  "root",
 		})
 		requirePrefix(t, removeText, "manage_scene_signals succeeded.")
 		requireNotContains(t, readFile(t, sceneFile), connection)
+	})
+
+	t.Run("removes only the targeted connection", func(t *testing.T) {
+		// Two connections share the "pressed" signal but differ in source and
+		// method; removing one must leave the other untouched.
+		root := seedScene(t, session, "scenes/targeted.tscn", "Button")
+		requireToolText(t, session, "add_node", map[string]any{
+			"projectPath": root,
+			"scenePath":   "scenes/targeted.tscn",
+			"nodeType":    "Button",
+			"nodeName":    "Second",
+		})
+
+		for _, c := range []struct {
+			source string
+			method string
+		}{
+			{"root", "on_root"},
+			{"root/Second", "on_second"},
+		} {
+			requireToolText(t, session, "manage_scene_signals", map[string]any{
+				"projectPath": root,
+				"scenePath":   "scenes/targeted.tscn",
+				"action":      "add",
+				"signalName":  "pressed",
+				"sourcePath":  c.source,
+				"targetPath":  "root",
+				"method":      c.method,
+			})
+		}
+
+		keep := `[connection signal="pressed" from="." to="." method="on_root"]`
+		drop := `[connection signal="pressed" from="Second" to="." method="on_second"]`
+		sceneFile := filepath.Join(root, "scenes", "targeted.tscn")
+		requireContains(t, readFile(t, sceneFile), keep, drop)
+
+		requireToolText(t, session, "manage_scene_signals", map[string]any{
+			"projectPath": root,
+			"scenePath":   "scenes/targeted.tscn",
+			"action":      "remove",
+			"signalName":  "pressed",
+			"sourcePath":  "root/Second",
+			"targetPath":  "root",
+			"method":      "on_second",
+		})
+		scene := readFile(t, sceneFile)
+		requireContains(t, scene, keep)
+		requireNotContains(t, scene, drop)
 	})
 
 	t.Run("duplicate add is idempotent", func(t *testing.T) {
@@ -100,7 +150,7 @@ func TestManageSceneSignalsTool(t *testing.T) {
 			"projectPath": root,
 			"scenePath":   "scenes/keep.tscn",
 			"action":      "remove",
-		}, "signalName is required for remove.")
+		}, "signalName, sourcePath, and targetPath are required for remove.")
 		requireContains(t, readFile(t, filepath.Join(root, "scenes", "keep.tscn")), connection)
 	})
 
@@ -193,7 +243,7 @@ func TestManageSceneSignalsErrors(t *testing.T) {
 			"projectPath": root,
 			"scenePath":   "main.tscn",
 			"action":      "remove",
-		}, "signalName is required for remove.")
+		}, "signalName, sourcePath, and targetPath are required for remove.")
 	})
 
 	t.Run("unknown action", func(t *testing.T) {

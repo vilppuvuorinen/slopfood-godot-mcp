@@ -32,19 +32,19 @@ func manageSceneSignals() mcp.Tool {
 				},
 				"signalName": map[string]any{
 					"type":        "string",
-					"description": "Signal name",
+					"description": "Signal name (required for add and remove)",
 				},
 				"sourcePath": map[string]any{
 					"type":        "string",
-					"description": "Source node path",
+					"description": "Source node path (required for add and remove)",
 				},
 				"targetPath": map[string]any{
 					"type":        "string",
-					"description": "Target node path",
+					"description": "Target node path (required for add and remove)",
 				},
 				"method": map[string]any{
 					"type":        "string",
-					"description": "Target method name",
+					"description": "Target method name (required for add; optional filter for remove)",
 				},
 			},
 			"required": []string{"projectPath", "scenePath", "action"},
@@ -93,8 +93,8 @@ func handleManageSceneSignals(ctx context.Context, raw json.RawMessage) (any, er
 			return mcp.ErrorResult("signalName, sourcePath, targetPath, and method are required for add."), nil
 		}
 	case "remove":
-		if args.SignalName == "" {
-			return mcp.ErrorResult("signalName is required for remove."), nil
+		if args.SignalName == "" || args.SourcePath == "" || args.TargetPath == "" {
+			return mcp.ErrorResult("signalName, sourcePath, and targetPath are required for remove."), nil
 		}
 	default:
 		return mcp.ErrorResult("Unknown action: " + args.Action + ". Use list, add, or remove."), nil
