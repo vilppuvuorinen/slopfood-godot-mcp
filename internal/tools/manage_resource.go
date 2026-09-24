@@ -13,7 +13,7 @@ func manageResource() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_resource",
 		Title:       "Manage Resource",
-		Description: "Read or modify .tres/.res resource files",
+		Description: "Create, read, or modify .tres/.res resource files",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
@@ -28,15 +28,20 @@ func manageResource() mcp.Tool {
 				},
 				"action": map[string]any{
 					"type":        "string",
-					"description": "Action: read or modify",
+					"description": "Action: create, read, or modify",
 				},
-				"properties": propertiesSchema("Properties to modify, as name to godotValue pairs"),
+				"resourceType": map[string]any{
+					"type":        "string",
+					"description": `Godot class name for create (e.g., "StandardMaterial3D", "Theme", "Environment")`,
+				},
+				"properties": propertiesSchema("Properties to set, as name to godotValue pairs"),
 			},
 			"required": []string{"projectPath", "resourcePath", "action"},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"resourcePath": map[string]any{"type": "string"},
 			"action":       map[string]any{"type": "string"},
+			"resourceType": map[string]any{"type": "string"},
 			"type":         map[string]any{"type": "string"},
 			"path":         map[string]any{"type": "string"},
 			"properties": map[string]any{
@@ -53,6 +58,7 @@ type manageResourceArgs struct {
 	ProjectPath  string         `json:"projectPath"`
 	ResourcePath string         `json:"resourcePath"`
 	Action       string         `json:"action"`
+	ResourceType string         `json:"resourceType"`
 	Properties   map[string]any `json:"properties"`
 }
 
@@ -70,6 +76,9 @@ func handleManageResource(ctx context.Context, raw json.RawMessage) (any, error)
 	if args.ProjectPath == "" || args.ResourcePath == "" || args.Action == "" {
 		return mcp.ErrorResult("projectPath, resourcePath, and action are required."), nil
 	}
+	if args.Action == "create" && args.ResourceType == "" {
+		return mcp.ErrorResult("resourceType is required for the create action."), nil
+	}
 	if !validPath(args.ProjectPath) || !validPath(args.ResourcePath) {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
@@ -81,12 +90,17 @@ func handleManageResource(ctx context.Context, raw json.RawMessage) (any, error)
 		"resourcePath": args.ResourcePath,
 		"action":       args.Action,
 	}
+	fields := map[string]any{
+		"resourcePath": args.ResourcePath,
+		"action":       args.Action,
+	}
+	if args.ResourceType != "" {
+		params["resourceType"] = args.ResourceType
+		fields["resourceType"] = args.ResourceType
+	}
 	if args.Properties != nil {
 		params["properties"] = args.Properties
 	}
 
-	return runHeadlessOperation(ctx, args.ProjectPath, "manage_resource", params, map[string]any{
-		"resourcePath": args.ResourcePath,
-		"action":       args.Action,
-	})
+	return runHeadlessOperation(ctx, args.ProjectPath, "manage_resource", params, fields)
 }

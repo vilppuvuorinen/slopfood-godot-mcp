@@ -11,7 +11,7 @@ func TestEnableCategories(t *testing.T) {
 		findTool(t, session, "get_project_info")
 		for _, name := range []string{
 			"read_project_settings", "manage_export_presets", "create_scene",
-			"add_node", "create_script", "create_resource",
+			"add_node", "create_script", "manage_resource",
 		} {
 			requireToolAbsent(t, session, name)
 		}
@@ -43,7 +43,7 @@ func TestEnableCategories(t *testing.T) {
 			"create_scene",          // scene
 			"add_node",              // node
 			"create_script",         // script
-			"create_resource",       // resources
+			"manage_resource",       // resources
 		} {
 			findTool(t, session, name)
 		}

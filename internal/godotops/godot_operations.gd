@@ -91,12 +91,8 @@ func _init():
             attach_script(params)
         "get_uid":
             get_uid(params)
-        "create_resource":
-            create_resource(params)
         "manage_resource":
             manage_resource(params)
-        "manage_theme_resource":
-            manage_theme_resource(params)
         "validate_project":
             validate_project(params)
         _:
@@ -1947,61 +1943,6 @@ func attach_script(params):
     print("Script '" + full_script_path + "' attached successfully to node in: " + full_scene_path)
 
 # Create a resource file (.tres)
-func create_resource(params):
-    if not params.has("resource_type") or not params.has("resource_path"):
-        printerr("resource_type and resource_path are required")
-        quit(1)
-
-    var resource_type = params.resource_type
-    var full_resource_path = params.resource_path
-    if not full_resource_path.begins_with("res://"):
-        full_resource_path = "res://" + full_resource_path
-
-    log_info("Creating resource of type " + resource_type + " at: " + full_resource_path)
-
-    # Instantiate the resource
-    if not ClassDB.class_exists(resource_type):
-        printerr("Unknown resource type: " + resource_type)
-        printerr("Must be a valid Godot class name (e.g., StandardMaterial3D, AudioStreamPlayer, Theme)")
-        quit(1)
-
-    if not ClassDB.can_instantiate(resource_type):
-        printerr("Cannot instantiate resource type: " + resource_type)
-        quit(1)
-
-    var resource = ClassDB.instantiate(resource_type)
-    if resource == null:
-        printerr("Failed to instantiate resource of type: " + resource_type)
-        quit(1)
-
-    if not resource is Resource:
-        printerr("Type " + resource_type + " is not a Resource subclass")
-        quit(1)
-
-    # Set properties if provided
-    if params.has("properties"):
-        if not _apply_properties(resource, params.properties):
-            printerr("Invalid property value: " + _decode_error)
-            quit(1)
-            return
-
-    # Ensure directory exists
-    var dir_path = full_resource_path.get_base_dir()
-    var dir_relative = dir_path.substr(6)  # Remove "res://"
-    if not dir_relative.is_empty():
-        var dir = DirAccess.open("res://")
-        if dir and not dir.dir_exists(dir_relative):
-            dir.make_dir_recursive(dir_relative)
-
-    # Save the resource
-    var save_error = ResourceSaver.save(resource, full_resource_path)
-    if save_error != OK:
-        printerr("Failed to save resource: " + str(save_error))
-        quit(1)
-
-    print("Resource created successfully at: " + full_resource_path)
-
-
 func manage_resource(params):
     var resource_path = params.get("resource_path", "")
     var action = params.get("action", "read")
@@ -2009,102 +1950,112 @@ func manage_resource(params):
     if not full_path.begins_with("res://"):
         full_path = "res://" + full_path
 
-    if action == "read":
-        if not ResourceLoader.exists(full_path):
-            printerr("Resource not found: " + full_path)
+    if action == "create":
+        var resource_type = params.get("resource_type", "")
+        if resource_type.is_empty():
+            printerr("resource_type is required to create a resource")
             quit(1)
-        var res = ResourceLoader.load(full_path)
-        if res == null:
-            printerr("Failed to load resource: " + full_path)
+            return
+
+        log_info("Creating resource of type " + resource_type + " at: " + full_path)
+
+        if not ClassDB.class_exists(resource_type):
+            printerr("Unknown resource type: " + resource_type)
+            printerr("Must be a valid Godot class name (e.g., StandardMaterial3D, AudioStreamPlayer, Theme)")
             quit(1)
-        var props = {}
-        for prop in res.get_property_list():
-            if prop["usage"] & PROPERTY_USAGE_STORAGE:
-                props[prop["name"]] = _variant_to_json(res.get(prop["name"]))
-        print(JSON_START)
-        print(JSON.stringify({"type": res.get_class(), "path": full_path, "properties": props}))
-        print(JSON_END)
-    elif action == "modify":
-        if not ResourceLoader.exists(full_path):
-            printerr("Resource not found: " + full_path)
+            return
+
+        if not ClassDB.can_instantiate(resource_type):
+            printerr("Cannot instantiate resource type: " + resource_type)
             quit(1)
-        var res = ResourceLoader.load(full_path)
-        if res == null:
-            printerr("Failed to load resource: " + full_path)
+            return
+
+        var resource = ClassDB.instantiate(resource_type)
+        if resource == null:
+            printerr("Failed to instantiate resource of type: " + resource_type)
             quit(1)
-        if not _apply_properties(res, params.get("properties", {})):
+            return
+
+        if not resource is Resource:
+            printerr("Type " + resource_type + " is not a Resource subclass")
+            quit(1)
+            return
+
+        if not _apply_resource_properties(resource, params.get("properties", {})):
             printerr("Invalid property value: " + _decode_error)
             quit(1)
             return
-        var save_error = ResourceSaver.save(res, full_path)
-        if save_error != OK:
-            printerr("Failed to save resource: " + str(save_error))
+
+        if not _save_resource(resource, full_path):
+            return
+
+        print("Resource created: " + full_path)
+    elif action == "read":
+        var resource = _load_resource(full_path)
+        if resource == null:
+            return
+        var props = {}
+        for prop in resource.get_property_list():
+            if prop["usage"] & PROPERTY_USAGE_STORAGE:
+                props[prop["name"]] = _variant_to_json(resource.get(prop["name"]))
+        print(JSON_START)
+        print(JSON.stringify({"type": resource.get_class(), "path": full_path, "properties": props}))
+        print(JSON_END)
+    elif action == "modify":
+        var resource = _load_resource(full_path)
+        if resource == null:
+            return
+        if not _apply_resource_properties(resource, params.get("properties", {})):
+            printerr("Invalid property value: " + _decode_error)
             quit(1)
+            return
+        if not _save_resource(resource, full_path):
+            return
         print("Resource modified: " + full_path)
     else:
         printerr("Unknown manage_resource action: " + action)
         quit(1)
 
 
-func manage_theme_resource(params):
-    var resource_path = params.get("resource_path", "")
-    var action = params.get("action", "read")
-    var full_path = resource_path
-    if not full_path.begins_with("res://"):
-        full_path = "res://" + full_path
-
-    if action == "create":
-        var theme = Theme.new()
-        if not _apply_theme_properties(theme, params.get("properties", {})):
-            printerr("Invalid property value: " + _decode_error)
-            quit(1)
-            return
-        var dir_path = full_path.get_base_dir()
-        var dir_relative = dir_path.substr(6)
-        if not dir_relative.is_empty():
-            var dir = DirAccess.open("res://")
-            if dir and not dir.dir_exists(dir_relative):
-                dir.make_dir_recursive(dir_relative)
-        var save_error = ResourceSaver.save(theme, full_path)
-        if save_error != OK:
-            printerr("Failed to save theme: " + str(save_error))
-            quit(1)
-        print("Theme created at: " + full_path)
-    elif action == "read":
-        if not ResourceLoader.exists(full_path):
-            printerr("Theme not found: " + full_path)
-            quit(1)
-        var theme = ResourceLoader.load(full_path)
-        if theme == null:
-            printerr("Failed to load theme: " + full_path)
-            quit(1)
-        var props = {}
-        for prop in theme.get_property_list():
-            if prop["usage"] & PROPERTY_USAGE_STORAGE:
-                props[prop["name"]] = _variant_to_json(theme.get(prop["name"]))
-        print(JSON_START)
-        print(JSON.stringify({"type": theme.get_class(), "path": full_path, "properties": props}))
-        print(JSON_END)
-    elif action == "modify":
-        if not ResourceLoader.exists(full_path):
-            printerr("Theme not found: " + full_path)
-            quit(1)
-        var theme = ResourceLoader.load(full_path)
-        if theme == null:
-            printerr("Failed to load theme: " + full_path)
-            quit(1)
-        if not _apply_theme_properties(theme, params.get("properties", {})):
-            printerr("Invalid property value: " + _decode_error)
-            quit(1)
-            return
-        var save_error = ResourceSaver.save(theme, full_path)
-        if save_error != OK:
-            printerr("Failed to save theme: " + str(save_error))
-            quit(1)
-        print("Theme modified: " + full_path)
-    else:
-        printerr("Unknown manage_theme_resource action: " + action)
+# Load a resource with the shared not-found and load-failure messages. Returns
+# null after signalling failure, because quit() does not stop the current call.
+func _load_resource(full_path):
+    if not ResourceLoader.exists(full_path):
+        printerr("Resource not found: " + full_path)
         quit(1)
+        return null
+    var resource = ResourceLoader.load(full_path)
+    if resource == null:
+        printerr("Failed to load resource: " + full_path)
+        quit(1)
+        return null
+    return resource
+
+
+# Save a resource, creating its directory first. Returns false after signalling
+# failure so the caller can bail out instead of reporting a false success.
+func _save_resource(resource, full_path) -> bool:
+    var dir_path = full_path.get_base_dir()
+    var dir_relative = dir_path.substr(6)  # Remove "res://"
+    if not dir_relative.is_empty():
+        var dir = DirAccess.open("res://")
+        if dir and not dir.dir_exists(dir_relative):
+            dir.make_dir_recursive(dir_relative)
+    var save_error = ResourceSaver.save(resource, full_path)
+    if save_error != OK:
+        printerr("Failed to save resource: " + str(save_error))
+        quit(1)
+        return false
+    return true
+
+
+# Apply a caller's properties to a resource. Theme items need their value type
+# inferred from the item path, so Themes go through the theme codec; every other
+# resource uses the plain property decoder.
+func _apply_resource_properties(resource, properties) -> bool:
+    if resource is Theme:
+        return _apply_theme_properties(resource, properties)
+    return _apply_properties(resource, properties)
 
 
 # Apply a caller's properties map to a Theme with type conversion. Theme items

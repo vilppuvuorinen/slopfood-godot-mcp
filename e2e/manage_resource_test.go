@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// resourceTres is a minimal StandardMaterial3D resource so the manage_resource
-// e2e tests do not depend on create_resource.
+// resourceTres is a minimal StandardMaterial3D resource so the read/modify
+// manage_resource e2e tests start from an existing file.
 const resourceTres = `[gd_resource type="StandardMaterial3D" format=3]
 
 [resource]
@@ -17,11 +17,11 @@ metallic = 0.5
 // TestManageResourceSchema ports the reference's tool-definition expectations
 // for manage_resource over the real stdio surface.
 func TestManageResourceSchema(t *testing.T) {
-	schema := requireSchema(t, "manage_resource", "Read or modify .tres/.res resource files")
+	schema := requireSchema(t, "manage_resource", "Create, read, or modify .tres/.res resource files")
 	schema.requireRequired(t, "projectPath", "resourcePath", "action")
-	schema.requireStringProps(t, "projectPath", "resourcePath", "action")
+	schema.requireStringProps(t, "projectPath", "resourcePath", "action", "resourceType")
 	schema.requireType(t, "properties", "object")
-	schema.requirePropCount(t, 4)
+	schema.requirePropCount(t, 5)
 }
 
 // TestManageResourceTool drives the real manage_resource tool against Godot.
@@ -69,6 +69,146 @@ func TestManageResourceTool(t *testing.T) {
 		})
 		requireContains(t, readText, `"metallic": 0.75`)
 	})
+
+	t.Run("creates then reads a resource", func(t *testing.T) {
+		root := t.TempDir()
+		seedProject(t, root)
+
+		createText := requireToolText(t, session, "manage_resource", map[string]any{
+			"projectPath":  root,
+			"resourcePath": "materials/red.tres",
+			"action":       "create",
+			"resourceType": "StandardMaterial3D",
+			"properties": map[string]any{
+				"albedo_color": map[string]any{"$type": "Color", "r": 1, "g": 0, "b": 0, "a": 1},
+			},
+		})
+		requirePrefix(t, createText, "manage_resource succeeded.")
+
+		content := readFile(t, filepath.Join(root, "materials", "red.tres"))
+		requireContains(t, content, `[gd_resource type="StandardMaterial3D"`)
+
+		readText := requireToolText(t, session, "manage_resource", map[string]any{
+			"projectPath":  root,
+			"resourcePath": "materials/red.tres",
+			"action":       "read",
+		})
+		requireContains(t, readText, `"type": "StandardMaterial3D"`)
+	})
+}
+
+// TestManageResourceTheme covers the Theme codec folded into manage_resource:
+// create/read/modify with the theme item type inference intact.
+func TestManageResourceTheme(t *testing.T) {
+	session := connect(t)
+	requireGodot(t, session)
+
+	root := t.TempDir()
+	seedProject(t, root)
+
+	createText := requireToolText(t, session, "manage_resource", map[string]any{
+		"projectPath":  root,
+		"resourcePath": "themes/main.tres",
+		"action":       "create",
+		"resourceType": "Theme",
+		"properties":   map[string]any{"default_font_size": 16},
+	})
+	requirePrefix(t, createText, "manage_resource succeeded.")
+
+	themeFile := filepath.Join(root, "themes", "main.tres")
+	requireContains(t, readFile(t, themeFile), `[gd_resource type="Theme"`)
+
+	readText := requireToolText(t, session, "manage_resource", map[string]any{
+		"projectPath":  root,
+		"resourcePath": "themes/main.tres",
+		"action":       "read",
+	})
+	requireContains(t, readText, `"type": "Theme"`, `"properties"`, `"default_font_size": 16`)
+	requireNotContains(t, readText, "THEME_JSON_START")
+
+	modifyText := requireToolText(t, session, "manage_resource", map[string]any{
+		"projectPath":  root,
+		"resourcePath": "themes/main.tres",
+		"action":       "modify",
+		"properties":   map[string]any{"default_font_size": 20},
+	})
+	requirePrefix(t, modifyText, "manage_resource succeeded.")
+
+	reReadText := requireToolText(t, session, "manage_resource", map[string]any{
+		"projectPath":  root,
+		"resourcePath": "themes/main.tres",
+		"action":       "read",
+	})
+	requireContains(t, reReadText, `"type": "Theme"`, `"default_font_size": 20`)
+}
+
+// TestManageResourceThemeConvertsTypes covers theme properties whose JSON
+// values need conversion: a color sent as a component dictionary, a font size,
+// and a Theme item that references another resource by path. The saved .tres is
+// inspected so a silently-ignored or mis-typed value fails the test.
+func TestManageResourceThemeConvertsTypes(t *testing.T) {
+	session := connect(t)
+	requireGodot(t, session)
+
+	root := t.TempDir()
+	seedProject(t, root)
+
+	requireToolText(t, session, "manage_resource", map[string]any{
+		"projectPath":  root,
+		"resourcePath": "themes/panel_box.tres",
+		"action":       "create",
+		"resourceType": "StyleBoxFlat",
+	})
+
+	createText := requireToolText(t, session, "manage_resource", map[string]any{
+		"projectPath":  root,
+		"resourcePath": "themes/main.tres",
+		"action":       "create",
+		"resourceType": "Theme",
+		"properties": map[string]any{
+			"Label/colors/font_color":    map[string]any{"$type": "Color", "r": 1, "g": 0, "b": 0, "a": 1},
+			"Label/font_sizes/font_size": 24,
+			"Panel/styles/panel":         "res://themes/panel_box.tres",
+		},
+	})
+	requirePrefix(t, createText, "manage_resource succeeded.")
+
+	themeFile := filepath.Join(root, "themes", "main.tres")
+	content := readFile(t, themeFile)
+	requireContains(t, content,
+		"Color(1, 0, 0, 1)",
+		"Label/font_sizes/font_size = 24",
+		"panel_box.tres",
+	)
+	requireNotContains(t, content, "Panel/styles/panel = null")
+
+	readText := requireToolText(t, session, "manage_resource", map[string]any{
+		"projectPath":  root,
+		"resourcePath": "themes/main.tres",
+		"action":       "read",
+	})
+	var readPayload struct {
+		Properties map[string]any `json:"properties"`
+	}
+	if err := json.Unmarshal([]byte(readText), &readPayload); err != nil {
+		t.Fatalf("unmarshal theme payload: %v\n%s", err, readText)
+	}
+	fontColor, ok := readPayload.Properties["Label/colors/font_color"].(map[string]any)
+	if !ok || fontColor["$type"] != "Color" || fontColor["r"] != float64(1) {
+		t.Errorf("font_color = %#v, want a tagged red Color", readPayload.Properties["Label/colors/font_color"])
+	}
+
+	modifyText := requireToolText(t, session, "manage_resource", map[string]any{
+		"projectPath":  root,
+		"resourcePath": "themes/main.tres",
+		"action":       "modify",
+		"properties": map[string]any{
+			"Label/colors/font_color": map[string]any{"$type": "Color", "r": 0, "g": 0, "b": 1, "a": 1},
+		},
+	})
+	requirePrefix(t, modifyText, "manage_resource succeeded.")
+
+	requireContains(t, readFile(t, themeFile), "Color(0, 0, 1, 1)")
 }
 
 // TestManageResourceErrors covers the reference's validation and failure
@@ -78,6 +218,16 @@ func TestManageResourceErrors(t *testing.T) {
 
 	t.Run("missing params", func(t *testing.T) {
 		requireToolError(t, session, "manage_resource", map[string]any{}, "projectPath, resourcePath, and action are required.")
+	})
+
+	t.Run("create without resource type", func(t *testing.T) {
+		root := t.TempDir()
+		seedProject(t, root)
+		requireToolError(t, session, "manage_resource", map[string]any{
+			"projectPath":  root,
+			"resourcePath": "materials/red.tres",
+			"action":       "create",
+		}, "resourceType is required for the create action.")
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
@@ -111,5 +261,22 @@ func TestManageResourceErrors(t *testing.T) {
 			t.Fatal("expected an error result")
 		}
 		requireContains(t, firstText(t, res), "Unknown manage_resource action: bogus")
+	})
+
+	t.Run("unknown resource type", func(t *testing.T) {
+		requireGodot(t, session)
+		root := t.TempDir()
+		seedProject(t, root)
+
+		res := callTool(t, session, "manage_resource", map[string]any{
+			"projectPath":  root,
+			"resourcePath": "materials/red.tres",
+			"action":       "create",
+			"resourceType": "NotARealResource",
+		})
+		if !res.IsError {
+			t.Fatal("expected an error result")
+		}
+		requireContains(t, firstText(t, res), "Unknown resource type: NotARealResource")
 	})
 }
