@@ -23,9 +23,56 @@ var settingsAliases = map[string]string{
 	"translation_path": "translationPath",
 }
 
+// configSchema identifies the project.godot ConfigFile format, keyed by the
+// config_version stored in the file. This server implements the Godot 4.x
+// schema only; other versions are rejected rather than written with
+// conventions that engine would misinterpret (for example Godot 3's
+// special-key scancodes, which use a different KEY_SPECIAL bit).
+type configSchema int
+
+const (
+	// schemaGodot4 is the Godot 4.x schema, which writes config_version=5.
+	schemaGodot4 configSchema = iota
+)
+
+// godot4ConfigVersion is the config_version Godot 4.x writes to project.godot.
+const godot4ConfigVersion = 5
+
+// projectSchema returns the schema of a project.godot document. A missing,
+// malformed, or unsupported config_version is an error, so version-specific
+// readers and writers never run against a schema they do not understand.
+func projectSchema(content string) (configSchema, error) { //nolint:unparam // schemaGodot4 is the only schema today; the return value is the branch point for future config versions.
+	var raw string
+	found := false
+	eachAssignment(content, func(section, rawKey string, _, valStart, valEnd int) bool {
+		if section == "" && decodePropertyName(rawKey) == "config_version" {
+			raw = strings.TrimSpace(content[valStart:valEnd])
+			found = true
+			return false
+		}
+		return true
+	})
+	if !found {
+		return 0, fmt.Errorf("project.godot has no config_version")
+	}
+	value, err := godotconfig.ParseValue(raw)
+	if err != nil {
+		return 0, fmt.Errorf("parse config_version %q: %w", raw, err)
+	}
+	version, ok := value.(godotconfig.Int)
+	if !ok {
+		return 0, fmt.Errorf("config_version %q is not an integer", raw)
+	}
+	if int(version) != godot4ConfigVersion {
+		return 0, fmt.Errorf("unsupported project.godot config_version %d; only Godot 4.x (config_version=%d) is supported", int(version), godot4ConfigVersion)
+	}
+	return schemaGodot4, nil
+}
+
 // readProjectGodot validates projectPath and returns the raw project.godot
 // contents. An unsafe path and a directory without project.godot each produce
-// the reference server's message. Callers validate required arguments before
+// the reference server's message; a project.godot this server does not
+// implement is rejected outright. Callers validate required arguments before
 // calling it, so an empty projectPath is reported as "Invalid path.".
 func readProjectGodot(projectPath string) (string, *mcp.ToolResult) {
 	if !validPath(projectPath) {
@@ -37,11 +84,21 @@ func readProjectGodot(projectPath string) (string, *mcp.ToolResult) {
 		result := mcp.ErrorResult("Not a valid Godot project: " + projectPath)
 		return "", &result
 	}
-	return string(data), nil
+	content := string(data)
+	if _, err := projectSchema(content); err != nil {
+		result := mcp.ErrorResult("Unsupported Godot project: " + err.Error())
+		return "", &result
+	}
+	return content, nil
 }
 
-// writeProjectGodot persists content to projectPath/project.godot.
+// writeProjectGodot persists content to projectPath/project.godot after
+// confirming its schema is one this server implements, so a version-specific
+// writer can never emit a file the engine would misread.
 func writeProjectGodot(projectPath, content string) error {
+	if _, err := projectSchema(content); err != nil {
+		return err
+	}
 	if err := os.WriteFile(filepath.Join(projectPath, "project.godot"), []byte(content), 0o644); err != nil { //nolint:gosec // user-facing project file.
 		return fmt.Errorf("write project.godot: %w", err)
 	}

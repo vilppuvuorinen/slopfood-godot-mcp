@@ -75,9 +75,16 @@ func readInputAction(content, name string) (godotconfig.Dictionary, bool, error)
 	return godotconfig.Dictionary{}, false, nil
 }
 
-// inputEvent builds the Object(InputEventKey, ...) literal for a scancode.
-func inputEvent(scancode int) string {
-	return fmt.Sprintf(`Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":%d,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)`, scancode)
+// inputEvent builds the Object(InputEventKey, ...) literal for a scancode in
+// the given schema's serialization. Only Godot 4.x is implemented; an
+// unsupported schema yields "" so no event is written.
+func inputEvent(schema configSchema, scancode int) string {
+	switch schema {
+	case schemaGodot4:
+		return fmt.Sprintf(`Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":%d,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)`, scancode)
+	default:
+		return ""
+	}
 }
 
 // mergeInputAction appends a new InputEventKey to an existing action unless
@@ -135,6 +142,10 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 	if failure != nil {
 		return *failure, nil
 	}
+	schema, err := projectSchema(content)
+	if err != nil {
+		return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
+	}
 
 	switch args.Action {
 	case "list":
@@ -159,8 +170,8 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 		newEvent := ""
 		scancode := 0
 		if args.Key != "" {
-			scancode = keyNameToScancode(args.Key)
-			newEvent = inputEvent(scancode)
+			scancode = keyNameToScancode(schema, args.Key)
+			newEvent = inputEvent(schema, scancode)
 		}
 
 		existing, found, parseErr := readInputAction(content, args.ActionName)
@@ -207,20 +218,44 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 	return mcp.ErrorResult(`Invalid action. Use "list", "add", or "remove".`), nil
 }
 
-// keyNameToScancode maps a human-readable key name to a Godot scancode,
-// mirroring the reference server's keyNameToScancode.
-func keyNameToScancode(key string) int {
+// keySpecialGodot4 is Godot 4's KEY_SPECIAL bit (1<<22). Special keys are the
+// bit OR-ed with an offset from core/os/keyboard.h; Godot 3 used 1<<24, so
+// reusing its values would write invalid physical_keycodes.
+const keySpecialGodot4 = 1 << 22
+
+// keyNameToScancode maps a human-readable key name to a scancode for the given
+// schema. Only the Godot 4.x schema is implemented; an unsupported schema
+// yields 0 so no binding is written.
+func keyNameToScancode(schema configSchema, key string) int {
+	switch schema {
+	case schemaGodot4:
+		return keyNameToScancodeGodot4(key)
+	default:
+		return 0
+	}
+}
+
+// keyNameToScancodeGodot4 maps a key name to its Godot 4 Key value. Letters and
+// digits are their ASCII code; special keys combine keySpecialGodot4 with the
+// offset Godot assigns in keyboard.h.
+func keyNameToScancodeGodot4(key string) int {
 	scancodes := map[string]int{
 		"A": 65, "B": 66, "C": 67, "D": 68, "E": 69, "F": 70, "G": 71, "H": 72,
 		"I": 73, "J": 74, "K": 75, "L": 76, "M": 77, "N": 78, "O": 79, "P": 80,
 		"Q": 81, "R": 82, "S": 83, "T": 84, "U": 85, "V": 86, "W": 87, "X": 88,
-		"Y": 89, "Z": 90, "SPACE": 32, "ENTER": 16777221, "ESCAPE": 16777217,
-		"TAB": 16777218, "BACKSPACE": 16777220, "UP": 16777232, "DOWN": 16777234,
-		"LEFT": 16777231, "RIGHT": 16777233, "SHIFT": 16777237, "CTRL": 16777238,
-		"ALT": 16777240, "F1": 16777244, "F2": 16777245, "F3": 16777246,
-		"F4": 16777247, "F5": 16777248, "F6": 16777249, "F7": 16777250,
-		"F8": 16777251, "F9": 16777252, "F10": 16777253, "F11": 16777254,
-		"F12": 16777255,
+		"Y": 89, "Z": 90, "SPACE": 32,
+		"ESCAPE": keySpecialGodot4 | 0x01, "TAB": keySpecialGodot4 | 0x02,
+		"BACKSPACE": keySpecialGodot4 | 0x04, "ENTER": keySpecialGodot4 | 0x05,
+		"LEFT": keySpecialGodot4 | 0x0F, "UP": keySpecialGodot4 | 0x10,
+		"RIGHT": keySpecialGodot4 | 0x11, "DOWN": keySpecialGodot4 | 0x12,
+		"SHIFT": keySpecialGodot4 | 0x15, "CTRL": keySpecialGodot4 | 0x16,
+		"ALT": keySpecialGodot4 | 0x18,
+		"F1":  keySpecialGodot4 | 0x1C, "F2": keySpecialGodot4 | 0x1D,
+		"F3": keySpecialGodot4 | 0x1E, "F4": keySpecialGodot4 | 0x1F,
+		"F5": keySpecialGodot4 | 0x20, "F6": keySpecialGodot4 | 0x21,
+		"F7": keySpecialGodot4 | 0x22, "F8": keySpecialGodot4 | 0x23,
+		"F9": keySpecialGodot4 | 0x24, "F10": keySpecialGodot4 | 0x25,
+		"F11": keySpecialGodot4 | 0x26, "F12": keySpecialGodot4 | 0x27,
 	}
 	upper := strings.ToUpper(key)
 	if code, ok := scancodes[upper]; ok {

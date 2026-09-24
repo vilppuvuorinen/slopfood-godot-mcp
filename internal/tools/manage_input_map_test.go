@@ -387,3 +387,71 @@ func TestManageInputMapSnakeCaseAlias(t *testing.T) {
 		t.Errorf("text = %q", got)
 	}
 }
+
+// TestKeyNameToScancodeGodot4 pins the Godot 4 Key values. Godot 3 used a
+// different KEY_SPECIAL bit (1<<24), so special keys must not regress to those
+// values.
+func TestKeyNameToScancodeGodot4(t *testing.T) {
+	tests := []struct {
+		key  string
+		want int
+	}{
+		{"W", 87},
+		{"a", 65},
+		{"7", 55},
+		{"SPACE", 32},
+		{"ESCAPE", 4194305},
+		{"TAB", 4194306},
+		{"BACKSPACE", 4194308},
+		{"ENTER", 4194309},
+		{"LEFT", 4194319},
+		{"UP", 4194320},
+		{"RIGHT", 4194321},
+		{"DOWN", 4194322},
+		{"SHIFT", 4194325},
+		{"CTRL", 4194326},
+		{"ALT", 4194328},
+		{"F1", 4194332},
+		{"F12", 4194343},
+		{"unknown", 0},
+	}
+	for _, tt := range tests {
+		if got := keyNameToScancode(schemaGodot4, tt.key); got != tt.want {
+			t.Errorf("keyNameToScancode(%q) = %d, want %d", tt.key, got, tt.want)
+		}
+	}
+}
+
+func TestManageInputMapAddSpecialKey(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"add","actionName":"jump","key":"ENTER"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+	if err != nil {
+		t.Fatalf("read project.godot: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, `"physical_keycode":4194309`) {
+		t.Errorf("content missing Godot 4 ENTER scancode:\n%s", content)
+	}
+	if strings.Contains(content, `"physical_keycode":16777221`) {
+		t.Errorf("content contains Godot 3 ENTER scancode:\n%s", content)
+	}
+}
+
+func TestManageInputMapRejectsUnsupportedSchema(t *testing.T) {
+	root := t.TempDir()
+	seedFile(t, filepath.Join(root, "project.godot"), "config_version=4\n")
+
+	result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if got := result.Content[0].Text; !strings.HasPrefix(got, "Unsupported Godot project: ") {
+		t.Errorf("message = %q", got)
+	}
+}
