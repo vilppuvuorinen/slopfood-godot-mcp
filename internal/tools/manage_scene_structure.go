@@ -12,7 +12,9 @@ import (
 func manageSceneStructure() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_scene_structure",
+		Title:       "Manage Scene Structure",
 		Description: "Rename/duplicate/move nodes within .tscn scenes",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

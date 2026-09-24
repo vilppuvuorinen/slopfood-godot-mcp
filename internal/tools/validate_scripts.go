@@ -13,7 +13,9 @@ import (
 func validateScripts() mcp.Tool {
 	return mcp.Tool{
 		Name:        "validate_scripts",
+		Title:       "Validate Scripts",
 		Description: "Batch-check GDScript files (git-changed by default, or all)",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -33,6 +35,17 @@ func validateScripts() mcp.Tool {
 				},
 			},
 			"required": []string{"projectPath"},
+		},
+		OutputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"scope":           map[string]any{"type": "string"},
+				"fileCount":       map[string]any{"type": "integer"},
+				"filesWithErrors": map[string]any{"type": "integer"},
+				"allValid":        map[string]any{"type": "boolean"},
+				"results":         map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
+			},
+			"required": []string{"scope", "fileCount", "filesWithErrors", "allValid", "results"},
 		},
 		Handler: handleValidateScripts,
 	}
@@ -175,5 +188,5 @@ func handleValidateScripts(ctx context.Context, raw json.RawMessage) (any, error
 	if err != nil {
 		return nil, fmt.Errorf("encode validate_scripts report: %w", err)
 	}
-	return mcp.TextResult(string(encoded)), nil
+	return mcp.StructuredResult(string(encoded), report), nil
 }

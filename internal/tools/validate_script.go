@@ -13,7 +13,9 @@ import (
 func validateScript() mcp.Tool {
 	return mcp.Tool{
 		Name:        "validate_script",
+		Title:       "Validate Script",
 		Description: "Check a GDScript file for syntax/type errors (headless, no run)",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -27,6 +29,27 @@ func validateScript() mcp.Tool {
 				},
 			},
 			"required": []string{"projectPath", "scriptPath"},
+		},
+		OutputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"valid":      map[string]any{"type": "boolean"},
+				"scriptPath": map[string]any{"type": "string"},
+				"errorCount": map[string]any{"type": "integer"},
+				"errors": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"message": map[string]any{"type": "string"},
+							"file":    map[string]any{"type": "string"},
+							"line":    map[string]any{"type": "integer"},
+						},
+						"required": []string{"message"},
+					},
+				},
+			},
+			"required": []string{"valid", "scriptPath", "errorCount", "errors"},
 		},
 		Handler: handleValidateScript,
 	}
@@ -77,14 +100,15 @@ func handleValidateScript(ctx context.Context, raw json.RawMessage) (any, error)
 	if err != nil {
 		return mcp.ErrorResult("validate_script could not check the script; " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	data, err := json.MarshalIndent(validateScriptResult{
+	result := validateScriptResult{
 		Valid:      len(diagnostics) == 0,
 		ScriptPath: args.ScriptPath,
 		ErrorCount: len(diagnostics),
 		Errors:     diagnostics,
-	}, "", "  ")
+	}
+	data, err := json.MarshalIndent(result, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("encode validate_script result: %w", err)
 	}
-	return mcp.TextResult(string(data)), nil
+	return mcp.StructuredResult(string(data), result), nil
 }

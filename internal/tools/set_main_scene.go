@@ -13,7 +13,9 @@ import (
 func setMainScene() mcp.Tool {
 	return mcp.Tool{
 		Name:        "set_main_scene",
+		Title:       "Set Main Scene",
 		Description: "Set the main scene in project.godot",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

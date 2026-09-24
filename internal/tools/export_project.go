@@ -13,7 +13,9 @@ import (
 func exportProject() mcp.Tool {
 	return mcp.Tool{
 		Name:        "export_project",
+		Title:       "Export Project",
 		Description: "Export a Godot project using a preset",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

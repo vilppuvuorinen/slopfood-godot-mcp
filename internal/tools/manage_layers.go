@@ -15,7 +15,9 @@ import (
 func manageLayers() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_layers",
+		Title:       "Manage Layers",
 		Description: "List/set named layer definitions in project",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

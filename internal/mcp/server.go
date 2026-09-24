@@ -13,7 +13,19 @@ import (
 	"sync"
 )
 
-const protocolVersion = "2024-11-05"
+// latestProtocolVersion is the newest revision this server speaks. Revisions
+// from 2026-07-28 on use the stateless server/discover handshake, which is not
+// implemented here, so the newest supported revision is the last legacy one.
+const latestProtocolVersion = "2025-11-25"
+
+// supportedProtocolVersions lists every revision this server can negotiate,
+// newest first. 2024-11-05 is kept so older clients still connect.
+var supportedProtocolVersions = []string{
+	"2025-11-25",
+	"2025-06-18",
+	"2025-03-26",
+	"2024-11-05",
+}
 
 type ServerInfo struct {
 	Name    string `json:"name"`
@@ -21,39 +33,100 @@ type ServerInfo struct {
 }
 
 type Server struct {
-	info    ServerInfo
-	logger  *slog.Logger
-	mu      sync.RWMutex
-	tools   map[string]Tool
-	writeMu sync.Mutex
+	info         ServerInfo
+	logger       *slog.Logger
+	Instructions string
+	mu           sync.RWMutex
+	tools        map[string]Tool
+	writeMu      sync.Mutex
 }
 
 type Tool struct {
-	Name        string         `json:"name"`
-	Description string         `json:"description"`
-	InputSchema map[string]any `json:"inputSchema"`
-	Handler     ToolHandler    `json:"-"`
+	Name         string           `json:"name"`
+	Title        string           `json:"title,omitempty"`
+	Description  string           `json:"description"`
+	InputSchema  map[string]any   `json:"inputSchema"`
+	OutputSchema map[string]any   `json:"outputSchema,omitempty"`
+	Annotations  *ToolAnnotations `json:"annotations,omitempty"`
+	Handler      ToolHandler      `json:"-"`
 }
+
+// ToolAnnotations carries optional hints about a tool. All fields are hints and
+// may be omitted; clients must not rely on them.
+type ToolAnnotations struct {
+	Title           string `json:"title,omitempty"`
+	ReadOnlyHint    *bool  `json:"readOnlyHint,omitempty"`
+	DestructiveHint *bool  `json:"destructiveHint,omitempty"`
+	IdempotentHint  *bool  `json:"idempotentHint,omitempty"`
+	OpenWorldHint   *bool  `json:"openWorldHint,omitempty"`
+}
+
+// Bool returns a pointer to b, for setting the optional annotation hints.
+func Bool(b bool) *bool { return &b }
 
 type ToolHandler func(ctx context.Context, args json.RawMessage) (any, error)
 
-// Content is a single MCP content block.
+// Content is a single MCP content block. Only the fields relevant to Type are
+// populated: text for "text", data/mimeType for "image" and "audio", and
+// uri/name for "resource_link".
 type Content struct {
-	Type string `json:"type"`
-	Text string `json:"text"`
+	Type        string `json:"type"`
+	Text        string `json:"text,omitempty"`
+	Data        string `json:"data,omitempty"`
+	MimeType    string `json:"mimeType,omitempty"`
+	URI         string `json:"uri,omitempty"`
+	Name        string `json:"name,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 // ToolResult is a complete tool result. Handlers may return one directly to
 // control the content blocks and isError flag; any other return value is
 // JSON-encoded into a single text block.
 type ToolResult struct {
-	Content []Content `json:"content"`
-	IsError bool      `json:"isError,omitempty"`
+	Content           []Content `json:"content"`
+	StructuredContent any       `json:"structuredContent,omitempty"`
+	IsError           bool      `json:"isError,omitempty"`
 }
 
 // TextResult builds a successful single-block text result.
 func TextResult(text string) ToolResult {
 	return ToolResult{Content: []Content{{Type: "text", Text: text}}}
+}
+
+// StructuredResult builds a result that carries text plus the structured value
+// returned in the structuredContent field.
+func StructuredResult(text string, value any) ToolResult {
+	return ToolResult{
+		Content:           []Content{{Type: "text", Text: text}},
+		StructuredContent: value,
+	}
+}
+
+// JSONResult builds a text result from a JSON payload and, when the payload
+// parses, exposes it as structuredContent as well.
+func JSONResult(text string) ToolResult {
+	result := TextResult(text)
+	var value any
+	if err := json.Unmarshal([]byte(text), &value); err == nil {
+		result.StructuredContent = value
+	}
+	return result
+}
+
+// ImageContent builds an image content block from base64 data.
+func ImageContent(data, mimeType string) Content {
+	return Content{Type: "image", Data: data, MimeType: mimeType}
+}
+
+// AudioContent builds an audio content block from base64 data.
+func AudioContent(data, mimeType string) Content {
+	return Content{Type: "audio", Data: data, MimeType: mimeType}
+}
+
+// ResourceLinkContent builds a resource_link content block.
+func ResourceLinkContent(uri, name string) Content {
+	return Content{Type: "resource_link", URI: uri, Name: name}
 }
 
 // ErrorResult builds an error result with an optional "Possible solutions"
@@ -87,6 +160,22 @@ type rpcError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
 	Data    any    `json:"data,omitempty"`
+}
+
+type initializeParams struct {
+	ProtocolVersion string `json:"protocolVersion"`
+}
+
+// negotiateProtocolVersion follows the spec's version negotiation: echo the
+// client's version when it is supported, otherwise offer the newest supported
+// revision.
+func negotiateProtocolVersion(requested string) string {
+	for _, version := range supportedProtocolVersions {
+		if version == requested {
+			return requested
+		}
+	}
+	return latestProtocolVersion
 }
 
 func NewServer(info ServerInfo, logger *slog.Logger) *Server {
@@ -147,13 +236,24 @@ func (s *Server) handle(ctx context.Context, req request) (response, bool) {
 
 	switch req.Method {
 	case "initialize":
-		resp.Result = map[string]any{
-			"protocolVersion": protocolVersion,
+		var p initializeParams
+		if len(req.Params) > 0 {
+			if err := json.Unmarshal(req.Params, &p); err != nil {
+				resp.Error = &rpcError{Code: -32602, Message: "invalid params: " + err.Error()}
+				break
+			}
+		}
+		result := map[string]any{
+			"protocolVersion": negotiateProtocolVersion(p.ProtocolVersion),
 			"capabilities": map[string]any{
 				"tools": map[string]any{},
 			},
 			"serverInfo": s.info,
 		}
+		if s.Instructions != "" {
+			result["instructions"] = s.Instructions
+		}
+		resp.Result = result
 	case "ping":
 		resp.Result = map[string]any{}
 	case "tools/list":
@@ -178,9 +278,12 @@ func (s *Server) listTools() []Tool {
 	tools := make([]Tool, 0, len(s.tools))
 	for _, t := range s.tools {
 		tools = append(tools, Tool{
-			Name:        t.Name,
-			Description: t.Description,
-			InputSchema: t.InputSchema,
+			Name:         t.Name,
+			Title:        t.Title,
+			Description:  t.Description,
+			InputSchema:  t.InputSchema,
+			OutputSchema: t.OutputSchema,
+			Annotations:  t.Annotations,
 		})
 	}
 	sort.Slice(tools, func(i, j int) bool {

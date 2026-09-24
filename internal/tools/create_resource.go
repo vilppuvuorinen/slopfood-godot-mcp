@@ -12,7 +12,9 @@ import (
 func createResource() mcp.Tool {
 	return mcp.Tool{
 		Name:        "create_resource",
+		Title:       "Create Resource",
 		Description: "Create a .tres resource file (headless)",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

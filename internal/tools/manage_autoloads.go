@@ -13,7 +13,9 @@ import (
 func manageAutoloads() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_autoloads",
+		Title:       "Manage Autoloads",
 		Description: "Add, remove, or list autoloads in a Godot project",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

@@ -12,7 +12,9 @@ import (
 func loadSprite() mcp.Tool {
 	return mcp.Tool{
 		Name:        "load_sprite",
+		Title:       "Load Sprite",
 		Description: "Load a sprite into a Sprite2D node",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

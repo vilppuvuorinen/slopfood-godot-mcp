@@ -12,7 +12,9 @@ import (
 func manageResource() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_resource",
+		Title:       "Manage Resource",
 		Description: "Read or modify .tres/.res resource files",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

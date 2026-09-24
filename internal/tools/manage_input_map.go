@@ -15,7 +15,9 @@ import (
 func manageInputMap() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_input_map",
+		Title:       "Manage Input Map",
 		Description: "Add, remove, or list input actions and bindings",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

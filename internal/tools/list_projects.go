@@ -12,7 +12,9 @@ import (
 func listProjects() mcp.Tool {
 	return mcp.Tool{
 		Name:        "list_projects",
+		Title:       "List Projects",
 		Description: "List Godot projects in a directory",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -26,6 +28,17 @@ func listProjects() mcp.Tool {
 				},
 			},
 			"required": []string{"directory"},
+		},
+		OutputSchema: map[string]any{
+			"type": "array",
+			"items": map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"path": map[string]any{"type": "string"},
+					"name": map[string]any{"type": "string"},
+				},
+				"required": []string{"path", "name"},
+			},
 		},
 		Handler: handleListProjects,
 	}
@@ -77,7 +90,7 @@ func handleListProjects(_ context.Context, raw json.RawMessage) (any, error) {
 			"Check if you have permission to read the directory",
 		), nil
 	}
-	return mcp.TextResult(string(data)), nil
+	return mcp.StructuredResult(string(data), projects), nil
 }
 
 // pathExists mirrors the reference server's existsSync check: it reports

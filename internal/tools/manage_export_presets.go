@@ -17,7 +17,9 @@ import (
 func manageExportPresets() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_export_presets",
+		Title:       "Manage Export Presets",
 		Description: "Create or modify export preset configuration",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

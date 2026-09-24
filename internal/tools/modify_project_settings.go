@@ -13,7 +13,9 @@ import (
 func modifyProjectSettings() mcp.Tool {
 	return mcp.Tool{
 		Name:        "modify_project_settings",
+		Title:       "Modify Project Settings",
 		Description: "Modify a project.godot setting",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

@@ -13,7 +13,9 @@ import (
 func updateProjectUIDs() mcp.Tool {
 	return mcp.Tool{
 		Name:        "update_project_uids",
+		Title:       "Update Project UIDs",
 		Description: "Update UID references in a Godot project by resaving resources (for Godot 4.4+)",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

@@ -66,6 +66,10 @@ func run() error {
 		Name:    "go-dot-mcp",
 		Version: version,
 	}, logger)
+	srv.Instructions = "Drives the Godot editor headlessly to inspect and modify Godot projects. " +
+		"Paths are resolved against the project directory; prefer project-relative paths for scenes, " +
+		"scripts, and resources. Read-only tools are safe to call freely; tools that write files " +
+		"may overwrite existing content."
 
 	tools.Register(srv, categories...)
 

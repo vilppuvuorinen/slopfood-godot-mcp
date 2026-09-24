@@ -12,7 +12,9 @@ import (
 func modifySceneNode() mcp.Tool {
 	return mcp.Tool{
 		Name:        "modify_scene_node",
+		Title:       "Modify Scene Node",
 		Description: "Modify node properties in a scene file (headless)",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

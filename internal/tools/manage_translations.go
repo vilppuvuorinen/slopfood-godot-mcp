@@ -13,7 +13,9 @@ import (
 func manageTranslations() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_translations",
+		Title:       "Manage Translations",
 		Description: "List/add/remove translation files in project",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

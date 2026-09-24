@@ -47,6 +47,9 @@ func TestListProjectsSchema(t *testing.T) {
 	if tool.InputSchema["type"] != "object" {
 		t.Errorf("schema type = %v", tool.InputSchema["type"])
 	}
+	if tool.OutputSchema["type"] != "array" {
+		t.Errorf("output schema type = %v", tool.OutputSchema["type"])
+	}
 	required, ok := tool.InputSchema["required"].([]string)
 	if !ok || len(required) != 1 || required[0] != "directory" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
@@ -150,6 +153,23 @@ func TestListProjectsMissingPath(t *testing.T) {
 	want := "Directory does not exist: " + missing
 	if result.Content[0].Text != want {
 		t.Errorf("message = %q, want %q", result.Content[0].Text, want)
+	}
+}
+
+func TestListProjectsStructuredContent(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, listProjects(), `{"directory":`+jsonString(root)+`}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	projects, ok := result.StructuredContent.([]godotProject)
+	if !ok {
+		t.Fatalf("structuredContent type %T, want []godotProject", result.StructuredContent)
+	}
+	if paths := projectPaths(projects); !equalStrings(paths, []string{root}) {
+		t.Fatalf("paths = %v, want [%s]", paths, root)
 	}
 }
 

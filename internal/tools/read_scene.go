@@ -12,7 +12,9 @@ import (
 func readScene() mcp.Tool {
 	return mcp.Tool{
 		Name:        "read_scene",
+		Title:       "Read Scene",
 		Description: "Read scene file as JSON node tree (headless)",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -83,7 +85,7 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 
 	if payload, ok := markerJSON(stdout); ok {
-		return mcp.TextResult(payload), nil
+		return mcp.JSONResult(payload), nil
 	}
 
 	text := "Scene read output:\n" + stdout

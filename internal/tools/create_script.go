@@ -15,7 +15,9 @@ import (
 func createScript() mcp.Tool {
 	return mcp.Tool{
 		Name:        "create_script",
+		Title:       "Create Script",
 		Description: "Create a GDScript file from a template",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

@@ -14,7 +14,9 @@ import (
 func getUID() mcp.Tool {
 	return mcp.Tool{
 		Name:        "get_uid",
+		Title:       "Get UID",
 		Description: "Get the UID for a specific file in a Godot project (for Godot 4.4+)",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -28,6 +30,17 @@ func getUID() mcp.Tool {
 				},
 			},
 			"required": []string{"projectPath", "filePath"},
+		},
+		OutputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"file":         map[string]any{"type": "string"},
+				"absolutePath": map[string]any{"type": "string"},
+				"uid":          map[string]any{"type": "string"},
+				"exists":       map[string]any{"type": "boolean"},
+				"message":      map[string]any{"type": "string"},
+			},
+			"required": []string{"file", "absolutePath", "exists"},
 		},
 		Handler: handleGetUID,
 	}
@@ -110,7 +123,7 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 
 	if payload, ok := markerJSON(stdout); ok {
-		return mcp.TextResult(payload), nil
+		return mcp.JSONResult(payload), nil
 	}
 
 	message := fmt.Sprintf("UID for %s: %s", args.FilePath, strings.TrimSpace(stdout))

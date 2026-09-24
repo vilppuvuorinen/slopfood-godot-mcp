@@ -11,11 +11,20 @@ import (
 func getGodotVersion() mcp.Tool {
 	return mcp.Tool{
 		Name:        "get_godot_version",
+		Title:       "Get Godot Version",
 		Description: "Get the installed Godot version",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type":       "object",
 			"properties": map[string]any{},
 			"required":   []string{},
+		},
+		OutputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"version": map[string]any{"type": "string"},
+			},
+			"required": []string{"version"},
 		},
 		Handler: handleGetGodotVersion,
 	}
@@ -24,7 +33,7 @@ func getGodotVersion() mcp.Tool {
 func handleGetGodotVersion(ctx context.Context, _ json.RawMessage) (any, error) {
 	version, err := godot.Version(ctx, godot.Path())
 	if err == nil {
-		return mcp.TextResult(version), nil
+		return mcp.StructuredResult(version, map[string]any{"version": version}), nil
 	}
 	return mcp.ErrorResult(
 		"Failed to get Godot version: "+err.Error(),

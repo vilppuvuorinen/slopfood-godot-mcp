@@ -13,7 +13,9 @@ import (
 func manageShader() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_shader",
+		Title:       "Manage Shader",
 		Description: "Create or read .gdshader files",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

@@ -12,7 +12,9 @@ import (
 func manageThemeResource() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_theme_resource",
+		Title:       "Manage Theme Resource",
 		Description: "Create/read/modify Theme .tres resources",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

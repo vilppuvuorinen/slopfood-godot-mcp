@@ -14,7 +14,9 @@ import (
 func createCSharpScript() mcp.Tool {
 	return mcp.Tool{
 		Name:        "create_csharp_script",
+		Title:       "Create C# Script",
 		Description: "Create a C# script file in a Godot .NET project",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

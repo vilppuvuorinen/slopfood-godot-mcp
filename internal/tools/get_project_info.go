@@ -25,7 +25,9 @@ var projectInfoAliases = map[string]string{
 func getProjectInfo() mcp.Tool {
 	return mcp.Tool{
 		Name:        "get_project_info",
+		Title:       "Get Project Info",
 		Description: "Retrieve metadata about a Godot project",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -35,6 +37,25 @@ func getProjectInfo() mcp.Tool {
 				},
 			},
 			"required": []string{"projectPath"},
+		},
+		OutputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"name":         map[string]any{"type": "string"},
+				"path":         map[string]any{"type": "string"},
+				"godotVersion": map[string]any{"type": "string"},
+				"structure": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"scenes":  map[string]any{"type": "integer"},
+						"scripts": map[string]any{"type": "integer"},
+						"assets":  map[string]any{"type": "integer"},
+						"other":   map[string]any{"type": "integer"},
+					},
+					"required": []string{"scenes", "scripts", "assets", "other"},
+				},
+			},
+			"required": []string{"name", "path", "godotVersion", "structure"},
 		},
 		Handler: handleGetProjectInfo,
 	}
@@ -113,7 +134,7 @@ func handleGetProjectInfo(ctx context.Context, raw json.RawMessage) (any, error)
 			"Verify the project path is accessible",
 		), nil
 	}
-	return mcp.TextResult(string(data)), nil
+	return mcp.StructuredResult(string(data), info), nil
 }
 
 var configNamePattern = regexp.MustCompile(`config/name="([^"]+)"`)

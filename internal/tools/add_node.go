@@ -12,7 +12,9 @@ import (
 func addNode() mcp.Tool {
 	return mcp.Tool{
 		Name:        "add_node",
+		Title:       "Add Node",
 		Description: "Add a node to an existing scene",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

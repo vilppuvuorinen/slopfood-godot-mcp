@@ -37,3 +37,65 @@ func TestGetGodotVersionTool(t *testing.T) {
 		t.Errorf("version = %q, want a %s.x build (GODOT_PATH=%q)", got, minor, os.Getenv("GODOT_PATH"))
 	}
 }
+
+// TestProtocolVersionNegotiationEchoesSupported pins a supported protocol
+// version and asserts the server echoes it back.
+func TestProtocolVersionNegotiationEchoesSupported(t *testing.T) {
+	session := connectWithProtocolVersion(t, "2025-06-18")
+	if got := session.InitializeResult().ProtocolVersion; got != "2025-06-18" {
+		t.Errorf("protocolVersion = %q, want 2025-06-18", got)
+	}
+}
+
+// TestProtocolVersionNegotiationFallsBack connects as a modern client, which
+// probes server/discover first. The server does not implement it, so the client
+// falls back to the legacy handshake and the server offers its newest revision.
+func TestProtocolVersionNegotiationFallsBack(t *testing.T) {
+	session := connectWithProtocolVersion(t, "2026-07-28")
+	if got := session.InitializeResult().ProtocolVersion; got != "2025-11-25" {
+		t.Errorf("protocolVersion = %q, want 2025-11-25", got)
+	}
+}
+
+// TestInitializeInstructions asserts the server advertises usage instructions.
+func TestInitializeInstructions(t *testing.T) {
+	session := connect(t)
+	if session.InitializeResult().Instructions == "" {
+		t.Error("instructions is empty")
+	}
+}
+
+// TestToolMetadata asserts a listed tool carries a title, annotations, and an
+// output schema.
+func TestToolMetadata(t *testing.T) {
+	tool := findTool(t, connect(t), "get_godot_version")
+	if tool.Title != "Get Godot Version" {
+		t.Errorf("title = %q", tool.Title)
+	}
+	if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
+		t.Errorf("annotations = %+v", tool.Annotations)
+	}
+	if tool.OutputSchema == nil {
+		t.Error("outputSchema missing")
+	}
+}
+
+// TestStructuredContent asserts a read-only tool returns structuredContent
+// alongside its text block.
+func TestStructuredContent(t *testing.T) {
+	session := connect(t)
+	root := t.TempDir()
+	seedProject(t, root)
+
+	res := callTool(t, session, "list_projects", map[string]any{"directory": root})
+	if res.IsError {
+		t.Fatalf("list_projects error: %s", firstText(t, res))
+	}
+	projects, ok := res.StructuredContent.([]any)
+	if !ok {
+		t.Fatalf("structuredContent type %T", res.StructuredContent)
+	}
+	if len(projects) != 1 {
+		t.Fatalf("projects = %+v", projects)
+	}
+}

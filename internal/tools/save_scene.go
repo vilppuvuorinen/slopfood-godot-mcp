@@ -12,7 +12,9 @@ import (
 func saveScene() mcp.Tool {
 	return mcp.Tool{
 		Name:        "save_scene",
+		Title:       "Save Scene",
 		Description: "Save changes to a scene file",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

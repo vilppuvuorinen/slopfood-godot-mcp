@@ -16,7 +16,9 @@ const projectSettingsReadTimeout = 30 * time.Second
 func readProjectSettings() mcp.Tool {
 	return mcp.Tool{
 		Name:        "read_project_settings",
+		Title:       "Read Project Settings",
 		Description: "Read project.godot as structured JSON",
+		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -26,6 +28,18 @@ func readProjectSettings() mcp.Tool {
 				},
 			},
 			"required": []string{"projectPath"},
+		},
+		OutputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"projectPath":  map[string]any{"type": "string"},
+				"settingCount": map[string]any{"type": "integer"},
+				"settings": map[string]any{
+					"type":                 "object",
+					"additionalProperties": map[string]any{"type": "string"},
+				},
+			},
+			"required": []string{"projectPath", "settingCount", "settings"},
 		},
 		Handler: handleReadProjectSettings,
 	}
@@ -80,7 +94,7 @@ func handleReadProjectSettings(ctx context.Context, raw json.RawMessage) (any, e
 		return mcp.ErrorResult("Failed to read project settings: "+detail, headlessSolutions...), nil
 	}
 	if payload, ok := markerJSON(probe.Stdout); ok {
-		return mcp.TextResult(payload), nil
+		return mcp.JSONResult(payload), nil
 	}
 	return mcp.ErrorResult(
 		"Failed to read project settings: no settings payload from Godot",

@@ -12,7 +12,9 @@ import (
 func manageSceneSignals() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_scene_signals",
+		Title:       "Manage Scene Signals",
 		Description: "List/add/remove signal connections in .tscn files",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

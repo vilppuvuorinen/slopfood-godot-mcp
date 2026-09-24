@@ -41,6 +41,9 @@ func TestGetGodotVersionSchema(t *testing.T) {
 	if tool.InputSchema["type"] != "object" {
 		t.Errorf("schema type = %v", tool.InputSchema["type"])
 	}
+	if tool.OutputSchema["type"] != "object" {
+		t.Errorf("output schema type = %v", tool.OutputSchema["type"])
+	}
 }
 
 func TestGetGodotVersionSuccess(t *testing.T) {
@@ -55,6 +58,13 @@ func TestGetGodotVersionSuccess(t *testing.T) {
 	}
 	if got := result.Content[0].Text; got != "4.7.2.stable.official.fake" {
 		t.Fatalf("text = %q", got)
+	}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent type %T, want map[string]any", result.StructuredContent)
+	}
+	if structured["version"] != "4.7.2.stable.official.fake" {
+		t.Errorf("structured version = %v", structured["version"])
 	}
 }
 

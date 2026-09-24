@@ -15,7 +15,9 @@ import (
 func managePlugins() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_plugins",
+		Title:       "Manage Plugins",
 		Description: "List/enable/disable editor plugins",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

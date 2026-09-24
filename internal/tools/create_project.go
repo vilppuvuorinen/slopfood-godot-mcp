@@ -33,7 +33,9 @@ var createProjectAliases = map[string]string{
 func createProject() mcp.Tool {
 	return mcp.Tool{
 		Name:        "create_project",
+		Title:       "Create Project",
 		Description: "Create a new Godot project from scratch",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

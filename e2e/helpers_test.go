@@ -62,6 +62,31 @@ func connectSession(t *testing.T, env []string, args ...string) *mcp.ClientSessi
 	return session
 }
 
+// connectWithProtocolVersion starts the server binary and connects with an
+// explicit protocol version so negotiation can be asserted.
+func connectWithProtocolVersion(t *testing.T, protocolVersion string) *mcp.ClientSession {
+	t.Helper()
+
+	binary := os.Getenv(binaryEnv)
+	if binary == "" {
+		t.Fatalf("%s is not set; build the server and point it at the binary", binaryEnv)
+	}
+
+	cmd := exec.CommandContext(context.Background(), binary, "--enable", "all") //nolint:gosec // the binary path is supplied by the test harness.
+	cmd.Env = os.Environ()
+	client := mcp.NewClient(&mcp.Implementation{Name: "go-dot-mcp-e2e", Version: "0.0.1"}, nil)
+	session, err := client.Connect(context.Background(), &mcp.CommandTransport{Command: cmd}, &mcp.ClientSessionOptions{ProtocolVersion: protocolVersion})
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("close session: %v", err)
+		}
+	})
+	return session
+}
+
 // connectWithFakeGodot starts the server with GODOT_PATH pointing at a script
 // that reports version, so version gates can be exercised without the engine.
 func connectWithFakeGodot(t *testing.T, version string) *mcp.ClientSession {
