@@ -13,19 +13,49 @@ import (
 	"sync"
 )
 
-// latestProtocolVersion is the newest revision this server speaks. Revisions
-// from 2026-07-28 on use the stateless server/discover handshake, which is not
-// implemented here, so the newest supported revision is the last legacy one.
-const latestProtocolVersion = "2025-11-25"
+// latestProtocolVersion is the newest revision this server speaks. Starting
+// with 2026-07-28 the protocol is stateless: clients learn the server's
+// identity and capabilities from server/discover and carry their protocol
+// version and capabilities in each request's _meta instead of running the
+// legacy initialize handshake.
+const latestProtocolVersion = "2026-07-28"
+
+// latestLegacyProtocolVersion is the newest revision that still uses the
+// initialize handshake. It caps initialize negotiation so a legacy client is
+// never handed a stateless revision, which is only reachable via discover.
+const latestLegacyProtocolVersion = "2025-11-25"
+
+// protocolVersion20260728 is the first stateless revision (SEP-2575). Protocol
+// versions are date strings, so they compare meaningfully as strings.
+const protocolVersion20260728 = "2026-07-28"
 
 // supportedProtocolVersions lists every revision this server can negotiate,
 // newest first. 2024-11-05 is kept so older clients still connect.
 var supportedProtocolVersions = []string{
+	"2026-07-28",
 	"2025-11-25",
 	"2025-06-18",
 	"2025-03-26",
 	"2024-11-05",
 }
+
+// Per-request and per-response _meta keys defined by the stateless model.
+const (
+	metaKeyProtocolVersion    = "io.modelcontextprotocol/protocolVersion"
+	metaKeyClientCapabilities = "io.modelcontextprotocol/clientCapabilities"
+	metaKeyServerInfo         = "io.modelcontextprotocol/serverInfo"
+)
+
+// resultTypeComplete marks a result that needs no further client input. The
+// stateless protocol requires a resultType on every result.
+const resultTypeComplete = "complete"
+
+// MCP-specific JSON-RPC error codes allocated by 2026-07-28 (SEP-2575).
+const (
+	codeMethodNotFound             = -32601
+	codeInvalidParams              = -32602
+	codeUnsupportedProtocolVersion = -32022
+)
 
 type ServerInfo struct {
 	Name    string `json:"name"`
@@ -84,9 +114,11 @@ type Content struct {
 // control the content blocks and isError flag; any other return value is
 // JSON-encoded into a single text block.
 type ToolResult struct {
-	Content           []Content `json:"content"`
-	StructuredContent any       `json:"structuredContent,omitempty"`
-	IsError           bool      `json:"isError,omitempty"`
+	Content           []Content      `json:"content"`
+	StructuredContent any            `json:"structuredContent,omitempty"`
+	IsError           bool           `json:"isError,omitempty"`
+	ResultType        string         `json:"resultType,omitempty"`
+	Meta              map[string]any `json:"_meta,omitempty"`
 }
 
 // TextResult builds a successful single-block text result.
@@ -166,16 +198,87 @@ type initializeParams struct {
 	ProtocolVersion string `json:"protocolVersion"`
 }
 
-// negotiateProtocolVersion follows the spec's version negotiation: echo the
-// client's version when it is supported, otherwise offer the newest supported
-// revision.
-func negotiateProtocolVersion(requested string) string {
-	for _, version := range supportedProtocolVersions {
-		if version == requested {
-			return requested
+// negotiateLegacyProtocolVersion follows the initialize handshake's version
+// negotiation: echo the client's version when it is a supported legacy
+// revision, otherwise offer the newest legacy revision. Stateless revisions
+// are reached through server/discover, never through initialize.
+func negotiateLegacyProtocolVersion(requested string) string {
+	if requested < protocolVersion20260728 {
+		for _, version := range supportedProtocolVersions {
+			if version == requested {
+				return requested
+			}
 		}
 	}
-	return latestProtocolVersion
+	return latestLegacyProtocolVersion
+}
+
+// isSupportedProtocolVersion reports whether version is one this server speaks.
+func isSupportedProtocolVersion(version string) bool {
+	for _, supported := range supportedProtocolVersions {
+		if supported == version {
+			return true
+		}
+	}
+	return false
+}
+
+// requestMeta is the per-request _meta the stateless protocol carries.
+type requestMeta struct {
+	// modern is true when the request selected the stateless protocol by
+	// declaring protocolVersion >= 2026-07-28.
+	modern bool
+	// version is the declared protocol version, empty on the legacy path.
+	version string
+}
+
+// parseRequestMeta detects whether a request's params select the stateless
+// protocol. It mirrors the reference implementation: a request is legacy
+// unless its _meta carries io.modelcontextprotocol/protocolVersion at a
+// 2026-07-28-or-newer revision, and a stateless request must also declare
+// io.modelcontextprotocol/clientCapabilities.
+func parseRequestMeta(params json.RawMessage) (requestMeta, *rpcError) {
+	if len(params) == 0 {
+		return requestMeta{}, nil
+	}
+	var p struct {
+		Meta map[string]json.RawMessage `json:"_meta"`
+	}
+	if err := json.Unmarshal(params, &p); err != nil {
+		return requestMeta{}, nil
+	}
+	raw, ok := p.Meta[metaKeyProtocolVersion]
+	if !ok {
+		return requestMeta{}, nil
+	}
+	var version string
+	if err := json.Unmarshal(raw, &version); err != nil || version < protocolVersion20260728 {
+		return requestMeta{}, nil
+	}
+	if _, ok := p.Meta[metaKeyClientCapabilities]; !ok {
+		return requestMeta{}, &rpcError{
+			Code:    codeInvalidParams,
+			Message: "missing or invalid _meta field " + metaKeyClientCapabilities,
+		}
+	}
+	return requestMeta{modern: true, version: version}, nil
+}
+
+// unsupportedProtocolVersionError builds the SEP-2575 -32022 error whose data
+// advertises the supported revisions so a client can retry with one of them.
+func unsupportedProtocolVersionError(requested string) *rpcError {
+	return &rpcError{
+		Code:    codeUnsupportedProtocolVersion,
+		Message: "unsupported protocol version",
+		Data: map[string]any{
+			"supported": append([]string(nil), supportedProtocolVersions...),
+			"requested": requested,
+		},
+	}
+}
+
+func methodNotFoundError(method string) *rpcError {
+	return &rpcError{Code: codeMethodNotFound, Message: "method not found: " + method}
 }
 
 func NewServer(info ServerInfo, logger *slog.Logger) *Server {
@@ -234,42 +337,128 @@ func (s *Server) handle(ctx context.Context, req request) (response, bool) {
 
 	resp := response{JSONRPC: "2.0", ID: req.ID}
 
+	meta, metaErr := parseRequestMeta(req.Params)
+	if metaErr != nil {
+		resp.Error = metaErr
+		return resp, true
+	}
+	if meta.modern && !isSupportedProtocolVersion(meta.version) {
+		resp.Error = unsupportedProtocolVersionError(meta.version)
+		return resp, true
+	}
+
 	switch req.Method {
 	case "initialize":
+		// initialize is removed in 2026-07-28; stateless clients discover the
+		// server instead. Legacy clients negotiate down to a legacy revision.
+		if meta.modern {
+			resp.Error = methodNotFoundError("initialize")
+			break
+		}
 		var p initializeParams
 		if len(req.Params) > 0 {
 			if err := json.Unmarshal(req.Params, &p); err != nil {
-				resp.Error = &rpcError{Code: -32602, Message: "invalid params: " + err.Error()}
+				resp.Error = &rpcError{Code: codeInvalidParams, Message: "invalid params: " + err.Error()}
 				break
 			}
 		}
 		result := map[string]any{
-			"protocolVersion": negotiateProtocolVersion(p.ProtocolVersion),
-			"capabilities": map[string]any{
-				"tools": map[string]any{},
-			},
-			"serverInfo": s.info,
+			"protocolVersion": negotiateLegacyProtocolVersion(p.ProtocolVersion),
+			"capabilities":    s.capabilities(),
+			"serverInfo":      s.info,
 		}
 		if s.Instructions != "" {
 			result["instructions"] = s.Instructions
 		}
 		resp.Result = result
+	case "server/discover":
+		if !meta.modern {
+			resp.Error = methodNotFoundError("server/discover")
+			break
+		}
+		resp.Result = s.discoverResult()
 	case "ping":
+		// ping is removed in 2026-07-28.
+		if meta.modern {
+			resp.Error = methodNotFoundError("ping")
+			break
+		}
 		resp.Result = map[string]any{}
 	case "tools/list":
-		resp.Result = map[string]any{"tools": s.listTools()}
+		resp.Result = s.listToolsResult(meta.modern)
 	case "tools/call":
 		result, err := s.callTool(ctx, req.Params)
 		if err != nil {
-			resp.Error = &rpcError{Code: -32602, Message: err.Error()}
+			resp.Error = &rpcError{Code: codeInvalidParams, Message: err.Error()}
 		} else {
 			resp.Result = result
 		}
 	default:
-		resp.Error = &rpcError{Code: -32601, Message: "method not found: " + req.Method}
+		resp.Error = methodNotFoundError(req.Method)
+	}
+
+	if meta.modern && resp.Error == nil {
+		resp.Result = s.withStatelessMeta(resp.Result)
 	}
 
 	return resp, true
+}
+
+// capabilities is the server capability set advertised by initialize and
+// server/discover.
+func (s *Server) capabilities() map[string]any {
+	return map[string]any{"tools": map[string]any{}}
+}
+
+// listToolsResult builds the tools/list result. Stateless clients also receive
+// the cache hints every list result carries from 2026-07-28 on.
+func (s *Server) listToolsResult(modern bool) map[string]any {
+	result := map[string]any{"tools": s.listTools()}
+	if modern {
+		result["ttlMs"] = 0
+		result["cacheScope"] = "public"
+	}
+	return result
+}
+
+// discoverResult implements the SEP-2575 server/discover RPC: without any
+// prior handshake a client learns the supported protocol versions, the server's
+// capabilities and identity, and how to use it.
+func (s *Server) discoverResult() map[string]any {
+	result := map[string]any{
+		"supportedVersions": append([]string(nil), supportedProtocolVersions...),
+		"capabilities":      s.capabilities(),
+		"ttlMs":             0,
+		"cacheScope":        "public",
+	}
+	if s.Instructions != "" {
+		result["instructions"] = s.Instructions
+	}
+	return result
+}
+
+// withStatelessMeta adds the fields every 2026-07-28 result requires: a
+// resultType and the server's identity in _meta. Legacy results are unchanged.
+func (s *Server) withStatelessMeta(result any) any {
+	meta := map[string]any{metaKeyServerInfo: s.info}
+	switch r := result.(type) {
+	case ToolResult:
+		r.ResultType = resultTypeComplete
+		r.Meta = meta
+		return r
+	case *ToolResult:
+		r.ResultType = resultTypeComplete
+		r.Meta = meta
+		return r
+	case map[string]any:
+		if _, ok := r["resultType"]; !ok {
+			r["resultType"] = resultTypeComplete
+		}
+		r["_meta"] = meta
+		return r
+	default:
+		return result
+	}
 }
 
 func (s *Server) listTools() []Tool {

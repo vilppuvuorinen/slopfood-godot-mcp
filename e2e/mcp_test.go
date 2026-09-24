@@ -47,11 +47,31 @@ func TestProtocolVersionNegotiationEchoesSupported(t *testing.T) {
 	}
 }
 
-// TestProtocolVersionNegotiationFallsBack connects as a modern client, which
-// probes server/discover first. The server does not implement it, so the client
-// falls back to the legacy handshake and the server offers its newest revision.
-func TestProtocolVersionNegotiationFallsBack(t *testing.T) {
+// TestProtocolVersionNegotiationModern connects as a 2026-07-28 client, which
+// probes server/discover first. The server implements it and advertises
+// 2026-07-28, so the session negotiates the stateless revision.
+func TestProtocolVersionNegotiationModern(t *testing.T) {
 	session := connectWithProtocolVersion(t, "2026-07-28")
+	if got := session.InitializeResult().ProtocolVersion; got != "2026-07-28" {
+		t.Errorf("protocolVersion = %q, want 2026-07-28", got)
+	}
+}
+
+// TestProtocolVersionNegotiationUnknownModern connects as a client offering a
+// future stateless revision. server/discover rejects it with the supported
+// list, and the client retries at 2026-07-28.
+func TestProtocolVersionNegotiationUnknownModern(t *testing.T) {
+	session := connectWithProtocolVersion(t, "2099-01-01")
+	if got := session.InitializeResult().ProtocolVersion; got != "2026-07-28" {
+		t.Errorf("protocolVersion = %q, want 2026-07-28", got)
+	}
+}
+
+// TestProtocolVersionNegotiationLegacyFallback connects with an unknown legacy
+// version. Discovery is skipped, and the legacy initialize handshake offers the
+// newest legacy revision, never a stateless one.
+func TestProtocolVersionNegotiationLegacyFallback(t *testing.T) {
+	session := connectWithProtocolVersion(t, "1999-01-01")
 	if got := session.InitializeResult().ProtocolVersion; got != "2025-11-25" {
 		t.Errorf("protocolVersion = %q, want 2025-11-25", got)
 	}

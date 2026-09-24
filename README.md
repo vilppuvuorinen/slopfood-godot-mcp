@@ -85,13 +85,16 @@ go-dot-mcp --enable all                        # everything
 ## Protocol
 
 The server speaks the MCP stdio transport and negotiates protocol revisions
-`2024-11-05` through `2025-11-25`: it echoes the client's requested revision
-when supported and otherwise offers its newest supported revision, `2025-11-25`.
-Every tool advertises a human-readable title, behavior annotations, and an
-`outputSchema`, and returns structured results through `structuredContent`
-alongside its text. The stateless `server/discover` handshake introduced in
-`2026-07-28` is not implemented; newer clients fall back to the legacy
-`initialize` handshake and negotiate `2025-11-25`.
+`2024-11-05` through `2026-07-28`. Revision `2026-07-28` (SEP-2575) is
+stateless: a client calls `server/discover` to learn the supported versions,
+capabilities, and identity without a handshake, then carries its protocol
+version and capabilities in each request's `_meta`. The server answers with
+`resultType`, its identity in `_meta`, and cache hints (`ttlMs`/`cacheScope`)
+on list and discovery results. Legacy clients negotiate with `initialize`,
+which never offers a stateless revision, and are served the newest legacy
+revision, `2025-11-25`. Every tool advertises a human-readable title, behavior
+annotations, and an `outputSchema`, and returns structured results through
+`structuredContent` alongside its text.
 
 ## Security
 
