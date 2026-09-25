@@ -35,10 +35,14 @@ func manageTranslations() mcp.Tool {
 			},
 			"required": []string{"projectPath", "action"},
 		},
-		OutputSchema: statusOutputSchema(map[string]any{
-			"translations":    godotValueSchema(`The translations setting as a tagged {"$type":"PackedStringArray","values":[...]} value`),
-			"translationPath": map[string]any{"type": "string"},
-		}),
+		OutputSchema: actionOutputSchema(
+			map[string]any{
+				"translationPath": map[string]any{"type": "string"},
+			},
+			payloadOutputSchema(map[string]any{
+				"translations": godotValueSchema(`The translations setting as a tagged {"$type":"PackedStringArray","values":[...]} value`),
+			}),
+		),
 		Handler: handleManageTranslations,
 	}
 }

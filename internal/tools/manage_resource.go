@@ -39,18 +39,22 @@ func manageResource() mcp.Tool {
 			},
 			"required": []string{"projectPath", "resourcePath", "action"},
 		},
-		OutputSchema: statusOutputSchema(map[string]any{
-			"resourcePath": map[string]any{"type": "string"},
-			"action":       map[string]any{"type": "string"},
-			"resourceType": map[string]any{"type": "string"},
-			"type":         map[string]any{"type": "string"},
-			"path":         map[string]any{"type": "string"},
-			"properties": map[string]any{
-				"type":                 "object",
-				"description":          "Resource properties in the tool value contract",
-				"additionalProperties": godotValueSchema("JSON-native values are nested; engine-only types are tagged objects"),
+		OutputSchema: actionOutputSchema(
+			map[string]any{
+				"resourcePath": map[string]any{"type": "string"},
+				"action":       map[string]any{"type": "string"},
+				"resourceType": map[string]any{"type": "string"},
 			},
-		}),
+			payloadOutputSchema(map[string]any{
+				"type": map[string]any{"type": "string"},
+				"path": map[string]any{"type": "string"},
+				"properties": map[string]any{
+					"type":                 "object",
+					"description":          "Resource properties in the tool value contract",
+					"additionalProperties": godotValueSchema("JSON-native values are nested; engine-only types are tagged objects"),
+				},
+			}),
+		),
 		Handler: handleManageResource,
 	}
 }

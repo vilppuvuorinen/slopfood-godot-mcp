@@ -47,21 +47,25 @@ func manageExportPresets() mcp.Tool {
 			},
 			"required": []string{"projectPath", "action"},
 		},
-		OutputSchema: statusOutputSchema(map[string]any{
-			"presets": map[string]any{
-				"type": "array",
-				"items": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"name":     map[string]any{"type": "string"},
-						"platform": map[string]any{"type": "string"},
+		OutputSchema: actionOutputSchema(
+			map[string]any{
+				"name":     map[string]any{"type": "string"},
+				"platform": map[string]any{"type": "string"},
+				"runnable": map[string]any{"type": "boolean"},
+			},
+			payloadOutputSchema(map[string]any{
+				"presets": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"name":     map[string]any{"type": "string"},
+							"platform": map[string]any{"type": "string"},
+						},
 					},
 				},
-			},
-			"name":     map[string]any{"type": "string"},
-			"platform": map[string]any{"type": "string"},
-			"runnable": map[string]any{"type": "boolean"},
-		}),
+			}),
+		),
 		Handler: handleManageExportPresets,
 	}
 }

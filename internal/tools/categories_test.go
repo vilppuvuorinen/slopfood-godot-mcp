@@ -165,3 +165,44 @@ func TestToolsAdvertiseActionEnum(t *testing.T) {
 		}
 	}
 }
+
+// TestToolsConstrainAdvertisedStatus verifies no tool advertises the success and
+// message envelope loosely. A mutation requires both fields, while an
+// action-routed tool separates them into an anyOf branch so a read or list
+// result is never described as returning the envelope.
+func TestToolsConstrainAdvertisedStatus(t *testing.T) {
+	for _, category := range AllCategories {
+		for _, newTool := range categoryTools[category] {
+			tool := newTool()
+			props, _ := tool.OutputSchema["properties"].(map[string]any)
+			if _, ok := props["success"]; !ok {
+				continue
+			}
+
+			branches, hasBranches := tool.OutputSchema["anyOf"].([]any)
+			if !hasBranches {
+				if !hasRequired(tool.OutputSchema, "success", "message") {
+					t.Errorf("tool %q advertises success without requiring it: %v", tool.Name, tool.OutputSchema)
+				}
+				continue
+			}
+
+			statusBranch, payloadBranch := false, false
+			for _, branch := range branches {
+				schema, ok := branch.(map[string]any)
+				if !ok {
+					t.Errorf("tool %q anyOf branch = %T", tool.Name, branch)
+					continue
+				}
+				if hasRequired(schema, "success", "message") {
+					statusBranch = true
+				} else if !hasRequired(schema, "success") {
+					payloadBranch = true
+				}
+			}
+			if !statusBranch || !payloadBranch {
+				t.Errorf("tool %q anyOf must separate the status and payload shapes: %v", tool.Name, branches)
+			}
+		}
+	}
+}

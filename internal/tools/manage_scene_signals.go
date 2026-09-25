@@ -50,15 +50,19 @@ func manageSceneSignals() mcp.Tool {
 			},
 			"required": []string{"projectPath", "scenePath", "action"},
 		},
-		OutputSchema: statusOutputSchema(map[string]any{
-			"connections": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			"scenePath":   map[string]any{"type": "string"},
-			"action":      map[string]any{"type": "string"},
-			"signalName":  map[string]any{"type": "string"},
-			"sourcePath":  map[string]any{"type": "string"},
-			"targetPath":  map[string]any{"type": "string"},
-			"method":      map[string]any{"type": "string"},
-		}),
+		OutputSchema: actionOutputSchema(
+			map[string]any{
+				"scenePath":  map[string]any{"type": "string"},
+				"action":     map[string]any{"type": "string"},
+				"signalName": map[string]any{"type": "string"},
+				"sourcePath": map[string]any{"type": "string"},
+				"targetPath": map[string]any{"type": "string"},
+				"method":     map[string]any{"type": "string"},
+			},
+			payloadOutputSchema(map[string]any{
+				"connections": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			}),
+		),
 		Handler: handleManageSceneSignals,
 	}
 }

@@ -48,8 +48,16 @@ func readScene() mcp.Tool {
 					"type":  "array",
 					"items": map[string]any{"type": "object"},
 				},
+				"error": map[string]any{"type": "string"},
+				"raw":   map[string]any{"type": "string"},
 			},
-			"required": []string{"name", "type"},
+			// A readable scene yields a node tree, while a scene the engine
+			// cannot instantiate yields its raw text so the caller can still
+			// inspect it. Advertise both so neither shape is misreported.
+			"anyOf": []any{
+				map[string]any{"required": []string{"name", "type"}},
+				map[string]any{"required": []string{"error", "raw"}},
+			},
 		},
 		Handler: handleReadScene,
 	}

@@ -45,11 +45,16 @@ func manageInputMap() mcp.Tool {
 			},
 			"required": []string{"projectPath", "action"},
 		},
-		OutputSchema: statusOutputSchema(map[string]any{
-			"actionName": map[string]any{"type": "string"},
-			"key":        map[string]any{"type": "string"},
-			"deadzone":   map[string]any{"type": "number"},
-		}),
+		OutputSchema: actionOutputSchema(
+			map[string]any{
+				"actionName": map[string]any{"type": "string"},
+			},
+			map[string]any{
+				"type":                 "object",
+				"description":          "Input actions by name, with values in the tool value contract",
+				"additionalProperties": godotValueSchema("A value in the tool value contract"),
+			},
+		),
 		Handler: handleManageInputMap,
 	}
 }

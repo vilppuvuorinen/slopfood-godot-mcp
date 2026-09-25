@@ -44,22 +44,26 @@ func manageLayers() mcp.Tool {
 			},
 			"required": []string{"projectPath", "action"},
 		},
-		OutputSchema: statusOutputSchema(map[string]any{
-			"layers": map[string]any{
-				"type": "array",
-				"items": map[string]any{
-					"type": "object",
-					"properties": map[string]any{
-						"type":  map[string]any{"type": "string"},
-						"layer": map[string]any{"type": "integer"},
-						"name":  map[string]any{"type": "string"},
+		OutputSchema: actionOutputSchema(
+			map[string]any{
+				"layerType": map[string]any{"type": "string"},
+				"layer":     map[string]any{"type": "integer"},
+				"name":      map[string]any{"type": "string"},
+			},
+			payloadOutputSchema(map[string]any{
+				"layers": map[string]any{
+					"type": "array",
+					"items": map[string]any{
+						"type": "object",
+						"properties": map[string]any{
+							"type":  map[string]any{"type": "string"},
+							"layer": map[string]any{"type": "integer"},
+							"name":  map[string]any{"type": "string"},
+						},
 					},
 				},
-			},
-			"layerType": map[string]any{"type": "string"},
-			"layer":     map[string]any{"type": "integer"},
-			"name":      map[string]any{"type": "string"},
-		}),
+			}),
+		),
 		Handler: handleManageLayers,
 	}
 }

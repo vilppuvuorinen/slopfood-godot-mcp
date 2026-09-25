@@ -39,10 +39,17 @@ func manageAutoloads() mcp.Tool {
 			},
 			"required": []string{"projectPath", "action"},
 		},
-		OutputSchema: statusOutputSchema(map[string]any{
-			"name": map[string]any{"type": "string"},
-			"path": map[string]any{"type": "string"},
-		}),
+		OutputSchema: actionOutputSchema(
+			map[string]any{
+				"name": map[string]any{"type": "string"},
+				"path": map[string]any{"type": "string"},
+			},
+			map[string]any{
+				"type":                 "object",
+				"description":          "Autoload entries by name, with values in the tool value contract",
+				"additionalProperties": godotValueSchema("A value in the tool value contract"),
+			},
+		),
 		Handler: handleManageAutoloads,
 	}
 }

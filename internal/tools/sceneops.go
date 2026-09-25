@@ -119,21 +119,71 @@ func propertiesSchema(description string) map[string]any {
 }
 
 // statusOutputSchema returns the object output schema shared by the mutation
-// tools. It always allows the success and message fields plus any tool-specific
-// properties, and deliberately requires none so a single schema can describe
-// tools whose structured result varies by action.
+// tools. Every successful result carries the status envelope, so success and
+// message are both advertised and required alongside any tool-specific
+// properties.
 func statusOutputSchema(properties map[string]any) map[string]any {
-	props := map[string]any{
-		"success": map[string]any{"type": "boolean"},
-		"message": map[string]any{"type": "string"},
+	return map[string]any{
+		"type":       "object",
+		"properties": statusProperties(properties),
+		"required":   []string{"success", "message"},
 	}
-	for name, schema := range properties {
-		props[name] = schema
+}
+
+// payloadOutputSchema returns the object output schema for an action that
+// returns its payload directly, without the status envelope. Its properties
+// are exactly the fields the payload carries.
+func payloadOutputSchema(properties map[string]any) map[string]any {
+	return map[string]any{
+		"type":       "object",
+		"properties": properties,
+	}
+}
+
+// actionOutputSchema returns the object output schema for a tool whose
+// structured result depends on the action: a mutation returns the status
+// envelope while a read or list returns a payload without it. payloadSchema is
+// the full object schema for the payload shape, so a fixed-field payload uses
+// payloadOutputSchema and a free-form one can declare additionalProperties.
+// Both shapes are advertised with anyOf so a read is never described as
+// returning success and message, and no action is described by fields it does
+// not return. The merged properties still list every field for clients that do
+// not read schema branches.
+func actionOutputSchema(status map[string]any, payloadSchema map[string]any) map[string]any {
+	properties := statusProperties(status)
+	for name, schema := range payloadProperties(payloadSchema) {
+		properties[name] = schema
 	}
 	return map[string]any{
 		"type":       "object",
-		"properties": props,
+		"properties": properties,
+		"anyOf": []any{
+			statusOutputSchema(status),
+			payloadSchema,
+		},
 	}
+}
+
+// payloadProperties returns the named properties of a payload object schema, or
+// an empty map for a free-form schema that only declares additionalProperties.
+func payloadProperties(schema map[string]any) map[string]any {
+	properties, _ := schema["properties"].(map[string]any)
+	if properties == nil {
+		return map[string]any{}
+	}
+	return properties
+}
+
+// statusProperties builds the property map for the status envelope, starting
+// from success and message and adding each tool-specific field.
+func statusProperties(properties map[string]any) map[string]any {
+	props := make(map[string]any, len(properties)+2)
+	props["success"] = map[string]any{"type": "boolean"}
+	props["message"] = map[string]any{"type": "string"}
+	for name, schema := range properties {
+		props[name] = schema
+	}
+	return props
 }
 
 // sceneMissingResult is the shared error for a scene file that does not exist,

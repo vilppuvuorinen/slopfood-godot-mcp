@@ -37,12 +37,16 @@ func managePlugins() mcp.Tool {
 			},
 			"required": []string{"projectPath", "action"},
 		},
-		OutputSchema: statusOutputSchema(map[string]any{
-			"enabled":       map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			"available":     map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-			"pluginName":    map[string]any{"type": "string"},
-			"pluginEnabled": map[string]any{"type": "boolean"},
-		}),
+		OutputSchema: actionOutputSchema(
+			map[string]any{
+				"pluginName":    map[string]any{"type": "string"},
+				"pluginEnabled": map[string]any{"type": "boolean"},
+			},
+			payloadOutputSchema(map[string]any{
+				"enabled":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+				"available": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			}),
+		),
 		Handler: handleManagePlugins,
 	}
 }
