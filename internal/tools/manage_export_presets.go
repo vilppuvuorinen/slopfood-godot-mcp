@@ -109,7 +109,7 @@ func handleManageExportPresets(ctx context.Context, raw json.RawMessage) (any, e
 		return mcp.ErrorResult("Invalid path."), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
-		return mcp.ErrorResult("Not a valid Godot project: " + project), nil
+		return notAProjectResult(project), nil
 	}
 
 	presetsFile := filepath.Join(project, "export_presets.cfg")

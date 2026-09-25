@@ -220,6 +220,19 @@ func TestManageExportPresetsEscaping(t *testing.T) {
 	}
 }
 
+func TestManageExportPresetsNotAProjectSolutions(t *testing.T) {
+	result := callToolArgs(t, manageExportPresets(), t.TempDir(), `{"action":"list"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "Not a valid Godot project: ") {
+		t.Errorf("message = %q", result.Content[0].Text)
+	}
+	if len(result.Content) != 2 || !strings.HasPrefix(result.Content[1].Text, "Possible solutions:") {
+		t.Errorf("solutions = %+v", result.Content)
+	}
+}
+
 func TestManageExportPresetsErrors(t *testing.T) {
 	projectRoot := t.TempDir()
 	makeProject(t, projectRoot)
