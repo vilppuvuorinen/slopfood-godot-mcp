@@ -32,7 +32,7 @@ func validateScripts() mcp.Tool {
 			},
 			"required": []string{},
 		},
-		OutputSchema: map[string]any{
+		OutputSchema: readOutputSchema(map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"scope": map[string]any{
@@ -46,7 +46,7 @@ func validateScripts() mcp.Tool {
 				"results":         map[string]any{"type": "array", "items": validateScriptResultSchema()},
 			},
 			"required": []string{"scope", "fileCount", "filesWithErrors", "allValid", "results"},
-		},
+		}),
 		Handler: handleValidateScripts,
 	}
 }

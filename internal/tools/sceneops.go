@@ -205,6 +205,56 @@ func payloadOutputSchema(properties map[string]any) map[string]any {
 	}
 }
 
+// errorOutputSchema describes the structuredContent ErrorResult emits: the
+// success/message envelope with success false, plus the possible solutions when
+// one is offered. It is advertised as an alternative branch on a read tool's
+// output schema, so the envelope an error carries validates against the schema
+// the tool declares just as a mutation's status envelope already does. Without
+// it, every error from a payload-only tool would violate that tool's own
+// outputSchema, which describes only the success shape.
+func errorOutputSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"success":   map[string]any{"const": false},
+			"message":   map[string]any{"type": "string"},
+			"solutions": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+		},
+		"required": []string{"success", "message"},
+	}
+}
+
+// readOutputSchema returns the object output schema for a tool whose structured
+// result is either its success payload or, on failure, the error envelope
+// ErrorResult emits. The payload branch keeps its own required fields, so the
+// success contract stays precise, while the error branch makes the envelope an
+// advertised shape rather than an undeclared one. The merged top-level
+// properties also list every field for clients that do not read schema
+// branches. A payload's $defs are hoisted to the top level so its $refs stay
+// resolvable from the document root.
+func readOutputSchema(payloadSchema map[string]any) map[string]any {
+	properties := map[string]any{
+		"success":   map[string]any{"type": "boolean"},
+		"message":   map[string]any{"type": "string"},
+		"solutions": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+	}
+	for name, schema := range payloadProperties(payloadSchema) {
+		properties[name] = schema
+	}
+	schema := map[string]any{
+		"type":       "object",
+		"properties": properties,
+		"anyOf": []any{
+			errorOutputSchema(),
+			payloadSchema,
+		},
+	}
+	if defs, ok := payloadSchema["$defs"]; ok {
+		schema["$defs"] = defs
+	}
+	return schema
+}
+
 // actionOutputSchema returns the object output schema for a tool whose
 // structured result depends on the action: a mutation returns the status
 // envelope while a read or list returns a payload without it. payloadSchema is

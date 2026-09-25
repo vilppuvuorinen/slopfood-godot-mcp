@@ -34,7 +34,7 @@ func readProjectSettings() mcp.Tool {
 			},
 			"required": []string{},
 		},
-		OutputSchema: map[string]any{
+		OutputSchema: readOutputSchema(map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"projectPath":  map[string]any{"type": "string", "description": "Absolute host filesystem path to the bound project root"},
@@ -49,7 +49,7 @@ func readProjectSettings() mcp.Tool {
 				},
 			},
 			"required": []string{"projectPath", "settingCount", "sections"},
-		},
+		}),
 		Handler: handleReadProjectSettings,
 	}
 }

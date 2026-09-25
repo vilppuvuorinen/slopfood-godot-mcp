@@ -19,13 +19,13 @@ func getGodotVersion() mcp.Tool {
 			"properties": map[string]any{},
 			"required":   []string{},
 		},
-		OutputSchema: map[string]any{
+		OutputSchema: readOutputSchema(map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"version": map[string]any{"type": "string"},
 			},
 			"required": []string{"version"},
-		},
+		}),
 		Handler: handleGetGodotVersion,
 	}
 }

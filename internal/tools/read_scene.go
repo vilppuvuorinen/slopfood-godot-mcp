@@ -39,15 +39,17 @@ func readScene() mcp.Tool {
 	}
 }
 
-// readSceneOutputSchema describes both read_scene results: a readable scene
-// yields a node tree (the sceneNode shape), while a scene the engine cannot
-// instantiate yields its raw text so the caller can still inspect it. children
-// recurses through $defs/sceneNode, so any depth of tree is described.
+// readSceneOutputSchema describes every read_scene result: a readable scene
+// yields a node tree (the sceneNode shape), a scene the engine cannot
+// instantiate yields its raw text so the caller can still inspect it, and an
+// error yields the shared error envelope. children recurses through
+// $defs/sceneNode, so any depth of tree is described, and readOutputSchema
+// advertises the error branch alongside the two success shapes.
 func readSceneOutputSchema() map[string]any {
 	properties := sceneNodeProperties()
 	properties["error"] = map[string]any{"type": "string"}
 	properties["raw"] = map[string]any{"type": "string"}
-	return map[string]any{
+	return readOutputSchema(map[string]any{
 		"type":       "object",
 		"properties": properties,
 		// A readable scene yields a node tree, while a scene the engine
@@ -59,7 +61,7 @@ func readSceneOutputSchema() map[string]any {
 			map[string]any{"required": []string{"error", "raw"}},
 		},
 		"$defs": map[string]any{"sceneNode": sceneNodeSchema()},
-	}
+	})
 }
 
 // sceneNodeSchema describes one node in read_scene's tree. children refers back

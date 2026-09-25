@@ -26,7 +26,7 @@ func getUID() mcp.Tool {
 			},
 			"required": []string{"filePath"},
 		},
-		OutputSchema: map[string]any{
+		OutputSchema: readOutputSchema(map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"file":         map[string]any{"type": "string", "description": "Path to the file, relative to the bound project"},
@@ -36,7 +36,7 @@ func getUID() mcp.Tool {
 				"message":      map[string]any{"type": "string"},
 			},
 			"required": []string{"file", "absolutePath", "exists"},
-		},
+		}),
 		Handler: handleGetUID,
 	}
 }
