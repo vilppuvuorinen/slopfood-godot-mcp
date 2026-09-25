@@ -36,7 +36,7 @@ func TestCreateSceneSuccess(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, createScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn"}`)
+	result := callToolArgs(t, createScene(), root, `{"scenePath":"scenes/main.tscn"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -59,7 +59,7 @@ func TestCreateSceneCustomRootNodeType(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, createScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn","rootNodeType":"Node3D"}`)
+	result := callToolArgs(t, createScene(), root, `{"scenePath":"main.tscn","rootNodeType":"Node3D"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -71,22 +71,24 @@ func TestCreateSceneCustomRootNodeType(t *testing.T) {
 func TestCreateSceneValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing paths", args: `{}`, want: "Scene path is required"},
-		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `}`, want: "Scene path is required"},
-		{name: "invalid project path", args: `{"projectPath":"../escape","scenePath":"main.tscn"}`, want: "Invalid path"},
-		{name: "invalid scene path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"../escape.tscn"}`, want: "Invalid path"},
-		{name: "invalid root node type", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","rootNodeType":"res://evil.gd"}`, want: "Invalid rootNodeType"},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn"}`, want: "Not a valid Godot project"},
+		{name: "missing scene", project: root, args: `{}`, want: "Scene path is required"},
+		{name: "invalid project path", project: "../escape", args: `{"scenePath":"main.tscn"}`, want: "Invalid path"},
+		{name: "invalid scene path", project: root, args: `{"scenePath":"../escape.tscn"}`, want: "Invalid path"},
+		{name: "invalid root node type", project: root, args: `{"scenePath":"main.tscn","rootNodeType":"res://evil.gd"}`, want: "Invalid rootNodeType"},
+		{name: "not a project", project: notAProject, args: `{"scenePath":"main.tscn"}`, want: "Not a valid Godot project"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, createScene(), tt.args)
+			result := callToolArgs(t, createScene(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -102,7 +104,7 @@ func TestCreateSceneScriptFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, createScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn"}`)
+	result := callToolArgs(t, createScene(), root, `{"scenePath":"main.tscn"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -122,7 +124,7 @@ func TestCreateSceneSpawnFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, createScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn"}`)
+	result := callToolArgs(t, createScene(), root, `{"scenePath":"main.tscn"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

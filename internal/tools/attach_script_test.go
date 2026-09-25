@@ -41,7 +41,7 @@ func TestAttachScriptSuccess(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, attachScript(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
+	result := callToolArgs(t, attachScript(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -65,7 +65,7 @@ func TestAttachScriptStructuredContent(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, attachScript(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
+	result := callToolArgs(t, attachScript(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -84,21 +84,23 @@ func TestAttachScriptStructuredContent(t *testing.T) {
 func TestAttachScriptValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing params", args: `{}`, want: "scenePath, nodePath, and scriptPath are required."},
-		{name: "missing scriptPath", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","nodePath":"root/Player"}`, want: "scenePath, nodePath, and scriptPath are required."},
-		{name: "invalid path", args: `{"projectPath":"../escape","scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Invalid path."},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Not a valid Godot project: "},
-		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"missing.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Scene file does not exist: "},
+		{name: "missing scriptPath", project: root, args: `{"scenePath":"main.tscn","nodePath":"root/Player"}`, want: "scenePath, nodePath, and scriptPath are required."},
+		{name: "invalid path", project: "../escape", args: `{"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Invalid path."},
+		{name: "not a project", project: notAProject, args: `{"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Not a valid Godot project: "},
+		{name: "missing scene", project: root, args: `{"scenePath":"missing.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Scene file does not exist: "},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, attachScript(), tt.args)
+			result := callToolArgs(t, attachScript(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -115,7 +117,7 @@ func TestAttachScriptScriptFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, attachScript(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root","scriptPath":"scripts/player.gd"}`)
+	result := callToolArgs(t, attachScript(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root","scriptPath":"scripts/player.gd"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -136,7 +138,7 @@ func TestAttachScriptSpawnFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, attachScript(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
+	result := callToolArgs(t, attachScript(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

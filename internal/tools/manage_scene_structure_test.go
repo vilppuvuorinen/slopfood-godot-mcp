@@ -41,19 +41,19 @@ func TestManageSceneStructureSuccess(t *testing.T) {
 	}{
 		{
 			name:    "rename",
-			args:    `{"projectPath":%q,"scenePath":"scenes/main.tscn","action":"rename","nodePath":"root/Player","newName":"Hero"}`,
+			args:    `{"scenePath":"scenes/main.tscn","action":"rename","nodePath":"root/Player","newName":"Hero"}`,
 			want:    []string{`"action":"rename"`, `"nodePath":"root/Player"`, `"newName":"Hero"`},
 			notWant: []string{`"newParentPath"`},
 		},
 		{
 			name:    "duplicate",
-			args:    `{"projectPath":%q,"scenePath":"scenes/main.tscn","action":"duplicate","nodePath":"root/Player"}`,
+			args:    `{"scenePath":"scenes/main.tscn","action":"duplicate","nodePath":"root/Player"}`,
 			want:    []string{`"action":"duplicate"`, `"nodePath":"root/Player"`},
 			notWant: []string{`"newName"`, `"newParentPath"`},
 		},
 		{
 			name:    "move",
-			args:    `{"projectPath":%q,"scenePath":"scenes/main.tscn","action":"move","nodePath":"root/Player","newParentPath":"root/World"}`,
+			args:    `{"scenePath":"scenes/main.tscn","action":"move","nodePath":"root/Player","newParentPath":"root/World"}`,
 			want:    []string{`"action":"move"`, `"nodePath":"root/Player"`, `"newParentPath":"root/World"`},
 			notWant: []string{`"newName"`},
 		},
@@ -65,8 +65,7 @@ func TestManageSceneStructureSuccess(t *testing.T) {
 			makeProject(t, root)
 			seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
-			args := strings.ReplaceAll(tt.args, "%q", jsonString(root))
-			result := callToolArgs(t, manageSceneStructure(), args)
+			result := callToolArgs(t, manageSceneStructure(), root, tt.args)
 			if result.IsError {
 				t.Fatalf("unexpected error: %+v", result.Content)
 			}
@@ -88,23 +87,25 @@ func TestManageSceneStructureSuccess(t *testing.T) {
 func TestManageSceneStructureValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing params", args: `{}`, want: "scenePath, action, and nodePath are required."},
-		{name: "missing action", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","nodePath":"root"}`, want: "scenePath, action, and nodePath are required."},
-		{name: "missing node path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","action":"rename"}`, want: "scenePath, action, and nodePath are required."},
-		{name: "invalid project path", args: `{"projectPath":"../escape","scenePath":"main.tscn","action":"rename","nodePath":"root"}`, want: "Invalid path."},
-		{name: "invalid scene path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"../escape.tscn","action":"rename","nodePath":"root"}`, want: "Invalid path."},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn","action":"rename","nodePath":"root"}`, want: "Not a valid Godot project"},
-		{name: "missing scene file", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"missing.tscn","action":"rename","nodePath":"root"}`, want: "Scene file does not exist: missing.tscn"},
+		{name: "missing action", project: root, args: `{"scenePath":"main.tscn","nodePath":"root"}`, want: "scenePath, action, and nodePath are required."},
+		{name: "missing node path", project: root, args: `{"scenePath":"main.tscn","action":"rename"}`, want: "scenePath, action, and nodePath are required."},
+		{name: "invalid project path", project: "../escape", args: `{"scenePath":"main.tscn","action":"rename","nodePath":"root"}`, want: "Invalid path."},
+		{name: "invalid scene path", project: root, args: `{"scenePath":"../escape.tscn","action":"rename","nodePath":"root"}`, want: "Invalid path."},
+		{name: "not a project", project: notAProject, args: `{"scenePath":"main.tscn","action":"rename","nodePath":"root"}`, want: "Not a valid Godot project"},
+		{name: "missing scene file", project: root, args: `{"scenePath":"missing.tscn","action":"rename","nodePath":"root"}`, want: "Scene file does not exist: missing.tscn"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, manageSceneStructure(), tt.args)
+			result := callToolArgs(t, manageSceneStructure(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -121,7 +122,7 @@ func TestManageSceneStructureScriptFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, manageSceneStructure(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn","action":"rename","nodePath":"root"}`)
+	result := callToolArgs(t, manageSceneStructure(), root, `{"scenePath":"main.tscn","action":"rename","nodePath":"root"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -139,7 +140,7 @@ func TestManageSceneStructureSpawnFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, manageSceneStructure(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn","action":"rename","nodePath":"root"}`)
+	result := callToolArgs(t, manageSceneStructure(), root, `{"scenePath":"main.tscn","action":"rename","nodePath":"root"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

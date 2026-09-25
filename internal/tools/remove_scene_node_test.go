@@ -41,7 +41,7 @@ func TestRemoveSceneNodeSuccess(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, removeSceneNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root/Player"}`)
+	result := callToolArgs(t, removeSceneNode(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -62,21 +62,23 @@ func TestRemoveSceneNodeSuccess(t *testing.T) {
 func TestRemoveSceneNodeValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing params", args: `{}`, want: "scenePath and nodePath are required."},
-		{name: "missing nodePath", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn"}`, want: "scenePath and nodePath are required."},
-		{name: "invalid path", args: `{"projectPath":"../escape","scenePath":"main.tscn","nodePath":"root/Player"}`, want: "Invalid path."},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn","nodePath":"root/Player"}`, want: "Not a valid Godot project: "},
-		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"missing.tscn","nodePath":"root/Player"}`, want: "Scene file does not exist: "},
+		{name: "missing nodePath", project: root, args: `{"scenePath":"main.tscn"}`, want: "scenePath and nodePath are required."},
+		{name: "invalid path", project: "../escape", args: `{"scenePath":"main.tscn","nodePath":"root/Player"}`, want: "Invalid path."},
+		{name: "not a project", project: notAProject, args: `{"scenePath":"main.tscn","nodePath":"root/Player"}`, want: "Not a valid Godot project: "},
+		{name: "missing scene", project: root, args: `{"scenePath":"missing.tscn","nodePath":"root/Player"}`, want: "Scene file does not exist: "},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, removeSceneNode(), tt.args)
+			result := callToolArgs(t, removeSceneNode(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -93,7 +95,7 @@ func TestRemoveSceneNodeScriptFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, removeSceneNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root"}`)
+	result := callToolArgs(t, removeSceneNode(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -114,7 +116,7 @@ func TestRemoveSceneNodeSpawnFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, removeSceneNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root/Player"}`)
+	result := callToolArgs(t, removeSceneNode(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

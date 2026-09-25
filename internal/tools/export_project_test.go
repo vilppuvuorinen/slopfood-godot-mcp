@@ -41,7 +41,7 @@ func TestExportProjectSuccess(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, exportProject(), `{"projectPath":`+jsonString(root)+`,"presetName":"Linux","outputPath":"build/game.x86_64"}`)
+	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -62,7 +62,7 @@ func TestExportProjectAbsoluteOutputPath(t *testing.T) {
 	makeProject(t, root)
 	out := filepath.Join(t.TempDir(), "game.x86_64")
 
-	result := callToolArgs(t, exportProject(), `{"projectPath":`+jsonString(root)+`,"presetName":"Linux","outputPath":`+jsonString(out)+`}`)
+	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":`+jsonString(out)+`}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -76,7 +76,7 @@ func TestExportProjectDebug(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, exportProject(), `{"projectPath":`+jsonString(root)+`,"presetName":"Linux","outputPath":"build/game.x86_64","debug":true}`)
+	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":"build/game.x86_64","debug":true}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -90,7 +90,7 @@ func TestExportProjectUsesOutputPathWhenStdoutEmpty(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, exportProject(), `{"projectPath":`+jsonString(root)+`,"presetName":"Linux","outputPath":"build/game.x86_64"}`)
+	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -104,7 +104,7 @@ func TestExportProjectNonZeroExit(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, exportProject(), `{"projectPath":`+jsonString(root)+`,"presetName":"Linux","outputPath":"build/game.x86_64"}`)
+	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -118,7 +118,7 @@ func TestExportProjectUnexpectedStderrFails(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, exportProject(), `{"projectPath":`+jsonString(root)+`,"presetName":"Linux","outputPath":"build/game.x86_64"}`)
+	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
 	if !result.IsError {
 		t.Fatalf("unexpected stderr must fail even on exit 0: %+v", result.Content)
 	}
@@ -132,7 +132,7 @@ func TestExportProjectSpawnFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, exportProject(), `{"projectPath":`+jsonString(root)+`,"presetName":"Linux","outputPath":"build/game.x86_64"}`)
+	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -144,21 +144,23 @@ func TestExportProjectSpawnFailure(t *testing.T) {
 func TestExportProjectValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing params", args: `{}`, want: "presetName and outputPath are required."},
-		{name: "missing outputPath", args: `{"projectPath":` + jsonString(root) + `,"presetName":"Linux"}`, want: "presetName and outputPath are required."},
-		{name: "invalid path", args: `{"projectPath":"../escape","presetName":"Linux","outputPath":"out"}`, want: "Invalid project path."},
-		{name: "invalid output path", args: `{"projectPath":` + jsonString(root) + `,"presetName":"Linux","outputPath":"../escape"}`, want: "Invalid output path."},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"presetName":"Linux","outputPath":"out"}`, want: "Not a valid Godot project: "},
+		{name: "missing outputPath", project: root, args: `{"presetName":"Linux"}`, want: "presetName and outputPath are required."},
+		{name: "invalid path", project: "../escape", args: `{"presetName":"Linux","outputPath":"out"}`, want: "Invalid project path."},
+		{name: "invalid output path", project: root, args: `{"presetName":"Linux","outputPath":"../escape"}`, want: "Invalid output path."},
+		{name: "not a project", project: notAProject, args: `{"presetName":"Linux","outputPath":"out"}`, want: "Not a valid Godot project: "},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, exportProject(), tt.args)
+			result := callToolArgs(t, exportProject(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}

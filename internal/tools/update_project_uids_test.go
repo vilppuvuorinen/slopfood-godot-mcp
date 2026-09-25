@@ -35,7 +35,7 @@ func TestUpdateProjectUIDsSuccess(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, updateProjectUIDs(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, updateProjectUIDs(), root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -65,7 +65,7 @@ func TestUpdateProjectUIDsVersionGate(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, updateProjectUIDs(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, updateProjectUIDs(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -80,19 +80,21 @@ func TestUpdateProjectUIDsVersionGate(t *testing.T) {
 func TestUpdateProjectUIDsValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing", args: `{}`, want: "Invalid project path"},
-		{name: "invalid path", args: `{"projectPath":"../escape"}`, want: "Invalid project path"},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `}`, want: "Not a valid Godot project"},
+		{name: "invalid path", project: "../escape", args: `{}`, want: "Invalid project path"},
+		{name: "not a project", project: notAProject, args: `{}`, want: "Not a valid Godot project"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, updateProjectUIDs(), tt.args)
+			result := callToolArgs(t, updateProjectUIDs(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -109,7 +111,7 @@ func TestUpdateProjectUIDsScriptFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, updateProjectUIDs(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, updateProjectUIDs(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -129,7 +131,7 @@ func TestUpdateProjectUIDsSpawnFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, updateProjectUIDs(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, updateProjectUIDs(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -144,7 +146,7 @@ func TestUpdateProjectUIDsVersionFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, updateProjectUIDs(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, updateProjectUIDs(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

@@ -56,7 +56,7 @@ jump={"deadzone": 0.5}
 config/name="Demo"
 `)
 
-	result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+	result := callToolArgs(t, manageInputMap(), root, `{"action":"list"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -79,7 +79,7 @@ func TestManageInputMapListEmpty(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+	result := callToolArgs(t, manageInputMap(), root, `{"action":"list"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -92,7 +92,7 @@ func TestManageInputMapAddWithKey(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"add","actionName":"move_left","key":"W"}`)
+	result := callToolArgs(t, manageInputMap(), root, `{"action":"add","actionName":"move_left","key":"W"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -116,7 +116,7 @@ func TestManageInputMapAddWithoutKey(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"add","actionName":"jump","deadzone":1}`)
+	result := callToolArgs(t, manageInputMap(), root, `{"action":"add","actionName":"jump","deadzone":1}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -138,7 +138,7 @@ func TestManageInputMapMerge(t *testing.T) {
 	existingEvent := `Object(InputEventKey,"resource_local_to_scene":false,"resource_name":"","device":-1,"window_id":0,"alt_pressed":false,"shift_pressed":false,"ctrl_pressed":false,"meta_pressed":false,"pressed":false,"keycode":0,"physical_keycode":87,"key_label":0,"unicode":0,"location":0,"echo":false,"script":null)`
 	seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[input]\n\nmove_left={\"deadzone\": 0.5, \"events\": ["+existingEvent+"]}\n")
 
-	result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"add","actionName":"move_left","key":"D"}`)
+	result := callToolArgs(t, manageInputMap(), root, `{"action":"add","actionName":"move_left","key":"D"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -169,7 +169,7 @@ move_left={"deadzone": 0.5}
 jump={"deadzone": 0.5}
 `)
 
-	result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"remove","actionName":"move_left"}`)
+	result := callToolArgs(t, manageInputMap(), root, `{"action":"remove","actionName":"move_left"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -200,7 +200,7 @@ func TestManageInputMapRemoveScoped(t *testing.T) {
 jump={"deadzone": 0.5}
 double_jump={"deadzone": 0.5}
 `)
-		result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"remove","actionName":"jump"}`)
+		result := callToolArgs(t, manageInputMap(), root, `{"action":"remove","actionName":"jump"}`)
 		if result.IsError {
 			t.Fatalf("unexpected error: %+v", result.Content)
 		}
@@ -233,7 +233,7 @@ jump={"deadzone": 0.5}
 
 jump="*res://jump.gd"
 `)
-		result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"remove","actionName":"jump"}`)
+		result := callToolArgs(t, manageInputMap(), root, `{"action":"remove","actionName":"jump"}`)
 		if result.IsError {
 			t.Fatalf("unexpected error: %+v", result.Content)
 		}
@@ -270,8 +270,7 @@ func TestManageInputMapEscaping(t *testing.T) {
 			root := t.TempDir()
 			makeProject(t, root)
 
-			result := callToolArgs(t, manageInputMap(),
-				`{"projectPath":`+jsonString(root)+`,"action":"add","actionName":`+jsonString(tt.action)+`,"key":"W"}`)
+			result := callToolArgs(t, manageInputMap(), root, `{"action":"add","actionName":`+jsonString(tt.action)+`,"key":"W"}`)
 			if result.IsError {
 				t.Fatalf("unexpected error: %+v", result.Content)
 			}
@@ -283,7 +282,7 @@ func TestManageInputMapEscaping(t *testing.T) {
 				t.Errorf("project.godot = %q, want it to contain %q", data, tt.wantLine)
 			}
 
-			list := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+			list := callToolArgs(t, manageInputMap(), root, `{"action":"list"}`)
 			var actions map[string]any
 			if unmarshalErr := json.Unmarshal([]byte(list.Content[0].Text), &actions); unmarshalErr != nil {
 				t.Fatalf("unmarshal %q: %v", list.Content[0].Text, unmarshalErr)
@@ -292,8 +291,7 @@ func TestManageInputMapEscaping(t *testing.T) {
 				t.Errorf("actions = %v, want key %q", actions, tt.action)
 			}
 
-			removed := callToolArgs(t, manageInputMap(),
-				`{"projectPath":`+jsonString(root)+`,"action":"remove","actionName":`+jsonString(tt.action)+`}`)
+			removed := callToolArgs(t, manageInputMap(), root, `{"action":"remove","actionName":`+jsonString(tt.action)+`}`)
 			if removed.IsError {
 				t.Fatalf("unexpected error: %+v", removed.Content)
 			}
@@ -319,8 +317,7 @@ func TestManageInputMapMergeMultiline(t *testing.T) {
 	seedFile(t, filepath.Join(root, "project.godot"),
 		"config_version=5\n\n[input]\n\nmove_left={\n\"deadzone\": 0.25,\n\"events\": ["+existingEvent+"]\n}\n")
 
-	result := callToolArgs(t, manageInputMap(),
-		`{"projectPath":`+jsonString(root)+`,"action":"add","actionName":"move_left","key":"D"}`)
+	result := callToolArgs(t, manageInputMap(), root, `{"action":"add","actionName":"move_left","key":"D"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -339,8 +336,7 @@ func TestManageInputMapMergeMultiline(t *testing.T) {
 	}
 
 	// Binding the same scancode again is a no-op.
-	again := callToolArgs(t, manageInputMap(),
-		`{"projectPath":`+jsonString(root)+`,"action":"add","actionName":"move_left","key":"W"}`)
+	again := callToolArgs(t, manageInputMap(), root, `{"action":"add","actionName":"move_left","key":"W"}`)
 	if again.IsError {
 		t.Fatalf("unexpected error: %+v", again.Content)
 	}
@@ -356,23 +352,25 @@ func TestManageInputMapMergeMultiline(t *testing.T) {
 func TestManageInputMapErrors(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing params", args: `{}`, want: "action is required."},
-		{name: "missing action", args: `{"projectPath":` + jsonString(root) + `}`, want: "action is required."},
-		{name: "invalid path", args: `{"projectPath":"../escape","action":"list"}`, want: "Invalid path."},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"action":"list"}`, want: "Not a valid Godot project: "},
-		{name: "add missing actionName", args: `{"projectPath":` + jsonString(root) + `,"action":"add"}`, want: "actionName is required for add action."},
-		{name: "remove missing actionName", args: `{"projectPath":` + jsonString(root) + `,"action":"remove"}`, want: "actionName is required for remove action."},
-		{name: "invalid action", args: `{"projectPath":` + jsonString(root) + `,"action":"bogus"}`, want: `Invalid action. Use "list", "add", or "remove".`},
+		{name: "missing action", project: root, args: `{}`, want: "action is required."},
+		{name: "invalid path", project: "../escape", args: `{"action":"list"}`, want: "Invalid path."},
+		{name: "not a project", project: notAProject, args: `{"action":"list"}`, want: "Not a valid Godot project: "},
+		{name: "add missing actionName", project: root, args: `{"action":"add"}`, want: "actionName is required for add action."},
+		{name: "remove missing actionName", project: root, args: `{"action":"remove"}`, want: "actionName is required for remove action."},
+		{name: "invalid action", project: root, args: `{"action":"bogus"}`, want: `Invalid action. Use "list", "add", or "remove".`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, manageInputMap(), tt.args)
+			result := callToolArgs(t, manageInputMap(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -421,7 +419,7 @@ func TestManageInputMapAddSpecialKey(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"add","actionName":"jump","key":"ENTER"}`)
+	result := callToolArgs(t, manageInputMap(), root, `{"action":"add","actionName":"jump","key":"ENTER"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -442,7 +440,7 @@ func TestManageInputMapRejectsUnsupportedSchema(t *testing.T) {
 	root := t.TempDir()
 	seedFile(t, filepath.Join(root, "project.godot"), "config_version=4\n")
 
-	result := callToolArgs(t, manageInputMap(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+	result := callToolArgs(t, manageInputMap(), root, `{"action":"list"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

@@ -38,7 +38,7 @@ func TestReadSceneSuccess(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, readScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn"}`)
+	result := callToolArgs(t, readScene(), root, `{"scenePath":"scenes/main.tscn"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -62,7 +62,7 @@ func TestReadScenePreservesNestedPropertyValues(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, readScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn"}`)
+	result := callToolArgs(t, readScene(), root, `{"scenePath":"scenes/main.tscn"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -100,7 +100,7 @@ func TestReadSceneRawWhenNoMarkers(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, readScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn"}`)
+	result := callToolArgs(t, readScene(), root, `{"scenePath":"main.tscn"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -115,7 +115,7 @@ func TestReadSceneRawWhenMarkersInvalid(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, readScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn"}`)
+	result := callToolArgs(t, readScene(), root, `{"scenePath":"main.tscn"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -131,22 +131,24 @@ func TestReadSceneRawWhenMarkersInvalid(t *testing.T) {
 func TestReadSceneValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing paths", args: `{}`, want: "scenePath is required."},
-		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `}`, want: "scenePath is required."},
-		{name: "invalid project path", args: `{"projectPath":"../escape","scenePath":"main.tscn"}`, want: "Invalid path."},
-		{name: "invalid scene path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"../escape.tscn"}`, want: "Invalid path."},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn"}`, want: "Not a valid Godot project"},
-		{name: "missing scene file", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"missing.tscn"}`, want: "Scene file does not exist: missing.tscn"},
+		{name: "missing scene", project: root, args: `{}`, want: "scenePath is required."},
+		{name: "invalid project path", project: "../escape", args: `{"scenePath":"main.tscn"}`, want: "Invalid path."},
+		{name: "invalid scene path", project: root, args: `{"scenePath":"../escape.tscn"}`, want: "Invalid path."},
+		{name: "not a project", project: notAProject, args: `{"scenePath":"main.tscn"}`, want: "Not a valid Godot project"},
+		{name: "missing scene file", project: root, args: `{"scenePath":"missing.tscn"}`, want: "Scene file does not exist: missing.tscn"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, readScene(), tt.args)
+			result := callToolArgs(t, readScene(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -163,7 +165,7 @@ func TestReadSceneScriptFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, readScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn"}`)
+	result := callToolArgs(t, readScene(), root, `{"scenePath":"main.tscn"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -181,7 +183,7 @@ func TestReadSceneSpawnFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, readScene(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn"}`)
+	result := callToolArgs(t, readScene(), root, `{"scenePath":"main.tscn"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

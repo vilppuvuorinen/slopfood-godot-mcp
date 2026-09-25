@@ -44,7 +44,7 @@ func TestReadProjectSettingsSuccess(t *testing.T) {
 config/name="Demo"
 `)
 
-	result := callToolArgs(t, readProjectSettings(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, readProjectSettings(), root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -70,7 +70,7 @@ func TestReadProjectSettingsRejectsUnparseableProject(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readProjectSettings(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, readProjectSettings(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -89,7 +89,7 @@ func TestReadProjectSettingsReportsProbeFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readProjectSettings(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, readProjectSettings(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -107,7 +107,7 @@ func TestReadProjectSettingsReportsEngineFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readProjectSettings(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, readProjectSettings(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -118,18 +118,20 @@ func TestReadProjectSettingsReportsEngineFailure(t *testing.T) {
 
 func TestReadProjectSettingsErrors(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodot(t))
+	notAProject := t.TempDir()
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing projectPath", args: `{}`, want: "Invalid path."},
-		{name: "invalid path", args: `{"projectPath":"../escape"}`, want: "Invalid path."},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `}`, want: "Not a valid Godot project"},
+		{name: "invalid path", project: "../escape", args: `{}`, want: "Invalid path."},
+		{name: "not a project", project: notAProject, args: `{}`, want: "Not a valid Godot project"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, readProjectSettings(), tt.args)
+			result := callToolArgs(t, readProjectSettings(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}

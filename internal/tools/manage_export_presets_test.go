@@ -40,7 +40,7 @@ func TestManageExportPresetsListEmpty(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageExportPresets(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+	result := callToolArgs(t, manageExportPresets(), root, `{"action":"list"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -53,7 +53,7 @@ func TestManageExportPresetsAddAndList(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageExportPresets(), `{"projectPath":`+jsonString(root)+`,"action":"add","name":"Linux","platform":"Linux","runnable":true}`)
+	result := callToolArgs(t, manageExportPresets(), root, `{"action":"add","name":"Linux","platform":"Linux","runnable":true}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -70,7 +70,7 @@ func TestManageExportPresetsAddAndList(t *testing.T) {
 		}
 	}
 
-	list := callToolArgs(t, manageExportPresets(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+	list := callToolArgs(t, manageExportPresets(), root, `{"action":"list"}`)
 	if list.IsError {
 		t.Fatalf("unexpected error: %+v", list.Content)
 	}
@@ -87,7 +87,7 @@ func TestManageExportPresetsAddRunnableDefaultsFalse(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageExportPresets(), `{"projectPath":`+jsonString(root)+`,"action":"add","name":"Web","platform":"Web"}`)
+	result := callToolArgs(t, manageExportPresets(), root, `{"action":"add","name":"Web","platform":"Web"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -105,7 +105,7 @@ func TestManageExportPresetsListUnknownPlatform(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "export_presets.cfg"), "[preset.1]\n\nname=\"Nameless\"\n")
 
-	result := callToolArgs(t, manageExportPresets(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+	result := callToolArgs(t, manageExportPresets(), root, `{"action":"list"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -134,7 +134,7 @@ platform="Web"
 runnable=false
 `)
 
-	result := callToolArgs(t, manageExportPresets(), `{"projectPath":`+jsonString(root)+`,"action":"remove","name":"Linux"}`)
+	result := callToolArgs(t, manageExportPresets(), root, `{"action":"remove","name":"Linux"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -157,7 +157,7 @@ func TestManageExportPresetsRemoveMissingFile(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageExportPresets(), `{"projectPath":`+jsonString(root)+`,"action":"remove","name":"Linux"}`)
+	result := callToolArgs(t, manageExportPresets(), root, `{"action":"remove","name":"Linux"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -183,8 +183,7 @@ func TestManageExportPresetsEscaping(t *testing.T) {
 			root := t.TempDir()
 			makeProject(t, root)
 
-			result := callToolArgs(t, manageExportPresets(),
-				`{"projectPath":`+jsonString(root)+`,"action":"add","name":`+jsonString(tt.preset)+`,"platform":`+jsonString(tt.platform)+`}`)
+			result := callToolArgs(t, manageExportPresets(), root, `{"action":"add","name":`+jsonString(tt.preset)+`,"platform":`+jsonString(tt.platform)+`}`)
 			if result.IsError {
 				t.Fatalf("unexpected error: %+v", result.Content)
 			}
@@ -197,7 +196,7 @@ func TestManageExportPresetsEscaping(t *testing.T) {
 				t.Errorf("export_presets.cfg = %q, want it to contain %q", data, wantName)
 			}
 
-			list := callToolArgs(t, manageExportPresets(), `{"projectPath":`+jsonString(root)+`,"action":"list"}`)
+			list := callToolArgs(t, manageExportPresets(), root, `{"action":"list"}`)
 			var decoded exportPresetList
 			if unmarshalErr := json.Unmarshal([]byte(list.Content[0].Text), &decoded); unmarshalErr != nil {
 				t.Fatalf("unmarshal %q: %v", list.Content[0].Text, unmarshalErr)
@@ -206,8 +205,7 @@ func TestManageExportPresetsEscaping(t *testing.T) {
 				t.Errorf("presets = %+v, want name %q platform %q", decoded.Presets, tt.preset, tt.platform)
 			}
 
-			remove := callToolArgs(t, manageExportPresets(),
-				`{"projectPath":`+jsonString(root)+`,"action":"remove","name":`+jsonString(tt.preset)+`}`)
+			remove := callToolArgs(t, manageExportPresets(), root, `{"action":"remove","name":`+jsonString(tt.preset)+`}`)
 			if remove.IsError {
 				t.Fatalf("unexpected error: %+v", remove.Content)
 			}
@@ -225,11 +223,13 @@ func TestManageExportPresetsEscaping(t *testing.T) {
 func TestManageExportPresetsErrors(t *testing.T) {
 	projectRoot := t.TempDir()
 	makeProject(t, projectRoot)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{
 			name: "missing params",
@@ -237,39 +237,45 @@ func TestManageExportPresetsErrors(t *testing.T) {
 			want: "action is required.",
 		},
 		{
-			name: "invalid path",
-			args: `{"projectPath":"../escape","action":"list"}`,
-			want: "Invalid path.",
+			name:    "invalid path",
+			project: "../escape",
+			args:    `{"action":"list"}`,
+			want:    "Invalid path.",
 		},
 		{
-			name: "not a project",
-			args: `{"projectPath":` + jsonString(t.TempDir()) + `,"action":"list"}`,
-			want: "Not a valid Godot project: ",
+			name:    "not a project",
+			project: notAProject,
+			args:    `{"action":"list"}`,
+			want:    "Not a valid Godot project: ",
 		},
 		{
-			name: "add missing platform",
-			args: `{"projectPath":` + jsonString(projectRoot) + `,"action":"add","name":"Linux"}`,
-			want: "name and platform are required for add action.",
+			name:    "add missing platform",
+			project: projectRoot,
+			args:    `{"action":"add","name":"Linux"}`,
+			want:    "name and platform are required for add action.",
 		},
 		{
-			name: "add missing name",
-			args: `{"projectPath":` + jsonString(projectRoot) + `,"action":"add","platform":"Linux"}`,
-			want: "name and platform are required for add action.",
+			name:    "add missing name",
+			project: projectRoot,
+			args:    `{"action":"add","platform":"Linux"}`,
+			want:    "name and platform are required for add action.",
 		},
 		{
-			name: "remove missing name",
-			args: `{"projectPath":` + jsonString(projectRoot) + `,"action":"remove"}`,
-			want: "name is required for remove action.",
+			name:    "remove missing name",
+			project: projectRoot,
+			args:    `{"action":"remove"}`,
+			want:    "name is required for remove action.",
 		},
 		{
-			name: "unknown action",
-			args: `{"projectPath":` + jsonString(projectRoot) + `,"action":"bogus"}`,
-			want: `Invalid action. Use "list", "add", or "remove".`,
+			name:    "unknown action",
+			project: projectRoot,
+			args:    `{"action":"bogus"}`,
+			want:    `Invalid action. Use "list", "add", or "remove".`,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, manageExportPresets(), tt.args)
+			result := callToolArgs(t, manageExportPresets(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}

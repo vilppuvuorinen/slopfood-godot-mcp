@@ -42,7 +42,7 @@ func TestModifySceneNodeSuccess(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, modifySceneNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root/Player","properties":{"visible":false}}`)
+	result := callToolArgs(t, modifySceneNode(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","properties":{"visible":false}}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -66,7 +66,7 @@ func TestModifySceneNodeVector2Properties(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, modifySceneNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root/Player","properties":{"position":{"$type":"Vector2","x":10,"y":20}}}`)
+	result := callToolArgs(t, modifySceneNode(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","properties":{"position":{"$type":"Vector2","x":10,"y":20}}}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -81,7 +81,7 @@ func TestModifySceneNodeLeavesDictionaryValuedPropertiesUntouched(t *testing.T) 
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, modifySceneNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodePath":"root/Player","properties":{"config":{"myKey":1}}}`)
+	result := callToolArgs(t, modifySceneNode(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","properties":{"config":{"myKey":1}}}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -97,22 +97,24 @@ func TestModifySceneNodeLeavesDictionaryValuedPropertiesUntouched(t *testing.T) 
 func TestModifySceneNodeValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing params", args: `{}`, want: "scenePath, nodePath, and properties are required."},
-		{name: "missing properties", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","nodePath":"root"}`, want: "scenePath, nodePath, and properties are required."},
-		{name: "invalid project path", args: `{"projectPath":"../escape","scenePath":"main.tscn","nodePath":"root","properties":{"visible":true}}`, want: "Invalid path."},
-		{name: "invalid scene path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"../escape.tscn","nodePath":"root","properties":{"visible":true}}`, want: "Invalid path."},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn","nodePath":"root","properties":{"visible":true}}`, want: "Not a valid Godot project"},
-		{name: "missing scene file", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"missing.tscn","nodePath":"root","properties":{"visible":true}}`, want: "Scene file does not exist: missing.tscn"},
+		{name: "missing properties", project: root, args: `{"scenePath":"main.tscn","nodePath":"root"}`, want: "scenePath, nodePath, and properties are required."},
+		{name: "invalid project path", project: "../escape", args: `{"scenePath":"main.tscn","nodePath":"root","properties":{"visible":true}}`, want: "Invalid path."},
+		{name: "invalid scene path", project: root, args: `{"scenePath":"../escape.tscn","nodePath":"root","properties":{"visible":true}}`, want: "Invalid path."},
+		{name: "not a project", project: notAProject, args: `{"scenePath":"main.tscn","nodePath":"root","properties":{"visible":true}}`, want: "Not a valid Godot project"},
+		{name: "missing scene file", project: root, args: `{"scenePath":"missing.tscn","nodePath":"root","properties":{"visible":true}}`, want: "Scene file does not exist: missing.tscn"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, modifySceneNode(), tt.args)
+			result := callToolArgs(t, modifySceneNode(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -129,7 +131,7 @@ func TestModifySceneNodeScriptFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, modifySceneNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn","nodePath":"root","properties":{"visible":true}}`)
+	result := callToolArgs(t, modifySceneNode(), root, `{"scenePath":"main.tscn","nodePath":"root","properties":{"visible":true}}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -147,7 +149,7 @@ func TestModifySceneNodeSpawnFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, modifySceneNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"main.tscn","nodePath":"root","properties":{"visible":true}}`)
+	result := callToolArgs(t, modifySceneNode(), root, `{"scenePath":"main.tscn","nodePath":"root","properties":{"visible":true}}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

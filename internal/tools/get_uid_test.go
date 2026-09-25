@@ -44,7 +44,7 @@ func TestGetUIDSuccess(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "player.gd"), "script")
 
-	result := callToolArgs(t, getUID(), `{"projectPath":`+jsonString(root)+`,"filePath":"player.gd"}`)
+	result := callToolArgs(t, getUID(), root, `{"filePath":"player.gd"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -70,7 +70,7 @@ func TestGetUIDVersionGate(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "player.gd"), "script")
 
-	result := callToolArgs(t, getUID(), `{"projectPath":`+jsonString(root)+`,"filePath":"player.gd"}`)
+	result := callToolArgs(t, getUID(), root, `{"filePath":"player.gd"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -86,20 +86,22 @@ func TestGetUIDValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "player.gd"), "script")
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing params", args: `{}`, want: "Missing required parameters"},
-		{name: "invalid path", args: `{"projectPath":"../escape","filePath":"player.gd"}`, want: "Invalid path"},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"filePath":"player.gd"}`, want: "Not a valid Godot project"},
-		{name: "missing file", args: `{"projectPath":` + jsonString(root) + `,"filePath":"missing.gd"}`, want: "File does not exist: "},
+		{name: "invalid path", project: "../escape", args: `{"filePath":"player.gd"}`, want: "Invalid path"},
+		{name: "not a project", project: notAProject, args: `{"filePath":"player.gd"}`, want: "Not a valid Godot project"},
+		{name: "missing file", project: root, args: `{"filePath":"missing.gd"}`, want: "File does not exist: "},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, getUID(), tt.args)
+			result := callToolArgs(t, getUID(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -117,7 +119,7 @@ func TestGetUIDScriptFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "player.gd"), "script")
 
-	result := callToolArgs(t, getUID(), `{"projectPath":`+jsonString(root)+`,"filePath":"player.gd"}`)
+	result := callToolArgs(t, getUID(), root, `{"filePath":"player.gd"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -138,7 +140,7 @@ func TestGetUIDSpawnFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "player.gd"), "script")
 
-	result := callToolArgs(t, getUID(), `{"projectPath":`+jsonString(root)+`,"filePath":"player.gd"}`)
+	result := callToolArgs(t, getUID(), root, `{"filePath":"player.gd"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -154,7 +156,7 @@ func TestGetUIDVersionFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "player.gd"), "script")
 
-	result := callToolArgs(t, getUID(), `{"projectPath":`+jsonString(root)+`,"filePath":"player.gd"}`)
+	result := callToolArgs(t, getUID(), root, `{"filePath":"player.gd"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

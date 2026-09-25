@@ -41,7 +41,7 @@ func TestAddNodeSuccess(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, addNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodeType":"Sprite2D","nodeName":"Player","parentNodePath":"root","properties":{"position":1}}`)
+	result := callToolArgs(t, addNode(), root, `{"scenePath":"scenes/main.tscn","nodeType":"Sprite2D","nodeName":"Player","parentNodePath":"root","properties":{"position":1}}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -65,7 +65,7 @@ func TestAddNodeOmitsOptionalParams(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, addNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodeType":"Sprite2D","nodeName":"Player"}`)
+	result := callToolArgs(t, addNode(), root, `{"scenePath":"scenes/main.tscn","nodeType":"Sprite2D","nodeName":"Player"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -80,21 +80,23 @@ func TestAddNodeOmitsOptionalParams(t *testing.T) {
 func TestAddNodeValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing params", args: `{}`, want: "Missing required parameters"},
-		{name: "invalid path", args: `{"projectPath":"../escape","scenePath":"main.tscn","nodeType":"Sprite2D","nodeName":"Player"}`, want: "Invalid path"},
-		{name: "invalid nodeType", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","nodeType":"res://evil.gd","nodeName":"Player"}`, want: "Invalid nodeType"},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn","nodeType":"Sprite2D","nodeName":"Player"}`, want: "Not a valid Godot project"},
-		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"missing.tscn","nodeType":"Sprite2D","nodeName":"Player"}`, want: "Scene file does not exist: "},
+		{name: "invalid path", project: "../escape", args: `{"scenePath":"main.tscn","nodeType":"Sprite2D","nodeName":"Player"}`, want: "Invalid path"},
+		{name: "invalid nodeType", project: root, args: `{"scenePath":"main.tscn","nodeType":"res://evil.gd","nodeName":"Player"}`, want: "Invalid nodeType"},
+		{name: "not a project", project: notAProject, args: `{"scenePath":"main.tscn","nodeType":"Sprite2D","nodeName":"Player"}`, want: "Not a valid Godot project"},
+		{name: "missing scene", project: root, args: `{"scenePath":"missing.tscn","nodeType":"Sprite2D","nodeName":"Player"}`, want: "Scene file does not exist: "},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, addNode(), tt.args)
+			result := callToolArgs(t, addNode(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -111,7 +113,7 @@ func TestAddNodeScriptFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, addNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodeType":"Sprite2D","nodeName":"Player"}`)
+	result := callToolArgs(t, addNode(), root, `{"scenePath":"scenes/main.tscn","nodeType":"Sprite2D","nodeName":"Player"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -132,7 +134,7 @@ func TestAddNodeSpawnFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, addNode(), `{"projectPath":`+jsonString(root)+`,"scenePath":"scenes/main.tscn","nodeType":"Sprite2D","nodeName":"Player"}`)
+	result := callToolArgs(t, addNode(), root, `{"scenePath":"scenes/main.tscn","nodeType":"Sprite2D","nodeName":"Player"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

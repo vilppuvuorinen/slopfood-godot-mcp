@@ -48,8 +48,7 @@ func TestModifyProjectSettingsUpdateExistingKey(t *testing.T) {
 config/name="Demo"
 run/main_scene="res://main.tscn"
 `)
-	result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
-		`,"section":"application","key":"config/name","value":"New"}`)
+	result := callToolArgs(t, modifyProjectSettings(), root, `{"section":"application","key":"config/name","value":"New"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -77,8 +76,7 @@ func TestModifyProjectSettingsAddKeyToExistingSection(t *testing.T) {
 
 config/name="Demo"
 `)
-	result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
-		`,"section":"application","key":"config/description","value":"Hi"}`)
+	result := callToolArgs(t, modifyProjectSettings(), root, `{"section":"application","key":"config/description","value":"Hi"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -104,8 +102,7 @@ func TestModifyProjectSettingsAppendNewSection(t *testing.T) {
 
 config/name="Demo"
 `)
-	result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
-		`,"section":"display","key":"window/size/viewport_width","value":1280}`)
+	result := callToolArgs(t, modifyProjectSettings(), root, `{"section":"display","key":"window/size/viewport_width","value":1280}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -141,8 +138,7 @@ func TestModifyProjectSettingsValueTypes(t *testing.T) {
 			root := t.TempDir()
 			makeProject(t, root)
 			seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[application]\n\nconfig/name=\"Demo\"\n")
-			result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
-				`,"section":"application","key":"test/value","value":`+tt.value+`}`)
+			result := callToolArgs(t, modifyProjectSettings(), root, `{"section":"application","key":"test/value","value":`+tt.value+`}`)
 			if result.IsError {
 				t.Fatalf("unexpected error: %+v", result.Content)
 			}
@@ -163,8 +159,7 @@ func TestModifyProjectSettingsVectorValue(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n")
-	result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
-		`,"section":"display","key":"window/size/test","value":{"$type":"Vector2i","x":1,"y":2}}`)
+	result := callToolArgs(t, modifyProjectSettings(), root, `{"section":"display","key":"window/size/test","value":{"$type":"Vector2i","x":1,"y":2}}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -191,8 +186,7 @@ func TestModifyProjectSettingsUnknownTagRejected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read project.godot: %v", err)
 	}
-	result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
-		`,"section":"application","key":"config/name","value":{"$type":"Vectr2","x":1,"y":2}}`)
+	result := callToolArgs(t, modifyProjectSettings(), root, `{"section":"application","key":"config/name","value":{"$type":"Vectr2","x":1,"y":2}}`)
 	if !result.IsError {
 		t.Fatalf("expected an error for an unknown $type, got: %+v", result.Content)
 	}
@@ -216,8 +210,7 @@ func TestModifyProjectSettingsEscaping(t *testing.T) {
 		makeProject(t, root)
 		seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n")
 
-		result := callToolArgs(t, modifyProjectSettings(),
-			`{"projectPath":`+jsonString(root)+`,"section":`+jsonString("weird]section")+`,"key":`+jsonString("a\nb")+`,"value":1280}`)
+		result := callToolArgs(t, modifyProjectSettings(), root, `{"section":`+jsonString("weird]section")+`,"key":`+jsonString("a\nb")+`,"value":1280}`)
 		if result.IsError {
 			t.Fatalf("unexpected error: %+v", result.Content)
 		}
@@ -239,8 +232,7 @@ func TestModifyProjectSettingsEscaping(t *testing.T) {
 		makeProject(t, root)
 		seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[application]\n\nconfig/description=\"say \\\"hi\\\"\"\nconfig/name=\"Demo\"\n")
 
-		result := callToolArgs(t, modifyProjectSettings(),
-			`{"projectPath":`+jsonString(root)+`,"section":"application","key":"config/description","value":"bye"}`)
+		result := callToolArgs(t, modifyProjectSettings(), root, `{"section":"application","key":"config/description","value":"bye"}`)
 		if result.IsError {
 			t.Fatalf("unexpected error: %+v", result.Content)
 		}
@@ -275,8 +267,7 @@ config/name="Demo"
 `)
 
 	injected := "1\n[input]\nmove_left=1"
-	result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
-		`,"section":"application","key":"config/name","value":`+jsonString(injected)+`}`)
+	result := callToolArgs(t, modifyProjectSettings(), root, `{"section":"application","key":"config/name","value":`+jsonString(injected)+`}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -297,8 +288,7 @@ config/name="Demo"
 		t.Errorf("config/name = %#v (%v), want the whole injected string", value, ok)
 	}
 
-	result = callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
-		`,"section":"application","key":"config/name","value":`+jsonString(`say "hi"`)+`}`)
+	result = callToolArgs(t, modifyProjectSettings(), root, `{"section":"application","key":"config/name","value":`+jsonString(`say "hi"`)+`}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -330,8 +320,7 @@ func TestModifyProjectSettingsSectionInjection(t *testing.T) {
 			if err != nil {
 				t.Fatalf("read project.godot: %v", err)
 			}
-			result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
-				`,"section":`+jsonString(tc.section)+`,"key":"k","value":1}`)
+			result := callToolArgs(t, modifyProjectSettings(), root, `{"section":`+jsonString(tc.section)+`,"key":"k","value":1}`)
 			if !result.IsError {
 				t.Fatalf("expected an error for section %q, got: %+v", tc.section, result.Content)
 			}
@@ -356,8 +345,7 @@ func TestModifyProjectSettingsSectionWithBackslash(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n")
-	result := callToolArgs(t, modifyProjectSettings(), `{"projectPath":`+jsonString(root)+
-		`,"section":`+jsonString(`back\mid`)+`,"key":"k","value":1}`)
+	result := callToolArgs(t, modifyProjectSettings(), root, `{"section":`+jsonString(`back\mid`)+`,"key":"k","value":1}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -381,20 +369,22 @@ func TestModifyProjectSettingsSectionWithBackslash(t *testing.T) {
 func TestModifyProjectSettingsErrors(t *testing.T) {
 	valid := t.TempDir()
 	makeProject(t, valid)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing args", args: `{}`, want: "section, key, and value are required."},
-		{name: "missing value", args: `{"projectPath":` + jsonString(valid) + `,"section":"application","key":"config/name"}`, want: "section, key, and value are required."},
-		{name: "invalid path", args: `{"projectPath":"../escape","section":"application","key":"config/name","value":"x"}`, want: "Invalid path."},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"section":"application","key":"config/name","value":"x"}`, want: "Not a valid Godot project"},
+		{name: "missing value", project: valid, args: `{"section":"application","key":"config/name"}`, want: "section, key, and value are required."},
+		{name: "invalid path", project: "../escape", args: `{"section":"application","key":"config/name","value":"x"}`, want: "Invalid path."},
+		{name: "not a project", project: notAProject, args: `{"section":"application","key":"config/name","value":"x"}`, want: "Not a valid Godot project"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, modifyProjectSettings(), tt.args)
+			result := callToolArgs(t, modifyProjectSettings(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}

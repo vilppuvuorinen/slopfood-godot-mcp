@@ -41,7 +41,7 @@ func TestManageResourceReadSuccess(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), `{"projectPath":`+jsonString(root)+`,"resourcePath":"resources/mat.tres","action":"read"}`)
+	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"resources/mat.tres","action":"read"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -67,7 +67,7 @@ func TestManageResourceReadStructured(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), `{"projectPath":`+jsonString(root)+`,"resourcePath":"resources/mat.tres","action":"read"}`)
+	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"resources/mat.tres","action":"read"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -90,7 +90,7 @@ func TestManageResourceModifySuccess(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), `{"projectPath":`+jsonString(root)+`,"resourcePath":"resources/mat.tres","action":"modify","properties":{"metallic":0.9}}`)
+	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"resources/mat.tres","action":"modify","properties":{"metallic":0.9}}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -107,7 +107,7 @@ func TestManageResourceCreateSuccess(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), `{"projectPath":`+jsonString(root)+`,"resourcePath":"materials/red.tres","action":"create","resourceType":"StandardMaterial3D"}`)
+	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"materials/red.tres","action":"create","resourceType":"StandardMaterial3D"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -133,7 +133,7 @@ func TestManageResourceCreateProperties(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), `{"projectPath":`+jsonString(root)+`,"resourcePath":"materials/red.tres","action":"create","resourceType":"StandardMaterial3D","properties":{"albedo_color":{"r":1,"g":0,"b":0,"a":1}}}`)
+	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"materials/red.tres","action":"create","resourceType":"StandardMaterial3D","properties":{"albedo_color":{"r":1,"g":0,"b":0,"a":1}}}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -146,23 +146,25 @@ func TestManageResourceCreateProperties(t *testing.T) {
 func TestManageResourceValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
+	notAProject := t.TempDir()
 
 	tests := []struct {
-		name string
-		args string
-		want string
+		name    string
+		project string
+		args    string
+		want    string
 	}{
 		{name: "missing params", args: `{}`, want: "resourcePath and action are required."},
-		{name: "missing action", args: `{"projectPath":` + jsonString(root) + `,"resourcePath":"mat.tres"}`, want: "resourcePath and action are required."},
-		{name: "missing resource path", args: `{"projectPath":` + jsonString(root) + `,"action":"read"}`, want: "resourcePath and action are required."},
-		{name: "create without resource type", args: `{"projectPath":` + jsonString(root) + `,"resourcePath":"mat.tres","action":"create"}`, want: "resourceType is required for the create action."},
-		{name: "invalid project path", args: `{"projectPath":"../escape","resourcePath":"mat.tres","action":"read"}`, want: "Invalid path."},
-		{name: "invalid resource path", args: `{"projectPath":` + jsonString(root) + `,"resourcePath":"../escape.tres","action":"read"}`, want: "Invalid path."},
-		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"resourcePath":"mat.tres","action":"read"}`, want: "Not a valid Godot project"},
+		{name: "missing action", project: root, args: `{"resourcePath":"mat.tres"}`, want: "resourcePath and action are required."},
+		{name: "missing resource path", project: root, args: `{"action":"read"}`, want: "resourcePath and action are required."},
+		{name: "create without resource type", project: root, args: `{"resourcePath":"mat.tres","action":"create"}`, want: "resourceType is required for the create action."},
+		{name: "invalid project path", project: "../escape", args: `{"resourcePath":"mat.tres","action":"read"}`, want: "Invalid path."},
+		{name: "invalid resource path", project: root, args: `{"resourcePath":"../escape.tres","action":"read"}`, want: "Invalid path."},
+		{name: "not a project", project: notAProject, args: `{"resourcePath":"mat.tres","action":"read"}`, want: "Not a valid Godot project"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, manageResource(), tt.args)
+			result := callToolArgs(t, manageResource(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -178,7 +180,7 @@ func TestManageResourceScriptFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), `{"projectPath":`+jsonString(root)+`,"resourcePath":"mat.tres","action":"read"}`)
+	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"mat.tres","action":"read"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -195,7 +197,7 @@ func TestManageResourceSpawnFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), `{"projectPath":`+jsonString(root)+`,"resourcePath":"mat.tres","action":"read"}`)
+	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"mat.tres","action":"read"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

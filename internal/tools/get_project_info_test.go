@@ -60,7 +60,7 @@ func TestGetProjectInfoSuccess(t *testing.T) {
 	seedFile(t, filepath.Join(root, ".hidden", "secret.tscn"), "hidden")
 	seedFile(t, filepath.Join(root, "nested", "level.tscn"), "scene")
 
-	result := callToolArgs(t, getProjectInfo(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, getProjectInfo(), root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -94,7 +94,7 @@ func TestGetProjectInfoNameDecodesEscapes(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[application]\n\nconfig/name=\"My \\\"Game\\\"\"\n")
 
-	result := callToolArgs(t, getProjectInfo(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, getProjectInfo(), root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -113,7 +113,7 @@ func TestGetProjectInfoNameFallsBackToBasename(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "fallback")
 	makeProject(t, root)
 
-	result := callToolArgs(t, getProjectInfo(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, getProjectInfo(), root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -127,7 +127,7 @@ func TestGetProjectInfoNameFallsBackToBasename(t *testing.T) {
 }
 
 func TestGetProjectInfoMissingPath(t *testing.T) {
-	result := callToolArgs(t, getProjectInfo(), `{}`)
+	result := callToolArgs(t, getProjectInfo(), "", `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -143,7 +143,7 @@ func TestGetProjectInfoMissingPath(t *testing.T) {
 }
 
 func TestGetProjectInfoInvalidPath(t *testing.T) {
-	result := callToolArgs(t, getProjectInfo(), `{"projectPath":"../escape"}`)
+	result := callToolArgs(t, getProjectInfo(), "../escape", `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -154,7 +154,7 @@ func TestGetProjectInfoInvalidPath(t *testing.T) {
 
 func TestGetProjectInfoNotAProject(t *testing.T) {
 	root := t.TempDir()
-	result := callToolArgs(t, getProjectInfo(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, getProjectInfo(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -173,7 +173,7 @@ func TestGetProjectInfoGodotFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, getProjectInfo(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, getProjectInfo(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

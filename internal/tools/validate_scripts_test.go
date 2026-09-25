@@ -78,8 +78,7 @@ func TestValidateScriptsExplicit(t *testing.T) {
 	seedFile(t, filepath.Join(root, "valid.gd"), "extends Node\n")
 	seedFile(t, filepath.Join(root, "invalid.gd"), "extends Node\nfunc b(\n")
 
-	result := callToolArgs(t, validateScripts(), `{"projectPath":`+jsonString(root)+
-		`,"scriptPaths":["valid.gd","invalid.gd"]}`)
+	result := callToolArgs(t, validateScripts(), root, `{"scriptPaths":["valid.gd","invalid.gd"]}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -133,7 +132,7 @@ func TestValidateScriptsScopeAll(t *testing.T) {
 	seedFile(t, filepath.Join(root, ".import", "f.gd"), "extends Node\n")
 	seedFile(t, filepath.Join(root, ".hidden", "g.gd"), "extends Node\n")
 
-	result := callToolArgs(t, validateScripts(), `{"projectPath":`+jsonString(root)+`,"scope":"all"}`)
+	result := callToolArgs(t, validateScripts(), root, `{"scope":"all"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -156,7 +155,7 @@ func TestValidateScriptsChangedOutsideGit(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, validateScripts(), `{"projectPath":`+jsonString(root)+`}`)
+	result := callToolArgs(t, validateScripts(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -178,8 +177,7 @@ func TestValidateScriptsTooMany(t *testing.T) {
 		paths = append(paths, `"`+name+`"`)
 	}
 
-	result := callToolArgs(t, validateScripts(), `{"projectPath":`+jsonString(root)+
-		`,"scriptPaths":[`+strings.Join(paths, ",")+`]}`)
+	result := callToolArgs(t, validateScripts(), root, `{"scriptPaths":[`+strings.Join(paths, ",")+`]}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -196,8 +194,7 @@ func TestValidateScriptsExplicitSkips(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "valid.gd"), "extends Node\n")
 
-	result := callToolArgs(t, validateScripts(), `{"projectPath":`+jsonString(root)+
-		`,"scriptPaths":["notes.txt","missing.gd","../escape.gd","valid.gd"]}`)
+	result := callToolArgs(t, validateScripts(), root, `{"scriptPaths":["notes.txt","missing.gd","../escape.gd","valid.gd"]}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -221,14 +218,14 @@ func TestValidateScriptsExplicitSkips(t *testing.T) {
 
 func TestValidateScriptsErrors(t *testing.T) {
 	t.Run("missing projectPath", func(t *testing.T) {
-		result := callToolArgs(t, validateScripts(), `{}`)
+		result := callToolArgs(t, validateScripts(), "", `{}`)
 		if !result.IsError || result.Content[0].Text != "Invalid path." {
 			t.Fatalf("result = %+v", result.Content)
 		}
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
-		result := callToolArgs(t, validateScripts(), `{"projectPath":"../escape"}`)
+		result := callToolArgs(t, validateScripts(), "../escape", `{}`)
 		if !result.IsError || result.Content[0].Text != "Invalid path." {
 			t.Fatalf("result = %+v", result.Content)
 		}
@@ -236,7 +233,7 @@ func TestValidateScriptsErrors(t *testing.T) {
 
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
-		result := callToolArgs(t, validateScripts(), `{"projectPath":`+jsonString(root)+`}`)
+		result := callToolArgs(t, validateScripts(), root, `{}`)
 		if !result.IsError || result.Content[0].Text != "Not a valid Godot project: "+root {
 			t.Fatalf("result = %+v", result.Content)
 		}
@@ -245,7 +242,7 @@ func TestValidateScriptsErrors(t *testing.T) {
 	t.Run("invalid scope", func(t *testing.T) {
 		root := t.TempDir()
 		makeProject(t, root)
-		result := callToolArgs(t, validateScripts(), `{"projectPath":`+jsonString(root)+`,"scope":"bogus"}`)
+		result := callToolArgs(t, validateScripts(), root, `{"scope":"bogus"}`)
 		want := `Invalid scope "bogus". Use "changed" or "all", or pass scriptPaths.`
 		if !result.IsError || result.Content[0].Text != want {
 			t.Fatalf("result = %+v", result.Content)
