@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"os"
@@ -362,6 +363,26 @@ func seedScene(t *testing.T, scenePath string, rootNodeType ...string) (string, 
 	}
 	requirePrefix(t, firstText(t, res), "Scene created successfully at: "+scenePath)
 	return root, session
+}
+
+// runGit runs a git subcommand in dir, failing the test on error. Identity and
+// config are pinned so the suite does not depend on the developer's git
+// environment.
+func runGit(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	base := make([]string, 0, 4+len(args))
+	base = append(base, "-c", "core.quotepath=false", "-C", dir)
+	cmd := exec.CommandContext(context.Background(), "git", append(base, args...)...) //nolint:gosec // the path and args are test-controlled.
+	cmd.Env = append(os.Environ(),
+		"GIT_AUTHOR_NAME=e2e", "GIT_AUTHOR_EMAIL=e2e@example.com",
+		"GIT_COMMITTER_NAME=e2e", "GIT_COMMITTER_EMAIL=e2e@example.com",
+		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
+	)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, stderr.String())
+	}
 }
 
 // readFile returns the contents of a file, failing when it cannot be read.

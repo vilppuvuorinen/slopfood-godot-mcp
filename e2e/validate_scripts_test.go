@@ -68,6 +68,75 @@ func TestValidateScriptsTool(t *testing.T) {
 		}
 	})
 
+	t.Run("scope changed by default", func(t *testing.T) {
+		root := t.TempDir()
+		seedProject(t, root)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+
+		// Outside a work tree the default scope is an explicit error, not a
+		// silent fallback to validating every script.
+		requireToolError(t, session, "validate_scripts", map[string]any{},
+			`Not a git repository (or git is unavailable). Use scope: "all" or pass scriptPaths.`)
+
+		writeE2EFile(t, filepath.Join(root, "committed.gd"), "extends Node\n")
+		runGit(t, root, "init", "-q")
+		runGit(t, root, "add", "committed.gd")
+		runGit(t, root, "commit", "-q", "-m", "baseline")
+		// Untracked, so it is one of the three change classes git reports.
+		writeE2EFile(t, filepath.Join(root, "changed.gd"), "extends Node\n")
+
+		text := requireToolText(t, session, "validate_scripts", map[string]any{})
+		var doc validateScriptsE2EDoc
+		if err := json.Unmarshal([]byte(text), &doc); err != nil {
+			t.Fatalf("unmarshal %q: %v", text, err)
+		}
+		if doc.Scope != "changed" {
+			t.Errorf("scope = %q, want changed", doc.Scope)
+		}
+		if doc.FileCount != 1 || !doc.AllValid {
+			t.Errorf("fileCount=%d allValid=%v, want 1/true", doc.FileCount, doc.AllValid)
+		}
+		if len(doc.Results) != 1 || doc.Results[0]["scriptPath"] != "changed.gd" {
+			t.Errorf("results = %+v, want only the untracked changed.gd", doc.Results)
+		}
+	})
+
+	t.Run("resolves autoload globals", func(t *testing.T) {
+		// The checker exists so a script referencing a project autoload validates
+		// cleanly; Godot's --check-only mode reports the autoload as an unknown
+		// identifier because it compiles before autoloads are registered.
+		root := t.TempDir()
+		writeE2EFile(t, filepath.Join(root, "project.godot"),
+			"config_version=5\n\n[autoload]\n\nGameState=\"*res://autoload/game_state.gd\"\n")
+		writeE2EFile(t, filepath.Join(root, "autoload", "game_state.gd"), "extends Node\n")
+		writeE2EFile(t, filepath.Join(root, "scripts", "player.gd"),
+			"extends Node\n\n@onready var state = GameState\n")
+		// A reference to a global that does not exist must still fail, proving
+		// the checker resolves identifiers rather than accepting anything.
+		writeE2EFile(t, filepath.Join(root, "scripts", "broken.gd"),
+			"extends Node\n\n@onready var state = NotAnAutoload\n")
+		session := connectProject(t, root)
+		requireGodot(t, session)
+
+		text := requireToolText(t, session, "validate_scripts", map[string]any{
+			"scriptPaths": []string{"scripts/player.gd", "scripts/broken.gd"},
+		})
+		var doc validateScriptsE2EDoc
+		if err := json.Unmarshal([]byte(text), &doc); err != nil {
+			t.Fatalf("unmarshal %q: %v", text, err)
+		}
+		if doc.FileCount != 2 || doc.FilesWithErrors != 1 || doc.AllValid {
+			t.Errorf("fileCount=%d filesWithErrors=%d allValid=%v", doc.FileCount, doc.FilesWithErrors, doc.AllValid)
+		}
+		if got := doc.Results[0]["valid"]; got != true {
+			t.Errorf("player.gd result = %+v, want valid", doc.Results[0])
+		}
+		if got := doc.Results[1]["valid"]; got != false {
+			t.Errorf("broken.gd result = %+v, want invalid", doc.Results[1])
+		}
+	})
+
 	t.Run("scope all", func(t *testing.T) {
 		root := t.TempDir()
 		seedProject(t, root)
