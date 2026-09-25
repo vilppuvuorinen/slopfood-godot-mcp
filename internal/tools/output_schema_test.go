@@ -21,25 +21,19 @@ func hasRequired(schema map[string]any, keys ...string) bool {
 }
 
 // TestGodotValueSchemaAdvertisesContract verifies a value slot names the
-// JSON-native types and repeats them as anyOf branches, so the value contract
-// is visible in the schema instead of a bare description.
+// JSON-native types as anyOf branches with single string types, so the value
+// contract is visible without an array-valued top-level type that stricter
+// schema clients reject.
 func TestGodotValueSchemaAdvertisesContract(t *testing.T) {
 	schema := godotValueSchema("A value in the tool value contract")
 	if schema["description"] != "A value in the tool value contract" {
 		t.Errorf("description = %v", schema["description"])
 	}
+	if _, present := schema["type"]; present {
+		t.Errorf("type = %#v, want no top-level type", schema["type"])
+	}
 
 	want := []string{"null", "boolean", "string", "number", "array", "object"}
-	types, ok := schema["type"].([]string)
-	if !ok || len(types) != len(want) {
-		t.Fatalf("type = %#v, want %v", schema["type"], want)
-	}
-	for i, name := range want {
-		if types[i] != name {
-			t.Errorf("type[%d] = %q, want %q", i, types[i], name)
-		}
-	}
-
 	branches, ok := schema["anyOf"].([]any)
 	if !ok || len(branches) != len(want) {
 		t.Fatalf("anyOf = %#v, want %d branches", schema["anyOf"], len(want))

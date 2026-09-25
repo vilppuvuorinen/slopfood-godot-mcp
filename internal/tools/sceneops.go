@@ -104,9 +104,9 @@ func statusResult(project, message string, fields map[string]any) mcp.ToolResult
 
 // godotValueSchema describes one value in the tool value contract for schema
 // consumers: JSON-native data, or a tagged object such as
-// {"$type":"Vector2","x":1,"y":2} for an engine-only type. type names the
-// JSON-native types and anyOf repeats them as discrete branches, so a client
-// that reads either form sees the contract instead of an unconstrained value.
+// {"$type":"Vector2","x":1,"y":2} for an engine-only type. anyOf names the
+// JSON-native types as discrete branches with a single string type each; the
+// top level stays untyped so stricter clients never see an array-valued type.
 // It is deliberately permissive; the decoder enforces which $type a slot
 // accepts.
 func godotValueSchema(description string) map[string]any {
@@ -117,7 +117,6 @@ func godotValueSchema(description string) map[string]any {
 	}
 	return map[string]any{
 		"description": description,
-		"type":        types,
 		"anyOf":       branches,
 	}
 }
