@@ -14,7 +14,7 @@ func createScene() mcp.Tool {
 		Name:        "create_scene",
 		Title:       "Create Scene",
 		Description: "Create a new Godot scene file",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
