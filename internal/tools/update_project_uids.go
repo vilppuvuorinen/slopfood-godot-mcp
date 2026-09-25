@@ -35,7 +35,6 @@ func updateProjectUIDs() mcp.Tool {
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"projectPath": map[string]any{"type": "string"},
-			"output":      map[string]any{"type": "string"},
 		}),
 		Handler: handleUpdateProjectUIDs,
 	}
@@ -94,7 +93,5 @@ func handleUpdateProjectUIDs(ctx context.Context, _ json.RawMessage) (any, error
 		), nil
 	}
 
-	return statusResult(project, "Project UIDs updated successfully.\n\nOutput: "+stdout, map[string]any{
-		"output": stdout,
-	}), nil
+	return statusResult(project, "Project UIDs updated successfully.\n\nOutput: "+stdout, nil), nil
 }

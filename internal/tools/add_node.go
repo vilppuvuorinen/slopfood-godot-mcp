@@ -43,7 +43,6 @@ func addNode() mcp.Tool {
 			"nodeName":       map[string]any{"type": "string"},
 			"nodeType":       map[string]any{"type": "string"},
 			"parentNodePath": map[string]any{"type": "string"},
-			"output":         map[string]any{"type": "string"},
 		}),
 		Handler: handleAddNode,
 	}
@@ -128,7 +127,6 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 		"scenePath": args.ScenePath,
 		"nodeName":  args.NodeName,
 		"nodeType":  args.NodeType,
-		"output":    stdout,
 	}
 	if args.ParentNodePath != "" {
 		fields["parentNodePath"] = args.ParentNodePath

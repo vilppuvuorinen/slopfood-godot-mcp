@@ -37,7 +37,6 @@ func exportMeshLibrary() mcp.Tool {
 		OutputSchema: statusOutputSchema(map[string]any{
 			"scenePath":  map[string]any{"type": "string"},
 			"outputPath": map[string]any{"type": "string"},
-			"output":     map[string]any{"type": "string"},
 		}),
 		Handler: handleExportMeshLibrary,
 	}
@@ -110,6 +109,5 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 	return statusResult(project, message, map[string]any{
 		"scenePath":  args.ScenePath,
 		"outputPath": outputPath,
-		"output":     stdout,
 	}), nil
 }

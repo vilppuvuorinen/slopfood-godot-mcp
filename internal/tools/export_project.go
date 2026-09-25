@@ -38,7 +38,6 @@ func exportProject() mcp.Tool {
 			"presetName": map[string]any{"type": "string"},
 			"outputPath": map[string]any{"type": "string"},
 			"debug":      map[string]any{"type": "boolean"},
-			"output":     map[string]any{"type": "string"},
 		}),
 		Handler: handleExportProject,
 	}
@@ -87,6 +86,5 @@ func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) 
 		"presetName": args.PresetName,
 		"outputPath": outputPath,
 		"debug":      args.Debug,
-		"output":     output,
 	}), nil
 }

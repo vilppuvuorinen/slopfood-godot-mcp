@@ -32,7 +32,6 @@ func createScene() mcp.Tool {
 		OutputSchema: statusOutputSchema(map[string]any{
 			"scenePath":    map[string]any{"type": "string"},
 			"rootNodeType": map[string]any{"type": "string"},
-			"output":       map[string]any{"type": "string"},
 		}),
 		Handler: handleCreateScene,
 	}
@@ -105,6 +104,5 @@ func handleCreateScene(ctx context.Context, raw json.RawMessage) (any, error) {
 	return statusResult(project, message, map[string]any{
 		"scenePath":    args.ScenePath,
 		"rootNodeType": rootNodeType,
-		"output":       stdout,
 	}), nil
 }
