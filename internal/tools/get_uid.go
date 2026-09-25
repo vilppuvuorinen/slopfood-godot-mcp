@@ -30,8 +30,8 @@ func getUID() mcp.Tool {
 		OutputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"file":         map[string]any{"type": "string"},
-				"absolutePath": map[string]any{"type": "string"},
+				"file":         map[string]any{"type": "string", "description": "Path to the file, relative to the bound project"},
+				"absolutePath": map[string]any{"type": "string", "description": "Absolute host filesystem path to the file"},
 				"uid":          map[string]any{"type": "string"},
 				"exists":       map[string]any{"type": "boolean"},
 				"message":      map[string]any{"type": "string"},

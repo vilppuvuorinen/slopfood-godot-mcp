@@ -29,7 +29,7 @@ func manageSceneStructure() mcp.Tool {
 				},
 				"nodePath": map[string]any{
 					"type":        "string",
-					"description": "Source node path in scene",
+					"description": "Source node path, relative to the scene root",
 				},
 				"newName": map[string]any{
 					"type":        "string",
@@ -37,7 +37,7 @@ func manageSceneStructure() mcp.Tool {
 				},
 				"newParentPath": map[string]any{
 					"type":        "string",
-					"description": "New parent path (for move)",
+					"description": "New parent path, relative to the scene root (for move)",
 				},
 			},
 			"required": []string{"scenePath", "action", "nodePath"},

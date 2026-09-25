@@ -59,6 +59,13 @@ func TestValidateScriptsTool(t *testing.T) {
 		if got := doc.Results[1]["valid"]; got != false {
 			t.Errorf("invalid.gd result = %+v", doc.Results[1])
 		}
+		errors, ok := doc.Results[1]["errors"].([]any)
+		if !ok || len(errors) == 0 {
+			t.Fatalf("invalid.gd errors = %+v", doc.Results[1]["errors"])
+		}
+		if got := errors[0].(map[string]any)["file"]; got != "scripts/invalid.gd" {
+			t.Errorf("diagnostic file = %v, want the project-relative scripts/invalid.gd", got)
+		}
 	})
 
 	t.Run("scope all", func(t *testing.T) {

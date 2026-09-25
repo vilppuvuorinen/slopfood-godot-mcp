@@ -23,6 +23,17 @@ func validPath(path string) bool {
 // local paths and cannot be confined here.
 var godotSchemes = []string{"res://", "user://"}
 
+// resScheme is Godot's project-virtual path prefix.
+const resScheme = "res://"
+
+// projectRelativePath rewrites a Godot resource path ("res://...") as a path
+// relative to the project root, so a path-valued result field shares the
+// project-relative realm of tool arguments. Values outside res:// (for example
+// user:// or an absolute host path) are returned unchanged.
+func projectRelativePath(path string) string {
+	return strings.TrimPrefix(path, resScheme)
+}
+
 // confinePath joins sub onto root and reports whether the result stays within
 // root, returning the joined, cleaned path on success. It is used for
 // project-relative paths that the server itself resolves against the

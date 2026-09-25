@@ -24,7 +24,7 @@ func removeSceneNode() mcp.Tool {
 				},
 				"nodePath": map[string]any{
 					"type":        "string",
-					"description": `Path to the node to remove (e.g., "root/Player/OldNode")`,
+					"description": `Path to the node to remove, relative to the scene root (e.g., "root/Player/OldNode")`,
 				},
 			},
 			"required": []string{"scenePath", "nodePath"},

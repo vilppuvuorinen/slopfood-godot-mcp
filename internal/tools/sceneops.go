@@ -194,7 +194,7 @@ func statusProperties(properties map[string]any) map[string]any {
 	props := make(map[string]any, len(properties)+3)
 	props["success"] = map[string]any{"type": "boolean"}
 	props["message"] = map[string]any{"type": "string"}
-	props["projectPath"] = map[string]any{"type": "string"}
+	props["projectPath"] = map[string]any{"type": "string", "description": "Absolute host filesystem path to the bound project root"}
 	for name, schema := range properties {
 		props[name] = schema
 	}

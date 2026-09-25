@@ -11,6 +11,7 @@ import (
 type sceneNode struct {
 	Name       string         `json:"name"`
 	Type       string         `json:"type"`
+	Script     string         `json:"script"`
 	Properties map[string]any `json:"properties"`
 	Children   []sceneNode    `json:"children"`
 }
@@ -93,6 +94,9 @@ func TestReadSceneNestedProperties(t *testing.T) {
 	var tree sceneNode
 	if err := json.Unmarshal([]byte(text), &tree); err != nil {
 		t.Fatalf("unmarshal %q: %v", text, err)
+	}
+	if tree.Script != "scripts/config.gd" {
+		t.Errorf("script = %q, want the project-relative scripts/config.gd", tree.Script)
 	}
 	config, ok := tree.Properties["config"].(map[string]any)
 	if !ok {

@@ -24,7 +24,7 @@ func addNode() mcp.Tool {
 				},
 				"parentNodePath": map[string]any{
 					"type":        "string",
-					"description": `Path to the parent node (e.g., "root" or "root/Player")`,
+					"description": `Path to the parent node, relative to the scene root (e.g., "root" or "root/Player")`,
 				},
 				"nodeType": map[string]any{
 					"type":        "string",

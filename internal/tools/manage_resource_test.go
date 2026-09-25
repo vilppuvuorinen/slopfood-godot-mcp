@@ -63,7 +63,7 @@ func TestManageResourceReadSuccess(t *testing.T) {
 }
 
 func TestManageResourceReadStructured(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"type":"StandardMaterial3D","path":"res://resources/mat.tres"}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"type":"StandardMaterial3D","path":"resources/mat.tres"}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 
@@ -72,7 +72,7 @@ func TestManageResourceReadStructured(t *testing.T) {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
 	text := result.Content[0].Text
-	for _, want := range []string{`"type": "StandardMaterial3D"`, `"path": "res://resources/mat.tres"`} {
+	for _, want := range []string{`"type": "StandardMaterial3D"`, `"path": "resources/mat.tres"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}

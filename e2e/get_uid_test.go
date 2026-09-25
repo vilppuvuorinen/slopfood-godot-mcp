@@ -28,7 +28,7 @@ func TestGetUIDTool(t *testing.T) {
 		text := requireToolText(t, session, "get_uid", map[string]any{
 			"filePath": "player.gd",
 		})
-		requireContains(t, text, `"uid": "uid://e2etestuid"`)
+		requireContains(t, text, `"uid": "uid://e2etestuid"`, `"file": "player.gd"`, `"absolutePath":`)
 	})
 
 	t.Run("reports a missing UID sidecar", func(t *testing.T) {

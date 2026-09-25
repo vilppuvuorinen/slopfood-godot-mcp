@@ -114,7 +114,7 @@ func TestValidateScriptsExplicit(t *testing.T) {
 	if diagnostic["message"] != "Unexpected token" {
 		t.Errorf("message = %v", diagnostic["message"])
 	}
-	if diagnostic["file"] != "res://invalid.gd" || diagnostic["line"] != float64(3) {
+	if diagnostic["file"] != "invalid.gd" || diagnostic["line"] != float64(3) {
 		t.Errorf("location = %v", diagnostic)
 	}
 }

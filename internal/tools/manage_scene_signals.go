@@ -33,11 +33,11 @@ func manageSceneSignals() mcp.Tool {
 				},
 				"sourcePath": map[string]any{
 					"type":        "string",
-					"description": "Source node path (required for add and remove)",
+					"description": "Source node path, relative to the scene root (required for add and remove)",
 				},
 				"targetPath": map[string]any{
 					"type":        "string",
-					"description": "Target node path (required for add and remove)",
+					"description": "Target node path, relative to the scene root (required for add and remove)",
 				},
 				"method": map[string]any{
 					"type":        "string",

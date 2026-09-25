@@ -31,7 +31,7 @@ func getProjectInfo() mcp.Tool {
 			"type": "object",
 			"properties": map[string]any{
 				"name":         map[string]any{"type": "string"},
-				"path":         map[string]any{"type": "string"},
+				"path":         map[string]any{"type": "string", "description": "Absolute host filesystem path to the bound project root"},
 				"godotVersion": map[string]any{"type": "string"},
 				"structure": map[string]any{
 					"type": "object",

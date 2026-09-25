@@ -79,7 +79,7 @@ func runGDScriptCheck(ctx context.Context, projectPath, scriptFull string) ([]sc
 	if err != nil {
 		return nil, fmt.Errorf("resolve script path: %w", err)
 	}
-	scriptRes := "res://" + filepath.ToSlash(rel)
+	scriptRes := resScheme + filepath.ToSlash(rel)
 
 	checkerPath, err := godotops.ValidateScript()
 	if err != nil {
@@ -93,6 +93,9 @@ func runGDScriptCheck(ctx context.Context, projectPath, scriptFull string) ([]sc
 	// stderr but still exits 0, while a usage/startup failure exits non-zero.
 	// Diagnostics are parsed first; any remaining stderr is unexpected.
 	diagnostics := parseGodotScriptDiagnostics(stderr)
+	for i := range diagnostics {
+		diagnostics[i].File = projectRelativePath(diagnostics[i].File)
+	}
 	if len(diagnostics) == 0 && scriptFailed(exitCode, stderr) {
 		return nil, fmt.Errorf("script checker failed (exit %d): %s", exitCode, strings.TrimSpace(stderr))
 	}

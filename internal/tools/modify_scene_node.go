@@ -24,7 +24,7 @@ func modifySceneNode() mcp.Tool {
 				},
 				"nodePath": map[string]any{
 					"type":        "string",
-					"description": `Path to the node within the scene (e.g., "root/Player/Sprite2D")`,
+					"description": `Path to the node within the scene, relative to the scene root (e.g., "root/Player/Sprite2D")`,
 				},
 				"properties": propertiesSchema("Properties to set on the node, as name to godotValue pairs"),
 			},

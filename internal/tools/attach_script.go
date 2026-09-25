@@ -24,7 +24,7 @@ func attachScript() mcp.Tool {
 				},
 				"nodePath": map[string]any{
 					"type":        "string",
-					"description": `Path to the node within the scene (e.g., "root/Player")`,
+					"description": `Path to the node within the scene, relative to the scene root (e.g., "root/Player")`,
 				},
 				"scriptPath": map[string]any{
 					"type":        "string",

@@ -30,7 +30,7 @@ func readScene() mcp.Tool {
 			"properties": map[string]any{
 				"name":   map[string]any{"type": "string"},
 				"type":   map[string]any{"type": "string"},
-				"script": map[string]any{"type": "string"},
+				"script": map[string]any{"type": "string", "description": "Script path, relative to the bound project"},
 				"properties": map[string]any{
 					"type":                 "object",
 					"description":          "Node properties in the tool value contract",

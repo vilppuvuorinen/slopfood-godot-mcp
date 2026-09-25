@@ -133,6 +133,15 @@ func log_info(message):
 func log_error(message):
     printerr("[ERROR] " + message)
 
+# Reduce a Godot virtual path ("res://...") to a project-relative path, so
+# path-valued result fields share the project-relative realm of tool inputs
+# instead of leaking a form the caller must translate. Paths outside res://
+# (for example user://) are returned unchanged.
+func project_relative(path):
+    if path.begins_with("res://"):
+        return path.substr(6)
+    return path
+
 # Get a script by registered class name.
 # Only looks up names via the project's global class registry. Raw paths
 # (e.g. "res://evil.gd") are intentionally not accepted here to prevent
@@ -842,7 +851,7 @@ func get_uid(params):
         
         # Return the UID content
         var result = {
-            "file": file_path,
+            "file": project_relative(file_path),
             "absolutePath": absolute_path,
             "uid": uid_content.strip_edges(),
             "exists": true
@@ -858,7 +867,7 @@ func get_uid(params):
         
         # UID file doesn't exist
         var result = {
-            "file": file_path,
+            "file": project_relative(file_path),
             "absolutePath": absolute_path,
             "exists": false,
             "message": "UID file does not exist for this file. Use update_project_uids to scan the project and generate UIDs."
@@ -921,7 +930,7 @@ func _walk_scene_tree(node) -> Dictionary:
 
     var node_script = node.get_script()
     if node_script != null and node_script is Script:
-        info["script"] = node_script.resource_path
+        info["script"] = project_relative(node_script.resource_path)
 
     var props = {}
     for prop in node.get_property_list():
@@ -1763,7 +1772,7 @@ func manage_resource(params):
             if prop["usage"] & PROPERTY_USAGE_STORAGE:
                 props[prop["name"]] = _variant_to_json(resource.get(prop["name"]))
         print(JSON_START)
-        print(JSON.stringify({"type": resource.get_class(), "path": full_path, "properties": props}))
+        print(JSON.stringify({"type": resource.get_class(), "path": project_relative(full_path), "properties": props}))
         print(JSON_END)
     elif action == "modify":
         var resource = _load_resource(full_path)

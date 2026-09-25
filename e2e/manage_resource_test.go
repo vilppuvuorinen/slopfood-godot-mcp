@@ -88,7 +88,7 @@ func TestManageResourceTool(t *testing.T) {
 			"resourcePath": "materials/red.tres",
 			"action":       "read",
 		})
-		requireContains(t, readText, `"type": "StandardMaterial3D"`)
+		requireContains(t, readText, `"type": "StandardMaterial3D"`, `"path": "materials/red.tres"`)
 	})
 }
 
