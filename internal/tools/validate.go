@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -96,14 +97,9 @@ func validClassName(name string) bool {
 	return classNamePattern.MatchString(name)
 }
 
-// extendsPathPattern matches a quoted Godot script path such as
-// `"res://base.gd"`, the other form an "extends" clause may take.
-var extendsPathPattern = regexp.MustCompile(`^"(res|user)://[^"\r\n]+"$`)
-
-// validExtends reports whether name is a valid target for an "extends" clause:
-// either a bare class identifier (built-in or class_name) or a quoted Godot
-// script path. Rejecting anything else keeps the value from breaking out of the
-// generated GDScript line.
-func validExtends(name string) bool {
-	return validClassName(name) || extendsPathPattern.MatchString(name)
+// pathExists mirrors the reference server's existsSync check: it reports
+// whether anything (file or directory) exists at path.
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }

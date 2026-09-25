@@ -36,29 +36,26 @@ var AllCategories = []Category{
 // tool belongs to exactly one category.
 var categoryTools = map[Category][]func() mcp.Tool{
 	CategoryProject: {
-		getGodotVersion, listProjects, getProjectInfo, createProject,
+		getGodotVersion, getProjectInfo, createProject,
 	},
 	CategorySettings: {
-		readProjectSettings, modifyProjectSettings, setMainScene,
-		manageInputMap,
+		readProjectSettings, modifyProjectSettings, manageInputMap,
 	},
 	CategoryExport: {
 		manageExportPresets, exportProject,
 	},
 	CategoryScene: {
-		createScene, readScene, saveScene, exportMeshLibrary,
+		createScene, readScene, exportMeshLibrary,
 	},
 	CategoryNode: {
-		addNode, loadSprite, modifySceneNode, removeSceneNode,
+		addNode, modifySceneNode, removeSceneNode,
 		manageSceneStructure, manageSceneSignals,
 	},
 	CategoryScript: {
-		createScript, createCSharpScript, attachScript,
-		validateScripts,
+		attachScript, validateScripts,
 	},
 	CategoryResources: {
-		manageResource, manageShader,
-		getUID, updateProjectUIDs,
+		manageResource, getUID, updateProjectUIDs,
 	},
 }
 

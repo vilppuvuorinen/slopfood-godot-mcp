@@ -125,30 +125,30 @@ func TestToolMetadata(t *testing.T) {
 // alongside its text block.
 func TestStructuredContent(t *testing.T) {
 	session := connect(t)
+	requireGodot(t, session)
 	root := t.TempDir()
 	seedProject(t, root)
 
-	res := callTool(t, session, "list_projects", map[string]any{"directory": root})
+	res := callTool(t, session, "get_project_info", map[string]any{"projectPath": root})
 	if res.IsError {
-		t.Fatalf("list_projects error: %s", firstText(t, res))
+		t.Fatalf("get_project_info error: %s", firstText(t, res))
 	}
 	structured, ok := res.StructuredContent.(map[string]any)
 	if !ok {
 		t.Fatalf("structuredContent type %T", res.StructuredContent)
 	}
-	projects, ok := structured["projects"].([]any)
-	if !ok {
-		t.Fatalf("projects type %T", structured["projects"])
+	if structured["path"] != root {
+		t.Fatalf("path = %v, want %v", structured["path"], root)
 	}
-	if len(projects) != 1 {
-		t.Fatalf("projects = %+v", projects)
+	if _, ok := structured["structure"].(map[string]any); !ok {
+		t.Fatalf("structure type %T", structured["structure"])
 	}
 }
 
 // TestMutationToolMetadata asserts a mutation tool advertises an output schema
 // and non-read-only annotations.
 func TestMutationToolMetadata(t *testing.T) {
-	tool := findTool(t, connect(t), "set_main_scene")
+	tool := findTool(t, connect(t), "modify_project_settings")
 	if tool.OutputSchema == nil {
 		t.Error("outputSchema missing")
 	}
@@ -164,18 +164,20 @@ func TestMutationStructuredContent(t *testing.T) {
 	root := t.TempDir()
 	seedProject(t, root)
 
-	res := callTool(t, session, "set_main_scene", map[string]any{
+	res := callTool(t, session, "modify_project_settings", map[string]any{
 		"projectPath": root,
-		"scenePath":   "scenes/main.tscn",
+		"section":     "application",
+		"key":         "config/name",
+		"value":       "Demo",
 	})
 	if res.IsError {
-		t.Fatalf("set_main_scene error: %s", firstText(t, res))
+		t.Fatalf("modify_project_settings error: %s", firstText(t, res))
 	}
 	structured, ok := res.StructuredContent.(map[string]any)
 	if !ok {
 		t.Fatalf("structuredContent type %T", res.StructuredContent)
 	}
-	if structured["scenePath"] != "res://scenes/main.tscn" {
-		t.Errorf("scenePath = %v", structured["scenePath"])
+	if structured["key"] != "config/name" {
+		t.Errorf("key = %v", structured["key"])
 	}
 }

@@ -94,7 +94,7 @@ func handleGetProjectInfo(ctx context.Context, raw json.RawMessage) (any, error)
 		return mcp.ErrorResult(
 			"Not a valid Godot project: "+args.ProjectPath,
 			"Ensure the path points to a directory containing a project.godot file",
-			"Use list_projects to find valid Godot projects",
+			"Create a project with create_project if none exists",
 		), nil
 	}
 

@@ -11,7 +11,7 @@ func TestEnableCategories(t *testing.T) {
 		findTool(t, session, "get_project_info")
 		for _, name := range []string{
 			"read_project_settings", "manage_export_presets", "create_scene",
-			"add_node", "create_script", "manage_resource",
+			"add_node", "attach_script", "manage_resource",
 		} {
 			requireToolAbsent(t, session, name)
 		}
@@ -22,7 +22,7 @@ func TestEnableCategories(t *testing.T) {
 
 		findTool(t, session, "create_scene")
 		requireToolAbsent(t, session, "get_project_info")
-		requireToolAbsent(t, session, "create_script")
+		requireToolAbsent(t, session, "attach_script")
 	})
 
 	t.Run("comma-separated categories", func(t *testing.T) {
@@ -42,7 +42,7 @@ func TestEnableCategories(t *testing.T) {
 			"manage_export_presets", // export
 			"create_scene",          // scene
 			"add_node",              // node
-			"create_script",         // script
+			"attach_script",         // script
 			"manage_resource",       // resources
 		} {
 			findTool(t, session, name)
