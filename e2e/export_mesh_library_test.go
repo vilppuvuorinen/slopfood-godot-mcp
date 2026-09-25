@@ -147,13 +147,18 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 	})
 
 	t.Run("output directory failure", func(t *testing.T) {
-		_, session := seedMeshScene(t)
+		root, session := seedMeshScene(t)
 
-		// /proc is not writable, so the engine reports both the directory and
-		// the save failure.
+		// An absolute output path whose ancestor is a regular file makes
+		// make_dir_recursive_absolute fail on any filesystem, unlike an
+		// unwritable path whose result depends on the running user's
+		// privileges. The blocker must be an ancestor, not the immediate
+		// parent: Godot reports OK when a file shadows the final component.
+		writeE2EFile(t, filepath.Join(root, "blocked"), "not a directory\n")
+
 		res := callTool(t, session, "export_mesh_library", map[string]any{
 			"scenePath":  "scenes/main.tscn",
-			"outputPath": "/proc/nope/meshlib.res",
+			"outputPath": filepath.Join(root, "blocked", "sub", "meshlib.res"),
 		})
 		if !res.IsError {
 			t.Fatal("export_mesh_library: expected an error result")
@@ -162,13 +167,18 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 	})
 
 	t.Run("save failure", func(t *testing.T) {
-		_, session := seedMeshScene(t)
+		root, session := seedMeshScene(t)
 
-		// The root filesystem is not writable here, so the directory exists
-		// but the save itself fails.
+		// A directory already sitting at the output path lets directory
+		// creation succeed but makes the save fail, independent of which
+		// paths the running user can write.
+		if err := os.MkdirAll(filepath.Join(root, "exported", "meshlib.res"), 0o755); err != nil {
+			t.Fatalf("seed output directory: %v", err)
+		}
+
 		res := callTool(t, session, "export_mesh_library", map[string]any{
 			"scenePath":  "scenes/main.tscn",
-			"outputPath": "/meshlib.res",
+			"outputPath": "exported/meshlib.res",
 		})
 		if !res.IsError {
 			t.Fatal("export_mesh_library: expected an error result")

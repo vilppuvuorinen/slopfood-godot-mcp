@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -127,6 +128,30 @@ func TestReadSceneTool(t *testing.T) {
 		}
 		requirePrefix(t, firstText(t, res), "Failed to read scene:")
 	})
+
+	t.Run("non-scene resource returns raw text", func(t *testing.T) {
+		root, session := seedScene(t, "scenes/main.tscn", "Node2D")
+		writeE2EFile(t, filepath.Join(root, "thing.tres"), resourceTres)
+
+		// A .tres loads as a Resource, not a PackedScene, so read_scene falls
+		// back to returning the file's raw text instead of instantiating it.
+		res := callTool(t, session, "read_scene", map[string]any{
+			"scenePath": "thing.tres",
+		})
+		if res.IsError {
+			t.Fatalf("read_scene: unexpected error: %s", firstText(t, res))
+		}
+		var payload struct {
+			Error string `json:"error"`
+			Raw   string `json:"raw"`
+		}
+		if err := json.Unmarshal([]byte(firstText(t, res)), &payload); err != nil {
+			t.Fatalf("unmarshal %q: %v", firstText(t, res), err)
+		}
+		if payload.Error == "" || !strings.Contains(payload.Raw, "StandardMaterial3D") {
+			t.Errorf("fallback payload = %+v", payload)
+		}
+	})
 }
 
 // TestReadSceneNestedProperties drives the real read_scene tool against a node
@@ -198,11 +223,4 @@ func TestReadSceneErrors(t *testing.T) {
 			"scenePath": "missing.tscn",
 		}, "Scene file does not exist: missing.tscn")
 	})
-
-	// The operations script's raw-text fallback (godot_operations.gd:908) is
-	// not reachable through the real engine: for a non-scene Resource, load()
-	// succeeds and the script fails with a SCRIPT ERROR on the instantiate
-	// call rather than reaching its "Failed to load scene" branch. The Go-side
-	// handling that consumes a fallback payload is covered by
-	// TestReadSceneRawWhenNoMarkers and TestReadSceneRawWhenMarkersInvalid.
 }

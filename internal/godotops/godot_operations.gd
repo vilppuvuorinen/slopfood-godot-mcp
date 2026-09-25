@@ -903,10 +903,13 @@ func read_scene(params):
         printerr("Scene file does not exist at: " + full_scene_path)
         quit(1)
 
+    # load() succeeds for any resource, so scenePath can point at a non-scene
+    # such as a .tres. That has no instantiate() and would otherwise die as a
+    # SCRIPT ERROR, so anything that is not a PackedScene takes the raw-text
+    # fallback. A null load is a parse/IO failure whose engine errors already
+    # reach stderr, so no extra printerr here: it would only duplicate them.
     var scene = load(full_scene_path)
-    if not scene:
-        printerr("Failed to load scene: " + full_scene_path)
-        printerr("The scene may reference missing external resources.")
+    if scene == null or not (scene is PackedScene):
         var f = FileAccess.open(full_scene_path, FileAccess.READ)
         if f:
             var raw_content = f.get_as_text()
