@@ -388,29 +388,32 @@ func TestKeyNameToScancodeGodot4(t *testing.T) {
 	tests := []struct {
 		key  string
 		want int
+		ok   bool
 	}{
-		{"W", 87},
-		{"a", 65},
-		{"7", 55},
-		{"SPACE", 32},
-		{"ESCAPE", 4194305},
-		{"TAB", 4194306},
-		{"BACKSPACE", 4194308},
-		{"ENTER", 4194309},
-		{"LEFT", 4194319},
-		{"UP", 4194320},
-		{"RIGHT", 4194321},
-		{"DOWN", 4194322},
-		{"SHIFT", 4194325},
-		{"CTRL", 4194326},
-		{"ALT", 4194328},
-		{"F1", 4194332},
-		{"F12", 4194343},
-		{"unknown", 0},
+		{"W", 87, true},
+		{"a", 65, true},
+		{"7", 55, true},
+		{"SPACE", 32, true},
+		{"ESCAPE", 4194305, true},
+		{"TAB", 4194306, true},
+		{"BACKSPACE", 4194308, true},
+		{"ENTER", 4194309, true},
+		{"LEFT", 4194319, true},
+		{"UP", 4194320, true},
+		{"RIGHT", 4194321, true},
+		{"DOWN", 4194322, true},
+		{"SHIFT", 4194325, true},
+		{"CTRL", 4194326, true},
+		{"ALT", 4194328, true},
+		{"F1", 4194332, true},
+		{"F12", 4194343, true},
+		{"unknown", 0, false},
+		{"F13", 0, false},
 	}
 	for _, tt := range tests {
-		if got := keyNameToScancode(schemaGodot4, tt.key); got != tt.want {
-			t.Errorf("keyNameToScancode(%q) = %d, want %d", tt.key, got, tt.want)
+		got, ok := keyNameToScancode(schemaGodot4, tt.key)
+		if got != tt.want || ok != tt.ok {
+			t.Errorf("keyNameToScancode(%q) = (%d, %t), want (%d, %t)", tt.key, got, ok, tt.want, tt.ok)
 		}
 	}
 }
@@ -433,6 +436,26 @@ func TestManageInputMapAddSpecialKey(t *testing.T) {
 	}
 	if strings.Contains(content, `"physical_keycode":16777221`) {
 		t.Errorf("content contains Godot 3 ENTER scancode:\n%s", content)
+	}
+}
+
+func TestManageInputMapRejectsUnknownKey(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, manageInputMap(), root, `{"action":"add","actionName":"jump","key":"F13"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if got := result.Content[0].Text; !strings.HasPrefix(got, `Unknown key "F13"`) {
+		t.Errorf("message = %q", got)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "project.godot"))
+	if err != nil {
+		t.Fatalf("read project.godot: %v", err)
+	}
+	if strings.Contains(string(data), `"physical_keycode":0`) || strings.Contains(string(data), "jump") {
+		t.Errorf("unknown key was written to project.godot:\n%s", data)
 	}
 }
 

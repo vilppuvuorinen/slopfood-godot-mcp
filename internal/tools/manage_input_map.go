@@ -170,7 +170,11 @@ func handleManageInputMap(ctx context.Context, raw json.RawMessage) (any, error)
 		newEvent := ""
 		scancode := 0
 		if args.Key != "" {
-			scancode = keyNameToScancode(schema, args.Key)
+			code, ok := keyNameToScancode(schema, args.Key)
+			if !ok {
+				return mcp.ErrorResult(fmt.Sprintf(`Unknown key %q. Use a letter, digit, or a supported name such as "Space", "Enter", or "F1".`, args.Key)), nil
+			}
+			scancode = code
 			newEvent = inputEvent(schema, scancode)
 		}
 
@@ -225,21 +229,21 @@ func handleManageInputMap(ctx context.Context, raw json.RawMessage) (any, error)
 const keySpecialGodot4 = 1 << 22
 
 // keyNameToScancode maps a human-readable key name to a scancode for the given
-// schema. Only the Godot 4.x schema is implemented; an unsupported schema
-// yields 0 so no binding is written.
-func keyNameToScancode(schema configSchema, key string) int {
+// schema. ok is false when the name is not a supported key, so callers never
+// write a bogus scancode (0) for an unrecognized binding.
+func keyNameToScancode(schema configSchema, key string) (scancode int, ok bool) {
 	switch schema {
 	case schemaGodot4:
 		return keyNameToScancodeGodot4(key)
 	default:
-		return 0
+		return 0, false
 	}
 }
 
 // keyNameToScancodeGodot4 maps a key name to its Godot 4 Key value. Letters and
 // digits are their ASCII code; special keys combine keySpecialGodot4 with the
-// offset Godot assigns in keyboard.h.
-func keyNameToScancodeGodot4(key string) int {
+// offset Godot assigns in keyboard.h. ok is false when the key is unknown.
+func keyNameToScancodeGodot4(key string) (scancode int, ok bool) {
 	scancodes := map[string]int{
 		"A": 65, "B": 66, "C": 67, "D": 68, "E": 69, "F": 70, "G": 71, "H": 72,
 		"I": 73, "J": 74, "K": 75, "L": 76, "M": 77, "N": 78, "O": 79, "P": 80,
@@ -260,10 +264,10 @@ func keyNameToScancodeGodot4(key string) int {
 	}
 	upper := strings.ToUpper(key)
 	if code, ok := scancodes[upper]; ok {
-		return code
+		return code, true
 	}
 	if len(key) == 1 {
-		return int(key[0])
+		return int(key[0]), true
 	}
-	return 0
+	return 0, false
 }
