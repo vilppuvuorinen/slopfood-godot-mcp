@@ -40,8 +40,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 	},
 	CategorySettings: {
 		readProjectSettings, modifyProjectSettings, setMainScene,
-		manageAutoloads, manageInputMap, manageLayers, managePlugins,
-		manageTranslations,
+		manageInputMap,
 	},
 	CategoryExport: {
 		manageExportPresets, exportProject,
@@ -55,7 +54,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 	},
 	CategoryScript: {
 		createScript, createCSharpScript, attachScript,
-		validateScript, validateScripts,
+		validateScripts,
 	},
 	CategoryResources: {
 		manageResource, manageShader,

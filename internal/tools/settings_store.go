@@ -62,11 +62,6 @@ func (s *settingsStore) DeleteSection(section string) bool {
 	return s.config.DeleteSection(section)
 }
 
-// Keys returns a copy of a section's keys in file order.
-func (s *settingsStore) Keys(section string) []godotconfig.KeyValue {
-	return s.config.SectionKeys(section)
-}
-
 // SectionValues returns a section's keys with each value encoded in the tool
 // value contract, ready to be marshaled as a list action's JSON payload. An
 // absent section yields an empty (non-nil) map.

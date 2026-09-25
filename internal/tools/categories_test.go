@@ -113,8 +113,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 33 {
-		t.Errorf("registered %d tools, want 33", len(seen))
+	if len(seen) != 28 {
+		t.Errorf("registered %d tools, want 28", len(seen))
 	}
 }
 

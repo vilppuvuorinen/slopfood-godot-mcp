@@ -261,29 +261,6 @@ func godotTexts(t *testing.T, value any) []string {
 	return out
 }
 
-// packedStrings asserts value is a PackedStringArray object and returns its
-// strings, joined for substring assertions.
-func packedStrings(t *testing.T, value any) string {
-	t.Helper()
-	obj := godotMap(t, value)
-	if obj["$type"] != "PackedStringArray" {
-		t.Fatalf("value = %#v, want a PackedStringArray object", value)
-	}
-	values, ok := obj["values"].([]any)
-	if !ok {
-		t.Fatalf("values = %#v, want an array", obj["values"])
-	}
-	parts := make([]string, 0, len(values))
-	for _, v := range values {
-		s, ok := v.(string)
-		if !ok {
-			t.Fatalf("value = %#v, want a string", v)
-		}
-		parts = append(parts, s)
-	}
-	return strings.Join(parts, ",")
-}
-
 // toolSchema is the subset of a tool's JSON schema the tests assert against.
 type toolSchema struct {
 	Type       string                    `json:"type"`
