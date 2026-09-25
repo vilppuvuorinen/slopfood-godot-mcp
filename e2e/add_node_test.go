@@ -8,7 +8,7 @@ import (
 // TestAddNodeSchema ports the reference's tool-definition expectations for
 // add_node over the real stdio surface.
 func TestAddNodeSchema(t *testing.T) {
-	schema := requireSchema(t, "add_node", "Add a node to an existing scene")
+	schema := requireSchema(t, "add_node", "Add a node to an existing scene (rewrites the .tscn file)")
 	schema.requireRequired(t, "scenePath", "nodeType", "nodeName")
 	schema.requireProps(t, "scenePath", "parentNodePath", "nodeType", "nodeName", "properties")
 	schema.requireType(t, "properties", "object")

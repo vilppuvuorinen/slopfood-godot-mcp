@@ -13,7 +13,7 @@ func TestAddNodeSchema(t *testing.T) {
 	if tool.Name != "add_node" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Add a node to an existing scene" {
+	if tool.Description != "Add a node to an existing scene (rewrites the .tscn file)" {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)

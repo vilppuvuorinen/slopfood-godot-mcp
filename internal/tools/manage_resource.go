@@ -14,7 +14,7 @@ func manageResource() mcp.Tool {
 		Name:        "manage_resource",
 		Title:       "Manage Resource",
 		Description: "Create, read, or modify .tres/.res resource files",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: actionInputSchema(
 			map[string]any{
 				"resourcePath": map[string]any{

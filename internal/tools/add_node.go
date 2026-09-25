@@ -13,7 +13,7 @@ func addNode() mcp.Tool {
 	return mcp.Tool{
 		Name:        "add_node",
 		Title:       "Add Node",
-		Description: "Add a node to an existing scene",
+		Description: "Add a node to an existing scene (rewrites the .tscn file)",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
@@ -32,7 +32,7 @@ func addNode() mcp.Tool {
 				},
 				"nodeName": map[string]any{
 					"type":        "string",
-					"description": "Name for the new node",
+					"description": "Name for the new node; if a sibling already uses it, Godot renames the new node (e.g. @Node2D@2)",
 				},
 				"properties": propertiesSchema("Optional properties to set on the node, as name to godotValue pairs"),
 			},
