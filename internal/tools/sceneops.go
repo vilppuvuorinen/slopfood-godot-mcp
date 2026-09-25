@@ -226,24 +226,15 @@ func errorOutputSchema() map[string]any {
 
 // readOutputSchema returns the object output schema for a tool whose structured
 // result is either its success payload or, on failure, the error envelope
-// ErrorResult emits. The payload branch keeps its own required fields, so the
-// success contract stays precise, while the error branch makes the envelope an
-// advertised shape rather than an undeclared one. The merged top-level
-// properties also list every field for clients that do not read schema
-// branches. A payload's $defs are hoisted to the top level so its $refs stay
-// resolvable from the document root.
+// ErrorResult emits. The top-level properties describe the payload alone, so a
+// read never advertises the envelope's success/message fields it does not
+// return; the anyOf branch keeps the envelope an advertised shape rather than
+// an undeclared one. A payload's $defs are hoisted to the top level so its
+// $refs stay resolvable from the document root.
 func readOutputSchema(payloadSchema map[string]any) map[string]any {
-	properties := map[string]any{
-		"success":   map[string]any{"type": "boolean"},
-		"message":   map[string]any{"type": "string"},
-		"solutions": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
-	}
-	for name, schema := range payloadProperties(payloadSchema) {
-		properties[name] = schema
-	}
 	schema := map[string]any{
 		"type":       "object",
-		"properties": properties,
+		"properties": payloadProperties(payloadSchema),
 		"anyOf": []any{
 			errorOutputSchema(),
 			payloadSchema,

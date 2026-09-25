@@ -155,6 +155,38 @@ func TestManageInputMapAdvertisesActionMap(t *testing.T) {
 	}
 }
 
+// TestReadOutputSchemaOmitsEnvelopeFromTopLevel verifies a read tool's
+// top-level properties describe only its payload. The error envelope stays an
+// accepted shape through the anyOf branch, so a successful read never
+// advertises success/message fields it does not return while a failure still
+// validates.
+func TestReadOutputSchemaOmitsEnvelopeFromTopLevel(t *testing.T) {
+	schema := readOutputSchema(map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"version": map[string]any{"type": "string"}},
+		"required":   []string{"version"},
+	})
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T", schema["properties"])
+	}
+	for _, key := range []string{"success", "message", "solutions"} {
+		if _, present := props[key]; present {
+			t.Errorf("top-level properties advertise %q, which the payload never returns", key)
+		}
+	}
+	if _, present := props["version"]; !present {
+		t.Error("top-level properties dropped the payload field version")
+	}
+	branches, ok := schema["anyOf"].([]any)
+	if !ok || len(branches) != 2 {
+		t.Fatalf("anyOf = %#v, want the error and payload branches", schema["anyOf"])
+	}
+	if !hasRequired(asSchema(branches[0]), "success", "message") {
+		t.Errorf("error branch = %#v, want the envelope", branches[0])
+	}
+}
+
 // TestPayloadOutputSchemaOmitsEnvelope verifies a bare payload schema declares
 // only the payload fields.
 func TestPayloadOutputSchemaOmitsEnvelope(t *testing.T) {
