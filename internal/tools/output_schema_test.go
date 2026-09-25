@@ -187,12 +187,14 @@ func TestReadOutputSchemaOmitsEnvelopeFromTopLevel(t *testing.T) {
 	}
 }
 
-// TestPayloadOutputSchemaOmitsEnvelope verifies a bare payload schema declares
-// only the payload fields.
-func TestPayloadOutputSchemaOmitsEnvelope(t *testing.T) {
+// TestPayloadOutputSchemaPinsShape verifies a bare payload schema declares its
+// fields and requires every one, while still omitting the status envelope, so
+// a read or list result is described as precisely as a mutation's envelope.
+func TestPayloadOutputSchemaPinsShape(t *testing.T) {
 	schema := payloadOutputSchema(map[string]any{"value": map[string]any{"type": "string"}})
-	if _, ok := schema["required"]; ok {
-		t.Errorf("payload schema must require nothing: %v", schema["required"])
+	required, _ := schema["required"].([]string)
+	if len(required) != 1 || !hasRequired(schema, "value") {
+		t.Errorf("required = %v, want [value]", schema["required"])
 	}
 	props, ok := schema["properties"].(map[string]any)
 	if !ok {

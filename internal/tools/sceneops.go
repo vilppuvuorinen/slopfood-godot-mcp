@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
@@ -197,12 +198,24 @@ func statusOutputSchema(properties map[string]any) map[string]any {
 
 // payloadOutputSchema returns the object output schema for an action that
 // returns its payload directly, without the status envelope. Its properties
-// are exactly the fields the payload carries.
+// are exactly the fields the payload carries, and every declared field is
+// required, so a read or list result pins its shape instead of leaving it
+// unconstrained. A free-form payload has no named properties and so requires
+// nothing.
 func payloadOutputSchema(properties map[string]any) map[string]any {
-	return map[string]any{
+	schema := map[string]any{
 		"type":       "object",
 		"properties": properties,
 	}
+	if len(properties) > 0 {
+		required := make([]string, 0, len(properties))
+		for name := range properties {
+			required = append(required, name)
+		}
+		sort.Strings(required)
+		schema["required"] = required
+	}
+	return schema
 }
 
 // errorOutputSchema describes the structuredContent ErrorResult emits: the
