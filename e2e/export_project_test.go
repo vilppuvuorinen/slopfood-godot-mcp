@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // TestExportProjectSchema ports the reference's tool-definition expectations
@@ -73,6 +75,50 @@ binary_format/embed_pck=false
 // export templates (scripts/download-godot.py with GODOT_TEMPLATES=1); a missing
 // template fails the suite rather than passing it.
 func TestExportProjectTool(t *testing.T) {
+	t.Run("release build", func(t *testing.T) {
+		root, session := seedExportProject(t)
+
+		res := callTool(t, session, "export_project", map[string]any{
+			"presetName": "Linux",
+			"outputPath": "build/game.x86_64",
+		})
+		text := firstText(t, res)
+		if res.IsError {
+			t.Fatalf("unexpected error: %s", text)
+		}
+		requirePrefix(t, text, "Export succeeded.\n\nOutput:")
+		assertNonEmptyFile(t, filepath.Join(root, "build", "game.x86_64"))
+	})
+
+	t.Run("debug build", func(t *testing.T) {
+		root, session := seedExportProject(t)
+
+		res := callTool(t, session, "export_project", map[string]any{
+			"presetName": "Linux",
+			"outputPath": "build/game_debug.x86_64",
+			"debug":      true,
+		})
+		text := firstText(t, res)
+		if res.IsError {
+			t.Fatalf("unexpected error: %s", text)
+		}
+		requirePrefix(t, text, "Export succeeded.\n\nOutput:")
+		assertNonEmptyFile(t, filepath.Join(root, "build", "game_debug.x86_64"))
+
+		structured, ok := res.StructuredContent.(map[string]any)
+		if !ok {
+			t.Fatalf("structuredContent type %T", res.StructuredContent)
+		}
+		if structured["debug"] != true {
+			t.Errorf("debug = %v, want true", structured["debug"])
+		}
+	})
+}
+
+// seedExportProject creates a project with a complete Linux preset and an
+// existing output directory, ready for a real export.
+func seedExportProject(t *testing.T) (string, *mcp.ClientSession) {
+	t.Helper()
 	root := newProject(t)
 	session := connectProject(t, root)
 	requireGodot(t, session)
@@ -84,14 +130,5 @@ func TestExportProjectTool(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "build"), 0o755); err != nil {
 		t.Fatalf("mkdir build: %v", err)
 	}
-
-	res := callTool(t, session, "export_project", map[string]any{
-		"presetName": "Linux",
-		"outputPath": "build/game.x86_64",
-	})
-	text := firstText(t, res)
-	if res.IsError {
-		t.Fatalf("unexpected error: %s", text)
-	}
-	requirePrefix(t, text, "Export succeeded.\n\nOutput:")
+	return root, session
 }

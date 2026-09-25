@@ -385,6 +385,19 @@ func runGit(t *testing.T, dir string, args ...string) {
 	}
 }
 
+// assertNonEmptyFile fails unless path is a regular file with content, so a
+// tool that reports success without writing an artifact fails the test.
+func assertNonEmptyFile(t *testing.T, path string) {
+	t.Helper()
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat artifact: %v", err)
+	}
+	if !info.Mode().IsRegular() || info.Size() == 0 {
+		t.Errorf("artifact %s = mode %v size %d, want a non-empty regular file", path, info.Mode(), info.Size())
+	}
+}
+
 // readFile returns the contents of a file, failing when it cannot be read.
 func readFile(t *testing.T, path string) string {
 	t.Helper()

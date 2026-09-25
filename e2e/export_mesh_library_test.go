@@ -88,9 +88,7 @@ func TestExportMeshLibraryTool(t *testing.T) {
 			"outputPath": "exported/meshlib.res",
 		})
 		requirePrefix(t, text, "MeshLibrary exported successfully to: "+output)
-		if _, err := os.Stat(output); err != nil {
-			t.Errorf("stat exported mesh library: %v", err)
-		}
+		assertNonEmptyFile(t, output)
 	})
 
 	t.Run("absolute output path", func(t *testing.T) {
@@ -102,24 +100,32 @@ func TestExportMeshLibraryTool(t *testing.T) {
 			"outputPath": output,
 		})
 		requirePrefix(t, text, "MeshLibrary exported successfully to: "+output)
-		if _, err := os.Stat(output); err != nil {
-			t.Errorf("stat exported mesh library: %v", err)
-		}
+		assertNonEmptyFile(t, output)
 	})
 
 	t.Run("specific mesh item names", func(t *testing.T) {
 		root, session := seedMeshScene(t)
+		// A second mesh the filter must exclude, so a filter that silently
+		// exports everything cannot pass.
+		requireToolText(t, session, "add_node", map[string]any{
+			"scenePath":  "scenes/main.tscn",
+			"nodeType":   "MeshInstance3D",
+			"nodeName":   "Other",
+			"properties": map[string]any{"mesh": "res://box.tres"},
+		})
 
-		output := filepath.Join(root, "exported", "named.res")
+		output := filepath.Join(root, "exported", "named.tres")
 		text := requireToolText(t, session, "export_mesh_library", map[string]any{
 			"scenePath":     "scenes/main.tscn",
-			"outputPath":    "exported/named.res",
+			"outputPath":    "exported/named.tres",
 			"meshItemNames": []any{"Mesh"},
 		})
 		requirePrefix(t, text, "MeshLibrary exported successfully to: "+output)
-		if _, err := os.Stat(output); err != nil {
-			t.Errorf("stat exported mesh library: %v", err)
-		}
+
+		library := readFile(t, output)
+		requireContains(t, library, `item/0/name = "Mesh"`)
+		requireNotContains(t, library, `item/1`)
+		requireNotContains(t, library, `"Other"`)
 	})
 }
 

@@ -1,8 +1,8 @@
 package e2e
 
 import (
-	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -41,8 +41,9 @@ func TestUpdateProjectUIDsTool(t *testing.T) {
 	text := requireToolText(t, session, "update_project_uids", map[string]any{})
 	requirePrefix(t, text, "Project UIDs updated successfully.")
 
-	if _, err := os.Stat(scriptPath + ".uid"); err != nil {
-		t.Errorf("expected %s.uid to be generated: %v", scriptPath, err)
+	generated := strings.TrimSpace(readFile(t, scriptPath+".uid"))
+	if !strings.HasPrefix(generated, "uid://") {
+		t.Errorf("generated uid = %q, want a uid:// value", generated)
 	}
 
 	afterScene := readFile(t, scenePath)
