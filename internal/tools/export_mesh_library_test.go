@@ -17,7 +17,7 @@ func TestExportMeshLibrarySchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,scenePath,outputPath" {
+	if !ok || strings.Join(required, ",") != "scenePath,outputPath" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)

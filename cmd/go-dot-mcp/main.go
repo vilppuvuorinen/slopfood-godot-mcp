@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -16,6 +17,34 @@ import (
 )
 
 var version = "dev"
+
+// projectEnv is the environment variable naming the project to bind when
+// --project is not passed.
+const projectEnv = "GODOT_PROJECT"
+
+// resolveProject determines the Godot project this server instance is bound to.
+// The --project flag wins, then $GODOT_PROJECT, and the working directory is the
+// last-resort fallback. The result is a cleaned absolute path; whether it is a
+// valid project is left to the tools, so create_project can target a directory
+// that does not exist yet.
+func resolveProject(flagValue string) (string, error) {
+	root := strings.TrimSpace(flagValue)
+	if root == "" {
+		root = strings.TrimSpace(os.Getenv(projectEnv))
+	}
+	if root == "" {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return "", fmt.Errorf("resolve working directory: %w", err)
+		}
+		root = cwd
+	}
+	abs, err := filepath.Abs(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve project path %q: %w", root, err)
+	}
+	return filepath.Clean(abs), nil
+}
 
 // enableValues collects the repeatable --enable flag values verbatim.
 type enableValues []string
@@ -38,6 +67,7 @@ func run() error {
 	var (
 		showVersion = flag.Bool("version", false, "print version and exit")
 		logLevel    = flag.String("log-level", "info", "log level (debug, info, warn, error)")
+		project     = flag.String("project", "", "Godot project directory to bind to (default: $"+projectEnv+", then the working directory)")
 		enable      enableValues
 	)
 	flag.Var(&enable, "enable", "tool categories to enable (repeatable, comma-separated; default \"project\"; \"all\" selects every category)")
@@ -46,6 +76,11 @@ func run() error {
 	if *showVersion {
 		fmt.Println(version)
 		return nil
+	}
+
+	root, err := resolveProject(*project)
+	if err != nil {
+		return err
 	}
 
 	categories, err := tools.ResolveCategories(enable)
@@ -66,12 +101,15 @@ func run() error {
 		Name:    "go-dot-mcp",
 		Version: version,
 	}, logger)
-	srv.Instructions = "Drives the Godot editor headlessly to inspect and modify Godot projects. " +
-		"Paths are resolved against the project directory; prefer project-relative paths for scenes, " +
-		"scripts, and resources. Read-only tools are safe to call freely; tools that write files " +
-		"may overwrite existing content."
+	srv.Instructions = fmt.Sprintf(
+		"Drives the Godot editor headlessly to inspect and modify the Godot project at %s. "+
+			"This server instance is bound to that project for its whole lifetime: every tool takes "+
+			"paths relative to it, and no tool accepts or changes the project directory. Read-only "+
+			"tools are safe to call freely; tools that write files may overwrite existing content.",
+		root)
 
-	tools.Register(srv, categories...)
+	logger.Info("bound project", "project", root)
+	tools.Register(srv, root, categories...)
 
 	if err := srv.Serve(ctx, os.Stdin, os.Stdout); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("serve: %w", err)

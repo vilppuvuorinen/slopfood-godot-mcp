@@ -17,14 +17,14 @@ func TestAddNodeSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,scenePath,nodeType,nodeName" {
+	if !ok || strings.Join(required, ",") != "scenePath,nodeType,nodeName" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"projectPath", "scenePath", "parentNodePath", "nodeType", "nodeName", "properties"} {
+	for _, key := range []string{"scenePath", "parentNodePath", "nodeType", "nodeName", "properties"} {
 		if _, exists := props[key]; !exists {
 			t.Errorf("missing property %q", key)
 		}

@@ -10,19 +10,16 @@ import (
 // expectations for read_project_settings over the real stdio surface.
 func TestReadProjectSettingsSchema(t *testing.T) {
 	schema := requireSchema(t, "read_project_settings", "Read project.godot as structured JSON")
-	schema.requireRequired(t, "projectPath")
-	schema.requirePropCount(t, 1)
-	schema.requireStringProps(t, "projectPath")
+	schema.requireRequired(t)
+	schema.requirePropCount(t, 0)
 }
 
 // TestReadProjectSettingsTool drives the real read_project_settings tool and
 // parses the resulting JSON document. read_project_settings loads the file with
 // the real Godot engine, so these subtests are Godot-gated and also prove the
-// engine accepts the seeded project.godot.
+// engine accepts the seeded project.godot. Each subtest binds a session to its
+// own project.
 func TestReadProjectSettingsTool(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
-
 	t.Run("parses sections", func(t *testing.T) {
 		root := t.TempDir()
 		// Seed the autoload script too: a missing one makes the engine log an
@@ -39,7 +36,9 @@ run/main_scene="res://main.tscn"
 
 Game="*res://game.gd"
 `)
-		sections := requireProjectSettingsRoundTrip(t, session, root)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+		sections := requireProjectSettingsRoundTrip(t, session)
 
 		if got := sections["application"]["config/name"]; got != "Demo" {
 			t.Errorf("config/name = %v", got)
@@ -61,7 +60,9 @@ Game="*res://game.gd"
 
 config/name=""
 `)
-		sections := requireProjectSettingsRoundTrip(t, session, root)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+		sections := requireProjectSettingsRoundTrip(t, session)
 
 		got, ok := sections["application"]["config/name"]
 		if !ok {
@@ -77,15 +78,12 @@ config/name=""
 // is load-bearing: a project.godot the engine rejects must fail rather than
 // come back as a parsed document.
 func TestReadProjectSettingsRejectsUnparseableProject(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
-
 	root := t.TempDir()
 	writeE2EFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[application\n\nconfig/name=\"Demo\"\n")
+	session := connectProject(t, root)
+	requireGodot(t, session)
 
-	res := callTool(t, session, "read_project_settings", map[string]any{
-		"projectPath": root,
-	})
+	res := callTool(t, session, "read_project_settings", map[string]any{})
 	if !res.IsError {
 		t.Fatalf("expected an error for an unparseable project.godot, got: %s", firstText(t, res))
 	}
@@ -96,13 +94,11 @@ func TestReadProjectSettingsRejectsUnparseableProject(t *testing.T) {
 // binary so the probe cannot start, and asserts the tool reports the failure
 // rather than silently succeeding with the Go parser's view.
 func TestReadProjectSettingsReportsEngineFailure(t *testing.T) {
-	session := connectWithEnv(t, "GODOT_PATH="+filepath.Join(t.TempDir(), "missing-godot"))
 	root := t.TempDir()
 	seedProject(t, root)
+	session := connectProjectWithEnv(t, root, "GODOT_PATH="+filepath.Join(t.TempDir(), "missing-godot"))
 
-	res := callTool(t, session, "read_project_settings", map[string]any{
-		"projectPath": root,
-	})
+	res := callTool(t, session, "read_project_settings", map[string]any{})
 	if !res.IsError {
 		t.Fatalf("expected an error, got: %s", firstText(t, res))
 	}
@@ -113,25 +109,12 @@ func TestReadProjectSettingsReportsEngineFailure(t *testing.T) {
 }
 
 // TestReadProjectSettingsErrors covers the reference's validation and failure
-// messages.
+// messages that come from the bound project root.
 func TestReadProjectSettingsErrors(t *testing.T) {
-	session := connect(t)
-
-	t.Run("missing projectPath", func(t *testing.T) {
-		requireToolError(t, session, "read_project_settings", map[string]any{},
-			"projectPath is required.")
-	})
-
-	t.Run("invalid path", func(t *testing.T) {
-		requireToolError(t, session, "read_project_settings", map[string]any{
-			"projectPath": "../escape",
-		}, "Invalid path.")
-	})
-
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
-		requireToolError(t, session, "read_project_settings", map[string]any{
-			"projectPath": root,
-		}, "Not a valid Godot project: "+root)
+		session := connectProject(t, root)
+		requireToolError(t, session, "read_project_settings", map[string]any{},
+			"Not a valid Godot project: "+root)
 	})
 }

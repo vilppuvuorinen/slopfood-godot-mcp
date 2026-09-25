@@ -23,10 +23,6 @@ func manageExportPresets() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Godot project path",
-				},
 				"action": map[string]any{
 					"type":        "string",
 					"enum":        []string{"list", "add", "remove"},
@@ -45,7 +41,7 @@ func manageExportPresets() mcp.Tool {
 					"description": "Whether this preset is runnable. Default: false",
 				},
 			},
-			"required": []string{"projectPath", "action"},
+			"required": []string{"action"},
 		},
 		OutputSchema: actionOutputSchema(
 			map[string]any{
@@ -71,11 +67,10 @@ func manageExportPresets() mcp.Tool {
 }
 
 type manageExportPresetsArgs struct {
-	ProjectPath string `json:"projectPath"`
-	Action      string `json:"action"`
-	Name        string `json:"name"`
-	Platform    string `json:"platform"`
-	Runnable    bool   `json:"runnable"`
+	Action   string `json:"action"`
+	Name     string `json:"name"`
+	Platform string `json:"platform"`
+	Runnable bool   `json:"runnable"`
 }
 
 // exportPreset is one entry in the list action's JSON document.
@@ -95,31 +90,32 @@ var (
 	exportPresetBlockPattern    = regexp.MustCompile(`(?m)^\[preset\.`)
 )
 
-func handleManageExportPresets(_ context.Context, raw json.RawMessage) (any, error) {
+func handleManageExportPresets(ctx context.Context, raw json.RawMessage) (any, error) {
 	var args manageExportPresetsArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.Action == "" {
-		return mcp.ErrorResult("projectPath and action are required."), nil
+	project := projectRoot(ctx)
+	if args.Action == "" {
+		return mcp.ErrorResult("action is required."), nil
 	}
-	if !validPath(args.ProjectPath) {
+	if !validPath(project) {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return mcp.ErrorResult("Not a valid Godot project: " + args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return mcp.ErrorResult("Not a valid Godot project: " + project), nil
 	}
 
-	presetsFile := filepath.Join(args.ProjectPath, "export_presets.cfg")
+	presetsFile := filepath.Join(project, "export_presets.cfg")
 	switch args.Action {
 	case "list":
 		return listExportPresets(presetsFile), nil
 	case "add":
-		return addExportPreset(presetsFile, args), nil
+		return addExportPreset(project, presetsFile, args), nil
 	case "remove":
-		return removeExportPreset(presetsFile, args.Name), nil
+		return removeExportPreset(project, presetsFile, args.Name), nil
 	}
 	return mcp.ErrorResult(`Invalid action. Use "list", "add", or "remove".`), nil
 }
@@ -168,7 +164,7 @@ func exportPresetBlocks(content string) []string {
 	return out
 }
 
-func addExportPreset(presetsFile string, args manageExportPresetsArgs) mcp.ToolResult {
+func addExportPreset(project, presetsFile string, args manageExportPresetsArgs) mcp.ToolResult {
 	if args.Name == "" || args.Platform == "" {
 		return mcp.ErrorResult("name and platform are required for add action.")
 	}
@@ -190,14 +186,14 @@ func addExportPreset(presetsFile string, args manageExportPresetsArgs) mcp.ToolR
 	if err := os.WriteFile(presetsFile, []byte(content), 0o644); err != nil { //nolint:gosec // user-facing project file.
 		return exportPresetsFailure(err)
 	}
-	return statusResult(fmt.Sprintf("Export preset \"%s\" added for platform \"%s\".", args.Name, args.Platform), map[string]any{
+	return statusResult(project, fmt.Sprintf("Export preset \"%s\" added for platform \"%s\".", args.Name, args.Platform), map[string]any{
 		"name":     args.Name,
 		"platform": args.Platform,
 		"runnable": args.Runnable,
 	})
 }
 
-func removeExportPreset(presetsFile, name string) mcp.ToolResult {
+func removeExportPreset(project, presetsFile, name string) mcp.ToolResult {
 	if name == "" {
 		return mcp.ErrorResult("name is required for remove action.")
 	}
@@ -212,7 +208,7 @@ func removeExportPreset(presetsFile, name string) mcp.ToolResult {
 	if err := os.WriteFile(presetsFile, []byte(content), 0o644); err != nil { //nolint:gosec // user-facing project file.
 		return exportPresetsFailure(err)
 	}
-	return statusResult(fmt.Sprintf("Export preset \"%s\" removed.", name), map[string]any{
+	return statusResult(project, fmt.Sprintf("Export preset \"%s\" removed.", name), map[string]any{
 		"name": name,
 	})
 }

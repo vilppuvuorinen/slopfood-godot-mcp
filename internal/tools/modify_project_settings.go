@@ -20,10 +20,6 @@ func modifyProjectSettings() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Godot project path",
-				},
 				"section": map[string]any{
 					"type":        "string",
 					"description": `Section in project.godot (e.g., "application", "display", "rendering")`,
@@ -34,7 +30,7 @@ func modifyProjectSettings() mcp.Tool {
 				},
 				"value": godotValueSchema(`Value to set in the tool value contract (for example "text", 1280, true, or {"$type":"Vector2","x":1,"y":2})`),
 			},
-			"required": []string{"projectPath", "section", "key", "value"},
+			"required": []string{"section", "key", "value"},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"section": map[string]any{"type": "string"},
@@ -46,24 +42,24 @@ func modifyProjectSettings() mcp.Tool {
 }
 
 type modifyProjectSettingsArgs struct {
-	ProjectPath string          `json:"projectPath"`
-	Section     string          `json:"section"`
-	Key         string          `json:"key"`
-	Value       json.RawMessage `json:"value"`
+	Section string          `json:"section"`
+	Key     string          `json:"key"`
+	Value   json.RawMessage `json:"value"`
 }
 
-func handleModifyProjectSettings(_ context.Context, raw json.RawMessage) (any, error) {
+func handleModifyProjectSettings(ctx context.Context, raw json.RawMessage) (any, error) {
 	var args modifyProjectSettingsArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.Section == "" || args.Key == "" || len(bytes.TrimSpace(args.Value)) == 0 {
-		return mcp.ErrorResult("projectPath, section, key, and value are required."), nil
+	project := projectRoot(ctx)
+	if args.Section == "" || args.Key == "" || len(bytes.TrimSpace(args.Value)) == 0 {
+		return mcp.ErrorResult("section, key, and value are required."), nil
 	}
 
-	store, failure := openSettings(args.ProjectPath)
+	store, failure := openSettings(project)
 	if failure != nil {
 		return *failure, nil
 	}
@@ -82,7 +78,7 @@ func handleModifyProjectSettings(_ context.Context, raw json.RawMessage) (any, e
 		return mcp.ErrorResult("Failed to modify project settings: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 
-	return statusResult(fmt.Sprintf("Setting updated: [%s] %s=%s", args.Section, args.Key, value), map[string]any{
+	return statusResult(project, fmt.Sprintf("Setting updated: [%s] %s=%s", args.Section, args.Key, value), map[string]any{
 		"section": args.Section,
 		"key":     args.Key,
 		"value":   value,

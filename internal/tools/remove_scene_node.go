@@ -18,10 +18,6 @@ func removeSceneNode() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Godot project path",
-				},
 				"scenePath": map[string]any{
 					"type":        "string",
 					"description": "Scene file path (relative to project)",
@@ -31,7 +27,7 @@ func removeSceneNode() mcp.Tool {
 					"description": `Path to the node to remove (e.g., "root/Player/OldNode")`,
 				},
 			},
-			"required": []string{"projectPath", "scenePath", "nodePath"},
+			"required": []string{"scenePath", "nodePath"},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"scenePath": map[string]any{"type": "string"},
@@ -42,9 +38,8 @@ func removeSceneNode() mcp.Tool {
 }
 
 type removeSceneNodeArgs struct {
-	ProjectPath string `json:"projectPath"`
-	ScenePath   string `json:"scenePath"`
-	NodePath    string `json:"nodePath"`
+	ScenePath string `json:"scenePath"`
+	NodePath  string `json:"nodePath"`
 }
 
 func handleRemoveSceneNode(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -54,15 +49,16 @@ func handleRemoveSceneNode(ctx context.Context, raw json.RawMessage) (any, error
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.ScenePath == "" || args.NodePath == "" {
-		return mcp.ErrorResult("projectPath, scenePath, and nodePath are required."), nil
+	project := projectRoot(ctx)
+	if args.ScenePath == "" || args.NodePath == "" {
+		return mcp.ErrorResult("scenePath and nodePath are required."), nil
 	}
-	sceneFull, pathOK := confinePath(args.ProjectPath, args.ScenePath)
-	if !validPath(args.ProjectPath) || !pathOK {
+	sceneFull, pathOK := confinePath(project, args.ScenePath)
+	if !validPath(project) || !pathOK {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return notAProjectResult(args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return notAProjectResult(project), nil
 	}
 	if !pathExists(sceneFull) {
 		return sceneMissingResult(args.ScenePath), nil
@@ -72,7 +68,7 @@ func handleRemoveSceneNode(ctx context.Context, raw json.RawMessage) (any, error
 		"scenePath": args.ScenePath,
 		"nodePath":  args.NodePath,
 	}
-	return runHeadlessOperation(ctx, args.ProjectPath, "remove_node", params, map[string]any{
+	return runHeadlessOperation(ctx, project, "remove_node", params, map[string]any{
 		"scenePath": args.ScenePath,
 		"nodePath":  args.NodePath,
 	})

@@ -19,17 +19,17 @@ func TestManageInputMapSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,action" {
+	if !ok || strings.Join(required, ",") != "action" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	if len(props) != 5 {
+	if len(props) != 4 {
 		t.Errorf("properties = %v", props)
 	}
-	for _, key := range []string{"projectPath", "action", "actionName", "key"} {
+	for _, key := range []string{"action", "actionName", "key"} {
 		property, isObject := props[key].(map[string]any)
 		if !isObject || property["type"] != "string" {
 			t.Errorf("%s property = %v", key, props[key])
@@ -362,8 +362,8 @@ func TestManageInputMapErrors(t *testing.T) {
 		args string
 		want string
 	}{
-		{name: "missing params", args: `{}`, want: "projectPath and action are required."},
-		{name: "missing action", args: `{"projectPath":` + jsonString(root) + `}`, want: "projectPath and action are required."},
+		{name: "missing params", args: `{}`, want: "action is required."},
+		{name: "missing action", args: `{"projectPath":` + jsonString(root) + `}`, want: "action is required."},
 		{name: "invalid path", args: `{"projectPath":"../escape","action":"list"}`, want: "Invalid path."},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"action":"list"}`, want: "Not a valid Godot project: "},
 		{name: "add missing actionName", args: `{"projectPath":` + jsonString(root) + `,"action":"add"}`, want: "actionName is required for add action."},

@@ -43,22 +43,21 @@ func decodeProjectInfo(t *testing.T, text string) projectInfoResult {
 // for get_project_info over the real stdio surface.
 func TestGetProjectInfoSchema(t *testing.T) {
 	schema := requireSchema(t, "get_project_info", "Retrieve metadata about a Godot project")
-	schema.requireRequired(t, "projectPath")
-	schema.requireStringProps(t, "projectPath")
+	schema.requireRequired(t)
+	schema.requirePropCount(t, 0)
 }
 
 // TestGetProjectInfoTool exercises name extraction and structure counting
 // through the MCP client. It skips when Godot is not installed, since the
 // reference probes `godot --version`.
 func TestGetProjectInfoTool(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
-
 	t.Run("reports project info", func(t *testing.T) {
 		root := t.TempDir()
 		seedInfoProject(t, root)
+		session := connectProject(t, root)
+		requireGodot(t, session)
 
-		info := decodeProjectInfo(t, requireToolText(t, session, "get_project_info", map[string]any{"projectPath": root}))
+		info := decodeProjectInfo(t, requireToolText(t, session, "get_project_info", map[string]any{}))
 		if info.Name != "E2E Game" {
 			t.Errorf("name = %q, want E2E Game", info.Name)
 		}
@@ -77,8 +76,10 @@ func TestGetProjectInfoTool(t *testing.T) {
 	t.Run("name falls back to basename", func(t *testing.T) {
 		root := filepath.Join(t.TempDir(), "fallback")
 		seedProject(t, root)
+		session := connectProject(t, root)
+		requireGodot(t, session)
 
-		info := decodeProjectInfo(t, requireToolText(t, session, "get_project_info", map[string]any{"projectPath": root}))
+		info := decodeProjectInfo(t, requireToolText(t, session, "get_project_info", map[string]any{}))
 		if info.Name != "fallback" {
 			t.Errorf("name = %q, want fallback", info.Name)
 		}
@@ -88,19 +89,10 @@ func TestGetProjectInfoTool(t *testing.T) {
 // TestGetProjectInfoErrors covers the reference's validation and failure
 // messages that are reachable without a Godot install.
 func TestGetProjectInfoErrors(t *testing.T) {
-	session := connect(t)
-
-	t.Run("missing projectPath", func(t *testing.T) {
-		requireToolError(t, session, "get_project_info", map[string]any{}, "Project path is required")
-	})
-
-	t.Run("invalid path", func(t *testing.T) {
-		requireToolError(t, session, "get_project_info", map[string]any{"projectPath": "../escape"}, "Invalid project path")
-	})
-
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
-		res := callTool(t, session, "get_project_info", map[string]any{"projectPath": root})
+		session := connectProject(t, root)
+		res := callTool(t, session, "get_project_info", map[string]any{})
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}

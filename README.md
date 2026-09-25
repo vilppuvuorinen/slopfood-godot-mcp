@@ -2,6 +2,24 @@
 
 A zero-dependency Go MCP server for Godot. Zero dependencies is a hard requirement: the standard library is the only dependency, ever.
 
+## Project binding
+
+One server process is bound to one Godot project, chosen at spawn in order of
+precedence: `--project /path`, then `$GODOT_PROJECT`, then the working
+directory. The bound path is the only place a caller can learn which project is
+in scope: it is advertised in the server's instructions (both the legacy
+`initialize` handshake and the stateless `server/discover` result), and
+project-scoped results echo it back.
+
+Tools take paths relative to the bound project and never accept a project
+argument, so there is no cursor, select tool, or per-call override. A second
+project is a second server entry:
+
+```
+go-dot-mcp --project /path/to/game --enable all
+GODOT_PROJECT=/path/to/game go-dot-mcp --enable all
+```
+
 ## Tools and `--enable` categories
 
 Tools are grouped into categories by what they act on. `project` is registered

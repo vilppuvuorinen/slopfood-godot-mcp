@@ -17,14 +17,14 @@ func TestExportProjectSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,presetName,outputPath" {
+	if !ok || strings.Join(required, ",") != "presetName,outputPath" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"projectPath", "presetName", "outputPath"} {
+	for _, key := range []string{"presetName", "outputPath"} {
 		prop, isString := props[key].(map[string]any)
 		if !isString || prop["type"] != "string" {
 			t.Errorf("%s property = %v", key, props[key])
@@ -150,8 +150,8 @@ func TestExportProjectValidation(t *testing.T) {
 		args string
 		want string
 	}{
-		{name: "missing params", args: `{}`, want: "projectPath, presetName, and outputPath are required."},
-		{name: "missing outputPath", args: `{"projectPath":` + jsonString(root) + `,"presetName":"Linux"}`, want: "projectPath, presetName, and outputPath are required."},
+		{name: "missing params", args: `{}`, want: "presetName and outputPath are required."},
+		{name: "missing outputPath", args: `{"projectPath":` + jsonString(root) + `,"presetName":"Linux"}`, want: "presetName and outputPath are required."},
 		{name: "invalid path", args: `{"projectPath":"../escape","presetName":"Linux","outputPath":"out"}`, want: "Invalid project path."},
 		{name: "invalid output path", args: `{"projectPath":` + jsonString(root) + `,"presetName":"Linux","outputPath":"../escape"}`, want: "Invalid output path."},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"presetName":"Linux","outputPath":"out"}`, want: "Not a valid Godot project: "},

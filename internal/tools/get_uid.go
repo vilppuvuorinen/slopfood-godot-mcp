@@ -20,16 +20,12 @@ func getUID() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Path to the Godot project directory",
-				},
 				"filePath": map[string]any{
 					"type":        "string",
 					"description": "Path to the file (relative to project) for which to get the UID",
 				},
 			},
-			"required": []string{"projectPath", "filePath"},
+			"required": []string{"filePath"},
 		},
 		OutputSchema: map[string]any{
 			"type": "object",
@@ -47,8 +43,7 @@ func getUID() mcp.Tool {
 }
 
 type getUIDArgs struct {
-	ProjectPath string `json:"projectPath"`
-	FilePath    string `json:"filePath"`
+	FilePath string `json:"filePath"`
 }
 
 func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -58,22 +53,23 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.FilePath == "" {
+	project := projectRoot(ctx)
+	if args.FilePath == "" {
 		return mcp.ErrorResult(
 			"Missing required parameters",
-			"Provide projectPath and filePath",
+			"Provide filePath",
 		), nil
 	}
-	fileFull, pathOK := confinePath(args.ProjectPath, args.FilePath)
-	if !validPath(args.ProjectPath) || !pathOK {
+	fileFull, pathOK := confinePath(project, args.FilePath)
+	if !validPath(project) || !pathOK {
 		return mcp.ErrorResult(
 			"Invalid path",
-			`Provide valid paths without ".." or other potentially unsafe characters`,
+			`Provide a valid file path without ".." or other potentially unsafe characters`,
 		), nil
 	}
 
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return notAProjectResult(args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return notAProjectResult(project), nil
 	}
 
 	if !pathExists(fileFull) {
@@ -101,7 +97,7 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 
 	params := map[string]any{"filePath": args.FilePath}
-	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "get_uid", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, project, "get_uid", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to get UID: "+err.Error(),

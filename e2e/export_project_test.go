@@ -11,43 +11,36 @@ import (
 // for export_project over the real stdio surface.
 func TestExportProjectSchema(t *testing.T) {
 	schema := requireSchema(t, "export_project", "Export a Godot project using a preset")
-	schema.requireRequired(t, "projectPath", "presetName", "outputPath")
-	schema.requirePropCount(t, 4)
-	schema.requireStringProps(t, "projectPath", "presetName", "outputPath")
+	schema.requireRequired(t, "presetName", "outputPath")
+	schema.requirePropCount(t, 3)
+	schema.requireStringProps(t, "presetName", "outputPath")
 	schema.requireType(t, "debug", "boolean")
 }
 
 // TestExportProjectValidation covers the reference's validation messages.
 func TestExportProjectValidation(t *testing.T) {
-	session := connect(t)
-
 	t.Run("missing params", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
 		requireToolError(t, session, "export_project", map[string]any{},
-			"projectPath, presetName, and outputPath are required.")
-	})
-
-	t.Run("invalid path", func(t *testing.T) {
-		requireToolError(t, session, "export_project", map[string]any{
-			"projectPath": "../escape",
-			"presetName":  "Linux",
-			"outputPath":  "build/game.x86_64",
-		}, "Invalid project path.")
+			"presetName and outputPath are required.")
 	})
 
 	t.Run("invalid output path", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
 		requireToolError(t, session, "export_project", map[string]any{
-			"projectPath": t.TempDir(),
-			"presetName":  "Linux",
-			"outputPath":  "../escape",
+			"presetName": "Linux",
+			"outputPath": "../escape",
 		}, "Invalid output path.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
+		session := connectProject(t, root)
 		requireToolError(t, session, "export_project", map[string]any{
-			"projectPath": root,
-			"presetName":  "Linux",
-			"outputPath":  "build/game.x86_64",
+			"presetName": "Linux",
+			"outputPath": "build/game.x86_64",
 		}, "Not a valid Godot project: "+root)
 	})
 }
@@ -81,11 +74,10 @@ binary_format/embed_pck=false
 // export templates (scripts/download-godot.py with GODOT_TEMPLATES=1), so a
 // template error skips rather than fails the suite.
 func TestExportProjectTool(t *testing.T) {
-	session := connect(t)
+	root := newProject(t)
+	session := connectProject(t, root)
 	requireGodot(t, session)
 
-	root := t.TempDir()
-	seedProject(t, root)
 	writeE2EFile(t, filepath.Join(root, "export_presets.cfg"), exportPresetLinux)
 	// Godot packs project resources only, so the project needs at least one
 	// file besides project.godot, and it will not create the output directory.
@@ -95,9 +87,8 @@ func TestExportProjectTool(t *testing.T) {
 	}
 
 	res := callTool(t, session, "export_project", map[string]any{
-		"projectPath": root,
-		"presetName":  "Linux",
-		"outputPath":  "build/game.x86_64",
+		"presetName": "Linux",
+		"outputPath": "build/game.x86_64",
 	})
 	text := firstText(t, res)
 	if res.IsError {

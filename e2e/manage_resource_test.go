@@ -18,24 +18,21 @@ metallic = 0.5
 // for manage_resource over the real stdio surface.
 func TestManageResourceSchema(t *testing.T) {
 	schema := requireSchema(t, "manage_resource", "Create, read, or modify .tres/.res resource files")
-	schema.requireRequired(t, "projectPath", "resourcePath", "action")
-	schema.requireStringProps(t, "projectPath", "resourcePath", "action", "resourceType")
+	schema.requireRequired(t, "resourcePath", "action")
+	schema.requireStringProps(t, "resourcePath", "action", "resourceType")
 	schema.requireType(t, "properties", "object")
-	schema.requirePropCount(t, 5)
+	schema.requirePropCount(t, 4)
 }
 
 // TestManageResourceTool drives the real manage_resource tool against Godot.
 func TestManageResourceTool(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
-
 	t.Run("reads a resource", func(t *testing.T) {
-		root := t.TempDir()
-		seedProject(t, root)
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
 		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
 
 		text := requireToolText(t, session, "manage_resource", map[string]any{
-			"projectPath":  root,
 			"resourcePath": "resources/mat.tres",
 			"action":       "read",
 		})
@@ -50,12 +47,12 @@ func TestManageResourceTool(t *testing.T) {
 	})
 
 	t.Run("modifies then re-reads a resource", func(t *testing.T) {
-		root := t.TempDir()
-		seedProject(t, root)
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
 		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
 
 		modifyText := requireToolText(t, session, "manage_resource", map[string]any{
-			"projectPath":  root,
 			"resourcePath": "resources/mat.tres",
 			"action":       "modify",
 			"properties":   map[string]any{"metallic": 0.75},
@@ -63,7 +60,6 @@ func TestManageResourceTool(t *testing.T) {
 		requirePrefix(t, modifyText, "manage_resource succeeded.")
 
 		readText := requireToolText(t, session, "manage_resource", map[string]any{
-			"projectPath":  root,
 			"resourcePath": "resources/mat.tres",
 			"action":       "read",
 		})
@@ -71,11 +67,11 @@ func TestManageResourceTool(t *testing.T) {
 	})
 
 	t.Run("creates then reads a resource", func(t *testing.T) {
-		root := t.TempDir()
-		seedProject(t, root)
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
 
 		createText := requireToolText(t, session, "manage_resource", map[string]any{
-			"projectPath":  root,
 			"resourcePath": "materials/red.tres",
 			"action":       "create",
 			"resourceType": "StandardMaterial3D",
@@ -89,7 +85,6 @@ func TestManageResourceTool(t *testing.T) {
 		requireContains(t, content, `[gd_resource type="StandardMaterial3D"`)
 
 		readText := requireToolText(t, session, "manage_resource", map[string]any{
-			"projectPath":  root,
 			"resourcePath": "materials/red.tres",
 			"action":       "read",
 		})
@@ -100,14 +95,11 @@ func TestManageResourceTool(t *testing.T) {
 // TestManageResourceTheme covers the Theme codec folded into manage_resource:
 // create/read/modify with the theme item type inference intact.
 func TestManageResourceTheme(t *testing.T) {
-	session := connect(t)
+	root := newProject(t)
+	session := connectProject(t, root)
 	requireGodot(t, session)
 
-	root := t.TempDir()
-	seedProject(t, root)
-
 	createText := requireToolText(t, session, "manage_resource", map[string]any{
-		"projectPath":  root,
 		"resourcePath": "themes/main.tres",
 		"action":       "create",
 		"resourceType": "Theme",
@@ -119,7 +111,6 @@ func TestManageResourceTheme(t *testing.T) {
 	requireContains(t, readFile(t, themeFile), `[gd_resource type="Theme"`)
 
 	readText := requireToolText(t, session, "manage_resource", map[string]any{
-		"projectPath":  root,
 		"resourcePath": "themes/main.tres",
 		"action":       "read",
 	})
@@ -127,7 +118,6 @@ func TestManageResourceTheme(t *testing.T) {
 	requireNotContains(t, readText, "THEME_JSON_START")
 
 	modifyText := requireToolText(t, session, "manage_resource", map[string]any{
-		"projectPath":  root,
 		"resourcePath": "themes/main.tres",
 		"action":       "modify",
 		"properties":   map[string]any{"default_font_size": 20},
@@ -135,7 +125,6 @@ func TestManageResourceTheme(t *testing.T) {
 	requirePrefix(t, modifyText, "manage_resource succeeded.")
 
 	reReadText := requireToolText(t, session, "manage_resource", map[string]any{
-		"projectPath":  root,
 		"resourcePath": "themes/main.tres",
 		"action":       "read",
 	})
@@ -147,21 +136,17 @@ func TestManageResourceTheme(t *testing.T) {
 // and a Theme item that references another resource by path. The saved .tres is
 // inspected so a silently-ignored or mis-typed value fails the test.
 func TestManageResourceThemeConvertsTypes(t *testing.T) {
-	session := connect(t)
+	root := newProject(t)
+	session := connectProject(t, root)
 	requireGodot(t, session)
 
-	root := t.TempDir()
-	seedProject(t, root)
-
 	requireToolText(t, session, "manage_resource", map[string]any{
-		"projectPath":  root,
 		"resourcePath": "themes/panel_box.tres",
 		"action":       "create",
 		"resourceType": "StyleBoxFlat",
 	})
 
 	createText := requireToolText(t, session, "manage_resource", map[string]any{
-		"projectPath":  root,
 		"resourcePath": "themes/main.tres",
 		"action":       "create",
 		"resourceType": "Theme",
@@ -183,7 +168,6 @@ func TestManageResourceThemeConvertsTypes(t *testing.T) {
 	requireNotContains(t, content, "Panel/styles/panel = null")
 
 	readText := requireToolText(t, session, "manage_resource", map[string]any{
-		"projectPath":  root,
 		"resourcePath": "themes/main.tres",
 		"action":       "read",
 	})
@@ -199,7 +183,6 @@ func TestManageResourceThemeConvertsTypes(t *testing.T) {
 	}
 
 	modifyText := requireToolText(t, session, "manage_resource", map[string]any{
-		"projectPath":  root,
 		"resourcePath": "themes/main.tres",
 		"action":       "modify",
 		"properties": map[string]any{
@@ -214,46 +197,35 @@ func TestManageResourceThemeConvertsTypes(t *testing.T) {
 // TestManageResourceErrors covers the reference's validation and failure
 // messages.
 func TestManageResourceErrors(t *testing.T) {
-	session := connect(t)
-
 	t.Run("missing params", func(t *testing.T) {
-		requireToolError(t, session, "manage_resource", map[string]any{}, "projectPath, resourcePath, and action are required.")
+		session := connect(t)
+		requireToolError(t, session, "manage_resource", map[string]any{}, "resourcePath and action are required.")
 	})
 
 	t.Run("create without resource type", func(t *testing.T) {
-		root := t.TempDir()
-		seedProject(t, root)
+		root := newProject(t)
+		session := connectProject(t, root)
 		requireToolError(t, session, "manage_resource", map[string]any{
-			"projectPath":  root,
 			"resourcePath": "materials/red.tres",
 			"action":       "create",
 		}, "resourceType is required for the create action.")
 	})
 
-	t.Run("invalid path", func(t *testing.T) {
-		requireToolError(t, session, "manage_resource", map[string]any{
-			"projectPath":  "../escape",
-			"resourcePath": "mat.tres",
-			"action":       "read",
-		}, "Invalid path.")
-	})
-
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
+		session := connectProject(t, root)
 		requireToolError(t, session, "manage_resource", map[string]any{
-			"projectPath":  root,
 			"resourcePath": "mat.tres",
 			"action":       "read",
 		}, "Not a valid Godot project: "+root)
 	})
 
 	t.Run("unknown action", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
 		requireGodot(t, session)
-		root := t.TempDir()
-		seedProject(t, root)
 
 		res := callTool(t, session, "manage_resource", map[string]any{
-			"projectPath":  root,
 			"resourcePath": "resources/mat.tres",
 			"action":       "bogus",
 		})
@@ -264,12 +236,11 @@ func TestManageResourceErrors(t *testing.T) {
 	})
 
 	t.Run("unknown resource type", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
 		requireGodot(t, session)
-		root := t.TempDir()
-		seedProject(t, root)
 
 		res := callTool(t, session, "manage_resource", map[string]any{
-			"projectPath":  root,
 			"resourcePath": "materials/red.tres",
 			"action":       "create",
 			"resourceType": "NotARealResource",

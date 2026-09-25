@@ -17,14 +17,14 @@ func TestModifySceneNodeSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,scenePath,nodePath,properties" {
+	if !ok || strings.Join(required, ",") != "scenePath,nodePath,properties" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"projectPath", "scenePath", "nodePath"} {
+	for _, key := range []string{"scenePath", "nodePath"} {
 		prop, propOK := props[key].(map[string]any)
 		if !propOK || prop["type"] != "string" {
 			t.Errorf("property %q = %v, want string", key, props[key])
@@ -103,8 +103,8 @@ func TestModifySceneNodeValidation(t *testing.T) {
 		args string
 		want string
 	}{
-		{name: "missing params", args: `{}`, want: "projectPath, scenePath, nodePath, and properties are required."},
-		{name: "missing properties", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","nodePath":"root"}`, want: "projectPath, scenePath, nodePath, and properties are required."},
+		{name: "missing params", args: `{}`, want: "scenePath, nodePath, and properties are required."},
+		{name: "missing properties", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","nodePath":"root"}`, want: "scenePath, nodePath, and properties are required."},
 		{name: "invalid project path", args: `{"projectPath":"../escape","scenePath":"main.tscn","nodePath":"root","properties":{"visible":true}}`, want: "Invalid path."},
 		{name: "invalid scene path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"../escape.tscn","nodePath":"root","properties":{"visible":true}}`, want: "Invalid path."},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn","nodePath":"root","properties":{"visible":true}}`, want: "Not a valid Godot project"},

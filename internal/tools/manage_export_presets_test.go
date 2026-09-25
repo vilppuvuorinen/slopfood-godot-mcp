@@ -17,14 +17,14 @@ func TestManageExportPresetsSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,action" {
+	if !ok || strings.Join(required, ",") != "action" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"projectPath", "action", "name", "platform"} {
+	for _, key := range []string{"action", "name", "platform"} {
 		prop, isString := props[key].(map[string]any)
 		if !isString || prop["type"] != "string" {
 			t.Errorf("%s property = %v", key, props[key])
@@ -234,7 +234,7 @@ func TestManageExportPresetsErrors(t *testing.T) {
 		{
 			name: "missing params",
 			args: `{}`,
-			want: "projectPath and action are required.",
+			want: "action is required.",
 		},
 		{
 			name: "invalid path",

@@ -17,14 +17,14 @@ func TestManageSceneStructureSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,scenePath,action,nodePath" {
+	if !ok || strings.Join(required, ",") != "scenePath,action,nodePath" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"projectPath", "scenePath", "action", "nodePath", "newName", "newParentPath"} {
+	for _, key := range []string{"scenePath", "action", "nodePath", "newName", "newParentPath"} {
 		prop, ok := props[key].(map[string]any)
 		if !ok || prop["type"] != "string" {
 			t.Errorf("property %q = %v, want string", key, props[key])
@@ -94,9 +94,9 @@ func TestManageSceneStructureValidation(t *testing.T) {
 		args string
 		want string
 	}{
-		{name: "missing params", args: `{}`, want: "projectPath, scenePath, action, and nodePath are required."},
-		{name: "missing action", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","nodePath":"root"}`, want: "projectPath, scenePath, action, and nodePath are required."},
-		{name: "missing node path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","action":"rename"}`, want: "projectPath, scenePath, action, and nodePath are required."},
+		{name: "missing params", args: `{}`, want: "scenePath, action, and nodePath are required."},
+		{name: "missing action", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","nodePath":"root"}`, want: "scenePath, action, and nodePath are required."},
+		{name: "missing node path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","action":"rename"}`, want: "scenePath, action, and nodePath are required."},
 		{name: "invalid project path", args: `{"projectPath":"../escape","scenePath":"main.tscn","action":"rename","nodePath":"root"}`, want: "Invalid path."},
 		{name: "invalid scene path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"../escape.tscn","action":"rename","nodePath":"root"}`, want: "Invalid path."},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn","action":"rename","nodePath":"root"}`, want: "Not a valid Godot project"},

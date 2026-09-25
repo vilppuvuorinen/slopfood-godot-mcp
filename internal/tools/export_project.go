@@ -19,10 +19,6 @@ func exportProject() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Godot project path",
-				},
 				"presetName": map[string]any{
 					"type":        "string",
 					"description": "Export preset name",
@@ -36,7 +32,7 @@ func exportProject() mcp.Tool {
 					"description": "Use debug export. Default: false",
 				},
 			},
-			"required": []string{"projectPath", "presetName", "outputPath"},
+			"required": []string{"presetName", "outputPath"},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"presetName": map[string]any{"type": "string"},
@@ -49,10 +45,9 @@ func exportProject() mcp.Tool {
 }
 
 type exportProjectArgs struct {
-	ProjectPath string `json:"projectPath"`
-	PresetName  string `json:"presetName"`
-	OutputPath  string `json:"outputPath"`
-	Debug       bool   `json:"debug"`
+	PresetName string `json:"presetName"`
+	OutputPath string `json:"outputPath"`
+	Debug      bool   `json:"debug"`
 }
 
 func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -62,20 +57,21 @@ func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) 
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.PresetName == "" || args.OutputPath == "" {
-		return mcp.ErrorResult("projectPath, presetName, and outputPath are required."), nil
+	project := projectRoot(ctx)
+	if args.PresetName == "" || args.OutputPath == "" {
+		return mcp.ErrorResult("presetName and outputPath are required."), nil
 	}
-	if !validPath(args.ProjectPath) {
+	if !validPath(project) {
 		return mcp.ErrorResult("Invalid project path."), nil
 	}
-	if _, ok := confineAbsPath(args.ProjectPath, args.OutputPath); !ok {
+	if _, ok := confineAbsPath(project, args.OutputPath); !ok {
 		return mcp.ErrorResult("Invalid output path."), nil
 	}
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return mcp.ErrorResult("Not a valid Godot project: " + args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return mcp.ErrorResult("Not a valid Godot project: " + project), nil
 	}
 
-	stdout, stderr, exitCode, err := godot.Export(ctx, godot.Path(), args.ProjectPath, args.PresetName, args.OutputPath, args.Debug)
+	stdout, stderr, exitCode, err := godot.Export(ctx, godot.Path(), project, args.PresetName, args.OutputPath, args.Debug)
 	if err != nil {
 		return mcp.ErrorResult("Export failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
@@ -86,7 +82,7 @@ func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) 
 	if output == "" {
 		output = args.OutputPath
 	}
-	return statusResult("Export succeeded.\n\nOutput: "+output, map[string]any{
+	return statusResult(project, "Export succeeded.\n\nOutput: "+output, map[string]any{
 		"presetName": args.PresetName,
 		"outputPath": args.OutputPath,
 		"debug":      args.Debug,

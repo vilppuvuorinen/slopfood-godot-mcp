@@ -18,10 +18,6 @@ func manageSceneStructure() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Godot project path",
-				},
 				"scenePath": map[string]any{
 					"type":        "string",
 					"description": "Scene file path (relative to project)",
@@ -44,7 +40,7 @@ func manageSceneStructure() mcp.Tool {
 					"description": "New parent path (for move)",
 				},
 			},
-			"required": []string{"projectPath", "scenePath", "action", "nodePath"},
+			"required": []string{"scenePath", "action", "nodePath"},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"scenePath":     map[string]any{"type": "string"},
@@ -58,7 +54,6 @@ func manageSceneStructure() mcp.Tool {
 }
 
 type manageSceneStructureArgs struct {
-	ProjectPath   string `json:"projectPath"`
 	ScenePath     string `json:"scenePath"`
 	Action        string `json:"action"`
 	NodePath      string `json:"nodePath"`
@@ -73,21 +68,22 @@ func handleManageSceneStructure(ctx context.Context, raw json.RawMessage) (any, 
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.ScenePath == "" || args.Action == "" || args.NodePath == "" {
+	project := projectRoot(ctx)
+	if args.ScenePath == "" || args.Action == "" || args.NodePath == "" {
 		return mcp.ErrorResult(
-			"projectPath, scenePath, action, and nodePath are required.",
-			"Provide projectPath, scenePath, action, and nodePath",
+			"scenePath, action, and nodePath are required.",
+			"Provide scenePath, action, and nodePath",
 		), nil
 	}
-	sceneFull, pathOK := confinePath(args.ProjectPath, args.ScenePath)
-	if !validPath(args.ProjectPath) || !pathOK {
+	sceneFull, pathOK := confinePath(project, args.ScenePath)
+	if !validPath(project) || !pathOK {
 		return mcp.ErrorResult(
 			"Invalid path.",
-			`Provide valid paths without ".." or other potentially unsafe characters`,
+			`Provide a valid scene path without ".." or other potentially unsafe characters`,
 		), nil
 	}
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return notAProjectResult(args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return notAProjectResult(project), nil
 	}
 	if !pathExists(sceneFull) {
 		return sceneMissingResult(args.ScenePath), nil
@@ -116,5 +112,5 @@ func handleManageSceneStructure(ctx context.Context, raw json.RawMessage) (any, 
 	if args.NewParentPath != "" {
 		fields["newParentPath"] = args.NewParentPath
 	}
-	return runHeadlessOperation(ctx, args.ProjectPath, "manage_scene_structure", params, fields)
+	return runHeadlessOperation(ctx, project, "manage_scene_structure", params, fields)
 }

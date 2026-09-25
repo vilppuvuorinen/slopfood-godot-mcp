@@ -18,10 +18,6 @@ func addNode() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Path to the Godot project directory",
-				},
 				"scenePath": map[string]any{
 					"type":        "string",
 					"description": "Path to the scene file (relative to project)",
@@ -40,7 +36,7 @@ func addNode() mcp.Tool {
 				},
 				"properties": propertiesSchema("Optional properties to set on the node, as name to godotValue pairs"),
 			},
-			"required": []string{"projectPath", "scenePath", "nodeType", "nodeName"},
+			"required": []string{"scenePath", "nodeType", "nodeName"},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"scenePath":      map[string]any{"type": "string"},
@@ -54,7 +50,6 @@ func addNode() mcp.Tool {
 }
 
 type addNodeArgs struct {
-	ProjectPath    string         `json:"projectPath"`
 	ScenePath      string         `json:"scenePath"`
 	ParentNodePath string         `json:"parentNodePath"`
 	NodeType       string         `json:"nodeType"`
@@ -69,17 +64,18 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.ScenePath == "" || args.NodeType == "" || args.NodeName == "" {
+	project := projectRoot(ctx)
+	if args.ScenePath == "" || args.NodeType == "" || args.NodeName == "" {
 		return mcp.ErrorResult(
 			"Missing required parameters",
-			"Provide projectPath, scenePath, nodeType, and nodeName",
+			"Provide scenePath, nodeType, and nodeName",
 		), nil
 	}
-	sceneFull, pathOK := confinePath(args.ProjectPath, args.ScenePath)
-	if !validPath(args.ProjectPath) || !pathOK {
+	sceneFull, pathOK := confinePath(project, args.ScenePath)
+	if !validPath(project) || !pathOK {
 		return mcp.ErrorResult(
 			"Invalid path",
-			`Provide valid paths without ".." or other potentially unsafe characters`,
+			`Provide a valid scene path without ".." or other potentially unsafe characters`,
 		), nil
 	}
 	if !validClassName(args.NodeType) {
@@ -89,8 +85,8 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 		), nil
 	}
 
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return notAProjectResult(args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return notAProjectResult(project), nil
 	}
 
 	if !pathExists(sceneFull) {
@@ -109,7 +105,7 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 		params["properties"] = args.Properties
 	}
 
-	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "add_node", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, project, "add_node", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to add node: "+err.Error(),
@@ -137,5 +133,5 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 	if args.ParentNodePath != "" {
 		fields["parentNodePath"] = args.ParentNodePath
 	}
-	return statusResult(message, fields), nil
+	return statusResult(project, message, fields), nil
 }

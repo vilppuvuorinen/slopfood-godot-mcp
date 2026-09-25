@@ -17,14 +17,14 @@ func TestCreateSceneSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,scenePath" {
+	if !ok || strings.Join(required, ",") != "scenePath" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"projectPath", "scenePath", "rootNodeType"} {
+	for _, key := range []string{"scenePath", "rootNodeType"} {
 		if _, ok := props[key]; !ok {
 			t.Errorf("missing property %q", key)
 		}
@@ -77,8 +77,8 @@ func TestCreateSceneValidation(t *testing.T) {
 		args string
 		want string
 	}{
-		{name: "missing paths", args: `{}`, want: "Project path and scene path are required"},
-		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `}`, want: "Project path and scene path are required"},
+		{name: "missing paths", args: `{}`, want: "Scene path is required"},
+		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `}`, want: "Scene path is required"},
 		{name: "invalid project path", args: `{"projectPath":"../escape","scenePath":"main.tscn"}`, want: "Invalid path"},
 		{name: "invalid scene path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"../escape.tscn"}`, want: "Invalid path"},
 		{name: "invalid root node type", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn","rootNodeType":"res://evil.gd"}`, want: "Invalid rootNodeType"},

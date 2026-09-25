@@ -33,16 +33,15 @@ func TestGetProjectInfoSchema(t *testing.T) {
 		t.Errorf("schema type = %v", tool.InputSchema["type"])
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || len(required) != 1 || required[0] != "projectPath" {
+	if !ok || len(required) != 0 {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	projectPath, ok := props["projectPath"].(map[string]any)
-	if !ok || projectPath["type"] != "string" {
-		t.Errorf("projectPath property = %v", props["projectPath"])
+	if len(props) != 0 {
+		t.Errorf("properties = %v, want none", props)
 	}
 }
 
@@ -135,7 +134,7 @@ func TestGetProjectInfoMissingPath(t *testing.T) {
 	if len(result.Content) != 2 {
 		t.Fatalf("content = %+v", result.Content)
 	}
-	if result.Content[0].Text != "Project path is required" {
+	if result.Content[0].Text != "Invalid project path" {
 		t.Errorf("message = %q", result.Content[0].Text)
 	}
 	if !strings.HasPrefix(result.Content[1].Text, "Possible solutions:") {

@@ -53,16 +53,12 @@ func TestValidateScriptsSchema(t *testing.T) {
 		t.Errorf("schema type = %v", tool.InputSchema["type"])
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || len(required) != 1 || required[0] != "projectPath" {
+	if !ok || len(required) != 0 {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
-	}
-	projectPath, ok := props["projectPath"].(map[string]any)
-	if !ok || projectPath["type"] != "string" {
-		t.Errorf("projectPath property = %v", props["projectPath"])
 	}
 	scope, ok := props["scope"].(map[string]any)
 	if !ok || scope["type"] != "string" {
@@ -226,7 +222,7 @@ func TestValidateScriptsExplicitSkips(t *testing.T) {
 func TestValidateScriptsErrors(t *testing.T) {
 	t.Run("missing projectPath", func(t *testing.T) {
 		result := callToolArgs(t, validateScripts(), `{}`)
-		if !result.IsError || result.Content[0].Text != "projectPath is required." {
+		if !result.IsError || result.Content[0].Text != "Invalid path." {
 			t.Fatalf("result = %+v", result.Content)
 		}
 	})

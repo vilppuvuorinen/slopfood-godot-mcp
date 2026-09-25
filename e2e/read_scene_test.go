@@ -19,23 +19,19 @@ type sceneNode struct {
 // read_scene over the real stdio surface.
 func TestReadSceneSchema(t *testing.T) {
 	schema := requireSchema(t, "read_scene", "Read scene file as JSON node tree (headless)")
-	schema.requireRequired(t, "projectPath", "scenePath")
-	schema.requireStringProps(t, "projectPath", "scenePath")
-	schema.requirePropCount(t, 2)
+	schema.requireRequired(t, "scenePath")
+	schema.requireStringProps(t, "scenePath")
+	schema.requirePropCount(t, 1)
 }
 
 // TestReadSceneTool drives the real read_scene tool against Godot and parses
 // the returned JSON node tree.
 func TestReadSceneTool(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
-
 	t.Run("reads the root node", func(t *testing.T) {
-		root := seedScene(t, session, "scenes/main.tscn", "Node2D")
+		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
 
 		text := requireToolText(t, session, "read_scene", map[string]any{
-			"projectPath": root,
-			"scenePath":   "scenes/main.tscn",
+			"scenePath": "scenes/main.tscn",
 		})
 
 		var tree sceneNode
@@ -48,18 +44,16 @@ func TestReadSceneTool(t *testing.T) {
 	})
 
 	t.Run("reads a child node", func(t *testing.T) {
-		root := seedScene(t, session, "scenes/tree.tscn", "Node2D")
+		_, session := seedScene(t, "scenes/tree.tscn", "Node2D")
 
 		requireToolText(t, session, "add_node", map[string]any{
-			"projectPath": root,
-			"scenePath":   "scenes/tree.tscn",
-			"nodeType":    "Sprite2D",
-			"nodeName":    "Player",
+			"scenePath": "scenes/tree.tscn",
+			"nodeType":  "Sprite2D",
+			"nodeName":  "Player",
 		})
 
 		text := requireToolText(t, session, "read_scene", map[string]any{
-			"projectPath": root,
-			"scenePath":   "scenes/tree.tscn",
+			"scenePath": "scenes/tree.tscn",
 		})
 
 		var tree sceneNode
@@ -79,10 +73,7 @@ func TestReadSceneTool(t *testing.T) {
 // whose exported Dictionary property exercises the hybrid value encoding:
 // JSON-native types stay nested, engine-only types stay strings.
 func TestReadSceneNestedProperties(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
-
-	root := seedScene(t, session, "scenes/dict.tscn", "Node2D")
+	root, session := seedScene(t, "scenes/dict.tscn", "Node2D")
 	writeE2EFile(t, filepath.Join(root, "scripts", "config.gd"),
 		`extends Node2D
 
@@ -90,15 +81,13 @@ func TestReadSceneNestedProperties(t *testing.T) {
 `)
 
 	requireToolText(t, session, "attach_script", map[string]any{
-		"projectPath": root,
-		"scenePath":   "scenes/dict.tscn",
-		"nodePath":    "root",
-		"scriptPath":  "scripts/config.gd",
+		"scenePath":  "scenes/dict.tscn",
+		"nodePath":   "root",
+		"scriptPath": "scripts/config.gd",
 	})
 
 	text := requireToolText(t, session, "read_scene", map[string]any{
-		"projectPath": root,
-		"scenePath":   "scenes/dict.tscn",
+		"scenePath": "scenes/dict.tscn",
 	})
 
 	var tree sceneNode
@@ -127,33 +116,23 @@ func TestReadSceneNestedProperties(t *testing.T) {
 
 // TestReadSceneErrors covers the reference's validation and failure messages.
 func TestReadSceneErrors(t *testing.T) {
-	session := connect(t)
-
 	t.Run("missing paths", func(t *testing.T) {
-		requireToolError(t, session, "read_scene", map[string]any{}, "projectPath and scenePath are required.")
-	})
-
-	t.Run("invalid path", func(t *testing.T) {
-		requireToolError(t, session, "read_scene", map[string]any{
-			"projectPath": "../escape",
-			"scenePath":   "main.tscn",
-		}, "Invalid path.")
+		session := connectProject(t, newProject(t))
+		requireToolError(t, session, "read_scene", map[string]any{}, "scenePath is required.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
+		session := connectProject(t, root)
 		requireToolError(t, session, "read_scene", map[string]any{
-			"projectPath": root,
-			"scenePath":   "main.tscn",
+			"scenePath": "main.tscn",
 		}, "Not a valid Godot project: "+root)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		root := t.TempDir()
-		seedProject(t, root)
+		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "read_scene", map[string]any{
-			"projectPath": root,
-			"scenePath":   "missing.tscn",
+			"scenePath": "missing.tscn",
 		}, "Scene file does not exist: missing.tscn")
 	})
 }

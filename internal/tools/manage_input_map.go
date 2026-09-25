@@ -21,10 +21,6 @@ func manageInputMap() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Godot project path",
-				},
 				"action": map[string]any{
 					"type":        "string",
 					"enum":        []string{"list", "add", "remove"},
@@ -43,7 +39,7 @@ func manageInputMap() mcp.Tool {
 					"description": "Deadzone for the action. Default: 0.5",
 				},
 			},
-			"required": []string{"projectPath", "action"},
+			"required": []string{"action"},
 		},
 		OutputSchema: actionOutputSchema(
 			map[string]any{
@@ -60,11 +56,10 @@ func manageInputMap() mcp.Tool {
 }
 
 type manageInputMapArgs struct {
-	ProjectPath string   `json:"projectPath"`
-	Action      string   `json:"action"`
-	ActionName  string   `json:"actionName"`
-	Key         string   `json:"key"`
-	Deadzone    *float64 `json:"deadzone"`
+	Action     string   `json:"action"`
+	ActionName string   `json:"actionName"`
+	Key        string   `json:"key"`
+	Deadzone   *float64 `json:"deadzone"`
 }
 
 // readInputAction returns the dictionary of an existing input action. found is
@@ -130,18 +125,19 @@ func mergeInputAction(action godotconfig.Dictionary, newEvent string, scancode i
 	return action
 }
 
-func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
+func handleManageInputMap(ctx context.Context, raw json.RawMessage) (any, error) {
 	var args manageInputMapArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.Action == "" {
-		return mcp.ErrorResult("projectPath and action are required."), nil
+	project := projectRoot(ctx)
+	if args.Action == "" {
+		return mcp.ErrorResult("action is required."), nil
 	}
 
-	store, failure := openSettings(args.ProjectPath)
+	store, failure := openSettings(project)
 	if failure != nil {
 		return *failure, nil
 	}
@@ -183,7 +179,7 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 			if err := store.Save(); err != nil {
 				return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 			}
-			return statusResult(fmt.Sprintf(`Input action "%s" updated (event merged into existing action).`, args.ActionName), map[string]any{
+			return statusResult(project, fmt.Sprintf(`Input action "%s" updated (event merged into existing action).`, args.ActionName), map[string]any{
 				"actionName": args.ActionName,
 			}), nil
 		}
@@ -201,7 +197,7 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 		if err := store.Save(); err != nil {
 			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return statusResult(fmt.Sprintf(`Input action "%s" added.`, args.ActionName), map[string]any{
+		return statusResult(project, fmt.Sprintf(`Input action "%s" added.`, args.ActionName), map[string]any{
 			"actionName": args.ActionName,
 		}), nil
 	case "remove":
@@ -212,7 +208,7 @@ func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
 		if err := store.Save(); err != nil {
 			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
-		return statusResult(fmt.Sprintf(`Input action "%s" removed.`, args.ActionName), map[string]any{
+		return statusResult(project, fmt.Sprintf(`Input action "%s" removed.`, args.ActionName), map[string]any{
 			"actionName": args.ActionName,
 		}), nil
 	}

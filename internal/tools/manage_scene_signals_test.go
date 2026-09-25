@@ -17,14 +17,14 @@ func TestManageSceneSignalsSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,scenePath,action" {
+	if !ok || strings.Join(required, ",") != "scenePath,action" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"projectPath", "scenePath", "action", "signalName", "sourcePath", "targetPath", "method"} {
+	for _, key := range []string{"scenePath", "action", "signalName", "sourcePath", "targetPath", "method"} {
 		prop, ok := props[key].(map[string]any)
 		if !ok || prop["type"] != "string" {
 			t.Errorf("property %q = %v, want string", key, props[key])
@@ -124,9 +124,9 @@ func TestManageSceneSignalsValidation(t *testing.T) {
 		args string
 		want string
 	}{
-		{name: "missing everything", args: `{}`, want: "projectPath, scenePath, and action are required."},
-		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `,"action":"list"}`, want: "projectPath, scenePath, and action are required."},
-		{name: "missing action", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn"}`, want: "projectPath, scenePath, and action are required."},
+		{name: "missing everything", args: `{}`, want: "scenePath and action are required."},
+		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `,"action":"list"}`, want: "scenePath and action are required."},
+		{name: "missing action", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn"}`, want: "scenePath and action are required."},
 		{name: "invalid project path", args: `{"projectPath":"../escape","scenePath":"main.tscn","action":"list"}`, want: "Invalid path."},
 		{name: "invalid scene path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"../escape.tscn","action":"list"}`, want: "Invalid path."},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn","action":"list"}`, want: "Not a valid Godot project"},

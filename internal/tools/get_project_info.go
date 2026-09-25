@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -24,14 +23,9 @@ func getProjectInfo() mcp.Tool {
 		Description: "Retrieve metadata about a Godot project",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Path to the Godot project directory",
-				},
-			},
-			"required": []string{"projectPath"},
+			"type":       "object",
+			"properties": map[string]any{},
+			"required":   []string{},
 		},
 		OutputSchema: map[string]any{
 			"type": "object",
@@ -56,10 +50,6 @@ func getProjectInfo() mcp.Tool {
 	}
 }
 
-type getProjectInfoArgs struct {
-	ProjectPath string `json:"projectPath"`
-}
-
 // projectInfo is the JSON payload returned on success. Field order matches the
 // reference server's object literal.
 type projectInfo struct {
@@ -70,29 +60,18 @@ type projectInfo struct {
 }
 
 func handleGetProjectInfo(ctx context.Context, raw json.RawMessage) (any, error) {
-	var args getProjectInfoArgs
-	if len(raw) > 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
-	}
-	if args.ProjectPath == "" {
-		return mcp.ErrorResult(
-			"Project path is required",
-			"Provide a valid path to a Godot project directory",
-		), nil
-	}
-	if !validPath(args.ProjectPath) {
+	project := projectRoot(ctx)
+	if !validPath(project) {
 		return mcp.ErrorResult(
 			"Invalid project path",
 			`Provide a valid path without ".." or other potentially unsafe characters`,
 		), nil
 	}
 
-	projectFile := filepath.Join(args.ProjectPath, "project.godot")
+	projectFile := filepath.Join(project, "project.godot")
 	if !pathExists(projectFile) {
 		return mcp.ErrorResult(
-			"Not a valid Godot project: "+args.ProjectPath,
+			"Not a valid Godot project: "+project,
 			"Ensure the path points to a directory containing a project.godot file",
 			"Create a project with create_project if none exists",
 		), nil
@@ -111,10 +90,10 @@ func handleGetProjectInfo(ctx context.Context, raw json.RawMessage) (any, error)
 	}
 
 	info := projectInfo{
-		Name:         readProjectName(args.ProjectPath, projectFile),
-		Path:         args.ProjectPath,
+		Name:         readProjectName(project, projectFile),
+		Path:         project,
 		GodotVersion: version,
-		Structure:    countProjectStructure(args.ProjectPath),
+		Structure:    countProjectStructure(project),
 	}
 	data, err := json.MarshalIndent(info, "", "  ")
 	if err != nil {

@@ -33,10 +33,6 @@ func createProject() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Directory where the project will be created",
-				},
 				"projectName": map[string]any{
 					"type":        "string",
 					"description": "Name of the project",
@@ -46,7 +42,7 @@ func createProject() mcp.Tool {
 					"description": `Scaffold a .NET (C#) project (.csproj + "C#" feature). Default: false`,
 				},
 			},
-			"required": []string{"projectPath", "projectName"},
+			"required": []string{"projectName"},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"projectPath": map[string]any{"type": "string"},
@@ -58,7 +54,6 @@ func createProject() mcp.Tool {
 }
 
 type createProjectArgs struct {
-	ProjectPath string `json:"projectPath"`
 	ProjectName string `json:"projectName"`
 	Dotnet      bool   `json:"dotnet"`
 }
@@ -70,17 +65,18 @@ func handleCreateProject(ctx context.Context, raw json.RawMessage) (any, error) 
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.ProjectName == "" {
-		return mcp.ErrorResult("projectPath and projectName are required."), nil
+	project := projectRoot(ctx)
+	if args.ProjectName == "" {
+		return mcp.ErrorResult("projectName is required."), nil
 	}
-	if !validPath(args.ProjectPath) {
+	if !validPath(project) {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
 	if !validProjectName(args.ProjectName) {
 		return mcp.ErrorResult("Invalid project name."), nil
 	}
 
-	projectFile := filepath.Join(args.ProjectPath, "project.godot")
+	projectFile := filepath.Join(project, "project.godot")
 	switch _, err := os.Stat(projectFile); {
 	case err == nil:
 		return mcp.ErrorResult("A project.godot already exists at this path."), nil
@@ -88,7 +84,7 @@ func handleCreateProject(ctx context.Context, raw json.RawMessage) (any, error) 
 		return nil, fmt.Errorf("stat project file: %w", err)
 	}
 
-	if err := os.MkdirAll(args.ProjectPath, 0o755); err != nil { //nolint:gosec // projectPath is caller-controlled.
+	if err := os.MkdirAll(project, 0o755); err != nil { //nolint:gosec // the project path is bound at startup.
 		return nil, fmt.Errorf("create project directory: %w", err)
 	}
 
@@ -107,18 +103,17 @@ func handleCreateProject(ctx context.Context, raw json.RawMessage) (any, error) 
 	if isDotnet {
 		sdkVersion := detectGodotNetSDKVersion(ctx)
 		csproj := generateCsprojContent(args.ProjectName, sdkVersion, defaultDotnetTargetFramework)
-		csprojPath := filepath.Join(args.ProjectPath, assemblyName+".csproj")
+		csprojPath := filepath.Join(project, assemblyName+".csproj")
 		if err := os.WriteFile(csprojPath, []byte(csproj), 0o644); err != nil { //nolint:gosec // user-facing project file.
 			return nil, fmt.Errorf("write csproj: %w", err)
 		}
 	}
 
-	message := fmt.Sprintf("Project %q created at %s", args.ProjectName, args.ProjectPath)
+	message := fmt.Sprintf("Project %q created at %s", args.ProjectName, project)
 	if isDotnet {
 		message += " (Godot .NET / C#)"
 	}
-	return statusResult(message, map[string]any{
-		"projectPath": args.ProjectPath,
+	return statusResult(project, message, map[string]any{
 		"projectName": args.ProjectName,
 		"dotnet":      isDotnet,
 	}), nil

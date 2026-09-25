@@ -17,24 +17,31 @@ import (
 const binaryEnv = "GO_DOT_MCP_BIN"
 
 // connect starts the server binary with every tool category enabled and returns
-// a connected MCP client session.
+// a connected MCP client session. The server binds to the working directory, so
+// this is only for tools that do not touch a project (version and protocol
+// checks, schema inspection). Project-scoped tests use connectProject.
 func connect(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 	return connectSession(t, nil, "--enable", "all")
+}
+
+// connectProject starts the server binary bound to root, with every tool
+// category enabled.
+func connectProject(t *testing.T, root string) *mcp.ClientSession {
+	t.Helper()
+	return connectSession(t, nil, "--enable", "all", "--project", root)
+}
+
+// connectProjectWithEnv is connectProject with extra environment entries.
+func connectProjectWithEnv(t *testing.T, root string, env ...string) *mcp.ClientSession {
+	t.Helper()
+	return connectSession(t, env, "--enable", "all", "--project", root)
 }
 
 // connectCategories starts the server with exactly the given --enable value.
 func connectCategories(t *testing.T, categories string) *mcp.ClientSession {
 	t.Helper()
 	return connectSession(t, nil, "--enable", categories)
-}
-
-// connectWithEnv starts the server binary with every category enabled plus
-// extra environment entries (KEY=VALUE) and returns a connected MCP client
-// session.
-func connectWithEnv(t *testing.T, env ...string) *mcp.ClientSession {
-	t.Helper()
-	return connectSession(t, env, "--enable", "all")
 }
 
 // connectSession starts the server binary with extra environment entries and
@@ -85,15 +92,6 @@ func connectWithProtocolVersion(t *testing.T, protocolVersion string) *mcp.Clien
 		}
 	})
 	return session
-}
-
-// connectWithFakeGodot starts the server with GODOT_PATH pointing at a script
-// that reports version, so version gates can be exercised without the engine.
-func connectWithFakeGodot(t *testing.T, version string) *mcp.ClientSession {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "godot")
-	writeFileMode(t, path, "#!/bin/sh\necho \""+version+"\"\nexit 0\n", 0o755)
-	return connectWithEnv(t, "GODOT_PATH="+path)
 }
 
 // requireGodot skips a test when no usable Godot executable is configured, so
@@ -216,11 +214,9 @@ func requireNotContains(t *testing.T, s, unwanted string) {
 // the typed store's view, which is only reached when the engine loaded
 // project.godot cleanly. Callers must be Godot-gated (requireGodot) because the
 // tool always invokes the engine and fails when it is unavailable.
-func requireProjectSettingsRoundTrip(t *testing.T, session *mcp.ClientSession, projectPath string) map[string]map[string]any {
+func requireProjectSettingsRoundTrip(t *testing.T, session *mcp.ClientSession) map[string]map[string]any {
 	t.Helper()
-	text := requireToolText(t, session, "read_project_settings", map[string]any{
-		"projectPath": projectPath,
-	})
+	text := requireToolText(t, session, "read_project_settings", map[string]any{})
 	var payload struct {
 		Sections map[string]map[string]any `json:"sections"`
 	}
@@ -339,14 +335,24 @@ func seedProject(t *testing.T, dir string) {
 	writeE2EFile(t, filepath.Join(dir, "project.godot"), "config_version=5\n")
 }
 
-// seedScene creates a temp project with a scene and returns the project root.
-// It skips when create_scene fails, which usually means Godot is unavailable.
-func seedScene(t *testing.T, session *mcp.ClientSession, scenePath string, rootNodeType ...string) string {
+// newProject creates a temp directory containing a minimal project.godot and
+// returns it, ready to be bound to a server with connectProject.
+func newProject(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	seedProject(t, root)
+	return root
+}
 
-	args := map[string]any{"projectPath": root, "scenePath": scenePath}
+// seedScene creates scenePath in a fresh project, starts a server bound to that
+// project, and returns the project root and its session. It skips when
+// create_scene fails, which usually means Godot is unavailable.
+func seedScene(t *testing.T, scenePath string, rootNodeType ...string) (string, *mcp.ClientSession) {
+	t.Helper()
+	root := newProject(t)
+	session := connectProject(t, root)
+
+	args := map[string]any{"scenePath": scenePath}
 	if len(rootNodeType) > 0 {
 		args["rootNodeType"] = rootNodeType[0]
 	}
@@ -355,7 +361,7 @@ func seedScene(t *testing.T, session *mcp.ClientSession, scenePath string, rootN
 		t.Skipf("create_scene failed, skipping: %s", firstText(t, res))
 	}
 	requirePrefix(t, firstText(t, res), "Scene created successfully at: "+scenePath)
-	return root
+	return root, session
 }
 
 // readFile returns the contents of a file, failing when it cannot be read.

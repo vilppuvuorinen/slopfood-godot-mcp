@@ -83,16 +83,19 @@ func runHeadlessOperation(ctx context.Context, projectPath, operation string, pa
 	if payload, ok := markerJSON(stdout); ok {
 		return mcp.JSONResult(payload), nil
 	}
-	return statusResult(operation+" succeeded.\n\nOutput: "+stdout, fields), nil
+	return statusResult(projectPath, operation+" succeeded.\n\nOutput: "+stdout, fields), nil
 }
 
 // statusResult builds a successful result whose structured content reports the
-// operation outcome: a success flag, the human-readable message, and any
-// tool-specific fields.
-func statusResult(message string, fields map[string]any) mcp.ToolResult {
-	value := make(map[string]any, len(fields)+2)
+// operation outcome: a success flag, the human-readable message, the bound
+// project, and any tool-specific fields.
+func statusResult(project, message string, fields map[string]any) mcp.ToolResult {
+	value := make(map[string]any, len(fields)+3)
 	value["success"] = true
 	value["message"] = message
+	if project != "" {
+		value["projectPath"] = project
+	}
 	for name, field := range fields {
 		value[name] = field
 	}
@@ -188,9 +191,10 @@ func payloadProperties(schema map[string]any) map[string]any {
 // statusProperties builds the property map for the status envelope, starting
 // from success and message and adding each tool-specific field.
 func statusProperties(properties map[string]any) map[string]any {
-	props := make(map[string]any, len(properties)+2)
+	props := make(map[string]any, len(properties)+3)
 	props["success"] = map[string]any{"type": "boolean"}
 	props["message"] = map[string]any{"type": "string"}
+	props["projectPath"] = map[string]any{"type": "string"}
 	for name, schema := range properties {
 		props[name] = schema
 	}

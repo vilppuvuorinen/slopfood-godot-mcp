@@ -18,10 +18,6 @@ func exportMeshLibrary() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Path to the Godot project directory",
-				},
 				"scenePath": map[string]any{
 					"type":        "string",
 					"description": "Path to the scene file (.tscn) to export",
@@ -36,7 +32,7 @@ func exportMeshLibrary() mcp.Tool {
 					"description": "Optional: Names of specific mesh items to include (defaults to all)",
 				},
 			},
-			"required": []string{"projectPath", "scenePath", "outputPath"},
+			"required": []string{"scenePath", "outputPath"},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"scenePath":  map[string]any{"type": "string"},
@@ -48,7 +44,6 @@ func exportMeshLibrary() mcp.Tool {
 }
 
 type exportMeshLibraryArgs struct {
-	ProjectPath   string   `json:"projectPath"`
 	ScenePath     string   `json:"scenePath"`
 	OutputPath    string   `json:"outputPath"`
 	MeshItemNames []string `json:"meshItemNames"`
@@ -61,22 +56,23 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.ScenePath == "" || args.OutputPath == "" {
+	project := projectRoot(ctx)
+	if args.ScenePath == "" || args.OutputPath == "" {
 		return mcp.ErrorResult(
 			"Missing required parameters",
-			"Provide projectPath, scenePath, and outputPath",
+			"Provide scenePath and outputPath",
 		), nil
 	}
-	sceneFull, sceneOK := confinePath(args.ProjectPath, args.ScenePath)
-	if !validPath(args.ProjectPath) || !validPath(args.OutputPath) || !sceneOK {
+	sceneFull, sceneOK := confinePath(project, args.ScenePath)
+	if !validPath(project) || !validPath(args.OutputPath) || !sceneOK {
 		return mcp.ErrorResult(
 			"Invalid path",
 			`Provide valid paths without ".." or other potentially unsafe characters`,
 		), nil
 	}
 
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return notAProjectResult(args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return notAProjectResult(project), nil
 	}
 
 	if !pathExists(sceneFull) {
@@ -91,7 +87,7 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 		params["meshItemNames"] = args.MeshItemNames
 	}
 
-	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "export_mesh_library", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, project, "export_mesh_library", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to export mesh library: "+err.Error(),
@@ -110,7 +106,7 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 	}
 
 	message := fmt.Sprintf("MeshLibrary exported successfully to: %s\n\nOutput: %s", args.OutputPath, stdout)
-	return statusResult(message, map[string]any{
+	return statusResult(project, message, map[string]any{
 		"scenePath":  args.ScenePath,
 		"outputPath": args.OutputPath,
 		"output":     stdout,

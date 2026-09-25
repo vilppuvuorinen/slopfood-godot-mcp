@@ -19,10 +19,6 @@ func validateScripts() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Godot project path",
-				},
 				"scope": map[string]any{
 					"type":        "string",
 					"enum":        []string{"changed", "all"},
@@ -34,7 +30,7 @@ func validateScripts() mcp.Tool {
 					"description": "Optional explicit list of .gd paths to check (overrides scope)",
 				},
 			},
-			"required": []string{"projectPath"},
+			"required": []string{},
 		},
 		OutputSchema: map[string]any{
 			"type": "object",
@@ -52,7 +48,6 @@ func validateScripts() mcp.Tool {
 }
 
 type validateScriptsArgs struct {
-	ProjectPath string   `json:"projectPath"`
 	Scope       string   `json:"scope"`
 	ScriptPaths []string `json:"scriptPaths"`
 }
@@ -94,14 +89,12 @@ func handleValidateScripts(ctx context.Context, raw json.RawMessage) (any, error
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" {
-		return mcp.ErrorResult("projectPath is required."), nil
-	}
-	if !validPath(args.ProjectPath) {
+	project := projectRoot(ctx)
+	if !validPath(project) {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return notAProjectResult(args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return notAProjectResult(project), nil
 	}
 
 	explicit := len(args.ScriptPaths) > 0
@@ -113,14 +106,14 @@ func handleValidateScripts(ctx context.Context, raw json.RawMessage) (any, error
 		candidates = args.ScriptPaths
 	case args.Scope == "" || args.Scope == "changed":
 		scope = "changed"
-		changed, listErr := listChangedGdFiles(ctx, args.ProjectPath)
+		changed, listErr := listChangedGdFiles(ctx, project)
 		if listErr != nil {
 			return mcp.ErrorResult(listErr.Error()), nil
 		}
 		candidates = changed
 	case args.Scope == "all":
 		scope = "all"
-		candidates = listAllGdFiles(args.ProjectPath)
+		candidates = listAllGdFiles(project)
 	default:
 		return mcp.ErrorResult(fmt.Sprintf(`Invalid scope %q. Use "changed" or "all", or pass scriptPaths.`, args.Scope)), nil
 	}
@@ -129,7 +122,7 @@ func handleValidateScripts(ctx context.Context, raw json.RawMessage) (any, error
 	allChecked := true
 	toCheck := make([]string, 0, len(candidates))
 	for _, rel := range candidates {
-		relFull, relOK := confinePath(args.ProjectPath, rel)
+		relFull, relOK := confinePath(project, rel)
 		if !strings.HasSuffix(strings.ToLower(rel), ".gd") || !relOK {
 			if explicit {
 				results = append(results, validateScriptSkip{ScriptPath: rel, Checked: false, Error: "Not a valid .gd path"})
@@ -155,7 +148,7 @@ func handleValidateScripts(ctx context.Context, raw json.RawMessage) (any, error
 
 	filesWithErrors := 0
 	for _, rel := range toCheck {
-		diagnostics, checkErr := runGDScriptCheck(ctx, args.ProjectPath, filepath.Join(args.ProjectPath, rel))
+		diagnostics, checkErr := runGDScriptCheck(ctx, project, filepath.Join(project, rel))
 		if checkErr != nil {
 			results = append(results, validateScriptSkip{ScriptPath: rel, Checked: false, Error: checkErr.Error()})
 			allChecked = false

@@ -98,12 +98,16 @@ func TestProtocolVersionNegotiationLegacyFallback(t *testing.T) {
 	}
 }
 
-// TestInitializeInstructions asserts the server advertises usage instructions.
+// TestInitializeInstructions asserts the server advertises usage instructions
+// naming the project it is bound to.
 func TestInitializeInstructions(t *testing.T) {
-	session := connect(t)
-	if session.InitializeResult().Instructions == "" {
+	root := t.TempDir()
+	session := connectProject(t, root)
+	instructions := session.InitializeResult().Instructions
+	if instructions == "" {
 		t.Error("instructions is empty")
 	}
+	requireContains(t, instructions, root)
 }
 
 // TestToolMetadata asserts a listed tool carries a title, annotations, and an
@@ -124,12 +128,12 @@ func TestToolMetadata(t *testing.T) {
 // TestStructuredContent asserts a read-only tool returns structuredContent
 // alongside its text block.
 func TestStructuredContent(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
 	root := t.TempDir()
 	seedProject(t, root)
+	session := connectProject(t, root)
+	requireGodot(t, session)
 
-	res := callTool(t, session, "get_project_info", map[string]any{"projectPath": root})
+	res := callTool(t, session, "get_project_info", map[string]any{})
 	if res.IsError {
 		t.Fatalf("get_project_info error: %s", firstText(t, res))
 	}
@@ -160,15 +164,14 @@ func TestMutationToolMetadata(t *testing.T) {
 // TestMutationStructuredContent asserts a mutation tool returns
 // structuredContent alongside its text block.
 func TestMutationStructuredContent(t *testing.T) {
-	session := connect(t)
 	root := t.TempDir()
 	seedProject(t, root)
+	session := connectProject(t, root)
 
 	res := callTool(t, session, "modify_project_settings", map[string]any{
-		"projectPath": root,
-		"section":     "application",
-		"key":         "config/name",
-		"value":       "Demo",
+		"section": "application",
+		"key":     "config/name",
+		"value":   "Demo",
 	})
 	if res.IsError {
 		t.Fatalf("modify_project_settings error: %s", firstText(t, res))

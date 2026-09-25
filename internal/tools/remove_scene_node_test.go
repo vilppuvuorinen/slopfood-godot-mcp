@@ -17,14 +17,14 @@ func TestRemoveSceneNodeSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,scenePath,nodePath" {
+	if !ok || strings.Join(required, ",") != "scenePath,nodePath" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"projectPath", "scenePath", "nodePath"} {
+	for _, key := range []string{"scenePath", "nodePath"} {
 		prop, exists := props[key]
 		if !exists {
 			t.Fatalf("missing property %q", key)
@@ -68,8 +68,8 @@ func TestRemoveSceneNodeValidation(t *testing.T) {
 		args string
 		want string
 	}{
-		{name: "missing params", args: `{}`, want: "projectPath, scenePath, and nodePath are required."},
-		{name: "missing nodePath", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn"}`, want: "projectPath, scenePath, and nodePath are required."},
+		{name: "missing params", args: `{}`, want: "scenePath and nodePath are required."},
+		{name: "missing nodePath", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"main.tscn"}`, want: "scenePath and nodePath are required."},
 		{name: "invalid path", args: `{"projectPath":"../escape","scenePath":"main.tscn","nodePath":"root/Player"}`, want: "Invalid path."},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn","nodePath":"root/Player"}`, want: "Not a valid Godot project: "},
 		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"missing.tscn","nodePath":"root/Player"}`, want: "Scene file does not exist: "},

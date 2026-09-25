@@ -53,7 +53,7 @@ func TestResolveCategoriesUnknown(t *testing.T) {
 func registeredToolNames(t *testing.T, categories ...Category) map[string]bool {
 	t.Helper()
 	server := mcp.NewServer(mcp.ServerInfo{Name: "test"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	Register(server, categories...)
+	Register(server, "", categories...)
 
 	in := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n")
 	var out bytes.Buffer

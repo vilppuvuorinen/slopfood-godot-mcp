@@ -17,14 +17,14 @@ func TestReadSceneSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,scenePath" {
+	if !ok || strings.Join(required, ",") != "scenePath" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"projectPath", "scenePath"} {
+	for _, key := range []string{"scenePath"} {
 		prop, ok := props[key].(map[string]any)
 		if !ok || prop["type"] != "string" {
 			t.Errorf("property %q = %v, want string", key, props[key])
@@ -137,8 +137,8 @@ func TestReadSceneValidation(t *testing.T) {
 		args string
 		want string
 	}{
-		{name: "missing paths", args: `{}`, want: "projectPath and scenePath are required."},
-		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `}`, want: "projectPath and scenePath are required."},
+		{name: "missing paths", args: `{}`, want: "scenePath is required."},
+		{name: "missing scene", args: `{"projectPath":` + jsonString(root) + `}`, want: "scenePath is required."},
 		{name: "invalid project path", args: `{"projectPath":"../escape","scenePath":"main.tscn"}`, want: "Invalid path."},
 		{name: "invalid scene path", args: `{"projectPath":` + jsonString(root) + `,"scenePath":"../escape.tscn"}`, want: "Invalid path."},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"scenePath":"main.tscn"}`, want: "Not a valid Godot project"},

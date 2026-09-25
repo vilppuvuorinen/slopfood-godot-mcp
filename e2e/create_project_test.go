@@ -8,23 +8,22 @@ import (
 )
 
 // TestCreateProjectSchema ports the reference's tool-definitions test: the
-// schema must require projectPath and projectName and expose the dotnet flag.
+// schema must require projectName and expose the dotnet flag.
 func TestCreateProjectSchema(t *testing.T) {
 	schema := requireSchema(t, "create_project", "Create a new Godot project from scratch")
-	schema.requireRequired(t, "projectPath", "projectName")
-	schema.requireProps(t, "projectPath", "projectName", "dotnet")
+	schema.requireRequired(t, "projectName")
+	schema.requireProps(t, "projectName", "dotnet")
 	schema.requireType(t, "dotnet", "boolean")
 }
 
 // TestCreateProjectTool ports the reference's handleCreateProject behaviors:
-// success, existing-project rejection, and validation.
+// success, existing-project rejection, and validation. The server is bound to
+// the target directory because create_project creates the bound root itself.
 func TestCreateProjectTool(t *testing.T) {
-	session := connect(t)
-
 	t.Run("creates a project", func(t *testing.T) {
 		dir := filepath.Join(t.TempDir(), "game")
+		session := connectProject(t, dir)
 		text := requireToolText(t, session, "create_project", map[string]any{
-			"projectPath": dir,
 			"projectName": "My Game",
 		})
 		if want := `Project "My Game" created at ` + dir; text != want {
@@ -46,34 +45,26 @@ func TestCreateProjectTool(t *testing.T) {
 	t.Run("existing project rejected", func(t *testing.T) {
 		dir := t.TempDir()
 		seedProject(t, dir)
+		session := connectProject(t, dir)
 		requireToolError(t, session, "create_project", map[string]any{
-			"projectPath": dir,
 			"projectName": "Existing",
 		}, "A project.godot already exists at this path.")
 	})
 
 	t.Run("missing projectName", func(t *testing.T) {
-		requireToolError(t, session, "create_project", map[string]any{
-			"projectPath": filepath.Join(t.TempDir(), "nope"),
-		}, "projectPath and projectName are required.")
-	})
-
-	t.Run("invalid path", func(t *testing.T) {
-		requireToolError(t, session, "create_project", map[string]any{
-			"projectPath": "../escape",
-			"projectName": "Escape",
-		}, "Invalid path.")
+		session := connectProject(t, filepath.Join(t.TempDir(), "nope"))
+		requireToolError(t, session, "create_project", map[string]any{},
+			"projectName is required.")
 	})
 }
 
 // TestCreateProjectDotnetTool covers the .NET branch and, by extension, the
 // reference's dotnet.test.ts helpers (identifier sanitizing, features, csproj).
 func TestCreateProjectDotnetTool(t *testing.T) {
-	session := connect(t)
 	dir := filepath.Join(t.TempDir(), "dotnet")
+	session := connectProject(t, dir)
 
 	text := requireToolText(t, session, "create_project", map[string]any{
-		"projectPath": dir,
 		"projectName": "My Rpg-Game!",
 		"dotnet":      true,
 	})
@@ -101,7 +92,6 @@ func TestCreateProjectDotnetTool(t *testing.T) {
 // TestCreateProjectDotnetIdentifiers ports the toDotnetIdentifier table from
 // the reference's dotnet.test.ts through the observable MCP surface.
 func TestCreateProjectDotnetIdentifiers(t *testing.T) {
-	session := connect(t)
 	tests := []struct {
 		name    string
 		project string
@@ -114,8 +104,8 @@ func TestCreateProjectDotnetIdentifiers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := filepath.Join(t.TempDir(), "id")
+			session := connectProject(t, dir)
 			requireToolText(t, session, "create_project", map[string]any{
-				"projectPath": dir,
 				"projectName": tt.project,
 				"dotnet":      true,
 			})

@@ -10,9 +10,8 @@ import (
 // expectations for update_project_uids over the real stdio surface.
 func TestUpdateProjectUIDsSchema(t *testing.T) {
 	schema := requireSchema(t, "update_project_uids", "Generate missing resource UIDs in a Godot project by scanning it in the editor (for Godot 4.4+)")
-	schema.requireRequired(t, "projectPath")
-	schema.requirePropCount(t, 1)
-	schema.requireStringProps(t, "projectPath")
+	schema.requireRequired(t)
+	schema.requirePropCount(t, 0)
 }
 
 // TestUpdateProjectUIDsTool drives the real update_project_uids tool against
@@ -20,9 +19,8 @@ func TestUpdateProjectUIDsSchema(t *testing.T) {
 // missing .uid sidecar for an un-UID'd script, and it leaves existing UIDs
 // (a scene's own header uid and an ext_resource uid) untouched.
 func TestUpdateProjectUIDsTool(t *testing.T) {
-	session := connect(t)
+	root, session := seedScene(t, "scenes/main.tscn")
 	requireGodot(t, session)
-	root := seedScene(t, session, "scenes/main.tscn")
 
 	// An un-UID'd script that the scan must give a sidecar.
 	scriptPath := filepath.Join(root, "player.gd")
@@ -40,7 +38,7 @@ func TestUpdateProjectUIDsTool(t *testing.T) {
 		"[node name=\"root\" type=\"Node2D\"]\nscript = ExtResource(\"1_used\")\n"
 	writeE2EFile(t, scenePath, beforeScene)
 
-	text := requireToolText(t, session, "update_project_uids", map[string]any{"projectPath": root})
+	text := requireToolText(t, session, "update_project_uids", map[string]any{})
 	requirePrefix(t, text, "Project UIDs updated successfully.")
 
 	if _, err := os.Stat(scriptPath + ".uid"); err != nil {
@@ -57,32 +55,22 @@ func TestUpdateProjectUIDsTool(t *testing.T) {
 // TestUpdateProjectUIDsVersionGate checks the Godot 4.4 requirement with a fake
 // engine.
 func TestUpdateProjectUIDsVersionGate(t *testing.T) {
-	session := connectWithFakeGodot(t, "4.3.1.stable")
 	root := t.TempDir()
 	seedProject(t, root)
+	path := filepath.Join(t.TempDir(), "godot")
+	writeFileMode(t, path, "#!/bin/sh\necho \"4.3.1.stable\"\nexit 0\n", 0o755)
+	session := connectProjectWithEnv(t, root, "GODOT_PATH="+path)
 
-	requireToolError(t, session, "update_project_uids", map[string]any{"projectPath": root},
+	requireToolError(t, session, "update_project_uids", map[string]any{},
 		"UIDs are only supported in Godot 4.4 or later. Current version: 4.3.1.stable")
 }
 
 // TestUpdateProjectUIDsErrors covers the reference's validation messages.
 func TestUpdateProjectUIDsErrors(t *testing.T) {
-	session := connect(t)
-
-	t.Run("missing params", func(t *testing.T) {
-		requireToolError(t, session, "update_project_uids", map[string]any{}, "Project path is required")
-	})
-
-	t.Run("invalid path", func(t *testing.T) {
-		requireToolError(t, session, "update_project_uids", map[string]any{
-			"projectPath": "../escape",
-		}, "Invalid project path")
-	})
-
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
-		requireToolError(t, session, "update_project_uids", map[string]any{
-			"projectPath": root,
-		}, "Not a valid Godot project: "+root)
+		session := connectProject(t, root)
+		requireToolError(t, session, "update_project_uids", map[string]any{},
+			"Not a valid Godot project: "+root)
 	})
 }

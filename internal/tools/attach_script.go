@@ -18,10 +18,6 @@ func attachScript() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Godot project path",
-				},
 				"scenePath": map[string]any{
 					"type":        "string",
 					"description": "Scene file path (relative to project)",
@@ -35,7 +31,7 @@ func attachScript() mcp.Tool {
 					"description": "Path to the .gd script file (relative to project)",
 				},
 			},
-			"required": []string{"projectPath", "scenePath", "nodePath", "scriptPath"},
+			"required": []string{"scenePath", "nodePath", "scriptPath"},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"scenePath":  map[string]any{"type": "string"},
@@ -47,10 +43,9 @@ func attachScript() mcp.Tool {
 }
 
 type attachScriptArgs struct {
-	ProjectPath string `json:"projectPath"`
-	ScenePath   string `json:"scenePath"`
-	NodePath    string `json:"nodePath"`
-	ScriptPath  string `json:"scriptPath"`
+	ScenePath  string `json:"scenePath"`
+	NodePath   string `json:"nodePath"`
+	ScriptPath string `json:"scriptPath"`
 }
 
 func handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -60,15 +55,16 @@ func handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.ScenePath == "" || args.NodePath == "" || args.ScriptPath == "" {
-		return mcp.ErrorResult("projectPath, scenePath, nodePath, and scriptPath are required."), nil
+	project := projectRoot(ctx)
+	if args.ScenePath == "" || args.NodePath == "" || args.ScriptPath == "" {
+		return mcp.ErrorResult("scenePath, nodePath, and scriptPath are required."), nil
 	}
-	sceneFull, pathOK := confinePath(args.ProjectPath, args.ScenePath)
-	if !validPath(args.ProjectPath) || !pathOK {
+	sceneFull, pathOK := confinePath(project, args.ScenePath)
+	if !validPath(project) || !pathOK {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return notAProjectResult(args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return notAProjectResult(project), nil
 	}
 	if !pathExists(sceneFull) {
 		return sceneMissingResult(args.ScenePath), nil
@@ -79,7 +75,7 @@ func handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
 		"nodePath":   args.NodePath,
 		"scriptPath": args.ScriptPath,
 	}
-	return runHeadlessOperation(ctx, args.ProjectPath, "attach_script", params, map[string]any{
+	return runHeadlessOperation(ctx, project, "attach_script", params, map[string]any{
 		"scenePath":  args.ScenePath,
 		"nodePath":   args.NodePath,
 		"scriptPath": args.ScriptPath,

@@ -62,11 +62,15 @@ var categoryTools = map[Category][]func() mcp.Tool{
 // DefaultCategories is the set registered when --enable is not passed.
 var DefaultCategories = []Category{CategoryProject}
 
-// Register adds the tools in the given categories to the server.
-func Register(s *mcp.Server, categories ...Category) {
+// Register adds the tools in the given categories to the server, binding every
+// project-scoped tool to project. The root is fixed for the life of the server,
+// so tools take only project-relative paths and never a project argument.
+func Register(s *mcp.Server, project string, categories ...Category) {
 	for _, category := range categories {
 		for _, newTool := range categoryTools[category] {
-			s.RegisterTool(newTool())
+			tool := newTool()
+			tool.Handler = bindProject(project, tool.Handler)
+			s.RegisterTool(tool)
 		}
 	}
 }

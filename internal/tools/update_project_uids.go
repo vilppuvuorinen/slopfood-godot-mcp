@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"path/filepath"
 	"regexp"
 
@@ -30,14 +29,9 @@ func updateProjectUIDs() mcp.Tool {
 		Description: "Generate missing resource UIDs in a Godot project by scanning it in the editor (for Godot 4.4+)",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Path to the Godot project directory",
-				},
-			},
-			"required": []string{"projectPath"},
+			"type":       "object",
+			"properties": map[string]any{},
+			"required":   []string{},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"projectPath": map[string]any{"type": "string"},
@@ -47,32 +41,17 @@ func updateProjectUIDs() mcp.Tool {
 	}
 }
 
-type updateProjectUIDsArgs struct {
-	ProjectPath string `json:"projectPath"`
-}
-
-func handleUpdateProjectUIDs(ctx context.Context, raw json.RawMessage) (any, error) {
-	var args updateProjectUIDsArgs
-	if len(raw) > 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
-	}
-	if args.ProjectPath == "" {
-		return mcp.ErrorResult(
-			"Project path is required",
-			"Provide a valid path to a Godot project directory",
-		), nil
-	}
-	if !validPath(args.ProjectPath) {
+func handleUpdateProjectUIDs(ctx context.Context, _ json.RawMessage) (any, error) {
+	project := projectRoot(ctx)
+	if !validPath(project) {
 		return mcp.ErrorResult(
 			"Invalid project path",
 			`Provide a valid path without ".." or other potentially unsafe characters`,
 		), nil
 	}
 
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return notAProjectResult(args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return notAProjectResult(project), nil
 	}
 
 	version, err := godot.Version(ctx, godot.Path())
@@ -98,7 +77,7 @@ func handleUpdateProjectUIDs(ctx context.Context, raw json.RawMessage) (any, err
 	// and without EditorFileSystem the text saver actively strips existing
 	// `uid=` references. Scanning is non-destructive, so this leaves every
 	// already-assigned UID untouched.
-	stdout, stderr, exitCode, err := godot.Import(ctx, godot.Path(), args.ProjectPath)
+	stdout, stderr, exitCode, err := godot.Import(ctx, godot.Path(), project)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to update project UIDs: "+err.Error(),
@@ -115,8 +94,7 @@ func handleUpdateProjectUIDs(ctx context.Context, raw json.RawMessage) (any, err
 		), nil
 	}
 
-	return statusResult("Project UIDs updated successfully.\n\nOutput: "+stdout, map[string]any{
-		"projectPath": args.ProjectPath,
-		"output":      stdout,
+	return statusResult(project, "Project UIDs updated successfully.\n\nOutput: "+stdout, map[string]any{
+		"output": stdout,
 	}), nil
 }

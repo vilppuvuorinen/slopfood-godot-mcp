@@ -17,7 +17,7 @@ func TestReadProjectSettingsSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || len(required) != 1 || required[0] != "projectPath" {
+	if !ok || len(required) != 0 {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	output, ok := tool.OutputSchema["properties"].(map[string]any)
@@ -123,7 +123,7 @@ func TestReadProjectSettingsErrors(t *testing.T) {
 		args string
 		want string
 	}{
-		{name: "missing projectPath", args: `{}`, want: "projectPath is required."},
+		{name: "missing projectPath", args: `{}`, want: "Invalid path."},
 		{name: "invalid path", args: `{"projectPath":"../escape"}`, want: "Invalid path."},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `}`, want: "Not a valid Godot project"},
 	}

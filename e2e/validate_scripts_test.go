@@ -19,26 +19,25 @@ type validateScriptsE2EDoc struct {
 // for validate_scripts over the real stdio surface.
 func TestValidateScriptsSchema(t *testing.T) {
 	schema := requireSchema(t, "validate_scripts", "Batch-check GDScript files (git-changed by default, or all)")
-	schema.requireRequired(t, "projectPath")
-	schema.requireProps(t, "projectPath", "scope", "scriptPaths")
-	schema.requireStringProps(t, "projectPath", "scope")
+	schema.requireRequired(t)
+	schema.requireProps(t, "scope", "scriptPaths")
+	schema.requireStringProps(t, "scope")
 	schema.requireType(t, "scriptPaths", "array")
-	schema.requirePropCount(t, 3)
+	schema.requirePropCount(t, 2)
 }
 
 // TestValidateScriptsTool drives the real validate_scripts tool against Godot.
+// Each subtest binds a session to its own project.
 func TestValidateScriptsTool(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
-
 	t.Run("explicit scriptPaths", func(t *testing.T) {
 		root := t.TempDir()
 		seedProject(t, root)
 		writeE2EFile(t, filepath.Join(root, "scripts", "valid.gd"), "extends Node\n")
 		writeE2EFile(t, filepath.Join(root, "scripts", "invalid.gd"), "extends Node\n\nfunc broken(\n")
+		session := connectProject(t, root)
+		requireGodot(t, session)
 
 		text := requireToolText(t, session, "validate_scripts", map[string]any{
-			"projectPath": root,
 			"scriptPaths": []string{"scripts/valid.gd", "scripts/invalid.gd"},
 		})
 		var doc validateScriptsE2EDoc
@@ -67,10 +66,11 @@ func TestValidateScriptsTool(t *testing.T) {
 		seedProject(t, root)
 		writeE2EFile(t, filepath.Join(root, "a.gd"), "extends Node\n")
 		writeE2EFile(t, filepath.Join(root, "nested", "b.gd"), "extends Node\n")
+		session := connectProject(t, root)
+		requireGodot(t, session)
 
 		text := requireToolText(t, session, "validate_scripts", map[string]any{
-			"projectPath": root,
-			"scope":       "all",
+			"scope": "all",
 		})
 		var doc validateScriptsE2EDoc
 		if err := json.Unmarshal([]byte(text), &doc); err != nil {
@@ -87,16 +87,10 @@ func TestValidateScriptsTool(t *testing.T) {
 
 // TestValidateScriptsErrors covers the reference's validation messages.
 func TestValidateScriptsErrors(t *testing.T) {
-	session := connect(t)
-
-	t.Run("missing projectPath", func(t *testing.T) {
-		requireToolError(t, session, "validate_scripts", map[string]any{}, "projectPath is required.")
-	})
-
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
-		requireToolError(t, session, "validate_scripts", map[string]any{
-			"projectPath": root,
-		}, "Not a valid Godot project: "+root)
+		session := connectProject(t, root)
+		requireToolError(t, session, "validate_scripts", map[string]any{},
+			"Not a valid Godot project: "+root)
 	})
 }

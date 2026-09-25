@@ -17,19 +17,15 @@ func TestUpdateProjectUIDsSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath" {
+	if !ok || len(required) != 0 {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	if len(props) != 1 {
-		t.Errorf("properties = %v", props)
-	}
-	property, ok := props["projectPath"].(map[string]any)
-	if !ok || property["type"] != "string" {
-		t.Errorf("projectPath property = %v", props["projectPath"])
+	if len(props) != 0 {
+		t.Errorf("properties = %v, want none", props)
 	}
 }
 
@@ -90,7 +86,7 @@ func TestUpdateProjectUIDsValidation(t *testing.T) {
 		args string
 		want string
 	}{
-		{name: "missing", args: `{}`, want: "Project path is required"},
+		{name: "missing", args: `{}`, want: "Invalid project path"},
 		{name: "invalid path", args: `{"projectPath":"../escape"}`, want: "Invalid project path"},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `}`, want: "Not a valid Godot project"},
 	}

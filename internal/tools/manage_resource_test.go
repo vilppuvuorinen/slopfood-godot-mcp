@@ -17,14 +17,14 @@ func TestManageResourceSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,resourcePath,action" {
+	if !ok || strings.Join(required, ",") != "resourcePath,action" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"projectPath", "resourcePath", "action", "resourceType"} {
+	for _, key := range []string{"resourcePath", "action", "resourceType"} {
 		prop, propOK := props[key].(map[string]any)
 		if !propOK || prop["type"] != "string" {
 			t.Errorf("property %q = %v, want string", key, props[key])
@@ -152,9 +152,9 @@ func TestManageResourceValidation(t *testing.T) {
 		args string
 		want string
 	}{
-		{name: "missing params", args: `{}`, want: "projectPath, resourcePath, and action are required."},
-		{name: "missing action", args: `{"projectPath":` + jsonString(root) + `,"resourcePath":"mat.tres"}`, want: "projectPath, resourcePath, and action are required."},
-		{name: "missing resource path", args: `{"projectPath":` + jsonString(root) + `,"action":"read"}`, want: "projectPath, resourcePath, and action are required."},
+		{name: "missing params", args: `{}`, want: "resourcePath and action are required."},
+		{name: "missing action", args: `{"projectPath":` + jsonString(root) + `,"resourcePath":"mat.tres"}`, want: "resourcePath and action are required."},
+		{name: "missing resource path", args: `{"projectPath":` + jsonString(root) + `,"action":"read"}`, want: "resourcePath and action are required."},
 		{name: "create without resource type", args: `{"projectPath":` + jsonString(root) + `,"resourcePath":"mat.tres","action":"create"}`, want: "resourceType is required for the create action."},
 		{name: "invalid project path", args: `{"projectPath":"../escape","resourcePath":"mat.tres","action":"read"}`, want: "Invalid path."},
 		{name: "invalid resource path", args: `{"projectPath":` + jsonString(root) + `,"resourcePath":"../escape.tres","action":"read"}`, want: "Invalid path."},

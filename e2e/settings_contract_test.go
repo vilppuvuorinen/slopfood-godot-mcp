@@ -12,9 +12,6 @@ import (
 // must equal the setting the real Godot engine reports for the same file. The
 // list calls themselves never touch Godot; only the read-back probe is gated.
 func TestSettingsListMatchesReadBack(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
-
 	root := t.TempDir()
 	writeE2EFile(t, filepath.Join(root, "project.godot"), `config_version=5
 
@@ -22,14 +19,15 @@ func TestSettingsListMatchesReadBack(t *testing.T) {
 
 move_left={"deadzone": 0.5}
 `)
+	session := connectProject(t, root)
+	requireGodot(t, session)
 
-	sections := requireProjectSettingsRoundTrip(t, session, root)
+	sections := requireProjectSettingsRoundTrip(t, session)
 
 	t.Run("input map", func(t *testing.T) {
 		var list map[string]any
 		text := requireToolText(t, session, "manage_input_map", map[string]any{
-			"projectPath": root,
-			"action":      "list",
+			"action": "list",
 		})
 		if err := json.Unmarshal([]byte(text), &list); err != nil {
 			t.Fatalf("unmarshal %q: %v", text, err)

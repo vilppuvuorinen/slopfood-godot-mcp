@@ -9,28 +9,25 @@ import (
 // create_scene over the real stdio surface.
 func TestCreateSceneSchema(t *testing.T) {
 	schema := requireSchema(t, "create_scene", "Create a new Godot scene file")
-	schema.requireRequired(t, "projectPath", "scenePath")
-	schema.requireStringProps(t, "projectPath", "scenePath", "rootNodeType")
+	schema.requireRequired(t, "scenePath")
+	schema.requireStringProps(t, "scenePath", "rootNodeType")
 }
 
 // TestCreateSceneTool drives the real create_scene tool against Godot,
 // exercising the default and custom root node types.
 func TestCreateSceneTool(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
-
 	t.Run("defaults to Node2D", func(t *testing.T) {
-		root := seedScene(t, session, "scenes/main.tscn")
+		root, _ := seedScene(t, "scenes/main.tscn")
 		scene := readFile(t, filepath.Join(root, "scenes", "main.tscn"))
 		requireContains(t, scene, `type="Node2D"`)
 	})
 
 	t.Run("custom root", func(t *testing.T) {
-		root := t.TempDir()
-		seedProject(t, root)
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
 
 		requireToolText(t, session, "create_scene", map[string]any{
-			"projectPath":  root,
 			"scenePath":    "level.tscn",
 			"rootNodeType": "Node3D",
 		})
@@ -42,22 +39,24 @@ func TestCreateSceneTool(t *testing.T) {
 
 // TestCreateSceneErrors covers the reference's validation and failure messages.
 func TestCreateSceneErrors(t *testing.T) {
-	session := connect(t)
-
 	t.Run("missing paths", func(t *testing.T) {
-		requireToolError(t, session, "create_scene", map[string]any{}, "Project path and scene path are required")
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireToolError(t, session, "create_scene", map[string]any{}, "Scene path is required")
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
 		requireToolError(t, session, "create_scene", map[string]any{
-			"projectPath": "../escape",
-			"scenePath":   "main.tscn",
+			"scenePath": "../escape",
 		}, "Invalid path")
 	})
 
 	t.Run("invalid rootNodeType", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
 		requireToolError(t, session, "create_scene", map[string]any{
-			"projectPath":  t.TempDir(),
 			"scenePath":    "main.tscn",
 			"rootNodeType": "res://evil.gd",
 		}, "Invalid rootNodeType")
@@ -65,9 +64,9 @@ func TestCreateSceneErrors(t *testing.T) {
 
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
+		session := connectProject(t, root)
 		requireToolError(t, session, "create_scene", map[string]any{
-			"projectPath": root,
-			"scenePath":   "main.tscn",
+			"scenePath": "main.tscn",
 		}, "Not a valid Godot project: "+root)
 	})
 }
@@ -76,13 +75,11 @@ func TestCreateSceneErrors(t *testing.T) {
 // asserts the reference's generic failure message and solutions. It uses its
 // own session so the shared environment is untouched.
 func TestCreateSceneFailsWithoutGodot(t *testing.T) {
-	session := connectWithEnv(t, "GODOT_PATH="+filepath.Join(t.TempDir(), "missing-godot"))
-	root := t.TempDir()
-	seedProject(t, root)
+	root := newProject(t)
+	session := connectProjectWithEnv(t, root, "GODOT_PATH="+filepath.Join(t.TempDir(), "missing-godot"))
 
 	res := callTool(t, session, "create_scene", map[string]any{
-		"projectPath": root,
-		"scenePath":   "main.tscn",
+		"scenePath": "main.tscn",
 	})
 	if !res.IsError {
 		t.Fatal("expected an error result")

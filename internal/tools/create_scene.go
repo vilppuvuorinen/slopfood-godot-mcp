@@ -18,10 +18,6 @@ func createScene() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Path to the Godot project directory",
-				},
 				"scenePath": map[string]any{
 					"type":        "string",
 					"description": "Path where the scene file will be saved (relative to project)",
@@ -31,7 +27,7 @@ func createScene() mcp.Tool {
 					"description": "Type of the root node (e.g., Node2D, Node3D)",
 				},
 			},
-			"required": []string{"projectPath", "scenePath"},
+			"required": []string{"scenePath"},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"scenePath":    map[string]any{"type": "string"},
@@ -43,7 +39,6 @@ func createScene() mcp.Tool {
 }
 
 type createSceneArgs struct {
-	ProjectPath  string `json:"projectPath"`
 	ScenePath    string `json:"scenePath"`
 	RootNodeType string `json:"rootNodeType"`
 }
@@ -55,16 +50,17 @@ func handleCreateScene(ctx context.Context, raw json.RawMessage) (any, error) {
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.ScenePath == "" {
+	project := projectRoot(ctx)
+	if args.ScenePath == "" {
 		return mcp.ErrorResult(
-			"Project path and scene path are required",
-			"Provide valid paths for both the project and the scene",
+			"Scene path is required",
+			"Provide a scene path relative to the bound project",
 		), nil
 	}
-	if !validPath(args.ProjectPath) || !validPath(args.ScenePath) {
+	if !validPath(project) || !validPath(args.ScenePath) {
 		return mcp.ErrorResult(
 			"Invalid path",
-			`Provide valid paths without ".." or other potentially unsafe characters`,
+			`Provide a scene path without ".." or other potentially unsafe characters`,
 		), nil
 	}
 
@@ -79,15 +75,15 @@ func handleCreateScene(ctx context.Context, raw json.RawMessage) (any, error) {
 		), nil
 	}
 
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return notAProjectResult(args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return notAProjectResult(project), nil
 	}
 
 	params := map[string]any{
 		"scenePath":    args.ScenePath,
 		"rootNodeType": rootNodeType,
 	}
-	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "create_scene", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, project, "create_scene", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to create scene: "+err.Error(),
@@ -106,7 +102,7 @@ func handleCreateScene(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 
 	message := fmt.Sprintf("Scene created successfully at: %s\n\nOutput: %s", args.ScenePath, stdout)
-	return statusResult(message, map[string]any{
+	return statusResult(project, message, map[string]any{
 		"scenePath":    args.ScenePath,
 		"rootNodeType": rootNodeType,
 		"output":       stdout,

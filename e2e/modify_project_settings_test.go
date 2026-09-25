@@ -9,20 +9,17 @@ import (
 // expectations for modify_project_settings over the real stdio surface.
 func TestModifyProjectSettingsSchema(t *testing.T) {
 	schema := requireSchema(t, "modify_project_settings", "Modify a project.godot setting")
-	schema.requireRequired(t, "projectPath", "section", "key", "value")
-	schema.requirePropCount(t, 4)
-	schema.requireStringProps(t, "projectPath", "section", "key")
+	schema.requireRequired(t, "section", "key", "value")
+	schema.requirePropCount(t, 3)
+	schema.requireStringProps(t, "section", "key")
 	schema.requireProps(t, "value")
 }
 
 // TestModifyProjectSettingsTool drives the real modify_project_settings tool
 // against a seeded project.godot. After each write it reads the project back
 // through Godot (via read_project_settings), proving the rewritten file is one
-// the engine accepts.
+// the engine accepts. Each subtest binds a fresh session to its own project.
 func TestModifyProjectSettingsTool(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
-
 	t.Run("update existing key", func(t *testing.T) {
 		root := t.TempDir()
 		writeE2EFile(t, filepath.Join(root, "project.godot"), `config_version=5
@@ -32,17 +29,18 @@ func TestModifyProjectSettingsTool(t *testing.T) {
 config/name="Demo"
 run/main_scene="res://main.tscn"
 `)
+		session := connectProject(t, root)
+		requireGodot(t, session)
 		text := requireToolText(t, session, "modify_project_settings", map[string]any{
-			"projectPath": root,
-			"section":     "application",
-			"key":         "config/name",
-			"value":       "New",
+			"section": "application",
+			"key":     "config/name",
+			"value":   "New",
 		})
 		if want := `Setting updated: [application] config/name="New"`; text != want {
 			t.Errorf("text = %q, want %q", text, want)
 		}
 
-		sections := requireProjectSettingsRoundTrip(t, session, root)
+		sections := requireProjectSettingsRoundTrip(t, session)
 		if got := sections["application"]["config/name"]; got != "New" {
 			t.Errorf("config/name = %v, want New", got)
 		}
@@ -56,14 +54,15 @@ run/main_scene="res://main.tscn"
 
 config/name="Demo"
 `)
+		session := connectProject(t, root)
+		requireGodot(t, session)
 		requireToolText(t, session, "modify_project_settings", map[string]any{
-			"projectPath": root,
-			"section":     "application",
-			"key":         "config/description",
-			"value":       "Hi",
+			"section": "application",
+			"key":     "config/description",
+			"value":   "Hi",
 		})
 
-		sections := requireProjectSettingsRoundTrip(t, session, root)
+		sections := requireProjectSettingsRoundTrip(t, session)
 		if got := sections["application"]["config/description"]; got != "Hi" {
 			t.Errorf("config/description = %v, want Hi", got)
 		}
@@ -73,29 +72,19 @@ config/name="Demo"
 // TestModifyProjectSettingsErrors covers the reference's validation and failure
 // messages.
 func TestModifyProjectSettingsErrors(t *testing.T) {
-	session := connect(t)
-
 	t.Run("missing args", func(t *testing.T) {
+		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "modify_project_settings", map[string]any{},
-			"projectPath, section, key, and value are required.")
-	})
-
-	t.Run("invalid path", func(t *testing.T) {
-		requireToolError(t, session, "modify_project_settings", map[string]any{
-			"projectPath": "../escape",
-			"section":     "application",
-			"key":         "config/name",
-			"value":       "x",
-		}, "Invalid path.")
+			"section, key, and value are required.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
+		session := connectProject(t, root)
 		requireToolError(t, session, "modify_project_settings", map[string]any{
-			"projectPath": root,
-			"section":     "application",
-			"key":         "config/name",
-			"value":       "x",
+			"section": "application",
+			"key":     "config/name",
+			"value":   "x",
 		}, "Not a valid Godot project: "+root)
 	})
 }

@@ -18,16 +18,15 @@ func TestModifyProjectSettingsSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || len(required) != 4 ||
-		required[0] != "projectPath" || required[1] != "section" ||
-		required[2] != "key" || required[3] != "value" {
+	if !ok || len(required) != 3 ||
+		required[0] != "section" || required[1] != "key" || required[2] != "value" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
-	if !ok || len(props) != 4 {
+	if !ok || len(props) != 3 {
 		t.Fatalf("properties = %v", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"projectPath", "section", "key"} {
+	for _, key := range []string{"section", "key"} {
 		prop, propOK := props[key].(map[string]any)
 		if !propOK || prop["type"] != "string" {
 			t.Errorf("%s property = %v", key, props[key])
@@ -388,8 +387,8 @@ func TestModifyProjectSettingsErrors(t *testing.T) {
 		args string
 		want string
 	}{
-		{name: "missing args", args: `{}`, want: "projectPath, section, key, and value are required."},
-		{name: "missing value", args: `{"projectPath":` + jsonString(valid) + `,"section":"application","key":"config/name"}`, want: "projectPath, section, key, and value are required."},
+		{name: "missing args", args: `{}`, want: "section, key, and value are required."},
+		{name: "missing value", args: `{"projectPath":` + jsonString(valid) + `,"section":"application","key":"config/name"}`, want: "section, key, and value are required."},
 		{name: "invalid path", args: `{"projectPath":"../escape","section":"application","key":"config/name","value":"x"}`, want: "Invalid path."},
 		{name: "not a project", args: `{"projectPath":` + jsonString(t.TempDir()) + `,"section":"application","key":"config/name","value":"x"}`, want: "Not a valid Godot project"},
 	}

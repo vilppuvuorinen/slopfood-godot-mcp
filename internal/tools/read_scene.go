@@ -18,16 +18,12 @@ func readScene() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Godot project path",
-				},
 				"scenePath": map[string]any{
 					"type":        "string",
 					"description": "Scene file path (relative to project)",
 				},
 			},
-			"required": []string{"projectPath", "scenePath"},
+			"required": []string{"scenePath"},
 		},
 		OutputSchema: map[string]any{
 			"type": "object",
@@ -64,8 +60,7 @@ func readScene() mcp.Tool {
 }
 
 type readSceneArgs struct {
-	ProjectPath string `json:"projectPath"`
-	ScenePath   string `json:"scenePath"`
+	ScenePath string `json:"scenePath"`
 }
 
 func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -75,28 +70,29 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.ScenePath == "" {
+	project := projectRoot(ctx)
+	if args.ScenePath == "" {
 		return mcp.ErrorResult(
-			"projectPath and scenePath are required.",
-			"Provide valid paths for both the project and the scene",
+			"scenePath is required.",
+			"Provide a scene path relative to the bound project",
 		), nil
 	}
-	sceneFull, pathOK := confinePath(args.ProjectPath, args.ScenePath)
-	if !validPath(args.ProjectPath) || !pathOK {
+	sceneFull, pathOK := confinePath(project, args.ScenePath)
+	if !validPath(project) || !pathOK {
 		return mcp.ErrorResult(
 			"Invalid path.",
-			`Provide valid paths without ".." or other potentially unsafe characters`,
+			`Provide a scene path without ".." or other potentially unsafe characters`,
 		), nil
 	}
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return notAProjectResult(args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return notAProjectResult(project), nil
 	}
 	if !pathExists(sceneFull) {
 		return sceneMissingResult(args.ScenePath), nil
 	}
 
 	params := map[string]any{"scenePath": args.ScenePath}
-	stdout, stderr, exitCode, err := runOperation(ctx, args.ProjectPath, "read_scene", params)
+	stdout, stderr, exitCode, err := runOperation(ctx, project, "read_scene", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to read scene: "+err.Error(),

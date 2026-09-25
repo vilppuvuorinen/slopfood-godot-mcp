@@ -18,10 +18,6 @@ func manageResource() mcp.Tool {
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Godot project path",
-				},
 				"resourcePath": map[string]any{
 					"type":        "string",
 					"description": "Resource file path (relative to project)",
@@ -37,7 +33,7 @@ func manageResource() mcp.Tool {
 				},
 				"properties": propertiesSchema("Properties to set, as name to godotValue pairs"),
 			},
-			"required": []string{"projectPath", "resourcePath", "action"},
+			"required": []string{"resourcePath", "action"},
 		},
 		OutputSchema: actionOutputSchema(
 			map[string]any{
@@ -60,7 +56,6 @@ func manageResource() mcp.Tool {
 }
 
 type manageResourceArgs struct {
-	ProjectPath  string         `json:"projectPath"`
 	ResourcePath string         `json:"resourcePath"`
 	Action       string         `json:"action"`
 	ResourceType string         `json:"resourceType"`
@@ -74,17 +69,18 @@ func handleManageResource(ctx context.Context, raw json.RawMessage) (any, error)
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}
-	if args.ProjectPath == "" || args.ResourcePath == "" || args.Action == "" {
-		return mcp.ErrorResult("projectPath, resourcePath, and action are required."), nil
+	project := projectRoot(ctx)
+	if args.ResourcePath == "" || args.Action == "" {
+		return mcp.ErrorResult("resourcePath and action are required."), nil
 	}
 	if args.Action == "create" && args.ResourceType == "" {
 		return mcp.ErrorResult("resourceType is required for the create action."), nil
 	}
-	if !validPath(args.ProjectPath) || !validPath(args.ResourcePath) {
+	if !validPath(project) || !validPath(args.ResourcePath) {
 		return mcp.ErrorResult("Invalid path."), nil
 	}
-	if !pathExists(filepath.Join(args.ProjectPath, "project.godot")) {
-		return notAProjectResult(args.ProjectPath), nil
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return notAProjectResult(project), nil
 	}
 
 	params := map[string]any{
@@ -103,5 +99,5 @@ func handleManageResource(ctx context.Context, raw json.RawMessage) (any, error)
 		params["properties"] = args.Properties
 	}
 
-	return runHeadlessOperation(ctx, args.ProjectPath, "manage_resource", params, fields)
+	return runHeadlessOperation(ctx, project, "manage_resource", params, fields)
 }

@@ -19,17 +19,17 @@ func TestGetUIDSchema(t *testing.T) {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "projectPath,filePath" {
+	if !ok || strings.Join(required, ",") != "filePath" {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	if len(props) != 2 {
+	if len(props) != 1 {
 		t.Errorf("properties = %v", props)
 	}
-	for _, key := range []string{"projectPath", "filePath"} {
+	for _, key := range []string{"filePath"} {
 		property, ok := props[key].(map[string]any)
 		if !ok || property["type"] != "string" {
 			t.Errorf("%s property = %v", key, props[key])

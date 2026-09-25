@@ -55,26 +55,23 @@ func loadValueContract(t *testing.T) valueContract {
 // internal/godotconfig/json_test.go, so a tag one decoder gains or loses
 // without the other following fails a test on one side.
 func TestValueContractScriptHalf(t *testing.T) {
-	session := connect(t)
-	requireGodot(t, session)
-
 	contract := loadValueContract(t)
 
-	root := seedScene(t, session, "scenes/contract.tscn", "Node2D")
+	root, session := seedScene(t, "scenes/contract.tscn", "Node2D")
+	requireGodot(t, session)
 	writeE2EFile(t, filepath.Join(root, "scripts", "contract.gd"),
 		"extends Node2D\n\n@export var config: Dictionary = {}\n")
 	requireToolText(t, session, "attach_script", map[string]any{
-		"projectPath": root,
-		"scenePath":   "scenes/contract.tscn",
-		"nodePath":    "root",
-		"scriptPath":  "scripts/contract.gd",
+		"scenePath":  "scenes/contract.tscn",
+		"nodePath":   "root",
+		"scriptPath": "scripts/contract.gd",
 	})
 
 	// Write the fixture as raw bytes so int and float spellings reach the
 	// engine exactly as the fixture declares them.
-	writeSceneConfig(t, session, root, contractJSON(t, contract))
+	writeSceneConfig(t, session, contractJSON(t, contract))
 
-	read := readSceneConfig(t, session, root)
+	read := readSceneConfig(t, session)
 	for _, entry := range contract.Values {
 		var parsed any
 		if err := json.Unmarshal(entry.Value, &parsed); err != nil {
@@ -89,8 +86,8 @@ func TestValueContractScriptHalf(t *testing.T) {
 
 	// Read -> write -> read: hand the read value straight back and require it
 	// to survive unchanged.
-	writeSceneConfig(t, session, root, read)
-	again := readSceneConfig(t, session, root)
+	writeSceneConfig(t, session, read)
+	again := readSceneConfig(t, session)
 	if !reflect.DeepEqual(again, read) {
 		t.Errorf("write-back changed the value:\n first = %#v\n second = %#v", read, again)
 	}
@@ -121,23 +118,21 @@ func contractJSON(t *testing.T, contract valueContract) json.RawMessage {
 // writeSceneConfig writes the config Dictionary onto the scene's root node.
 // config may be a json.RawMessage (to control number spellings) or any
 // JSON-marshalable tree.
-func writeSceneConfig(t *testing.T, session *mcp.ClientSession, root string, config any) {
+func writeSceneConfig(t *testing.T, session *mcp.ClientSession, config any) {
 	t.Helper()
 	requireToolText(t, session, "modify_scene_node", map[string]any{
-		"projectPath": root,
-		"scenePath":   "scenes/contract.tscn",
-		"nodePath":    "root",
-		"properties":  map[string]any{"config": config},
+		"scenePath":  "scenes/contract.tscn",
+		"nodePath":   "root",
+		"properties": map[string]any{"config": config},
 	})
 }
 
 // readSceneConfig reads the scene's root node and returns the config Dictionary
 // in the tool value contract.
-func readSceneConfig(t *testing.T, session *mcp.ClientSession, root string) map[string]any {
+func readSceneConfig(t *testing.T, session *mcp.ClientSession) map[string]any {
 	t.Helper()
 	text := requireToolText(t, session, "read_scene", map[string]any{
-		"projectPath": root,
-		"scenePath":   "scenes/contract.tscn",
+		"scenePath": "scenes/contract.tscn",
 	})
 	var tree sceneNode
 	if err := json.Unmarshal([]byte(text), &tree); err != nil {

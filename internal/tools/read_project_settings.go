@@ -20,14 +20,9 @@ func readProjectSettings() mcp.Tool {
 		Description: "Read project.godot as structured JSON",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"projectPath": map[string]any{
-					"type":        "string",
-					"description": "Godot project path",
-				},
-			},
-			"required": []string{"projectPath"},
+			"type":       "object",
+			"properties": map[string]any{},
+			"required":   []string{},
 		},
 		OutputSchema: map[string]any{
 			"type": "object",
@@ -49,10 +44,6 @@ func readProjectSettings() mcp.Tool {
 	}
 }
 
-type readProjectSettingsArgs struct {
-	ProjectPath string `json:"projectPath"`
-}
-
 // readProjectSettingsResult is the JSON payload returned on success. Field
 // order matches the engine payload's object literal.
 type readProjectSettingsResult struct {
@@ -61,20 +52,12 @@ type readProjectSettingsResult struct {
 	Sections     map[string]map[string]any `json:"sections"`
 }
 
-func handleReadProjectSettings(ctx context.Context, raw json.RawMessage) (any, error) {
-	var args readProjectSettingsArgs
-	if len(raw) > 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
-	}
-	if args.ProjectPath == "" {
-		return mcp.ErrorResult("projectPath is required."), nil
-	}
+func handleReadProjectSettings(ctx context.Context, _ json.RawMessage) (any, error) {
+	project := projectRoot(ctx)
 
 	// Internal sanity check: reject an unsafe path or a directory without
 	// project.godot before invoking the engine.
-	if _, failure := readProjectGodot(args.ProjectPath); failure != nil {
+	if _, failure := readProjectGodot(project); failure != nil {
 		return *failure, nil
 	}
 
@@ -83,7 +66,7 @@ func handleReadProjectSettings(ctx context.Context, raw json.RawMessage) (any, e
 	// of a stale view.
 	probeCtx, cancel := context.WithTimeout(ctx, projectSettingsReadTimeout)
 	defer cancel()
-	probe, probeErr := probeProjectWithGodot(probeCtx, args.ProjectPath)
+	probe, probeErr := probeProjectWithGodot(probeCtx, project)
 	if probeErr != nil {
 		return mcp.ErrorResult("Failed to read project settings: "+probeErr.Error(), headlessSolutions...), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
@@ -107,7 +90,7 @@ func handleReadProjectSettings(ctx context.Context, raw json.RawMessage) (any, e
 	// engine's applied settings instead would drop a key that is present in the
 	// file but equals its engine default, disagreeing with the specialized
 	// readers for the same project.
-	store, failure := openSettings(args.ProjectPath)
+	store, failure := openSettings(project)
 	if failure != nil {
 		return *failure, nil
 	}
@@ -116,7 +99,7 @@ func handleReadProjectSettings(ctx context.Context, raw json.RawMessage) (any, e
 		return mcp.ErrorResult("Failed to read project settings: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 	payload := readProjectSettingsResult{
-		ProjectPath:  args.ProjectPath,
+		ProjectPath:  project,
 		SettingCount: count,
 		Sections:     sections,
 	}
