@@ -1,5 +1,6 @@
 bin/
 coverage.out
+coverage-e2e/
 .godot/
 __pycache__/
 *.pyc
