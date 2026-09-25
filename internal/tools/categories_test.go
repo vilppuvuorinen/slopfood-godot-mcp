@@ -138,6 +138,56 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 	}
 }
 
+// TestToolAnnotationsMatchBehavior pins the read-only/destructive hints to what
+// each tool actually does, so a mislabeled hint cannot survive a change. A
+// read-only tool must say so and never claim to be destructive. Every other
+// tool may write, so it must not claim to be read-only; tools that only add
+// data (create_project refuses to overwrite, add_node appends and never deletes
+// a sibling, update_project_uids only writes missing UID sidecars) declare
+// themselves non-destructive, and every remaining writer is destructive.
+func TestToolAnnotationsMatchBehavior(t *testing.T) {
+	readOnly := map[string]bool{
+		"get_godot_version":     true,
+		"get_project_info":      true,
+		"get_uid":               true,
+		"read_project_settings": true,
+		"read_scene":            true,
+		"validate_scripts":      true,
+	}
+	additive := map[string]bool{
+		"add_node":            true,
+		"create_project":      true,
+		"update_project_uids": true,
+	}
+	for _, category := range AllCategories {
+		for _, newTool := range categoryTools[category] {
+			tool := newTool()
+			if tool.Annotations == nil {
+				continue
+			}
+			if readOnly[tool.Name] {
+				if tool.Annotations.ReadOnlyHint == nil || !*tool.Annotations.ReadOnlyHint {
+					t.Errorf("read-only tool %q does not advertise readOnlyHint", tool.Name)
+				}
+				if tool.Annotations.DestructiveHint != nil && *tool.Annotations.DestructiveHint {
+					t.Errorf("read-only tool %q advertises destructiveHint", tool.Name)
+				}
+				continue
+			}
+			if tool.Annotations.ReadOnlyHint != nil && *tool.Annotations.ReadOnlyHint {
+				t.Errorf("writing tool %q advertises readOnlyHint", tool.Name)
+			}
+			wantDestructive := !additive[tool.Name]
+			if wantDestructive && (tool.Annotations.DestructiveHint == nil || !*tool.Annotations.DestructiveHint) {
+				t.Errorf("destructive tool %q does not advertise destructiveHint", tool.Name)
+			}
+			if !wantDestructive && tool.Annotations.DestructiveHint != nil && *tool.Annotations.DestructiveHint {
+				t.Errorf("additive tool %q advertises destructiveHint", tool.Name)
+			}
+		}
+	}
+}
+
 // TestToolsAdvertiseActionEnum verifies every tool whose schema has an "action"
 // property advertises the valid actions as an enum, so clients can discover
 // them without out-of-band documentation.

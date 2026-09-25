@@ -14,7 +14,7 @@ func attachScript() mcp.Tool {
 		Name:        "attach_script",
 		Title:       "Attach Script",
 		Description: "Attach a GDScript to a scene node (headless)",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

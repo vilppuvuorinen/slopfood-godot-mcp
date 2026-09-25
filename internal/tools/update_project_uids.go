@@ -27,7 +27,7 @@ func updateProjectUIDs() mcp.Tool {
 		Name:        "update_project_uids",
 		Title:       "Update Project UIDs",
 		Description: "Generate missing resource UIDs in a Godot project by scanning it in the editor (for Godot 4.4+)",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type":       "object",
 			"properties": map[string]any{},
