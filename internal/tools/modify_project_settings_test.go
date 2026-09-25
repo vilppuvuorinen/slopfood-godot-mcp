@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -173,6 +174,63 @@ func TestModifyProjectSettingsVectorValue(t *testing.T) {
 	}
 	if v, ok := cfg.Get("display", "window/size/test"); !ok || godotconfig.FormatValue(v) != "Vector2i(1, 2)" {
 		t.Errorf("window/size/test = %#v (%v)", v, ok)
+	}
+}
+
+// TestModifyProjectSettingsEchoesContractValue proves the structured result
+// carries the stored value in the tool value contract, the same encoding the
+// input accepts and read_project_settings emits, so the result can be fed back
+// without re-decoding. A formatted string would fail this: an int would echo as
+// "1280" and a vector as "Vector2i(1, 2)", neither of which re-decodes to the
+// value that was written.
+func TestModifyProjectSettingsEchoesContractValue(t *testing.T) {
+	tests := []struct {
+		name  string
+		value string
+	}{
+		{name: "string", value: `"hello"`},
+		{name: "int", value: `1280`},
+		{name: "float", value: `0.5`},
+		{name: "bool", value: `true`},
+		{name: "array", value: `[1, "a"]`},
+		{name: "dictionary", value: `{"b": 2, "a": 1}`},
+		{name: "vector", value: `{"$type":"Vector2i","x":1,"y":2}`},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			makeProject(t, root)
+			seedFile(t, filepath.Join(root, "project.godot"), "config_version=5\n")
+
+			result := callToolArgs(t, modifyProjectSettings(), root, `{"section":"test","key":"echo","value":`+tt.value+`}`)
+			if result.IsError {
+				t.Fatalf("unexpected error: %+v", result.Content)
+			}
+			structured, ok := result.StructuredContent.(map[string]any)
+			if !ok {
+				t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+			}
+			echoed, ok := structured["value"]
+			if !ok {
+				t.Fatalf("structuredContent has no value: %#v", structured)
+			}
+
+			data, err := json.Marshal(echoed)
+			if err != nil {
+				t.Fatalf("marshal echoed value: %v", err)
+			}
+			original, err := godotconfig.DecodeJSONValue([]byte(tt.value))
+			if err != nil {
+				t.Fatalf("decode original value: %v", err)
+			}
+			redecode, err := godotconfig.DecodeJSONValue(data)
+			if err != nil {
+				t.Fatalf("re-decode echoed value %s: %v", data, err)
+			}
+			if got, want := godotconfig.FormatValue(redecode), godotconfig.FormatValue(original); got != want {
+				t.Errorf("echoed value %s decodes to %q, want %q", data, got, want)
+			}
+		})
 	}
 }
 

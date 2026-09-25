@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -67,6 +68,47 @@ config/name="Demo"
 			t.Errorf("config/description = %v, want Hi", got)
 		}
 	})
+}
+
+// TestModifyProjectSettingsEchoesContractValue proves the structured result
+// reports the stored value in the tool value contract, so it can be handed
+// straight back to modify_project_settings. The echoed value is written to a
+// second key and the file is checked: a formatted string would land as a quoted
+// string rather than the vector literal.
+func TestModifyProjectSettingsEchoesContractValue(t *testing.T) {
+	root := t.TempDir()
+	writeE2EFile(t, filepath.Join(root, "project.godot"), "config_version=5\n")
+	session := connectProject(t, root)
+
+	res := callTool(t, session, "modify_project_settings", map[string]any{
+		"section": "display",
+		"key":     "window/size/test",
+		"value":   map[string]any{"$type": "Vector2i", "x": 1, "y": 2},
+	})
+	if res.IsError {
+		t.Fatalf("modify_project_settings error: %s", firstText(t, res))
+	}
+	structured, ok := res.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent type %T", res.StructuredContent)
+	}
+	echoed, ok := structured["value"]
+	if !ok {
+		t.Fatalf("structuredContent has no value: %#v", structured)
+	}
+
+	res = callTool(t, session, "modify_project_settings", map[string]any{
+		"section": "display",
+		"key":     "window/size/copy",
+		"value":   echoed,
+	})
+	if res.IsError {
+		t.Fatalf("round-trip modify_project_settings error: %s", firstText(t, res))
+	}
+	content := readFile(t, filepath.Join(root, "project.godot"))
+	if got := strings.Count(content, "=Vector2i(1, 2)"); got != 2 {
+		t.Errorf("found %d vector literals, want 2:\n%s", got, content)
+	}
 }
 
 // TestModifyProjectSettingsErrors covers the reference's validation and failure

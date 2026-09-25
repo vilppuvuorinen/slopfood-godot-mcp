@@ -35,7 +35,7 @@ func modifyProjectSettings() mcp.Tool {
 		OutputSchema: statusOutputSchema(map[string]any{
 			"section": map[string]any{"type": "string"},
 			"key":     map[string]any{"type": "string"},
-			"value":   map[string]any{"type": "string"},
+			"value":   godotValueSchema("The stored value in the tool value contract"),
 		}),
 		Handler: handleModifyProjectSettings,
 	}
@@ -68,7 +68,13 @@ func handleModifyProjectSettings(ctx context.Context, raw json.RawMessage) (any,
 	if err != nil {
 		return mcp.ErrorResult("Invalid value: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	value := godotconfig.FormatValue(settingValue)
+	// Echo the stored value in the tool value contract, the same encoding the
+	// input and read_project_settings use, so a caller can feed the result back
+	// without re-decoding.
+	contractValue, err := godotconfig.ValueToJSON(settingValue)
+	if err != nil {
+		return mcp.ErrorResult("Invalid value: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
+	}
 	if _, err = encodeSettingSection(args.Section); err != nil {
 		return mcp.ErrorResult("Invalid section: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
@@ -78,10 +84,10 @@ func handleModifyProjectSettings(ctx context.Context, raw json.RawMessage) (any,
 		return mcp.ErrorResult("Failed to modify project settings: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 
-	return statusResult(project, fmt.Sprintf("Setting updated: [%s] %s=%s", args.Section, args.Key, value), map[string]any{
+	return statusResult(project, fmt.Sprintf("Setting updated: [%s] %s=%s", args.Section, args.Key, godotconfig.FormatValue(settingValue)), map[string]any{
 		"section": args.Section,
 		"key":     args.Key,
-		"value":   value,
+		"value":   contractValue,
 	}), nil
 }
 
