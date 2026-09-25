@@ -263,13 +263,15 @@ func readOutputSchema(payloadSchema map[string]any) map[string]any {
 // Both shapes are advertised with anyOf so a read is never described as
 // returning success and message, and no action is described by fields it does
 // not return. The merged properties still list every field for clients that do
-// not read schema branches.
+// not read schema branches. A free-form payload declares its entries through
+// additionalProperties rather than named properties; that whole-object shape is
+// carried up too, so a client reading only the top level still sees it.
 func actionOutputSchema(status map[string]any, payloadSchema map[string]any) map[string]any {
 	properties := statusProperties(status)
 	for name, schema := range payloadProperties(payloadSchema) {
 		properties[name] = schema
 	}
-	return map[string]any{
+	schema := map[string]any{
 		"type":       "object",
 		"properties": properties,
 		"anyOf": []any{
@@ -277,6 +279,10 @@ func actionOutputSchema(status map[string]any, payloadSchema map[string]any) map
 			payloadSchema,
 		},
 	}
+	if extra, ok := payloadSchema["additionalProperties"]; ok {
+		schema["additionalProperties"] = extra
+	}
+	return schema
 }
 
 // payloadProperties returns the named properties of a payload object schema, or

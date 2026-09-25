@@ -130,6 +130,31 @@ func TestActionOutputSchemaSeparatesShapes(t *testing.T) {
 	}
 }
 
+// TestActionOutputSchemaCarriesFreeFormPayload verifies a free-form payload's
+// additionalProperties shape is carried to the top level, so a client that reads
+// only the merged properties still learns the list result is a name-to-value
+// map rather than an unconstrained object.
+func TestActionOutputSchemaCarriesFreeFormPayload(t *testing.T) {
+	payload := map[string]any{
+		"type":                 "object",
+		"additionalProperties": godotValueSchema("A value in the tool value contract"),
+	}
+	schema := actionOutputSchema(map[string]any{"action": map[string]any{"type": "string"}}, payload)
+	if _, ok := schema["additionalProperties"]; !ok {
+		t.Fatalf("action output schema = %#v, want the payload's additionalProperties", schema)
+	}
+}
+
+// TestManageInputMapAdvertisesActionMap pins the free-form payload case to the
+// tool that has it: the list result is keyed by input action name, so the top
+// level of its output schema must describe that map.
+func TestManageInputMapAdvertisesActionMap(t *testing.T) {
+	tool := manageInputMap()
+	if _, ok := tool.OutputSchema["additionalProperties"]; !ok {
+		t.Errorf("manage_input_map output schema must describe the action-name map: %#v", tool.OutputSchema)
+	}
+}
+
 // TestPayloadOutputSchemaOmitsEnvelope verifies a bare payload schema declares
 // only the payload fields.
 func TestPayloadOutputSchemaOmitsEnvelope(t *testing.T) {
