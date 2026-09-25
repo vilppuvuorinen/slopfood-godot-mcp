@@ -42,7 +42,7 @@ func TestCreateSceneErrors(t *testing.T) {
 	t.Run("missing paths", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireToolError(t, session, "create_scene", map[string]any{}, "Scene path is required")
+		requireToolError(t, session, "create_scene", map[string]any{}, "scenePath is required.")
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
@@ -50,7 +50,7 @@ func TestCreateSceneErrors(t *testing.T) {
 		session := connectProject(t, root)
 		requireToolError(t, session, "create_scene", map[string]any{
 			"scenePath": "../escape",
-		}, "Invalid path")
+		}, "Invalid path.")
 	})
 
 	t.Run("invalid rootNodeType", func(t *testing.T) {

@@ -142,7 +142,7 @@ func handleValidateScripts(ctx context.Context, raw json.RawMessage) (any, error
 	}
 	project := projectRoot(ctx)
 	if !validPath(project) {
-		return mcp.ErrorResult("Invalid path."), nil
+		return invalidPathResult(), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
 		return notAProjectResult(project), nil

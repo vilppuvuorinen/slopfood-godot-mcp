@@ -110,7 +110,7 @@ func TestExportMeshLibraryValidation(t *testing.T) {
 		args    string
 		want    string
 	}{
-		{name: "missing params", args: `{}`, want: "Missing required parameters"},
+		{name: "missing params", args: `{}`, want: "scenePath and outputPath are required."},
 		{name: "invalid path", project: "../escape", args: `{"scenePath":"scenes/main.tscn","outputPath":"exported/meshlib.res"}`, want: "Invalid path"},
 		{name: "parent output path", project: root, args: `{"scenePath":"scenes/main.tscn","outputPath":"../escape.res"}`, want: "Invalid path"},
 		{name: "not a project", project: notAProject, args: `{"scenePath":"scenes/main.tscn","outputPath":"exported/meshlib.res"}`, want: "Not a valid Godot project"},

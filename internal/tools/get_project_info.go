@@ -62,19 +62,12 @@ type projectInfo struct {
 func handleGetProjectInfo(ctx context.Context, raw json.RawMessage) (any, error) {
 	project := projectRoot(ctx)
 	if !validPath(project) {
-		return mcp.ErrorResult(
-			"Invalid project path",
-			`Provide a valid path without ".." or other potentially unsafe characters`,
-		), nil
+		return invalidPathResult(), nil
 	}
 
 	projectFile := filepath.Join(project, "project.godot")
 	if !pathExists(projectFile) {
-		return mcp.ErrorResult(
-			"Not a valid Godot project: "+project,
-			"Ensure the path points to a directory containing a project.godot file",
-			"Create a project with create_project if none exists",
-		), nil
+		return notAProjectResult(project), nil
 	}
 
 	versionCtx, cancel := context.WithTimeout(ctx, projectInfoTimeout)

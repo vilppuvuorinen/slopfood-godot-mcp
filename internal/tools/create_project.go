@@ -67,10 +67,10 @@ func handleCreateProject(ctx context.Context, raw json.RawMessage) (any, error) 
 	}
 	project := projectRoot(ctx)
 	if args.ProjectName == "" {
-		return mcp.ErrorResult("projectName is required."), nil
+		return requiredArgsResult("projectName"), nil
 	}
 	if !validPath(project) {
-		return mcp.ErrorResult("Invalid path."), nil
+		return invalidPathResult(), nil
 	}
 	if !validProjectName(args.ProjectName) {
 		return mcp.ErrorResult("Invalid project name."), nil

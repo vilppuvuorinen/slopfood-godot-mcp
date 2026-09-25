@@ -57,18 +57,12 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 	}
 	project := projectRoot(ctx)
 	if args.ScenePath == "" || args.OutputPath == "" {
-		return mcp.ErrorResult(
-			"Missing required parameters",
-			"Provide scenePath and outputPath",
-		), nil
+		return requiredArgsResult("scenePath", "outputPath"), nil
 	}
 	sceneFull, sceneOK := confinePath(project, args.ScenePath)
 	outputPath, outputOK := confineAbsPath(project, args.OutputPath)
 	if !validPath(project) || !sceneOK || !outputOK {
-		return mcp.ErrorResult(
-			"Invalid path",
-			`Provide valid paths without ".." or other potentially unsafe characters`,
-		), nil
+		return invalidPathResult(), nil
 	}
 
 	if !pathExists(filepath.Join(project, "project.godot")) {

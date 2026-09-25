@@ -223,7 +223,7 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 	t.Run("missing params", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireToolError(t, session, "export_mesh_library", map[string]any{}, "Missing required parameters")
+		requireToolError(t, session, "export_mesh_library", map[string]any{}, "scenePath and outputPath are required.")
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
@@ -232,7 +232,7 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 		requireToolError(t, session, "export_mesh_library", map[string]any{
 			"scenePath":  "../escape",
 			"outputPath": "exported/meshlib.res",
-		}, "Invalid path")
+		}, "Invalid path.")
 	})
 
 	t.Run("parent output path", func(t *testing.T) {
@@ -241,7 +241,7 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 		requireToolError(t, session, "export_mesh_library", map[string]any{
 			"scenePath":  "scenes/main.tscn",
 			"outputPath": "../escape.res",
-		}, "Invalid path")
+		}, "Invalid path.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {

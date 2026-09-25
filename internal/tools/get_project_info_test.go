@@ -134,7 +134,7 @@ func TestGetProjectInfoMissingPath(t *testing.T) {
 	if len(result.Content) != 2 {
 		t.Fatalf("content = %+v", result.Content)
 	}
-	if result.Content[0].Text != "Invalid project path" {
+	if result.Content[0].Text != "Invalid path." {
 		t.Errorf("message = %q", result.Content[0].Text)
 	}
 	if !strings.HasPrefix(result.Content[1].Text, "Possible solutions:") {
@@ -147,7 +147,7 @@ func TestGetProjectInfoInvalidPath(t *testing.T) {
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
-	if result.Content[0].Text != "Invalid project path" {
+	if result.Content[0].Text != "Invalid path." {
 		t.Errorf("message = %q", result.Content[0].Text)
 	}
 }

@@ -79,8 +79,8 @@ func TestCreateSceneValidation(t *testing.T) {
 		args    string
 		want    string
 	}{
-		{name: "missing paths", args: `{}`, want: "Scene path is required"},
-		{name: "missing scene", project: root, args: `{}`, want: "Scene path is required"},
+		{name: "missing paths", args: `{}`, want: "scenePath is required."},
+		{name: "missing scene", project: root, args: `{}`, want: "scenePath is required."},
 		{name: "invalid project path", project: "../escape", args: `{"scenePath":"main.tscn"}`, want: "Invalid path"},
 		{name: "invalid scene path", project: root, args: `{"scenePath":"../escape.tscn"}`, want: "Invalid path"},
 		{name: "invalid root node type", project: root, args: `{"scenePath":"main.tscn","rootNodeType":"res://evil.gd"}`, want: "Invalid rootNodeType"},

@@ -43,10 +43,7 @@ func updateProjectUIDs() mcp.Tool {
 func handleUpdateProjectUIDs(ctx context.Context, _ json.RawMessage) (any, error) {
 	project := projectRoot(ctx)
 	if !validPath(project) {
-		return mcp.ErrorResult(
-			"Invalid project path",
-			`Provide a valid path without ".." or other potentially unsafe characters`,
-		), nil
+		return invalidPathResult(), nil
 	}
 
 	if !pathExists(filepath.Join(project, "project.godot")) {

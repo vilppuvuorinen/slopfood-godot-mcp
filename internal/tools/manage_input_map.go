@@ -138,7 +138,7 @@ func handleManageInputMap(ctx context.Context, raw json.RawMessage) (any, error)
 	}
 	project := projectRoot(ctx)
 	if args.Action == "" {
-		return mcp.ErrorResult("action is required."), nil
+		return requiredArgsResult("action"), nil
 	}
 
 	store, failure := openSettings(project)

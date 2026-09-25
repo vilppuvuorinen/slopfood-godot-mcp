@@ -33,7 +33,7 @@ func TestExportProjectValidation(t *testing.T) {
 		requireToolError(t, session, "export_project", map[string]any{
 			"presetName": "Linux",
 			"outputPath": "../escape",
-		}, "Invalid output path.")
+		}, "Invalid path.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {

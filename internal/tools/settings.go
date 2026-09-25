@@ -64,17 +64,17 @@ func projectSchema(content string) (configSchema, error) { //nolint:unparam // s
 // calling it, so an empty projectPath is reported as "Invalid path.".
 func readProjectGodot(projectPath string) (string, *mcp.ToolResult) {
 	if !validPath(projectPath) {
-		result := mcp.ErrorResult("Invalid path.")
+		result := invalidPathResult()
 		return "", &result
 	}
 	data, err := os.ReadFile(filepath.Join(projectPath, "project.godot"))
 	if err != nil {
-		result := mcp.ErrorResult("Not a valid Godot project: " + projectPath)
+		result := notAProjectResult(projectPath)
 		return "", &result
 	}
 	content := string(data)
 	if _, err := projectSchema(content); err != nil {
-		result := mcp.ErrorResult("Unsupported Godot project: " + err.Error())
+		result := unsupportedProjectResult(err)
 		return "", &result
 	}
 	return content, nil

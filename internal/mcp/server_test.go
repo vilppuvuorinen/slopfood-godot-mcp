@@ -173,6 +173,9 @@ func TestErrorResultStructuredContent(t *testing.T) {
 	if structured["message"] != "boom" {
 		t.Errorf("message = %v, want boom", structured["message"])
 	}
+	if solutions, ok := structured["solutions"].([]string); !ok || len(solutions) != 1 || solutions[0] != "try again" {
+		t.Errorf("solutions = %#v, want [try again]", structured["solutions"])
+	}
 }
 
 func TestServeToolsCall(t *testing.T) {

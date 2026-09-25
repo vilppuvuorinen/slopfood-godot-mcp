@@ -123,7 +123,7 @@ func TestGetUIDValidation(t *testing.T) {
 		args    string
 		want    string
 	}{
-		{name: "missing params", args: `{}`, want: "Missing required parameters"},
+		{name: "missing params", args: `{}`, want: "filePath is required."},
 		{name: "invalid path", project: "../escape", args: `{"filePath":"player.gd"}`, want: "Invalid path"},
 		{name: "not a project", project: notAProject, args: `{"filePath":"player.gd"}`, want: "Not a valid Godot project"},
 		{name: "missing file", project: root, args: `{"filePath":"missing.gd"}`, want: "File does not exist: "},

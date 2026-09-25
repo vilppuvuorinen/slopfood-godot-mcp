@@ -30,12 +30,12 @@ func openSettings(projectPath string) (*settingsStore, *mcp.ToolResult) {
 	}
 	schema, err := projectSchema(content)
 	if err != nil {
-		result := mcp.ErrorResult("Unsupported Godot project: " + err.Error())
+		result := unsupportedProjectResult(err)
 		return nil, &result
 	}
 	config, err := godotconfig.Parse(content)
 	if err != nil {
-		result := mcp.ErrorResult("Unsupported Godot project: " + err.Error())
+		result := unsupportedProjectResult(err)
 		return nil, &result
 	}
 	return &settingsStore{projectPath: projectPath, schema: schema, config: config}, nil

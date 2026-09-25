@@ -36,7 +36,7 @@ func TestAddNodeErrors(t *testing.T) {
 	t.Run("missing params", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireToolError(t, session, "add_node", map[string]any{}, "Missing required parameters")
+		requireToolError(t, session, "add_node", map[string]any{}, "scenePath, nodeType, and nodeName are required.")
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
@@ -46,7 +46,7 @@ func TestAddNodeErrors(t *testing.T) {
 			"scenePath": "../escape",
 			"nodeType":  "Sprite2D",
 			"nodeName":  "Player",
-		}, "Invalid path")
+		}, "Invalid path.")
 	})
 
 	t.Run("invalid nodeType", func(t *testing.T) {

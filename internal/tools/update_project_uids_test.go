@@ -88,8 +88,8 @@ func TestUpdateProjectUIDsValidation(t *testing.T) {
 		args    string
 		want    string
 	}{
-		{name: "missing", args: `{}`, want: "Invalid project path"},
-		{name: "invalid path", project: "../escape", args: `{}`, want: "Invalid project path"},
+		{name: "missing", args: `{}`, want: "Invalid path."},
+		{name: "invalid path", project: "../escape", args: `{}`, want: "Invalid path."},
 		{name: "not a project", project: notAProject, args: `{}`, want: "Not a valid Godot project"},
 	}
 	for _, tt := range tests {

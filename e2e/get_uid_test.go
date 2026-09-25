@@ -59,7 +59,7 @@ func TestGetUIDVersionGate(t *testing.T) {
 func TestGetUIDErrors(t *testing.T) {
 	t.Run("missing params", func(t *testing.T) {
 		session := connect(t)
-		requireToolError(t, session, "get_uid", map[string]any{}, "Missing required parameters")
+		requireToolError(t, session, "get_uid", map[string]any{}, "filePath is required.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {

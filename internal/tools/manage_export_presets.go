@@ -104,10 +104,10 @@ func handleManageExportPresets(ctx context.Context, raw json.RawMessage) (any, e
 	}
 	project := projectRoot(ctx)
 	if args.Action == "" {
-		return mcp.ErrorResult("action is required."), nil
+		return requiredArgsResult("action"), nil
 	}
 	if !validPath(project) {
-		return mcp.ErrorResult("Invalid path."), nil
+		return invalidPathResult(), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
 		return notAProjectResult(project), nil

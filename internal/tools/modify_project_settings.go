@@ -56,7 +56,7 @@ func handleModifyProjectSettings(ctx context.Context, raw json.RawMessage) (any,
 	}
 	project := projectRoot(ctx)
 	if args.Section == "" || args.Key == "" || len(bytes.TrimSpace(args.Value)) == 0 {
-		return mcp.ErrorResult("section, key, and value are required."), nil
+		return requiredArgsResult("section", "key", "value"), nil
 	}
 
 	store, failure := openSettings(project)

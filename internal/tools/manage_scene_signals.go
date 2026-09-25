@@ -96,7 +96,7 @@ func handleManageSceneSignals(ctx context.Context, raw json.RawMessage) (any, er
 	}
 	project := projectRoot(ctx)
 	if args.ScenePath == "" || args.Action == "" {
-		return mcp.ErrorResult("scenePath and action are required."), nil
+		return requiredArgsResult("scenePath", "action"), nil
 	}
 	switch args.Action {
 	case "list":
@@ -113,7 +113,7 @@ func handleManageSceneSignals(ctx context.Context, raw json.RawMessage) (any, er
 	}
 	sceneFull, pathOK := confinePath(project, args.ScenePath)
 	if !validPath(project) || !pathOK {
-		return mcp.ErrorResult("Invalid path."), nil
+		return invalidPathResult(), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
 		return notAProjectResult(project), nil

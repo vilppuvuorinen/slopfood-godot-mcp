@@ -54,17 +54,11 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	project := projectRoot(ctx)
 	if args.FilePath == "" {
-		return mcp.ErrorResult(
-			"Missing required parameters",
-			"Provide filePath",
-		), nil
+		return requiredArgsResult("filePath"), nil
 	}
 	fileFull, pathOK := confinePath(project, args.FilePath)
 	if !validPath(project) || !pathOK {
-		return mcp.ErrorResult(
-			"Invalid path",
-			`Provide a valid file path without ".." or other potentially unsafe characters`,
-		), nil
+		return invalidPathResult(), nil
 	}
 
 	if !pathExists(filepath.Join(project, "project.godot")) {

@@ -51,11 +51,11 @@ func handleRemoveSceneNode(ctx context.Context, raw json.RawMessage) (any, error
 	}
 	project := projectRoot(ctx)
 	if args.ScenePath == "" || args.NodePath == "" {
-		return mcp.ErrorResult("scenePath and nodePath are required."), nil
+		return requiredArgsResult("scenePath", "nodePath"), nil
 	}
 	sceneFull, pathOK := confinePath(project, args.ScenePath)
 	if !validPath(project) || !pathOK {
-		return mcp.ErrorResult("Invalid path."), nil
+		return invalidPathResult(), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
 		return notAProjectResult(project), nil

@@ -298,14 +298,54 @@ func payloadProperties(schema map[string]any) map[string]any {
 // statusProperties builds the property map for the status envelope, starting
 // from success and message and adding each tool-specific field.
 func statusProperties(properties map[string]any) map[string]any {
-	props := make(map[string]any, len(properties)+3)
+	props := make(map[string]any, len(properties)+4)
 	props["success"] = map[string]any{"type": "boolean"}
 	props["message"] = map[string]any{"type": "string"}
+	props["solutions"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
 	props["projectPath"] = map[string]any{"type": "string", "description": "Absolute host filesystem path to the bound project root"}
 	for name, schema := range properties {
 		props[name] = schema
 	}
 	return props
+}
+
+// invalidPathResult is the shared error for an unusable path. Every path guard
+// reports it, so a caller sees the same message and solution whichever tool
+// rejected the path.
+func invalidPathResult() mcp.ToolResult {
+	return mcp.ErrorResult(
+		"Invalid path.",
+		`Provide a valid path without ".." or other potentially unsafe characters`,
+	)
+}
+
+// requiredArgsResult is the shared error for missing required arguments. It
+// names the fields the way the tool's inputSchema does, so the message and the
+// advertised contract agree.
+func requiredArgsResult(fields ...string) mcp.ToolResult {
+	verb := "are"
+	if len(fields) == 1 {
+		verb = "is"
+	}
+	return mcp.ErrorResult(
+		joinFieldNames(fields)+" "+verb+" required.",
+		"Provide the missing fields",
+	)
+}
+
+// joinFieldNames renders a field list as English: "a", "a and b", or
+// "a, b, and c".
+func joinFieldNames(fields []string) string {
+	switch len(fields) {
+	case 0:
+		return ""
+	case 1:
+		return fields[0]
+	case 2:
+		return fields[0] + " and " + fields[1]
+	default:
+		return strings.Join(fields[:len(fields)-1], ", ") + ", and " + fields[len(fields)-1]
+	}
 }
 
 // sceneMissingResult is the shared error for a scene file that does not exist,
@@ -325,5 +365,15 @@ func notAProjectResult(projectPath string) mcp.ToolResult {
 		"Not a valid Godot project: "+projectPath,
 		"Ensure the path points to a directory containing a project.godot file",
 		"Create a project with create_project if none exists",
+	)
+}
+
+// unsupportedProjectResult is the shared error for a project.godot this server
+// does not implement, so the caller gets a recovery hint instead of only the
+// parse failure.
+func unsupportedProjectResult(err error) mcp.ToolResult {
+	return mcp.ErrorResult(
+		"Unsupported Godot project: "+err.Error(),
+		"Use a Godot 4.x project (project.godot with config_version=5)",
 	)
 }

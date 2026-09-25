@@ -170,15 +170,20 @@ func ResourceLinkContent(uri, name string) Content {
 // signalled by isError alone, but asserting it keeps the declared schema true.
 func ErrorResult(message string, possibleSolutions ...string) ToolResult {
 	content := []Content{{Type: "text", Text: message}}
+	structured := map[string]any{"success": false, "message": message}
 	if len(possibleSolutions) > 0 {
 		var b strings.Builder
 		b.WriteString("Possible solutions:\n- ")
 		b.WriteString(strings.Join(possibleSolutions, "\n- "))
 		content = append(content, Content{Type: "text", Text: b.String()})
+		// Carry the solutions in the structured envelope too, so a client that
+		// consumes structuredContent instead of text content still receives
+		// the recovery hints rather than only the failure message.
+		structured["solutions"] = possibleSolutions
 	}
 	return ToolResult{
 		Content:           content,
-		StructuredContent: map[string]any{"success": false, "message": message},
+		StructuredContent: structured,
 		IsError:           true,
 	}
 }

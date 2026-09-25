@@ -51,16 +51,10 @@ func handleCreateScene(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	project := projectRoot(ctx)
 	if args.ScenePath == "" {
-		return mcp.ErrorResult(
-			"Scene path is required",
-			"Provide a scene path relative to the bound project",
-		), nil
+		return requiredArgsResult("scenePath"), nil
 	}
 	if !validPath(project) || !validPath(args.ScenePath) {
-		return mcp.ErrorResult(
-			"Invalid path",
-			`Provide a scene path without ".." or other potentially unsafe characters`,
-		), nil
+		return invalidPathResult(), nil
 	}
 
 	rootNodeType := args.RootNodeType

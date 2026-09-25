@@ -65,17 +65,11 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	project := projectRoot(ctx)
 	if args.ScenePath == "" || args.NodeType == "" || args.NodeName == "" {
-		return mcp.ErrorResult(
-			"Missing required parameters",
-			"Provide scenePath, nodeType, and nodeName",
-		), nil
+		return requiredArgsResult("scenePath", "nodeType", "nodeName"), nil
 	}
 	sceneFull, pathOK := confinePath(project, args.ScenePath)
 	if !validPath(project) || !pathOK {
-		return mcp.ErrorResult(
-			"Invalid path",
-			`Provide a valid scene path without ".." or other potentially unsafe characters`,
-		), nil
+		return invalidPathResult(), nil
 	}
 	if !validClassName(args.NodeType) {
 		return mcp.ErrorResult(

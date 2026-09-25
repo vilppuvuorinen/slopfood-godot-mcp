@@ -58,17 +58,17 @@ func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) 
 	}
 	project := projectRoot(ctx)
 	if args.PresetName == "" || args.OutputPath == "" {
-		return mcp.ErrorResult("presetName and outputPath are required."), nil
+		return requiredArgsResult("presetName", "outputPath"), nil
 	}
 	if !validPath(project) {
-		return mcp.ErrorResult("Invalid project path."), nil
+		return invalidPathResult(), nil
 	}
 	outputPath, ok := confineAbsPath(project, args.OutputPath)
 	if !ok {
-		return mcp.ErrorResult("Invalid output path."), nil
+		return invalidPathResult(), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
-		return mcp.ErrorResult("Not a valid Godot project: " + project), nil
+		return notAProjectResult(project), nil
 	}
 
 	stdout, stderr, exitCode, err := godot.Export(ctx, godot.Path(), project, args.PresetName, outputPath, args.Debug)

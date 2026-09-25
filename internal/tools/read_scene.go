@@ -113,10 +113,7 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	project := projectRoot(ctx)
 	if args.ScenePath == "" {
-		return mcp.ErrorResult(
-			"scenePath is required.",
-			"Provide a scene path relative to the bound project",
-		), nil
+		return requiredArgsResult("scenePath"), nil
 	}
 	if args.Depth != nil && *args.Depth < 0 {
 		return mcp.ErrorResult(
@@ -126,10 +123,7 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	sceneFull, pathOK := confinePath(project, args.ScenePath)
 	if !validPath(project) || !pathOK {
-		return mcp.ErrorResult(
-			"Invalid path.",
-			`Provide a scene path without ".." or other potentially unsafe characters`,
-		), nil
+		return invalidPathResult(), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
 		return notAProjectResult(project), nil

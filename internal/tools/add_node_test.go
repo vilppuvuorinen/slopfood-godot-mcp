@@ -88,7 +88,7 @@ func TestAddNodeValidation(t *testing.T) {
 		args    string
 		want    string
 	}{
-		{name: "missing params", args: `{}`, want: "Missing required parameters"},
+		{name: "missing params", args: `{}`, want: "scenePath, nodeType, and nodeName are required."},
 		{name: "invalid path", project: "../escape", args: `{"scenePath":"main.tscn","nodeType":"Sprite2D","nodeName":"Player"}`, want: "Invalid path"},
 		{name: "invalid nodeType", project: root, args: `{"scenePath":"main.tscn","nodeType":"res://evil.gd","nodeName":"Player"}`, want: "Invalid nodeType"},
 		{name: "not a project", project: notAProject, args: `{"scenePath":"main.tscn","nodeType":"Sprite2D","nodeName":"Player"}`, want: "Not a valid Godot project"},
