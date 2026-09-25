@@ -79,7 +79,15 @@ defense.
 ```
 make test
 make e2e
+make e2e-cover
 ```
+
+`make test` measures only the Go half of the server: the GDScript bridge and the
+engine-facing code run in a child process. `make e2e-cover` builds the server
+with `go build -cover`, runs the black-box suite with the spawned processes
+writing to a shared `GOCOVERDIR`, and merges the counters into
+`coverage-e2e.out`, which is the only profile that includes the engine-facing
+paths.
 
 Godot-dependent tests need an engine and export templates in the repo-local
 `.godot/`; templates are opt-in:

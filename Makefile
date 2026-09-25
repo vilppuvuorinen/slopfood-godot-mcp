@@ -39,9 +39,29 @@ godot:
 # e2e drives a pre-built server binary with the official MCP SDK client. It is
 # a standalone black-box module, so the SDK never enters the server's module
 # graph. The binary is built first and handed to the tests via GO_DOT_MCP_BIN.
+#
+# The e2e module has no non-test code, so -covermode here measures nothing; the
+# server is a child process. Use e2e-cover for real coverage of the server.
 .PHONY: e2e
 e2e: build
-	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GO_DOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)' $(GO) test $(GOFLAGS) -count=1 -covermode=atomic ./...
+	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GO_DOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)' $(GO) test $(GOFLAGS) -count=1 ./...
+
+# e2e-cover is e2e with a coverage-instrumented server binary. Building with
+# -cover and pointing every spawned server at a shared GOCOVERDIR makes each
+# process write counter files, which are merged into a profile. This is the only
+# view of the engine-facing half of the server: unit tests mock Godot out and
+# the black-box e2e module cannot instrument the server's packages.
+COVERDIR ?= $(CURDIR)/coverage-e2e
+E2E_COVERPROFILE := coverage-e2e.out
+
+.PHONY: e2e-cover
+e2e-cover:
+	rm -rf '$(COVERDIR)' $(E2E_COVERPROFILE)
+	mkdir -p '$(COVERDIR)'
+	$(GO) build $(GOFLAGS) -cover -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY)-cover $(CMD)
+	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GO_DOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)-cover' GOCOVERDIR='$(COVERDIR)' $(GO) test $(GOFLAGS) -count=1 ./...
+	$(GO) tool covdata textfmt -i='$(COVERDIR)' -o=$(E2E_COVERPROFILE)
+	@$(GO) tool cover -func=$(E2E_COVERPROFILE) | tail -1
 
 .PHONY: bench
 bench:
@@ -78,7 +98,7 @@ check: fmt vet lint test e2e
 
 .PHONY: clean
 clean:
-	rm -rf bin coverage.out
+	rm -rf bin coverage.out $(E2E_COVERPROFILE) '$(COVERDIR)'
 
 .PHONY: help
 help:
@@ -89,5 +109,6 @@ help:
 	@printf '  test     run tests with coverage\n'
 	@printf '  godot    download pinned Godot builds (GODOT_TEMPLATES=1 adds export templates)\n'
 	@printf '  e2e      build, then run the SDK-backed black-box tests\n'
+	@printf '  e2e-cover  e2e with a coverage-instrumented server, merged to %s\n' '$(E2E_COVERPROFILE)'
 	@printf '  fmt/vet/lint/check  code quality\n'
 	@printf '  clean    remove build artifacts\n'
