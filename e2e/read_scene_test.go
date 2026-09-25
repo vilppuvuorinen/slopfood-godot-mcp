@@ -21,8 +21,9 @@ type sceneNode struct {
 func TestReadSceneSchema(t *testing.T) {
 	schema := requireSchema(t, "read_scene", "Read scene file as JSON node tree (headless)")
 	schema.requireRequired(t, "scenePath")
-	schema.requireStringProps(t, "scenePath")
-	schema.requirePropCount(t, 1)
+	schema.requireStringProps(t, "scenePath", "nodePath")
+	schema.requireType(t, "depth", "integer")
+	schema.requirePropCount(t, 3)
 }
 
 // TestReadSceneTool drives the real read_scene tool against Godot and parses
@@ -67,6 +68,64 @@ func TestReadSceneTool(t *testing.T) {
 		if got := tree.Children[0]; got.Name != "Player" || got.Type != "Sprite2D" {
 			t.Errorf("child = %+v", got)
 		}
+	})
+
+	t.Run("scopes to a node and depth", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/scope.tscn", "Node2D")
+		requireToolText(t, session, "add_node", map[string]any{
+			"scenePath": "scenes/scope.tscn",
+			"nodeType":  "Sprite2D",
+			"nodeName":  "Player",
+		})
+		requireToolText(t, session, "add_node", map[string]any{
+			"scenePath":      "scenes/scope.tscn",
+			"nodeType":       "Node2D",
+			"nodeName":       "Weapon",
+			"parentNodePath": "Player",
+		})
+
+		text := requireToolText(t, session, "read_scene", map[string]any{
+			"scenePath": "scenes/scope.tscn",
+			"nodePath":  "root/Player",
+		})
+		var scoped sceneNode
+		if err := json.Unmarshal([]byte(text), &scoped); err != nil {
+			t.Fatalf("unmarshal %q: %v", text, err)
+		}
+		if scoped.Name != "Player" {
+			t.Errorf("scoped root = %+v, want Player", scoped)
+		}
+		if len(scoped.Children) != 1 || scoped.Children[0].Name != "Weapon" {
+			t.Errorf("scoped children = %+v, want Weapon", scoped.Children)
+		}
+
+		text = requireToolText(t, session, "read_scene", map[string]any{
+			"scenePath": "scenes/scope.tscn",
+			"depth":     1,
+		})
+		var shallow sceneNode
+		if err := json.Unmarshal([]byte(text), &shallow); err != nil {
+			t.Fatalf("unmarshal %q: %v", text, err)
+		}
+		if len(shallow.Children) != 1 || shallow.Children[0].Name != "Player" {
+			t.Fatalf("depth-1 children = %+v, want Player", shallow.Children)
+		}
+		if len(shallow.Children[0].Children) != 0 {
+			t.Errorf("depth-1 grandchildren = %+v, want none", shallow.Children[0].Children)
+		}
+	})
+
+	t.Run("unknown nodePath", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/unknown.tscn", "Node2D")
+
+		res := callTool(t, session, "read_scene", map[string]any{
+			"scenePath": "scenes/unknown.tscn",
+			"nodePath":  "Nope",
+		})
+		if !res.IsError {
+			t.Fatal("expected an error for an unknown nodePath")
+		}
+		requirePrefix(t, firstText(t, res), "Failed to read scene:")
 	})
 }
 

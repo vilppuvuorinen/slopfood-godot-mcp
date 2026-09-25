@@ -22,6 +22,15 @@ func readScene() mcp.Tool {
 					"type":        "string",
 					"description": "Scene file path (relative to project)",
 				},
+				"nodePath": map[string]any{
+					"type":        "string",
+					"description": "Optional node path relative to the scene root; only this node's subtree is returned",
+				},
+				"depth": map[string]any{
+					"type":        "integer",
+					"minimum":     0,
+					"description": "Optional maximum number of child levels below the node; 0 returns the node without children, omitted means no limit",
+				},
 			},
 			"required": []string{"scenePath"},
 		},
@@ -88,6 +97,8 @@ func sceneNodeProperties() map[string]any {
 
 type readSceneArgs struct {
 	ScenePath string `json:"scenePath"`
+	NodePath  string `json:"nodePath"`
+	Depth     *int   `json:"depth"`
 }
 
 func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -102,6 +113,12 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 		return mcp.ErrorResult(
 			"scenePath is required.",
 			"Provide a scene path relative to the bound project",
+		), nil
+	}
+	if args.Depth != nil && *args.Depth < 0 {
+		return mcp.ErrorResult(
+			"depth must be zero or greater.",
+			"Omit depth to return the whole subtree",
 		), nil
 	}
 	sceneFull, pathOK := confinePath(project, args.ScenePath)
@@ -119,6 +136,12 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 
 	params := map[string]any{"scenePath": args.ScenePath}
+	if args.NodePath != "" {
+		params["nodePath"] = args.NodePath
+	}
+	if args.Depth != nil {
+		params["depth"] = *args.Depth
+	}
 	stdout, stderr, exitCode, err := runOperation(ctx, project, "read_scene", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.

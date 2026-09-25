@@ -922,7 +922,28 @@ func read_scene(params):
         printerr("Failed to instantiate scene: " + full_scene_path)
         quit(1)
 
-    var tree_data = _walk_scene_tree(scene_root)
+    # An optional nodePath roots the returned tree at a descendant instead of
+    # the scene root, so a caller can page into a large scene without pulling
+    # the whole tree into its context.
+    var start_node = scene_root
+    if params.has("nodePath") and params.nodePath != null and not str(params.nodePath).is_empty():
+        var node_path = str(params.nodePath)
+        if node_path.begins_with("root/"):
+            node_path = node_path.substr(5)
+        if node_path != "root" and node_path != "." and not node_path.is_empty():
+            start_node = scene_root.get_node_or_null(node_path)
+            if start_node == null:
+                printerr("Node not found: " + str(params.nodePath))
+                quit(1)
+                return
+
+    # An optional depth limits how many child levels are included below the
+    # start node; -1 (the default) means no limit and 0 returns the node alone.
+    var depth = -1
+    if params.has("depth") and params.depth != null:
+        depth = int(params.depth)
+
+    var tree_data = _walk_scene_tree(start_node, depth)
 
     print(JSON_START)
     print(JSON.stringify(tree_data))
@@ -930,8 +951,10 @@ func read_scene(params):
 
     scene_root.queue_free()
 
-# Walk a scene tree and build a dictionary describing each node
-func _walk_scene_tree(node) -> Dictionary:
+# Walk a scene tree and build a dictionary describing each node. depth is the
+# number of child levels still to include below node: -1 means no limit, 0
+# returns the node without its children.
+func _walk_scene_tree(node, depth := -1) -> Dictionary:
     var info = {
         "name": node.name,
         "type": node.get_class(),
@@ -960,12 +983,14 @@ func _walk_scene_tree(node) -> Dictionary:
             group_names.append(str(g))
         info["groups"] = group_names
 
-    var children_arr = []
-    for child in node.get_children():
-        children_arr.append(_walk_scene_tree(child))
+    if depth != 0:
+        var child_depth = -1 if depth < 0 else depth - 1
+        var children_arr = []
+        for child in node.get_children():
+            children_arr.append(_walk_scene_tree(child, child_depth))
 
-    if children_arr.size() > 0:
-        info["children"] = children_arr
+        if children_arr.size() > 0:
+            info["children"] = children_arr
 
     return info
 
@@ -1776,10 +1801,17 @@ func manage_resource(params):
         var resource = _load_resource(full_path)
         if resource == null:
             return
+        var filter = params.get("propertyFilter", [])
+        if filter is String:
+            filter = [filter]
+        var has_filter = filter is Array and filter.size() > 0
         var props = {}
         for prop in resource.get_property_list():
             if prop["usage"] & PROPERTY_USAGE_STORAGE:
-                props[prop["name"]] = _variant_to_json(resource.get(prop["name"]))
+                var prop_name = prop["name"]
+                if has_filter and not _matches_property_filter(prop_name, filter):
+                    continue
+                props[prop_name] = _variant_to_json(resource.get(prop_name))
         print(JSON_START)
         print(JSON.stringify({"type": resource.get_class(), "path": project_relative(full_path), "properties": props}))
         print(JSON_END)
@@ -1797,6 +1829,17 @@ func manage_resource(params):
     else:
         printerr("Unknown manage_resource action: " + action)
         quit(1)
+
+
+# Report whether a property name passes a caller's read filter. An entry
+# matches by exact name or as a wildcard pattern using "*" and "?", so a family
+# such as "level/*" can be selected without listing every key.
+func _matches_property_filter(prop_name, filter) -> bool:
+    for entry in filter:
+        var pattern = str(entry)
+        if pattern == prop_name or prop_name.match(pattern):
+            return true
+    return false
 
 
 # Load a resource with the shared not-found and load-failure messages. Returns

@@ -34,6 +34,43 @@ func TestManageResourceSchema(t *testing.T) {
 	if !ok || properties["type"] != "object" {
 		t.Errorf("properties property = %v", props["properties"])
 	}
+	filter, isMap := props["propertyFilter"].(map[string]any)
+	if !isMap || filter["type"] != "array" {
+		t.Errorf("propertyFilter property = %v", props["propertyFilter"])
+	}
+}
+
+// TestManageResourceReadForwardsPropertyFilter proves a read's propertyFilter
+// reaches the operations script.
+func TestManageResourceReadForwardsPropertyFilter(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"resources/mat.tres","action":"read","propertyFilter":["metallic","albedo_*"]}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	if !strings.Contains(text, `"propertyFilter":["metallic","albedo_*"]`) {
+		t.Errorf("text = %q, want the property filter forwarded", text)
+	}
+}
+
+// TestManageResourceFilterIgnoredForMutation proves propertyFilter is a read
+// option: create and modify must not forward it.
+func TestManageResourceFilterIgnoredForMutation(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"resources/mat.tres","action":"modify","propertyFilter":["metallic"],"properties":{"metallic":0.5}}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if strings.Contains(result.Content[0].Text, `"propertyFilter"`) {
+		t.Errorf("text = %q, want propertyFilter dropped for a modify", result.Content[0].Text)
+	}
 }
 
 func TestManageResourceReadSuccess(t *testing.T) {

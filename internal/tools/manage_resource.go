@@ -31,6 +31,11 @@ func manageResource() mcp.Tool {
 					"description": `Godot class name for create (e.g., "StandardMaterial3D", "Theme", "Environment")`,
 				},
 				"properties": propertiesSchema("Properties to set, as name to godotValue pairs"),
+				"propertyFilter": map[string]any{
+					"type":        "array",
+					"items":       map[string]any{"type": "string"},
+					"description": "Read action only: limit the returned properties to these names (wildcards * and ? allowed)",
+				},
 			},
 			[]string{"resourcePath", "action"},
 			[]actionVariant{
@@ -60,10 +65,11 @@ func manageResource() mcp.Tool {
 }
 
 type manageResourceArgs struct {
-	ResourcePath string         `json:"resourcePath"`
-	Action       string         `json:"action"`
-	ResourceType string         `json:"resourceType"`
-	Properties   map[string]any `json:"properties"`
+	ResourcePath   string         `json:"resourcePath"`
+	Action         string         `json:"action"`
+	ResourceType   string         `json:"resourceType"`
+	Properties     map[string]any `json:"properties"`
+	PropertyFilter []string       `json:"propertyFilter"`
 }
 
 func handleManageResource(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -101,6 +107,9 @@ func handleManageResource(ctx context.Context, raw json.RawMessage) (any, error)
 	}
 	if args.Properties != nil {
 		params["properties"] = args.Properties
+	}
+	if args.Action == "read" && len(args.PropertyFilter) > 0 {
+		params["propertyFilter"] = args.PropertyFilter
 	}
 
 	return runHeadlessOperation(ctx, project, "manage_resource", params, fields)

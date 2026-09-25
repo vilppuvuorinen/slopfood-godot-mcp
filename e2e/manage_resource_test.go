@@ -21,7 +21,8 @@ func TestManageResourceSchema(t *testing.T) {
 	schema.requireRequired(t, "resourcePath", "action")
 	schema.requireStringProps(t, "resourcePath", "action", "resourceType")
 	schema.requireType(t, "properties", "object")
-	schema.requirePropCount(t, 4)
+	schema.requireType(t, "propertyFilter", "array")
+	schema.requirePropCount(t, 5)
 }
 
 // TestManageResourceTool drives the real manage_resource tool against Godot.
@@ -44,6 +45,29 @@ func TestManageResourceTool(t *testing.T) {
 			t.Errorf("type = %v, want StandardMaterial3D", payload["type"])
 		}
 		requireContains(t, text, `"type": "StandardMaterial3D"`)
+	})
+
+	t.Run("reads with a property filter", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
+
+		text := requireToolText(t, session, "manage_resource", map[string]any{
+			"resourcePath":   "resources/mat.tres",
+			"action":         "read",
+			"propertyFilter": []any{"metallic"},
+		})
+		requireContains(t, text, `"metallic": 0.5`)
+		requireNotContains(t, text, `"albedo_color"`)
+
+		text = requireToolText(t, session, "manage_resource", map[string]any{
+			"resourcePath":   "resources/mat.tres",
+			"action":         "read",
+			"propertyFilter": []any{"albedo_*"},
+		})
+		requireContains(t, text, `"albedo_color"`)
+		requireNotContains(t, text, `"metallic"`)
 	})
 
 	t.Run("modifies then re-reads a resource", func(t *testing.T) {

@@ -24,10 +24,34 @@ func TestReadSceneSchema(t *testing.T) {
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"scenePath"} {
-		prop, ok := props[key].(map[string]any)
-		if !ok || prop["type"] != "string" {
+	for _, key := range []string{"scenePath", "nodePath"} {
+		prop, isMap := props[key].(map[string]any)
+		if !isMap || prop["type"] != "string" {
 			t.Errorf("property %q = %v, want string", key, props[key])
+		}
+	}
+	depth, ok := props["depth"].(map[string]any)
+	if !ok || depth["type"] != "integer" {
+		t.Errorf("depth = %v, want integer", props["depth"])
+	}
+}
+
+// TestReadSceneForwardsScopeOptions proves the optional nodePath and depth are
+// handed to the operations script rather than silently dropped.
+func TestReadSceneForwardsScopeOptions(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, readScene(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","depth":1}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	for _, want := range []string{`"scenePath":"scenes/main.tscn"`, `"nodePath":"root/Player"`, `"depth":1`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
 	}
 }
@@ -190,6 +214,7 @@ func TestReadSceneValidation(t *testing.T) {
 		{name: "invalid scene path", project: root, args: `{"scenePath":"../escape.tscn"}`, want: "Invalid path."},
 		{name: "not a project", project: notAProject, args: `{"scenePath":"main.tscn"}`, want: "Not a valid Godot project"},
 		{name: "missing scene file", project: root, args: `{"scenePath":"missing.tscn"}`, want: "Scene file does not exist: missing.tscn"},
+		{name: "negative depth", project: root, args: `{"scenePath":"main.tscn","depth":-1}`, want: "depth must be zero or greater."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -20,9 +20,19 @@ func readProjectSettings() mcp.Tool {
 		Description: "Read project.godot as structured JSON",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
-			"type":       "object",
-			"properties": map[string]any{},
-			"required":   []string{},
+			"type": "object",
+			"properties": map[string]any{
+				"section": map[string]any{
+					"type":        "string",
+					"description": "Optional section name to restrict the result to",
+				},
+				"keys": map[string]any{
+					"type":        "array",
+					"items":       map[string]any{"type": "string"},
+					"description": "Optional key names to restrict the result to, across the selected sections",
+				},
+			},
+			"required": []string{},
 		},
 		OutputSchema: map[string]any{
 			"type": "object",
@@ -52,7 +62,20 @@ type readProjectSettingsResult struct {
 	Sections     map[string]map[string]any `json:"sections"`
 }
 
-func handleReadProjectSettings(ctx context.Context, _ json.RawMessage) (any, error) {
+// readProjectSettingsArgs are the optional filters a caller may pass. A zero
+// value reads every key.
+type readProjectSettingsArgs struct {
+	Section string   `json:"section"`
+	Keys    []string `json:"keys"`
+}
+
+func handleReadProjectSettings(ctx context.Context, raw json.RawMessage) (any, error) {
+	var args readProjectSettingsArgs
+	if len(raw) > 0 && string(raw) != "null" {
+		if err := json.Unmarshal(raw, &args); err != nil {
+			return nil, fmt.Errorf("invalid arguments: %w", err)
+		}
+	}
 	project := projectRoot(ctx)
 
 	// Internal sanity check: reject an unsafe path or a directory without
@@ -94,7 +117,7 @@ func handleReadProjectSettings(ctx context.Context, _ json.RawMessage) (any, err
 	if failure != nil {
 		return *failure, nil
 	}
-	sections, count, err := store.AllSectionValues()
+	sections, count, err := store.FilteredSectionValues(args.Section, args.Keys)
 	if err != nil {
 		return mcp.ErrorResult("Failed to read project settings: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}

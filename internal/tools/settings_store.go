@@ -69,21 +69,41 @@ func (s *settingsStore) SectionValues(section string) (map[string]any, error) {
 	return encodeSectionValues(s.config.SectionKeys(section))
 }
 
-// AllSectionValues returns every parsed section with its keys encoded in the
-// tool value contract, along with the total number of keys. Unlike
+// FilteredSectionValues returns the parsed sections encoded in the tool value
+// contract, restricted to one section and/or a set of key names. Unlike
 // SectionValues it is driven by the parsed document, so the section-less prefix
-// is keyed by "". This is the whole-document read; the specialized readers use
-// SectionValues so both share one encoding.
-func (s *settingsStore) AllSectionValues() (map[string]map[string]any, int, error) {
+// is keyed by "". An empty section keeps every section; empty keys keeps every
+// key. Only sections with at least one selected key are emitted, so a filter
+// that matches nothing yields an empty (non-nil) map with a zero count rather
+// than empty sections. The specialized readers use SectionValues so both share
+// one encoding.
+func (s *settingsStore) FilteredSectionValues(section string, keys []string) (map[string]map[string]any, int, error) {
+	keySet := make(map[string]bool, len(keys))
+	for _, key := range keys {
+		keySet[key] = true
+	}
 	out := make(map[string]map[string]any, len(s.config.Sections))
 	count := 0
 	for _, sec := range s.config.Sections {
-		values, err := encodeSectionValues(sec.Keys)
+		if section != "" && sec.Name != section {
+			continue
+		}
+		selected := make([]godotconfig.KeyValue, 0, len(sec.Keys))
+		for _, kv := range sec.Keys {
+			if len(keySet) > 0 && !keySet[kv.Key] {
+				continue
+			}
+			selected = append(selected, kv)
+		}
+		if len(selected) == 0 {
+			continue
+		}
+		values, err := encodeSectionValues(selected)
 		if err != nil {
 			return nil, 0, err
 		}
 		out[sec.Name] = values
-		count += len(sec.Keys)
+		count += len(selected)
 	}
 	return out, count, nil
 }

@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -11,7 +12,9 @@ import (
 func TestReadProjectSettingsSchema(t *testing.T) {
 	schema := requireSchema(t, "read_project_settings", "Read project.godot as structured JSON")
 	schema.requireRequired(t)
-	schema.requirePropCount(t, 0)
+	schema.requireStringProps(t, "section")
+	schema.requireType(t, "keys", "array")
+	schema.requirePropCount(t, 2)
 }
 
 // TestReadProjectSettingsTool drives the real read_project_settings tool and
@@ -72,6 +75,43 @@ config/name=""
 			t.Errorf("config/name = %#v, want empty string", got)
 		}
 	})
+}
+
+// TestReadProjectSettingsFilters proves the optional section and keys filters
+// bound the returned document over the real stdio surface.
+func TestReadProjectSettingsFilters(t *testing.T) {
+	root := t.TempDir()
+	writeE2EFile(t, filepath.Join(root, "project.godot"), `config_version=5
+
+[application]
+
+config/name="Demo"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+`)
+	session := connectProject(t, root)
+	requireGodot(t, session)
+
+	text := requireToolText(t, session, "read_project_settings", map[string]any{"section": "display"})
+	var payload struct {
+		SettingCount int                       `json:"settingCount"`
+		Sections     map[string]map[string]any `json:"sections"`
+	}
+	if err := json.Unmarshal([]byte(text), &payload); err != nil {
+		t.Fatalf("unmarshal %q: %v", text, err)
+	}
+	if payload.SettingCount != 2 {
+		t.Errorf("settingCount = %d, want 2", payload.SettingCount)
+	}
+	if _, ok := payload.Sections["application"]; ok {
+		t.Errorf("sections = %#v, want application dropped", payload.Sections)
+	}
+	if got := payload.Sections["display"]["window/size/viewport_width"]; got != float64(1920) {
+		t.Errorf("viewport_width = %v, want 1920", got)
+	}
 }
 
 // TestReadProjectSettingsRejectsUnparseableProject proves the Godot load probe

@@ -20,6 +20,16 @@ func TestReadProjectSettingsSchema(t *testing.T) {
 	if !ok || len(required) != 0 {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
+	props, ok := tool.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T", tool.InputSchema["properties"])
+	}
+	if section, isMap := props["section"].(map[string]any); !isMap || section["type"] != "string" {
+		t.Errorf("section property = %v, want string", props["section"])
+	}
+	if keys, isMap := props["keys"].(map[string]any); !isMap || keys["type"] != "array" {
+		t.Errorf("keys property = %v, want array", props["keys"])
+	}
 	output, ok := tool.OutputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("output properties = %T", tool.OutputSchema["properties"])
@@ -27,6 +37,70 @@ func TestReadProjectSettingsSchema(t *testing.T) {
 	if _, ok := output["sections"]; !ok {
 		t.Errorf("output schema has no sections property: %v", output)
 	}
+}
+
+// TestReadProjectSettingsFilters proves the optional section and keys filters
+// bound the returned document without changing its shape.
+func TestReadProjectSettingsFilters(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, ":"))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "project.godot"), `config_version=5
+
+[application]
+
+config/name="Demo"
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+`)
+
+	t.Run("section", func(t *testing.T) {
+		result := callToolArgs(t, readProjectSettings(), root, `{"section":"display"}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		text := result.Content[0].Text
+		if !strings.Contains(text, `"settingCount": 2`) {
+			t.Errorf("text = %q, want two settings", text)
+		}
+		if !strings.Contains(text, `"window/size/viewport_width": 1920`) {
+			t.Errorf("text = %q, want the selected section's key", text)
+		}
+		if strings.Contains(text, `"config/name"`) {
+			t.Errorf("text = %q, want sections outside the filter dropped", text)
+		}
+	})
+
+	t.Run("keys", func(t *testing.T) {
+		result := callToolArgs(t, readProjectSettings(), root, `{"keys":["config/name","window/size/viewport_width"]}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		text := result.Content[0].Text
+		if !strings.Contains(text, `"settingCount": 2`) {
+			t.Errorf("text = %q, want two settings", text)
+		}
+		if !strings.Contains(text, `"window/size/viewport_width": 1920`) || !strings.Contains(text, `"config/name": "Demo"`) {
+			t.Errorf("text = %q, want both selected keys", text)
+		}
+		if strings.Contains(text, `"window/size/viewport_height"`) {
+			t.Errorf("text = %q, want unselected keys dropped", text)
+		}
+	})
+
+	t.Run("no match", func(t *testing.T) {
+		result := callToolArgs(t, readProjectSettings(), root, `{"section":"missing"}`)
+		if result.IsError {
+			t.Fatalf("unexpected error: %+v", result.Content)
+		}
+		text := result.Content[0].Text
+		if !strings.Contains(text, `"settingCount": 0`) || !strings.Contains(text, `"sections": {}`) {
+			t.Errorf("text = %q, want an empty document", text)
+		}
+	})
 }
 
 func TestReadProjectSettingsSuccess(t *testing.T) {
