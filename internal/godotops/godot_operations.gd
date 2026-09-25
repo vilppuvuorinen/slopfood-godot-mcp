@@ -615,13 +615,15 @@ func export_mesh_library(params):
     if debug_mode:
         print("Full scene path (with res://): " + full_scene_path)
     
-    # Ensure the output path starts with res:// for Godot's resource system
+    # Project-relative output paths resolve under res://. Absolute host paths
+    # (and user://) are kept as-is so the caller can target a location outside
+    # the project; prefixing those with res:// would produce an invalid path.
     var full_output_path = params.outputPath
-    if not full_output_path.begins_with("res://"):
+    if not full_output_path.begins_with("res://") and not full_output_path.begins_with("user://") and not full_output_path.is_absolute_path():
         full_output_path = "res://" + full_output_path
     
     if debug_mode:
-        print("Full output path (with res://): " + full_output_path)
+        print("Full output path: " + full_output_path)
     
     # Check if the scene file exists
     var file_check = FileAccess.file_exists(full_scene_path)
@@ -740,22 +742,29 @@ func export_mesh_library(params):
         print("Processed " + str(item_id) + " meshes")
     
     # Create directory if it doesn't exist
-    var dir = DirAccess.open("res://")
-    if dir == null:
-        printerr("Failed to open res:// directory")
-        printerr("DirAccess error: " + str(DirAccess.get_open_error()))
-        quit(1)
-        
     var output_dir = full_output_path.get_base_dir()
     if debug_mode:
         print("Output directory: " + output_dir)
     
-    if output_dir != "res://" and not dir.dir_exists(output_dir.substr(6)):  # Remove "res://" prefix
+    if full_output_path.begins_with("res://"):
+        var dir = DirAccess.open("res://")
+        if dir == null:
+            printerr("Failed to open res:// directory")
+            printerr("DirAccess error: " + str(DirAccess.get_open_error()))
+            quit(1)
+        if output_dir != "res://" and not dir.dir_exists(output_dir.substr(6)):  # Remove "res://" prefix
+            if debug_mode:
+                print("Creating directory: " + output_dir)
+            var make_error = dir.make_dir_recursive(output_dir.substr(6))  # Remove "res://" prefix
+            if make_error != OK:
+                printerr("Failed to create directory: " + output_dir + ", error: " + str(make_error))
+                quit(1)
+    elif not DirAccess.dir_exists_absolute(output_dir):
         if debug_mode:
             print("Creating directory: " + output_dir)
-        var error = dir.make_dir_recursive(output_dir.substr(6))  # Remove "res://" prefix
-        if error != OK:
-            printerr("Failed to create directory: " + output_dir + ", error: " + str(error))
+        var make_error = DirAccess.make_dir_recursive_absolute(output_dir)
+        if make_error != OK:
+            printerr("Failed to create directory: " + output_dir + ", error: " + str(make_error))
             quit(1)
     
     # Save the mesh library

@@ -47,17 +47,39 @@ func TestExportMeshLibrarySuccess(t *testing.T) {
 	if len(result.Content) != 1 {
 		t.Fatalf("content = %+v", result.Content)
 	}
+	output := filepath.Join(root, "exported", "meshlib.res")
 	text := result.Content[0].Text
-	if !strings.HasPrefix(text, "MeshLibrary exported successfully to: exported/meshlib.res") {
+	if !strings.HasPrefix(text, "MeshLibrary exported successfully to: "+output) {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{`"scenePath":"scenes/main.tscn"`, `"outputPath":"exported/meshlib.res"`} {
+	for _, want := range []string{`"scenePath":"scenes/main.tscn"`, `"outputPath":` + jsonString(output)} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
 	}
 	if strings.Contains(text, "meshItemNames") {
 		t.Errorf("text = %q, want it not to contain mesh_item_names", text)
+	}
+}
+
+func TestExportMeshLibraryAbsoluteOutputPath(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
+
+	output := filepath.Join(t.TempDir(), "build", "meshlib.res")
+	result := callToolArgs(t, exportMeshLibrary(), root,
+		`{"scenePath":"scenes/main.tscn","outputPath":`+jsonString(output)+`}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	if !strings.HasPrefix(text, "MeshLibrary exported successfully to: "+output) {
+		t.Errorf("text = %q", text)
+	}
+	if !strings.Contains(text, `"outputPath":`+jsonString(output)) {
+		t.Errorf("text = %q, want it to forward the absolute output path", text)
 	}
 }
 
@@ -90,6 +112,7 @@ func TestExportMeshLibraryValidation(t *testing.T) {
 	}{
 		{name: "missing params", args: `{}`, want: "Missing required parameters"},
 		{name: "invalid path", project: "../escape", args: `{"scenePath":"scenes/main.tscn","outputPath":"exported/meshlib.res"}`, want: "Invalid path"},
+		{name: "parent output path", project: root, args: `{"scenePath":"scenes/main.tscn","outputPath":"../escape.res"}`, want: "Invalid path"},
 		{name: "not a project", project: notAProject, args: `{"scenePath":"scenes/main.tscn","outputPath":"exported/meshlib.res"}`, want: "Not a valid Godot project"},
 		{name: "missing scene", project: root, args: `{"scenePath":"missing.tscn","outputPath":"exported/meshlib.res"}`, want: "Scene file does not exist: "},
 	}

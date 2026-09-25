@@ -48,12 +48,27 @@ func TestExportMeshLibraryTool(t *testing.T) {
 	t.Run("exports a mesh library", func(t *testing.T) {
 		root, session := seedMeshScene(t)
 
+		output := filepath.Join(root, "exported", "meshlib.res")
 		text := requireToolText(t, session, "export_mesh_library", map[string]any{
 			"scenePath":  "scenes/main.tscn",
 			"outputPath": "exported/meshlib.res",
 		})
-		requirePrefix(t, text, "MeshLibrary exported successfully to: exported/meshlib.res")
-		if _, err := os.Stat(filepath.Join(root, "exported", "meshlib.res")); err != nil {
+		requirePrefix(t, text, "MeshLibrary exported successfully to: "+output)
+		if _, err := os.Stat(output); err != nil {
+			t.Errorf("stat exported mesh library: %v", err)
+		}
+	})
+
+	t.Run("absolute output path", func(t *testing.T) {
+		_, session := seedMeshScene(t)
+
+		output := filepath.Join(t.TempDir(), "nested", "meshlib.res")
+		text := requireToolText(t, session, "export_mesh_library", map[string]any{
+			"scenePath":  "scenes/main.tscn",
+			"outputPath": output,
+		})
+		requirePrefix(t, text, "MeshLibrary exported successfully to: "+output)
+		if _, err := os.Stat(output); err != nil {
 			t.Errorf("stat exported mesh library: %v", err)
 		}
 	})
@@ -61,13 +76,14 @@ func TestExportMeshLibraryTool(t *testing.T) {
 	t.Run("specific mesh item names", func(t *testing.T) {
 		root, session := seedMeshScene(t)
 
+		output := filepath.Join(root, "exported", "named.res")
 		text := requireToolText(t, session, "export_mesh_library", map[string]any{
 			"scenePath":     "scenes/main.tscn",
 			"outputPath":    "exported/named.res",
 			"meshItemNames": []any{"Mesh"},
 		})
-		requirePrefix(t, text, "MeshLibrary exported successfully to: exported/named.res")
-		if _, err := os.Stat(filepath.Join(root, "exported", "named.res")); err != nil {
+		requirePrefix(t, text, "MeshLibrary exported successfully to: "+output)
+		if _, err := os.Stat(output); err != nil {
 			t.Errorf("stat exported mesh library: %v", err)
 		}
 	})
@@ -87,6 +103,15 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 		requireToolError(t, session, "export_mesh_library", map[string]any{
 			"scenePath":  "../escape",
 			"outputPath": "exported/meshlib.res",
+		}, "Invalid path")
+	})
+
+	t.Run("parent output path", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireToolError(t, session, "export_mesh_library", map[string]any{
+			"scenePath":  "scenes/main.tscn",
+			"outputPath": "../escape.res",
 		}, "Invalid path")
 	})
 

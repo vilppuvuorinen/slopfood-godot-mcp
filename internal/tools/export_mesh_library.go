@@ -24,7 +24,7 @@ func exportMeshLibrary() mcp.Tool {
 				},
 				"outputPath": map[string]any{
 					"type":        "string",
-					"description": "Path where the mesh library (.res) will be saved",
+					"description": "Path where the mesh library (.res) will be saved; relative paths resolve against the project root, absolute paths are allowed",
 				},
 				"meshItemNames": map[string]any{
 					"type":        "array",
@@ -64,7 +64,8 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 		), nil
 	}
 	sceneFull, sceneOK := confinePath(project, args.ScenePath)
-	if !validPath(project) || !validPath(args.OutputPath) || !sceneOK {
+	outputPath, outputOK := confineAbsPath(project, args.OutputPath)
+	if !validPath(project) || !sceneOK || !outputOK {
 		return mcp.ErrorResult(
 			"Invalid path",
 			`Provide valid paths without ".." or other potentially unsafe characters`,
@@ -81,7 +82,7 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 
 	params := map[string]any{
 		"scenePath":  args.ScenePath,
-		"outputPath": args.OutputPath,
+		"outputPath": outputPath,
 	}
 	if len(args.MeshItemNames) > 0 {
 		params["meshItemNames"] = args.MeshItemNames
@@ -105,10 +106,10 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 		), nil
 	}
 
-	message := fmt.Sprintf("MeshLibrary exported successfully to: %s\n\nOutput: %s", args.OutputPath, stdout)
+	message := fmt.Sprintf("MeshLibrary exported successfully to: %s\n\nOutput: %s", outputPath, stdout)
 	return statusResult(project, message, map[string]any{
 		"scenePath":  args.ScenePath,
-		"outputPath": args.OutputPath,
+		"outputPath": outputPath,
 		"output":     stdout,
 	}), nil
 }
