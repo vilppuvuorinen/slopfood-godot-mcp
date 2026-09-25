@@ -132,27 +132,6 @@ func TestCreateScriptSourceOverride(t *testing.T) {
 	}
 }
 
-func TestCreateScriptSnakeCaseAliases(t *testing.T) {
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, createScript(),
-		`{"project_path":`+jsonString(root)+`,"script_path":"aliased.gd","class_name":"Aliased"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if got := result.Content[0].Text; got != "Script created at aliased.gd" {
-		t.Errorf("message = %q", got)
-	}
-	data, err := os.ReadFile(filepath.Join(root, "aliased.gd"))
-	if err != nil {
-		t.Fatalf("read script: %v", err)
-	}
-	if got, want := string(data), "extends Node\nclass_name Aliased\n\n"; got != want {
-		t.Errorf("content = %q, want %q", got, want)
-	}
-}
-
 func TestCreateScriptErrors(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

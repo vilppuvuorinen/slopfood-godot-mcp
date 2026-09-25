@@ -67,13 +67,9 @@ type manageSceneStructureArgs struct {
 }
 
 func handleManageSceneStructure(ctx context.Context, raw json.RawMessage) (any, error) {
-	raw, err := aliasParams(raw, parameterMappings)
-	if err != nil {
-		return nil, err
-	}
 	var args manageSceneStructureArgs
 	if len(raw) > 0 && string(raw) != "null" {
-		if err = json.Unmarshal(raw, &args); err != nil {
+		if err := json.Unmarshal(raw, &args); err != nil {
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}

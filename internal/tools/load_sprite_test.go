@@ -53,26 +53,10 @@ func TestLoadSpriteSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "Sprite loaded successfully with texture: icon.tres") {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{`"node_path":"root/Sprite"`, `"texture_path":"icon.tres"`} {
+	for _, want := range []string{`"nodePath":"root/Sprite"`, `"texturePath":"icon.tres"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
-	}
-}
-
-func TestLoadSpriteSnakeCaseAliases(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
-	seedFile(t, filepath.Join(root, "icon.tres"), "texture")
-
-	result := callToolArgs(t, loadSprite(), `{"project_path":`+jsonString(root)+`,"scene_path":"scenes/main.tscn","node_path":"root/Sprite","texture_path":"icon.tres"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if !strings.HasPrefix(result.Content[0].Text, "Sprite loaded successfully with texture: icon.tres") {
-		t.Errorf("text = %q", result.Content[0].Text)
 	}
 }
 

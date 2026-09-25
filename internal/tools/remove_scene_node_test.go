@@ -52,7 +52,7 @@ func TestRemoveSceneNodeSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "remove_node succeeded.") {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{`"scene_path":"scenes/main.tscn"`, `"node_path":"root/Player"`} {
+	for _, want := range []string{`"scenePath":"scenes/main.tscn"`, `"nodePath":"root/Player"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}

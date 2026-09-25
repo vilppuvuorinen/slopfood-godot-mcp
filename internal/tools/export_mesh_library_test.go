@@ -51,12 +51,12 @@ func TestExportMeshLibrarySuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "MeshLibrary exported successfully to: exported/meshlib.res") {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{`"scene_path":"scenes/main.tscn"`, `"output_path":"exported/meshlib.res"`} {
+	for _, want := range []string{`"scenePath":"scenes/main.tscn"`, `"outputPath":"exported/meshlib.res"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
 	}
-	if strings.Contains(text, "mesh_item_names") {
+	if strings.Contains(text, "meshItemNames") {
 		t.Errorf("text = %q, want it not to contain mesh_item_names", text)
 	}
 }
@@ -71,27 +71,8 @@ func TestExportMeshLibraryMeshItemNames(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	if !strings.Contains(result.Content[0].Text, `"mesh_item_names":["A","B"]`) {
+	if !strings.Contains(result.Content[0].Text, `"meshItemNames":["A","B"]`) {
 		t.Errorf("text = %q, want it to contain the forwarded mesh item names", result.Content[0].Text)
-	}
-}
-
-func TestExportMeshLibrarySnakeCaseAliases(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
-
-	result := callToolArgs(t, exportMeshLibrary(), `{"project_path":`+jsonString(root)+`,"scene_path":"scenes/main.tscn","output_path":"exported/meshlib.res","mesh_item_names":["A","B"]}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	text := result.Content[0].Text
-	if !strings.HasPrefix(text, "MeshLibrary exported successfully to: exported/meshlib.res") {
-		t.Errorf("text = %q", text)
-	}
-	if !strings.Contains(text, `"mesh_item_names":["A","B"]`) {
-		t.Errorf("text = %q, want it to contain the forwarded mesh item names", text)
 	}
 }
 

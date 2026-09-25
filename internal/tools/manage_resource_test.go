@@ -52,7 +52,7 @@ func TestManageResourceReadSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "manage_resource succeeded.") {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{`"resource_path":"resources/mat.tres"`, `"action":"read"`} {
+	for _, want := range []string{`"resourcePath":"resources/mat.tres"`, `"action":"read"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
@@ -118,7 +118,7 @@ func TestManageResourceCreateSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "manage_resource succeeded.") {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{`"action":"create"`, `"resource_type":"StandardMaterial3D"`, `"resource_path":"materials/red.tres"`} {
+	for _, want := range []string{`"action":"create"`, `"resourceType":"StandardMaterial3D"`, `"resourcePath":"materials/red.tres"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
@@ -140,34 +140,6 @@ func TestManageResourceCreateProperties(t *testing.T) {
 	text := result.Content[0].Text
 	if !strings.Contains(text, `"properties":{"albedo_color":{"a":1,"b":0,"g":0,"r":1}}`) {
 		t.Errorf("text = %q, want the properties to round-trip", text)
-	}
-}
-
-func TestManageResourceThemeAliases(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, manageResource(), `{"project_path":`+jsonString(root)+`,"resource_path":"themes/dark.tres","action":"create","resource_type":"Theme"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if !strings.Contains(result.Content[0].Text, `"resource_type":"Theme"`) {
-		t.Errorf("text = %q, want converted snake_case params", result.Content[0].Text)
-	}
-}
-
-func TestManageResourceAliases(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, manageResource(), `{"project_path":`+jsonString(root)+`,"resource_path":"mat.tres","action":"read"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if !strings.Contains(result.Content[0].Text, `"resource_path":"mat.tres"`) {
-		t.Errorf("text = %q, want converted snake_case params", result.Content[0].Text)
 	}
 }
 

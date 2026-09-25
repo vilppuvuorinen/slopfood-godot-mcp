@@ -14,8 +14,7 @@ func TestAddNodeSchema(t *testing.T) {
 	schema.requireType(t, "properties", "object")
 }
 
-// TestAddNodeTool drives the real add_node tool against Godot, including the
-// snake_case argument aliases.
+// TestAddNodeTool drives the real add_node tool against Godot.
 func TestAddNodeTool(t *testing.T) {
 	session := connect(t)
 	requireGodot(t, session)
@@ -33,21 +32,6 @@ func TestAddNodeTool(t *testing.T) {
 
 		scene := readFile(t, filepath.Join(root, "scenes", "main.tscn"))
 		requireContains(t, scene, `[node name="Player" type="Sprite2D"`)
-	})
-
-	t.Run("snake_case aliases", func(t *testing.T) {
-		root := seedScene(t, session, "scenes/aliased.tscn")
-
-		requireToolText(t, session, "add_node", map[string]any{
-			"project_path":     root,
-			"scene_path":       "scenes/aliased.tscn",
-			"node_type":        "Sprite2D",
-			"node_name":        "Aliased",
-			"parent_node_path": "root",
-		})
-
-		scene := readFile(t, filepath.Join(root, "scenes", "aliased.tscn"))
-		requireContains(t, scene, `[node name="Aliased" type="Sprite2D"`)
 	})
 }
 

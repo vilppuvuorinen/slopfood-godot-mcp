@@ -48,13 +48,9 @@ type removeSceneNodeArgs struct {
 }
 
 func handleRemoveSceneNode(ctx context.Context, raw json.RawMessage) (any, error) {
-	raw, err := aliasParams(raw, parameterMappings)
-	if err != nil {
-		return nil, err
-	}
 	var args removeSceneNodeArgs
 	if len(raw) > 0 && string(raw) != "null" {
-		if err = json.Unmarshal(raw, &args); err != nil {
+		if err := json.Unmarshal(raw, &args); err != nil {
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}

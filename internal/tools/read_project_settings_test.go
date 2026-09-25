@@ -60,18 +60,6 @@ config/name="Demo"
 	}
 }
 
-func TestReadProjectSettingsSnakeCaseAlias(t *testing.T) {
-	fake := fakeGodotOps(t, ":")
-	t.Setenv(godot.PathEnv, fake)
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, readProjectSettings(), `{"project_path":`+jsonString(root)+`}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-}
-
 // TestReadProjectSettingsRejectsUnparseableProject confirms the Godot load
 // probe surfaces a project.godot the engine rejects instead of returning the
 // Go parser's view. The fake engine reports a fixed parse diagnostic.

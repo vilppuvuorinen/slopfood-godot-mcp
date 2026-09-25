@@ -52,10 +52,10 @@ func TestSaveSceneInPlace(t *testing.T) {
 	if !strings.HasPrefix(text, "Scene saved successfully to: scenes/main.tscn") {
 		t.Errorf("text = %q", text)
 	}
-	if !strings.Contains(text, `"scene_path":"scenes/main.tscn"`) {
+	if !strings.Contains(text, `"scenePath":"scenes/main.tscn"`) {
 		t.Errorf("text = %q, want it to contain the scene_path", text)
 	}
-	if strings.Contains(text, "new_path") {
+	if strings.Contains(text, "newPath") {
 		t.Errorf("text = %q, want it not to contain new_path", text)
 	}
 }
@@ -77,23 +77,8 @@ func TestSaveSceneVariant(t *testing.T) {
 	if !strings.HasPrefix(text, "Scene saved successfully to: variants/main_variant.tscn") {
 		t.Errorf("text = %q", text)
 	}
-	if !strings.Contains(text, `"new_path":"variants/main_variant.tscn"`) {
+	if !strings.Contains(text, `"newPath":"variants/main_variant.tscn"`) {
 		t.Errorf("text = %q, want it to contain the new_path", text)
-	}
-}
-
-func TestSaveSceneSnakeCaseAliases(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
-
-	result := callToolArgs(t, saveScene(), `{"project_path":`+jsonString(root)+`,"scene_path":"scenes/main.tscn","new_path":"variants/main_variant.tscn"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if !strings.HasPrefix(result.Content[0].Text, "Scene saved successfully to: variants/main_variant.tscn") {
-		t.Errorf("text = %q", result.Content[0].Text)
 	}
 }
 

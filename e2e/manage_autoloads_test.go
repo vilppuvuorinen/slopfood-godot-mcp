@@ -16,9 +16,9 @@ func TestManageAutoloadsSchema(t *testing.T) {
 }
 
 // TestManageAutoloadsTool drives the real manage_autoloads tool through a
-// list/add/remove round-trip, including the snake_case alias. Writes are read
-// back through Godot (via read_project_settings) to prove the engine accepts
-// the rewritten project.godot.
+// list/add/remove round-trip. Writes are read back through Godot (via
+// read_project_settings) to prove the engine accepts the rewritten
+// project.godot.
 func TestManageAutoloadsTool(t *testing.T) {
 	session := connect(t)
 
@@ -95,10 +95,10 @@ Music="*res://music.gd"
 Game="*res://game.gd"
 `)
 		requireToolText(t, session, "manage_autoloads", map[string]any{
-			"project_path": root,
-			"action":       "add",
-			"name":         "Music",
-			"path":         "res://music.gd",
+			"projectPath": root,
+			"action":      "add",
+			"name":        "Music",
+			"path":        "res://music.gd",
 		})
 		// Seed the autoload scripts so the read-back probe has clean stderr.
 		writeE2EFile(t, filepath.Join(root, "game.gd"), "extends Node\n")
@@ -110,16 +110,6 @@ Game="*res://game.gd"
 		if got := sections["autoload"]["Music"]; got != "*res://music.gd" {
 			t.Errorf("autoload Music = %q", got)
 		}
-	})
-
-	t.Run("snake_case alias", func(t *testing.T) {
-		root := t.TempDir()
-		seedProject(t, root)
-
-		requireToolText(t, session, "manage_autoloads", map[string]any{
-			"project_path": root,
-			"action":       "list",
-		})
 	})
 }
 

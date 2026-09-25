@@ -71,10 +71,6 @@ type createCSharpScriptArgs struct {
 }
 
 func handleCreateCSharpScript(ctx context.Context, raw json.RawMessage) (any, error) {
-	raw, err := aliasParams(raw, parameterMappings)
-	if err != nil {
-		return nil, err
-	}
 	var args createCSharpScriptArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

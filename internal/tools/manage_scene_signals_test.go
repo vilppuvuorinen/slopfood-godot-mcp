@@ -47,24 +47,24 @@ func TestManageSceneSignalsSuccess(t *testing.T) {
 		{
 			name:    "list",
 			args:    `{"projectPath":` + jsonString(root) + `,"scenePath":"scenes/main.tscn","action":"list"}`,
-			present: []string{`"action":"list"`, `"scene_path":"scenes/main.tscn"`},
-			omitted: []string{"signal_name", "source_path", "target_path", "method"},
+			present: []string{`"action":"list"`, `"scenePath":"scenes/main.tscn"`},
+			omitted: []string{"signalName", "sourcePath", "targetPath", "method"},
 		},
 		{
 			name: "add",
 			args: `{"projectPath":` + jsonString(root) + `,"scenePath":"scenes/main.tscn","action":"add","signalName":"pressed","sourcePath":"root","targetPath":"root","method":"on_pressed"}`,
 			present: []string{
-				`"action":"add"`, `"scene_path":"scenes/main.tscn"`,
-				`"signal_name":"pressed"`, `"source_path":"root"`,
-				`"target_path":"root"`, `"method":"on_pressed"`,
+				`"action":"add"`, `"scenePath":"scenes/main.tscn"`,
+				`"signalName":"pressed"`, `"sourcePath":"root"`,
+				`"targetPath":"root"`, `"method":"on_pressed"`,
 			},
 		},
 		{
 			name: "remove",
 			args: `{"projectPath":` + jsonString(root) + `,"scenePath":"scenes/main.tscn","action":"remove","signalName":"released","sourcePath":"root","targetPath":"root/Player"}`,
 			present: []string{
-				`"action":"remove"`, `"signal_name":"released"`,
-				`"source_path":"root"`, `"target_path":"root/Player"`,
+				`"action":"remove"`, `"signalName":"released"`,
+				`"sourcePath":"root"`, `"targetPath":"root/Player"`,
 			},
 			omitted: []string{"method"},
 		},

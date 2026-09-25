@@ -104,18 +104,6 @@ exit 3`))
 	}
 }
 
-func TestValidateScriptAlias(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, ``))
-	root := t.TempDir()
-	makeProject(t, root)
-	seedFile(t, filepath.Join(root, "player.gd"), "extends Node\n")
-
-	result := callToolArgs(t, validateScript(), `{"project_path":`+jsonString(root)+`,"script_path":"player.gd"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-}
-
 func TestValidateScriptValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

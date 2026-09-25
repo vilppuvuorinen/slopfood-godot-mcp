@@ -52,7 +52,7 @@ func TestAddNodeSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "Node 'Player' of type 'Sprite2D' added successfully to 'scenes/main.tscn'.") {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{`"node_type":"Sprite2D"`, `"node_name":"Player"`, `"parent_node_path":"root"`, `"properties":{"position":1}`} {
+	for _, want := range []string{`"nodeType":"Sprite2D"`, `"nodeName":"Player"`, `"parentNodePath":"root"`, `"properties":{"position":1}`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
@@ -70,7 +70,7 @@ func TestAddNodeOmitsOptionalParams(t *testing.T) {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
 	text := result.Content[0].Text
-	for _, unwanted := range []string{"parent_node_path", "properties"} {
+	for _, unwanted := range []string{"parentNodePath", "properties"} {
 		if strings.Contains(text, unwanted) {
 			t.Errorf("text = %q, want it to omit %q", text, unwanted)
 		}

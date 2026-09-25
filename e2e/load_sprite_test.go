@@ -37,8 +37,7 @@ func seedSpriteScene(t *testing.T, session *mcp.ClientSession, scenePath string)
 	return root
 }
 
-// TestLoadSpriteTool drives the real load_sprite tool against Godot, including
-// the snake_case argument aliases.
+// TestLoadSpriteTool drives the real load_sprite tool against Godot.
 func TestLoadSpriteTool(t *testing.T) {
 	session := connect(t)
 	requireGodot(t, session)
@@ -56,18 +55,6 @@ func TestLoadSpriteTool(t *testing.T) {
 
 		scene := readFile(t, filepath.Join(root, "scenes", "main.tscn"))
 		requireContains(t, scene, `texture = ExtResource(`)
-	})
-
-	t.Run("snake_case aliases", func(t *testing.T) {
-		root := seedSpriteScene(t, session, "scenes/aliased.tscn")
-
-		text := requireToolText(t, session, "load_sprite", map[string]any{
-			"project_path": root,
-			"scene_path":   "scenes/aliased.tscn",
-			"node_path":    "root/Sprite",
-			"texture_path": "icon.tres",
-		})
-		requirePrefix(t, text, "Sprite loaded successfully with texture: icon.tres")
 	})
 }
 

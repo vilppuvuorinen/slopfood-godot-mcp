@@ -49,15 +49,6 @@ Game="*res://game.gd"
 		}
 	})
 
-	t.Run("snake_case aliases", func(t *testing.T) {
-		root := t.TempDir()
-		seedProject(t, root)
-
-		requireToolText(t, session, "read_project_settings", map[string]any{
-			"project_path": root,
-		})
-	})
-
 	t.Run("includes settings equal to the engine default", func(t *testing.T) {
 		root := t.TempDir()
 		// config/name defaults to "" in the engine, so a file that stores it

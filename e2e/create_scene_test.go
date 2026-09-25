@@ -14,7 +14,7 @@ func TestCreateSceneSchema(t *testing.T) {
 }
 
 // TestCreateSceneTool drives the real create_scene tool against Godot,
-// exercising the default root node type, custom types, and arg aliasing.
+// exercising the default and custom root node types.
 func TestCreateSceneTool(t *testing.T) {
 	session := connect(t)
 	requireGodot(t, session)
@@ -25,14 +25,14 @@ func TestCreateSceneTool(t *testing.T) {
 		requireContains(t, scene, `type="Node2D"`)
 	})
 
-	t.Run("custom root and snake_case aliases", func(t *testing.T) {
+	t.Run("custom root", func(t *testing.T) {
 		root := t.TempDir()
 		seedProject(t, root)
 
 		requireToolText(t, session, "create_scene", map[string]any{
-			"project_path":   root,
-			"scene_path":     "level.tscn",
-			"root_node_type": "Node3D",
+			"projectPath":  root,
+			"scenePath":    "level.tscn",
+			"rootNodeType": "Node3D",
 		})
 
 		scene := readFile(t, filepath.Join(root, "level.tscn"))

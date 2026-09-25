@@ -17,11 +17,11 @@ func TestCreateProjectSchema(t *testing.T) {
 }
 
 // TestCreateProjectTool ports the reference's handleCreateProject behaviors:
-// success, snake_case aliasing, existing-project rejection, and validation.
+// success, existing-project rejection, and validation.
 func TestCreateProjectTool(t *testing.T) {
 	session := connect(t)
 
-	t.Run("camelCase", func(t *testing.T) {
+	t.Run("creates a project", func(t *testing.T) {
 		dir := filepath.Join(t.TempDir(), "game")
 		text := requireToolText(t, session, "create_project", map[string]any{
 			"projectPath": dir,
@@ -41,16 +41,6 @@ func TestCreateProjectTool(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(dir, "My_Game.csproj")); !os.IsNotExist(err) {
 			t.Errorf("plain project unexpectedly wrote a .csproj (err=%v)", err)
 		}
-	})
-
-	t.Run("snake_case aliases", func(t *testing.T) {
-		dir := filepath.Join(t.TempDir(), "aliased")
-		requireToolText(t, session, "create_project", map[string]any{
-			"project_path": dir,
-			"project_name": "Aliased",
-		})
-		content := readFile(t, filepath.Join(dir, "project.godot"))
-		requireContains(t, content, `config/name="Aliased"`)
 	})
 
 	t.Run("existing project rejected", func(t *testing.T) {

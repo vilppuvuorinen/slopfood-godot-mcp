@@ -24,12 +24,6 @@ const (
 	defaultDotnetTargetFramework = "net8.0"
 )
 
-// createProjectAliases lets callers use the snake_case spellings too.
-var createProjectAliases = map[string]string{
-	"project_path": "projectPath",
-	"project_name": "projectName",
-}
-
 func createProject() mcp.Tool {
 	return mcp.Tool{
 		Name:        "create_project",
@@ -70,10 +64,6 @@ type createProjectArgs struct {
 }
 
 func handleCreateProject(ctx context.Context, raw json.RawMessage) (any, error) {
-	raw, err := aliasParams(raw, createProjectAliases)
-	if err != nil {
-		return nil, err
-	}
 	var args createProjectArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

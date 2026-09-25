@@ -77,21 +77,6 @@ func TestCreateCsharpScriptTool(t *testing.T) {
 			t.Errorf("content = %q", got)
 		}
 	})
-
-	t.Run("snake_case aliases", func(t *testing.T) {
-		root := t.TempDir()
-		seedDotnetProject(t, root)
-
-		requireToolText(t, session, "create_csharp_script", map[string]any{
-			"project_path":   root,
-			"script_path":    "Player.cs",
-			"class_name":     "Player",
-			"base_class":     "Node2D",
-			"namespace_name": "Game",
-		})
-		content := readFile(t, filepath.Join(root, "Player.cs"))
-		requireContains(t, content, "namespace Game;", "public partial class Player : Node2D")
-	})
 }
 
 func TestCreateCsharpScriptErrors(t *testing.T) {

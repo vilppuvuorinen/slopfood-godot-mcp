@@ -199,19 +199,6 @@ func TestSetMainSceneStructuredContent(t *testing.T) {
 	}
 }
 
-func TestSetMainSceneSnakeCaseAliases(t *testing.T) {
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, setMainScene(), `{"project_path":`+jsonString(root)+`,"scene_path":"scenes/main.tscn"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if result.Content[0].Text != "Main scene set to res://scenes/main.tscn" {
-		t.Errorf("text = %q", result.Content[0].Text)
-	}
-}
-
 func TestSetMainSceneErrors(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

@@ -122,21 +122,6 @@ func TestCreateCsharpScriptCustomSource(t *testing.T) {
 	}
 }
 
-func TestCreateCsharpScriptAliases(t *testing.T) {
-	root := dotnetProject(t)
-	result := callToolArgs(t, createCSharpScript(), `{"project_path":`+jsonString(root)+`,"script_path":"Player.cs","class_name":"Player","base_class":"Node2D","namespace_name":"Game"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	content := readScript(t, filepath.Join(root, "Player.cs"))
-	if !strings.Contains(content, "namespace Game;") {
-		t.Errorf("missing namespace in:\n%s", content)
-	}
-	if !strings.Contains(content, "public partial class Player : Node2D") {
-		t.Errorf("missing class in:\n%s", content)
-	}
-}
-
 func TestCreateCsharpScriptErrors(t *testing.T) {
 	project := t.TempDir()
 	makeProject(t, project)

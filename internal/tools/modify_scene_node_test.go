@@ -53,7 +53,7 @@ func TestModifySceneNodeSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "modify_node succeeded.") {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{`"scene_path":"scenes/main.tscn"`, `"node_path":"root/Player"`, `"properties":{"visible":false}`} {
+	for _, want := range []string{`"scenePath":"scenes/main.tscn"`, `"nodePath":"root/Player"`, `"properties":{"visible":false}`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
@@ -91,21 +91,6 @@ func TestModifySceneNodeLeavesDictionaryValuedPropertiesUntouched(t *testing.T) 
 	}
 	if strings.Contains(text, `"my_key"`) {
 		t.Errorf("text = %q, dictionary key was rewritten", text)
-	}
-}
-
-func TestModifySceneNodeAliases(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
-
-	result := callToolArgs(t, modifySceneNode(), `{"project_path":`+jsonString(root)+`,"scene_path":"scenes/main.tscn","node_path":"root/Player","properties":{"visible":true}}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if !strings.Contains(result.Content[0].Text, `"scene_path":"scenes/main.tscn"`) {
-		t.Errorf("text = %q, want converted snake_case params", result.Content[0].Text)
 	}
 }
 

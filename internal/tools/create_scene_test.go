@@ -47,7 +47,7 @@ func TestCreateSceneSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "Scene created successfully at: scenes/main.tscn") {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{`"scene_path":"scenes/main.tscn"`, `"root_node_type":"Node2D"`} {
+	for _, want := range []string{`"scenePath":"scenes/main.tscn"`, `"rootNodeType":"Node2D"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
@@ -63,21 +63,7 @@ func TestCreateSceneCustomRootNodeType(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	if !strings.Contains(result.Content[0].Text, `"root_node_type":"Node3D"`) {
-		t.Errorf("text = %q", result.Content[0].Text)
-	}
-}
-
-func TestCreateSceneSnakeCaseAliases(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, createScene(), `{"project_path":`+jsonString(root)+`,"scene_path":"main.tscn","root_node_type":"Node3D"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if !strings.Contains(result.Content[0].Text, `"root_node_type":"Node3D"`) {
+	if !strings.Contains(result.Content[0].Text, `"rootNodeType":"Node3D"`) {
 		t.Errorf("text = %q", result.Content[0].Text)
 	}
 }

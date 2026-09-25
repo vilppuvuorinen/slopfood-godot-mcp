@@ -108,25 +108,6 @@ func TestGetProjectInfoNameDecodesEscapes(t *testing.T) {
 	}
 }
 
-func TestGetProjectInfoSnakeCaseAlias(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodot(t))
-
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, getProjectInfo(), `{"project_path":`+jsonString(root)+`}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	var info projectInfo
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &info); err != nil {
-		t.Fatalf("unmarshal: %v", err)
-	}
-	if info.Path != root {
-		t.Errorf("path = %q, want %q", info.Path, root)
-	}
-}
-
 func TestGetProjectInfoNameFallsBackToBasename(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodot(t))
 

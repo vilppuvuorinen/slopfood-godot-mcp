@@ -383,19 +383,6 @@ func TestManageInputMapErrors(t *testing.T) {
 	}
 }
 
-func TestManageInputMapSnakeCaseAlias(t *testing.T) {
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, manageInputMap(), `{"project_path":`+jsonString(root)+`,"action":"add","action_name":"jump"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if got := result.Content[0].Text; got != `Input action "jump" added.` {
-		t.Errorf("text = %q", got)
-	}
-}
-
 // TestKeyNameToScancodeGodot4 pins the Godot 4 Key values. Godot 3 used a
 // different KEY_SPECIAL bit (1<<24), so special keys must not regress to those
 // values.

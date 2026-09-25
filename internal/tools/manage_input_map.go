@@ -131,13 +131,9 @@ func mergeInputAction(action godotconfig.Dictionary, newEvent string, scancode i
 }
 
 func handleManageInputMap(_ context.Context, raw json.RawMessage) (any, error) {
-	raw, err := aliasParams(raw, settingsAliases)
-	if err != nil {
-		return nil, err
-	}
 	var args manageInputMapArgs
 	if len(raw) > 0 && string(raw) != "null" {
-		if err = json.Unmarshal(raw, &args); err != nil {
+		if err := json.Unmarshal(raw, &args); err != nil {
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}

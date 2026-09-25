@@ -16,7 +16,7 @@ func TestSaveSceneSchema(t *testing.T) {
 }
 
 // TestSaveSceneTool drives the real save_scene tool against Godot, including
-// the optional variant path and the snake_case argument aliases.
+// the optional variant path.
 func TestSaveSceneTool(t *testing.T) {
 	session := connect(t)
 	requireGodot(t, session)
@@ -40,15 +40,6 @@ func TestSaveSceneTool(t *testing.T) {
 		if _, err := os.Stat(filepath.Join(root, "variants", "main_variant.tscn")); err != nil {
 			t.Errorf("stat saved variant: %v", err)
 		}
-	})
-
-	t.Run("snake_case aliases", func(t *testing.T) {
-		text := requireToolText(t, session, "save_scene", map[string]any{
-			"project_path": root,
-			"scene_path":   "scenes/main.tscn",
-			"new_path":     "variants/aliased_variant.tscn",
-		})
-		requirePrefix(t, text, "Scene saved successfully to: variants/aliased_variant.tscn")
 	})
 }
 

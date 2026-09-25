@@ -52,7 +52,7 @@ func TestAttachScriptSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "attach_script succeeded.") {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{`"scene_path":"scenes/main.tscn"`, `"node_path":"root/Player"`, `"script_path":"scripts/player.gd"`} {
+	for _, want := range []string{`"scenePath":"scenes/main.tscn"`, `"nodePath":"root/Player"`, `"scriptPath":"scripts/player.gd"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}

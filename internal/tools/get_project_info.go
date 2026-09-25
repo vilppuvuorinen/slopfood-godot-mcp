@@ -17,11 +17,6 @@ import (
 // server's 10 second exec timeout.
 const projectInfoTimeout = 10 * time.Second
 
-// projectInfoAliases lets callers use the snake_case spellings too.
-var projectInfoAliases = map[string]string{
-	"project_path": "projectPath",
-}
-
 func getProjectInfo() mcp.Tool {
 	return mcp.Tool{
 		Name:        "get_project_info",
@@ -75,13 +70,9 @@ type projectInfo struct {
 }
 
 func handleGetProjectInfo(ctx context.Context, raw json.RawMessage) (any, error) {
-	raw, err := aliasParams(raw, projectInfoAliases)
-	if err != nil {
-		return nil, err
-	}
 	var args getProjectInfoArgs
 	if len(raw) > 0 && string(raw) != "null" {
-		if err = json.Unmarshal(raw, &args); err != nil {
+		if err := json.Unmarshal(raw, &args); err != nil {
 			return nil, fmt.Errorf("invalid arguments: %w", err)
 		}
 	}

@@ -42,20 +42,20 @@ func TestManageSceneStructureSuccess(t *testing.T) {
 		{
 			name:    "rename",
 			args:    `{"projectPath":%q,"scenePath":"scenes/main.tscn","action":"rename","nodePath":"root/Player","newName":"Hero"}`,
-			want:    []string{`"action":"rename"`, `"node_path":"root/Player"`, `"new_name":"Hero"`},
-			notWant: []string{`"new_parent_path"`},
+			want:    []string{`"action":"rename"`, `"nodePath":"root/Player"`, `"newName":"Hero"`},
+			notWant: []string{`"newParentPath"`},
 		},
 		{
 			name:    "duplicate",
 			args:    `{"projectPath":%q,"scenePath":"scenes/main.tscn","action":"duplicate","nodePath":"root/Player"}`,
-			want:    []string{`"action":"duplicate"`, `"node_path":"root/Player"`},
-			notWant: []string{`"new_name"`, `"new_parent_path"`},
+			want:    []string{`"action":"duplicate"`, `"nodePath":"root/Player"`},
+			notWant: []string{`"newName"`, `"newParentPath"`},
 		},
 		{
 			name:    "move",
 			args:    `{"projectPath":%q,"scenePath":"scenes/main.tscn","action":"move","nodePath":"root/Player","newParentPath":"root/World"}`,
-			want:    []string{`"action":"move"`, `"node_path":"root/Player"`, `"new_parent_path":"root/World"`},
-			notWant: []string{`"new_name"`},
+			want:    []string{`"action":"move"`, `"nodePath":"root/Player"`, `"newParentPath":"root/World"`},
+			notWant: []string{`"newName"`},
 		},
 	}
 	for _, tt := range tests {
@@ -112,21 +112,6 @@ func TestManageSceneStructureValidation(t *testing.T) {
 				t.Errorf("message = %q, want prefix %q", result.Content[0].Text, tt.want)
 			}
 		})
-	}
-}
-
-func TestManageSceneStructureSnakeCaseAliases(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
-
-	result := callToolArgs(t, manageSceneStructure(), `{"project_path":`+jsonString(root)+`,"scene_path":"main.tscn","action":"rename","node_path":"root","new_parent_path":"root/World"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if !strings.Contains(result.Content[0].Text, `"new_parent_path":"root/World"`) {
-		t.Errorf("text = %q, want converted snake_case params", result.Content[0].Text)
 	}
 }
 

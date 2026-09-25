@@ -124,24 +124,6 @@ func TestManageShaderReadMissing(t *testing.T) {
 	}
 }
 
-func TestManageShaderSnakeCaseAliases(t *testing.T) {
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, manageShader(),
-		`{"project_path":`+jsonString(root)+`,"shader_path":"aliased.gdshader","action":"create","shader_type":"sky"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	data, err := os.ReadFile(filepath.Join(root, "aliased.gdshader"))
-	if err != nil {
-		t.Fatalf("read shader: %v", err)
-	}
-	if !strings.HasPrefix(string(data), "shader_type sky;") {
-		t.Errorf("content = %q", data)
-	}
-}
-
 func TestManageShaderErrors(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

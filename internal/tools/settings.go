@@ -11,18 +11,6 @@ import (
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
-// settingsAliases lets callers of the project-settings tools use the
-// snake_case spellings too, mirroring the reference server's
-// normalizeParameters over its PARAMETER_MAPPINGS table.
-var settingsAliases = map[string]string{
-	"project_path":     "projectPath",
-	"scene_path":       "scenePath",
-	"action_name":      "actionName",
-	"layer_type":       "layerType",
-	"plugin_name":      "pluginName",
-	"translation_path": "translationPath",
-}
-
 // configSchema identifies the project.godot ConfigFile format, keyed by the
 // config_version stored in the file. This server implements the Godot 4.x
 // schema only; other versions are rejected rather than written with

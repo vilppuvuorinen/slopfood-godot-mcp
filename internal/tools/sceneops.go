@@ -39,14 +39,13 @@ func markerJSON(stdout string) (string, bool) {
 	return buf.String(), true
 }
 
-// runOperation executes an operations-script operation against a project,
-// converting camelCase parameters to snake_case first.
+// runOperation executes an operations-script operation against a project.
 func runOperation(ctx context.Context, projectPath, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error) {
 	scriptPath, err := godotops.OperationsScript()
 	if err != nil {
 		return "", "", 0, fmt.Errorf("materialize operations script: %w", err)
 	}
-	stdout, stderr, exitCode, err = godot.RunOperation(ctx, godot.Path(), projectPath, scriptPath, operation, toSnakeCase(params))
+	stdout, stderr, exitCode, err = godot.RunOperation(ctx, godot.Path(), projectPath, scriptPath, operation, params)
 	if err != nil {
 		return stdout, stderr, exitCode, fmt.Errorf("run godot operation: %w", err)
 	}

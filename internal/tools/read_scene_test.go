@@ -94,21 +94,6 @@ func TestReadScenePreservesNestedPropertyValues(t *testing.T) {
 	}
 }
 
-func TestReadSceneSnakeCaseAliases(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
-
-	result := callToolArgs(t, readScene(), `{"project_path":`+jsonString(root)+`,"scene_path":"main.tscn"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if !strings.Contains(result.Content[0].Text, `"scene_path":"main.tscn"`) {
-		t.Errorf("text = %q, want converted snake_case params", result.Content[0].Text)
-	}
-}
-
 func TestReadSceneRawWhenNoMarkers(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "plain output"`))
 	root := t.TempDir()

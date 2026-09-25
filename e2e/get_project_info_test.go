@@ -47,14 +47,14 @@ func TestGetProjectInfoSchema(t *testing.T) {
 	schema.requireStringProps(t, "projectPath")
 }
 
-// TestGetProjectInfoTool exercises name extraction, structure counting, and
-// snake_case aliasing through the MCP client. It skips when Godot is not
-// installed, since the reference probes `godot --version`.
+// TestGetProjectInfoTool exercises name extraction and structure counting
+// through the MCP client. It skips when Godot is not installed, since the
+// reference probes `godot --version`.
 func TestGetProjectInfoTool(t *testing.T) {
 	session := connect(t)
 	requireGodot(t, session)
 
-	t.Run("camelCase", func(t *testing.T) {
+	t.Run("reports project info", func(t *testing.T) {
 		root := t.TempDir()
 		seedInfoProject(t, root)
 
@@ -71,16 +71,6 @@ func TestGetProjectInfoTool(t *testing.T) {
 		if info.Structure.Scenes != 1 || info.Structure.Scripts != 1 ||
 			info.Structure.Assets != 1 || info.Structure.Other != 2 {
 			t.Errorf("structure = %+v", info.Structure)
-		}
-	})
-
-	t.Run("snake_case alias", func(t *testing.T) {
-		root := t.TempDir()
-		seedInfoProject(t, root)
-
-		info := decodeProjectInfo(t, requireToolText(t, session, "get_project_info", map[string]any{"project_path": root}))
-		if info.Path != root {
-			t.Errorf("path = %q, want %q", info.Path, root)
 		}
 	})
 

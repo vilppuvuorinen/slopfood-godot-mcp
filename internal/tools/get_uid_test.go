@@ -82,22 +82,6 @@ func TestGetUIDVersionGate(t *testing.T) {
 	}
 }
 
-func TestGetUIDSnakeCaseAliases(t *testing.T) {
-	fake := fakeGodotOps(t, fakeUIDVersion+"\nprintf '<<<GO_DOT_MCP_JSON_START>>>\n{\"file\":\"res://player.gd\",\"uid\":\"uid://abc\",\"exists\":true}\n<<<GO_DOT_MCP_JSON_END>>>\n'")
-	t.Setenv(godot.PathEnv, fake)
-	root := t.TempDir()
-	makeProject(t, root)
-	seedFile(t, filepath.Join(root, "player.gd"), "script")
-
-	result := callToolArgs(t, getUID(), `{"project_path":`+jsonString(root)+`,"file_path":"player.gd"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if !strings.Contains(result.Content[0].Text, `"uid": "uid://abc"`) {
-		t.Errorf("text = %q, want converted aliases and pretty payload", result.Content[0].Text)
-	}
-}
-
 func TestGetUIDValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
