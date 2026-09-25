@@ -150,6 +150,31 @@ func TestServeStructuredContent(t *testing.T) {
 	}
 }
 
+// TestErrorResultStructuredContent asserts an error result carries the
+// success/message envelope as structured content alongside isError, so a client
+// that eagerly validates structuredContent against a mutation outputSchema sees
+// the required fields rather than no body. The text block stays the primary
+// message, with any solutions appended after it.
+func TestErrorResultStructuredContent(t *testing.T) {
+	result := ErrorResult("boom", "try again")
+	if !result.IsError {
+		t.Fatal("IsError = false")
+	}
+	if len(result.Content) != 2 || result.Content[0].Text != "boom" {
+		t.Fatalf("content = %+v", result.Content)
+	}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+	}
+	if structured["success"] != false {
+		t.Errorf("success = %v, want false", structured["success"])
+	}
+	if structured["message"] != "boom" {
+		t.Errorf("message = %v, want boom", structured["message"])
+	}
+}
+
 func TestServeToolsCall(t *testing.T) {
 	in := strings.NewReader(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"echo","arguments":{"message":"hi"}}}` + "\n")
 	var out bytes.Buffer

@@ -61,7 +61,10 @@ on list and discovery results. Legacy clients negotiate with `initialize`,
 which never offers a stateless revision, and are served the newest legacy
 revision, `2025-11-25`. Every tool advertises a human-readable title, behavior
 annotations, and an `outputSchema`, and returns structured results through
-`structuredContent` alongside its text.
+`structuredContent` alongside its text. Error results are marked `isError` and
+also carry `structuredContent` with `{"success": false, "message": ...}`: an
+error is spec-permissible without a structured body, but the envelope keeps the
+declared mutation `outputSchema` satisfied for clients that validate it eagerly.
 
 ## Security
 

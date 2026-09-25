@@ -64,6 +64,32 @@ func TestStatusOutputSchemaRequiresEnvelope(t *testing.T) {
 	}
 }
 
+// TestMutationErrorCarriesStatusEnvelope verifies a failing mutation returns the
+// success/message envelope its outputSchema requires, so a client validating
+// structuredContent finds the required fields instead of an absent body. Errors
+// are spec-permissible without structuredContent, but this keeps the declared
+// schema true.
+func TestMutationErrorCarriesStatusEnvelope(t *testing.T) {
+	tool := removeSceneNode()
+	result := callToolArgs(t, tool, "", "{}")
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if !hasRequired(tool.OutputSchema, "success", "message") {
+		t.Fatalf("mutation schema does not require the envelope: %v", tool.OutputSchema)
+	}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+	}
+	if structured["success"] != false {
+		t.Errorf("success = %v, want false", structured["success"])
+	}
+	if message, _ := structured["message"].(string); message == "" {
+		t.Errorf("message = %v, want non-empty", structured["message"])
+	}
+}
+
 // TestActionOutputSchemaSeparatesShapes verifies a mixed action tool advertises
 // the status envelope for mutations and the bare payload for reads via anyOf,
 // so the read shape never promises success or message.

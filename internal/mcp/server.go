@@ -162,7 +162,12 @@ func ResourceLinkContent(uri, name string) Content {
 }
 
 // ErrorResult builds an error result with an optional "Possible solutions"
-// block, mirroring the Coding-Solo reference response shape.
+// block, mirroring the Coding-Solo reference response shape. structuredContent
+// carries the same success/message envelope a successful mutation result uses,
+// with success false, so a client that eagerly validates structuredContent
+// against a mutation tool's outputSchema finds the required fields instead of
+// no body at all. The envelope is not required by the spec: an error may be
+// signalled by isError alone, but asserting it keeps the declared schema true.
 func ErrorResult(message string, possibleSolutions ...string) ToolResult {
 	content := []Content{{Type: "text", Text: message}}
 	if len(possibleSolutions) > 0 {
@@ -171,7 +176,11 @@ func ErrorResult(message string, possibleSolutions ...string) ToolResult {
 		b.WriteString(strings.Join(possibleSolutions, "\n- "))
 		content = append(content, Content{Type: "text", Text: b.String()})
 	}
-	return ToolResult{Content: content, IsError: true}
+	return ToolResult{
+		Content:           content,
+		StructuredContent: map[string]any{"success": false, "message": message},
+		IsError:           true,
+	}
 }
 
 type request struct {
