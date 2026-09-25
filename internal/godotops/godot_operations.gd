@@ -1209,7 +1209,11 @@ func _decode_typed(value):
         "Basis":
             return Basis(_vector_field(value, "x", TYPE_VECTOR3), _vector_field(value, "y", TYPE_VECTOR3), _vector_field(value, "z", TYPE_VECTOR3))
         "Transform3D":
-            return Transform3D(_typed_field(value, "basis", "Basis"), _vector_field(value, "origin", TYPE_VECTOR3))
+            var basis = _typed_field(value, "basis", "Basis")
+            var origin = _vector_field(value, "origin", TYPE_VECTOR3)
+            if _decode_error != "":
+                return null
+            return Transform3D(basis, origin)
         "AABB":
             return AABB(_vector_field(value, "position", TYPE_VECTOR3), _vector_field(value, "size", TYPE_VECTOR3))
         "Plane":
@@ -1255,17 +1259,40 @@ func _typed_field(value, field, tag):
         return _decode_typed(inner)
     return _decode_fail("field \"" + field + "\" must be a {\"$type\": \"" + tag + "\"} value")
 
-# Decode a nested Vector field, requiring and converting the given type.
+# Decode a nested Vector field, requiring and converting the given type. On
+# failure it reports and returns that type's zero vector, so a composite
+# constructor is never handed null (which the engine logs as a separate
+# SCRIPT ERROR before the caller's decode error).
 func _vector_field(value, field, type_id):
     var inner = value.get(field, null)
     if inner is Dictionary and inner.has("$type"):
         var decoded = _decode_typed(inner)
         if _decode_error != "":
-            return null
+            return _zero_vector(type_id)
         if typeof(decoded) == type_id:
             return decoded
-        return _decode_fail("field \"" + field + "\" has the wrong vector type")
-    return _decode_fail("field \"" + field + "\" must be a tagged vector value")
+        _decode_error = "field \"" + field + "\" has the wrong vector type"
+        return _zero_vector(type_id)
+    _decode_error = "field \"" + field + "\" must be a tagged vector value"
+    return _zero_vector(type_id)
+
+# The zero value for a Vector Variant type id, returned by _vector_field when
+# a field cannot be decoded.
+func _zero_vector(type_id):
+    match type_id:
+        TYPE_VECTOR2:
+            return Vector2.ZERO
+        TYPE_VECTOR2I:
+            return Vector2i.ZERO
+        TYPE_VECTOR3:
+            return Vector3.ZERO
+        TYPE_VECTOR3I:
+            return Vector3i.ZERO
+        TYPE_VECTOR4:
+            return Vector4.ZERO
+        TYPE_VECTOR4I:
+            return Vector4i.ZERO
+    return null
 
 # Decode an object-typed value. A bare res:// or user:// string is sugar for a
 # Resource reference; a tagged Resource or GodotText also decodes.
