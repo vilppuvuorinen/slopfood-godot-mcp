@@ -52,8 +52,9 @@ func readSceneOutputSchema() map[string]any {
 		"properties": properties,
 		// A readable scene yields a node tree, while a scene the engine
 		// cannot instantiate yields its raw text so the caller can still
-		// inspect it. Advertise both so neither shape is misreported.
-		"anyOf": []any{
+		// inspect it. The two shapes are mutually exclusive, so oneOf states
+		// that a payload carrying both is invalid rather than valid twice.
+		"oneOf": []any{
 			map[string]any{"required": []string{"name", "type"}},
 			map[string]any{"required": []string{"error", "raw"}},
 		},
