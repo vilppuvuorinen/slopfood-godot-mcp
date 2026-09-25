@@ -13,6 +13,7 @@ type sceneNode struct {
 	Name       string         `json:"name"`
 	Type       string         `json:"type"`
 	Script     string         `json:"script"`
+	Groups     []string       `json:"groups"`
 	Properties map[string]any `json:"properties"`
 	Children   []sceneNode    `json:"children"`
 }
@@ -199,6 +200,39 @@ func TestReadSceneNestedProperties(t *testing.T) {
 	position, ok := tree.Properties["position"].(map[string]any)
 	if !ok || position["$type"] != "Vector2" {
 		t.Errorf("position = %#v, want a tagged Vector2 object", tree.Properties["position"])
+	}
+}
+
+// TestReadSceneGroups exercises the node-group branch of the scene walker. A
+// hand-written .tscn is used because no tool exposes group membership, and the
+// engine persists groups even when the scene is instantiated outside a tree.
+func TestReadSceneGroups(t *testing.T) {
+	root := newProject(t)
+	session := connectProject(t, root)
+	requireGodot(t, session)
+
+	writeE2EFile(t, filepath.Join(root, "scenes", "groups.tscn"), `[gd_scene format=3]
+
+[node name="root" type="Node2D" groups=["enemies"]]
+
+[node name="Child" type="Node2D" parent="." groups=["pickups", "enemies"]]
+`)
+
+	text := requireToolText(t, session, "read_scene", map[string]any{
+		"scenePath": "scenes/groups.tscn",
+	})
+	var tree sceneNode
+	if err := json.Unmarshal([]byte(text), &tree); err != nil {
+		t.Fatalf("unmarshal %q: %v", text, err)
+	}
+	if !reflect.DeepEqual(tree.Groups, []string{"enemies"}) {
+		t.Errorf("root groups = %v, want [enemies]", tree.Groups)
+	}
+	if len(tree.Children) != 1 {
+		t.Fatalf("children = %+v", tree.Children)
+	}
+	if got := tree.Children[0].Groups; !reflect.DeepEqual(got, []string{"pickups", "enemies"}) {
+		t.Errorf("child groups = %v, want [pickups enemies]", got)
 	}
 }
 

@@ -10,6 +10,40 @@ import (
 
 const boxMeshResource = "[gd_resource type=\"BoxMesh\" format=3]\n\n[resource]\nsize = Vector3(1, 1, 1)\n"
 
+// The collision/preview fixtures: a BoxMesh whose material carries an albedo
+// texture, plus a BoxShape3D for a CollisionShape3D child. A plain BoxMesh
+// reaches neither branch of export_mesh_library.
+const (
+	gradientTextureResource = `[gd_resource type="GradientTexture2D" format=3]
+
+[resource]
+width = 4
+height = 4
+`
+
+	texturedMaterialResource = `[gd_resource type="StandardMaterial3D" format=3]
+
+[ext_resource type="Texture2D" path="res://gradient.tres" id="1_tex"]
+
+[resource]
+albedo_texture = ExtResource("1_tex")
+`
+
+	texturedBoxMeshResource = `[gd_resource type="BoxMesh" format=3]
+
+[ext_resource type="Material" path="res://mat.tres" id="1_mat"]
+
+[resource]
+material = ExtResource("1_mat")
+`
+
+	boxShapeResource = `[gd_resource type="BoxShape3D" format=3]
+
+[resource]
+size = Vector3(1, 1, 1)
+`
+)
+
 // TestExportMeshLibrarySchema ports the reference's tool-definition
 // expectations for export_mesh_library over the real stdio surface.
 func TestExportMeshLibrarySchema(t *testing.T) {
@@ -87,6 +121,48 @@ func TestExportMeshLibraryTool(t *testing.T) {
 			t.Errorf("stat exported mesh library: %v", err)
 		}
 	})
+}
+
+// TestExportMeshLibraryCollisionAndPreview covers the two MeshLibrary features
+// a material-less mesh does not reach: a CollisionShape3D child becomes an item
+// shape, and a mesh whose material carries an albedo texture becomes the item
+// preview. It exports to a .tres so the serialized library can be checked as
+// text instead of through a resource reader that does not exist.
+func TestExportMeshLibraryCollisionAndPreview(t *testing.T) {
+	root, session := seedScene(t, "scenes/main.tscn", "Node3D")
+	writeE2EFile(t, filepath.Join(root, "gradient.tres"), gradientTextureResource)
+	writeE2EFile(t, filepath.Join(root, "mat.tres"), texturedMaterialResource)
+	writeE2EFile(t, filepath.Join(root, "box.tres"), texturedBoxMeshResource)
+	writeE2EFile(t, filepath.Join(root, "box_shape.tres"), boxShapeResource)
+
+	requireToolText(t, session, "add_node", map[string]any{
+		"scenePath":  "scenes/main.tscn",
+		"nodeType":   "MeshInstance3D",
+		"nodeName":   "Mesh",
+		"properties": map[string]any{"mesh": "res://box.tres"},
+	})
+	requireToolText(t, session, "add_node", map[string]any{
+		"scenePath":      "scenes/main.tscn",
+		"nodeType":       "CollisionShape3D",
+		"nodeName":       "Shape",
+		"parentNodePath": "root/Mesh",
+		"properties":     map[string]any{"shape": "res://box_shape.tres"},
+	})
+
+	output := filepath.Join(root, "exported", "meshlib.tres")
+	text := requireToolText(t, session, "export_mesh_library", map[string]any{
+		"scenePath":  "scenes/main.tscn",
+		"outputPath": "exported/meshlib.tres",
+	})
+	requirePrefix(t, text, "MeshLibrary exported successfully to: "+output)
+
+	library := readFile(t, output)
+	requireContains(t, library,
+		`item/0/shapes = [`,
+		`item/0/preview = ExtResource(`,
+		`path="res://gradient.tres"`,
+		`path="res://box_shape.tres"`,
+	)
 }
 
 // TestExportMeshLibraryErrors covers the reference's validation messages.

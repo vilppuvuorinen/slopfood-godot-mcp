@@ -69,6 +69,26 @@ func TestCreateSceneErrors(t *testing.T) {
 			"scenePath": "main.tscn",
 		}, "Not a valid Godot project: "+root)
 	})
+
+	t.Run("abstract rootNodeType", func(t *testing.T) {
+		session := connectProject(t, newProject(t))
+		requireGodot(t, session)
+
+		// CanvasItem is a registered ClassDB class Godot refuses to
+		// instantiate.
+		res := callTool(t, session, "create_scene", map[string]any{
+			"scenePath":    "abstract.tscn",
+			"rootNodeType": "CanvasItem",
+		})
+		if !res.IsError {
+			t.Fatal("create_scene: expected an error result")
+		}
+		requireContains(t, firstText(t, res),
+			"Failed to create scene",
+			"Class exists but cannot be instantiated: CanvasItem",
+			"Failed to instantiate node of type: CanvasItem",
+		)
+	})
 }
 
 // TestCreateSceneFailsWithoutGodot points GODOT_PATH at a missing binary and

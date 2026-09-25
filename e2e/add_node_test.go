@@ -109,4 +109,25 @@ func TestAddNodeErrors(t *testing.T) {
 		}
 		requireContains(t, firstText(t, res), "Failed to add node", "Failed to instantiate node of type: NotARealNode")
 	})
+
+	t.Run("abstract node type", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+
+		// CanvasItem is a registered ClassDB class Godot refuses to
+		// instantiate, taking the can_instantiate branch rather than the
+		// script-lookup one.
+		res := callTool(t, session, "add_node", map[string]any{
+			"scenePath": "scenes/main.tscn",
+			"nodeType":  "CanvasItem",
+			"nodeName":  "Player",
+		})
+		if !res.IsError {
+			t.Fatal("add_node: expected an error result")
+		}
+		requireContains(t, firstText(t, res),
+			"Failed to add node",
+			"Class exists but cannot be instantiated: CanvasItem",
+			"Failed to instantiate node of type: CanvasItem",
+		)
+	})
 }
