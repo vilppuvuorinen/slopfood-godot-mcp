@@ -71,12 +71,6 @@ func Import(ctx context.Context, executable, projectPath string) (stdout, stderr
 // `<executable> --headless --path <project> --script <script> <operation>
 // <params-json>`, mirroring the reference server's executeOperation.
 //
-// The operations script's `--debug-godot` mode is deliberately not enabled:
-// it is a manual troubleshooting aid that writes probe files into the project
-// and dumps environment variables, so the server always runs the script in its
-// default (non-debug) mode. The feature remains available when running the
-// script by hand.
-//
 // A non-zero exit is not a wrapper failure: the operations script calls quit(1)
 // on every error and quit() on success, so the exit code is returned for the
 // caller to interpret. Only a failure to start the process is returned as an
