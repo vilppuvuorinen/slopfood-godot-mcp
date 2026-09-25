@@ -67,4 +67,50 @@ func TestAttachScriptErrors(t *testing.T) {
 			"scriptPath": "scripts/player.gd",
 		}, "Scene file does not exist: missing.tscn")
 	})
+
+	t.Run("missing script file", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+
+		res := callTool(t, session, "attach_script", map[string]any{
+			"scenePath":  "scenes/main.tscn",
+			"nodePath":   "root",
+			"scriptPath": "scripts/missing.gd",
+		})
+		if !res.IsError {
+			t.Fatal("attach_script: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "attach_script failed", "Script file does not exist at: res://scripts/missing.gd")
+	})
+
+	t.Run("missing node", func(t *testing.T) {
+		root, session := seedScene(t, "scenes/main.tscn", "Node2D")
+		writeE2EFile(t, filepath.Join(root, "scripts", "player.gd"), "extends Node2D\n")
+
+		res := callTool(t, session, "attach_script", map[string]any{
+			"scenePath":  "scenes/main.tscn",
+			"nodePath":   "root/Missing",
+			"scriptPath": "scripts/player.gd",
+		})
+		if !res.IsError {
+			t.Fatal("attach_script: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "attach_script failed", "Node not found: root/Missing")
+	})
+
+	t.Run("unloadable script", func(t *testing.T) {
+		root, session := seedScene(t, "scenes/main.tscn", "Node2D")
+		writeE2EFile(t, filepath.Join(root, "scripts", "thing.tres"), resourceTres)
+
+		// A non-.gd resource path resolves but is not a valid script, so the
+		// failure surfaces from the engine's set_script call.
+		res := callTool(t, session, "attach_script", map[string]any{
+			"scenePath":  "scenes/main.tscn",
+			"nodePath":   "root",
+			"scriptPath": "scripts/thing.tres",
+		})
+		if !res.IsError {
+			t.Fatal("attach_script: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "attach_script failed", "Parameter should be null or a reference to a valid script")
+	})
 }

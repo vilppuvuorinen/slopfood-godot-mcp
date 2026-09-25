@@ -132,4 +132,47 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 			"outputPath": "exported/meshlib.res",
 		}, "Scene file does not exist: missing.tscn")
 	})
+
+	t.Run("no meshes in scene", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/empty.tscn", "Node3D")
+
+		res := callTool(t, session, "export_mesh_library", map[string]any{
+			"scenePath":  "scenes/empty.tscn",
+			"outputPath": "exported/empty.res",
+		})
+		if !res.IsError {
+			t.Fatal("export_mesh_library: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "Failed to export mesh library", "No valid meshes found in the scene")
+	})
+
+	t.Run("output directory failure", func(t *testing.T) {
+		_, session := seedMeshScene(t)
+
+		// /proc is not writable, so the engine reports both the directory and
+		// the save failure.
+		res := callTool(t, session, "export_mesh_library", map[string]any{
+			"scenePath":  "scenes/main.tscn",
+			"outputPath": "/proc/nope/meshlib.res",
+		})
+		if !res.IsError {
+			t.Fatal("export_mesh_library: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "Failed to export mesh library", "Failed to create directory", "Failed to save MeshLibrary")
+	})
+
+	t.Run("save failure", func(t *testing.T) {
+		_, session := seedMeshScene(t)
+
+		// The root filesystem is not writable here, so the directory exists
+		// but the save itself fails.
+		res := callTool(t, session, "export_mesh_library", map[string]any{
+			"scenePath":  "scenes/main.tscn",
+			"outputPath": "/meshlib.res",
+		})
+		if !res.IsError {
+			t.Fatal("export_mesh_library: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "Failed to export mesh library", "Failed to save MeshLibrary")
+	})
 }

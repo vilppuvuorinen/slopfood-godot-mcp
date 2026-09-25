@@ -71,4 +71,17 @@ func TestRemoveSceneNodeErrors(t *testing.T) {
 			"nodePath":  "root/Player",
 		}, "Scene file does not exist: missing.tscn")
 	})
+
+	t.Run("missing node", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+
+		res := callTool(t, session, "remove_scene_node", map[string]any{
+			"scenePath": "scenes/main.tscn",
+			"nodePath":  "root/Missing",
+		})
+		if !res.IsError {
+			t.Fatal("remove_scene_node: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "remove_node failed", "Node not found: root/Missing")
+	})
 }

@@ -78,4 +78,35 @@ func TestAddNodeErrors(t *testing.T) {
 			"nodeName":  "Player",
 		}, "Scene file does not exist: missing.tscn")
 	})
+
+	t.Run("missing parent node", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+
+		res := callTool(t, session, "add_node", map[string]any{
+			"scenePath":      "scenes/main.tscn",
+			"parentNodePath": "root/Missing",
+			"nodeType":       "Sprite2D",
+			"nodeName":       "Player",
+		})
+		if !res.IsError {
+			t.Fatal("add_node: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "Failed to add node", "Parent node not found: root/Missing")
+	})
+
+	t.Run("bogus node type", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+
+		// validClassName accepts any identifier, so an unregistered class
+		// reaches the engine and fails there rather than being pre-rejected.
+		res := callTool(t, session, "add_node", map[string]any{
+			"scenePath": "scenes/main.tscn",
+			"nodeType":  "NotARealNode",
+			"nodeName":  "Player",
+		})
+		if !res.IsError {
+			t.Fatal("add_node: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "Failed to add node", "Failed to instantiate node of type: NotARealNode")
+	})
 }

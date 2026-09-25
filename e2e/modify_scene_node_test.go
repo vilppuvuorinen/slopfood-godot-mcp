@@ -60,4 +60,33 @@ func TestModifySceneNodeErrors(t *testing.T) {
 			"properties": map[string]any{"visible": true},
 		}, "Not a valid Godot project: "+root)
 	})
+
+	t.Run("missing node", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+
+		res := callTool(t, session, "modify_scene_node", map[string]any{
+			"scenePath":  "scenes/main.tscn",
+			"nodePath":   "root/Missing",
+			"properties": map[string]any{"visible": true},
+		})
+		if !res.IsError {
+			t.Fatal("modify_scene_node: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "modify_node failed", "Node not found: root/Missing")
+	})
+
+	t.Run("invalid property value", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+
+		// position is a Vector2 slot, so a bare string cannot be decoded.
+		res := callTool(t, session, "modify_scene_node", map[string]any{
+			"scenePath":  "scenes/main.tscn",
+			"nodePath":   "root",
+			"properties": map[string]any{"position": "not-a-vector"},
+		})
+		if !res.IsError {
+			t.Fatal("modify_scene_node: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "modify_node failed", "Invalid property value: expected a tagged")
+	})
 }

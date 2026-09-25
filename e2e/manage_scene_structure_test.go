@@ -103,4 +103,100 @@ func TestManageSceneStructureErrors(t *testing.T) {
 			"nodePath":  "root",
 		}, "Scene file does not exist: missing.tscn")
 	})
+
+	t.Run("duplicate root", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/structure.tscn", "Node2D")
+		res := callTool(t, session, "manage_scene_structure", map[string]any{
+			"scenePath": "scenes/structure.tscn",
+			"action":    "duplicate",
+			"nodePath":  "root",
+		})
+		if !res.IsError {
+			t.Fatal("manage_scene_structure: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "manage_scene_structure failed", "Cannot duplicate the root node")
+	})
+
+	t.Run("move root", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/structure.tscn", "Node2D")
+		requireToolText(t, session, "add_node", map[string]any{
+			"scenePath": "scenes/structure.tscn",
+			"nodeType":  "Node2D",
+			"nodeName":  "World",
+		})
+		res := callTool(t, session, "manage_scene_structure", map[string]any{
+			"scenePath":     "scenes/structure.tscn",
+			"action":        "move",
+			"nodePath":      "root",
+			"newParentPath": "root/World",
+		})
+		if !res.IsError {
+			t.Fatal("manage_scene_structure: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "manage_scene_structure failed", "Cannot move the root node")
+	})
+
+	t.Run("move into a descendant", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/structure.tscn", "Node2D")
+		requireToolText(t, session, "add_node", map[string]any{
+			"scenePath": "scenes/structure.tscn",
+			"nodeType":  "Node2D",
+			"nodeName":  "Parent",
+		})
+		requireToolText(t, session, "add_node", map[string]any{
+			"scenePath":      "scenes/structure.tscn",
+			"nodeType":       "Node2D",
+			"nodeName":       "Child",
+			"parentNodePath": "root/Parent",
+		})
+		res := callTool(t, session, "manage_scene_structure", map[string]any{
+			"scenePath":     "scenes/structure.tscn",
+			"action":        "move",
+			"nodePath":      "root/Parent",
+			"newParentPath": "root/Parent/Child",
+		})
+		if !res.IsError {
+			t.Fatal("manage_scene_structure: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "manage_scene_structure failed", "Cannot move a node into itself or one of its descendants")
+	})
+
+	t.Run("rename without newName", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/structure.tscn", "Node2D")
+		res := callTool(t, session, "manage_scene_structure", map[string]any{
+			"scenePath": "scenes/structure.tscn",
+			"action":    "rename",
+			"nodePath":  "root",
+		})
+		if !res.IsError {
+			t.Fatal("manage_scene_structure: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "manage_scene_structure failed", "newName is required for rename")
+	})
+
+	t.Run("move without newParentPath", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/structure.tscn", "Node2D")
+		res := callTool(t, session, "manage_scene_structure", map[string]any{
+			"scenePath": "scenes/structure.tscn",
+			"action":    "move",
+			"nodePath":  "root",
+		})
+		if !res.IsError {
+			t.Fatal("manage_scene_structure: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "manage_scene_structure failed", "newParentPath is required for move")
+	})
+
+	t.Run("unknown action", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/structure.tscn", "Node2D")
+		res := callTool(t, session, "manage_scene_structure", map[string]any{
+			"scenePath": "scenes/structure.tscn",
+			"action":    "bogus",
+			"nodePath":  "root",
+		})
+		if !res.IsError {
+			t.Fatal("manage_scene_structure: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "manage_scene_structure failed", "Unknown manage_scene_structure action: bogus")
+	})
 }

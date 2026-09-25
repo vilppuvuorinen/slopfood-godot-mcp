@@ -274,4 +274,87 @@ func TestManageResourceErrors(t *testing.T) {
 		}
 		requireContains(t, firstText(t, res), "Unknown resource type: NotARealResource")
 	})
+
+	t.Run("abstract resource type", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+
+		// BaseMaterial3D is a registered Resource subclass that Godot
+		// refuses to instantiate directly.
+		res := callTool(t, session, "manage_resource", map[string]any{
+			"resourcePath": "materials/red.tres",
+			"action":       "create",
+			"resourceType": "BaseMaterial3D",
+		})
+		if !res.IsError {
+			t.Fatal("expected an error result")
+		}
+		requireContains(t, firstText(t, res), "manage_resource failed", "Cannot instantiate resource type: BaseMaterial3D")
+	})
+
+	t.Run("non-resource type", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+
+		// Node is instantiable, so the failure is the Resource-subclass guard.
+		res := callTool(t, session, "manage_resource", map[string]any{
+			"resourcePath": "materials/red.tres",
+			"action":       "create",
+			"resourceType": "Node",
+		})
+		if !res.IsError {
+			t.Fatal("expected an error result")
+		}
+		requireContains(t, firstText(t, res), "manage_resource failed", "Type Node is not a Resource subclass")
+	})
+
+	t.Run("resource not found", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+
+		res := callTool(t, session, "manage_resource", map[string]any{
+			"resourcePath": "resources/missing.tres",
+			"action":       "read",
+		})
+		if !res.IsError {
+			t.Fatal("expected an error result")
+		}
+		requireContains(t, firstText(t, res), "manage_resource failed", "Resource not found: res://resources/missing.tres")
+	})
+
+	t.Run("unloadable resource", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+		writeE2EFile(t, filepath.Join(root, "resources", "bad.tres"), "this is not a valid resource\n")
+
+		res := callTool(t, session, "manage_resource", map[string]any{
+			"resourcePath": "resources/bad.tres",
+			"action":       "read",
+		})
+		if !res.IsError {
+			t.Fatal("expected an error result")
+		}
+		requireContains(t, firstText(t, res), "manage_resource failed", "Failed to load resource: res://resources/bad.tres")
+	})
+
+	t.Run("invalid property value", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+
+		res := callTool(t, session, "manage_resource", map[string]any{
+			"resourcePath": "materials/red.tres",
+			"action":       "create",
+			"resourceType": "StandardMaterial3D",
+			"properties":   map[string]any{"metallic": "not-a-number"},
+		})
+		if !res.IsError {
+			t.Fatal("expected an error result")
+		}
+		requireContains(t, firstText(t, res), "manage_resource failed", "Invalid property value")
+	})
 }

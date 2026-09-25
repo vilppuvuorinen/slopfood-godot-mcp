@@ -198,4 +198,11 @@ func TestReadSceneErrors(t *testing.T) {
 			"scenePath": "missing.tscn",
 		}, "Scene file does not exist: missing.tscn")
 	})
+
+	// The operations script's raw-text fallback (godot_operations.gd:908) is
+	// not reachable through the real engine: for a non-scene Resource, load()
+	// succeeds and the script fails with a SCRIPT ERROR on the instantiate
+	// call rather than reaching its "Failed to load scene" branch. The Go-side
+	// handling that consumes a fallback payload is covered by
+	// TestReadSceneRawWhenNoMarkers and TestReadSceneRawWhenMarkersInvalid.
 }
