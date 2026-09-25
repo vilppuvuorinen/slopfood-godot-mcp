@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
@@ -118,12 +117,11 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 		return mcp.JSONResult(payload), nil
 	}
 
-	uid := strings.TrimSpace(stdout)
-	message := fmt.Sprintf("UID for %s: %s", args.FilePath, uid)
+	message := "No structured UID output for " + args.FilePath
 	return mcp.StructuredResult(message, map[string]any{
 		"file":         args.FilePath,
 		"absolutePath": fileFull,
-		"uid":          uid,
-		"exists":       true,
+		"exists":       false,
+		"message":      message,
 	}), nil
 }

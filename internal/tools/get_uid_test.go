@@ -64,7 +64,7 @@ func TestGetUIDSuccess(t *testing.T) {
 }
 
 func TestGetUIDNoMarkersStructured(t *testing.T) {
-	fake := fakeGodotOps(t, fakeUIDVersion+"\necho 'uid://fallback'")
+	fake := fakeGodotOps(t, fakeUIDVersion+"\necho 'Getting UID for file: res://player.gd'")
 	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)
@@ -84,11 +84,11 @@ func TestGetUIDNoMarkersStructured(t *testing.T) {
 	if structured["absolutePath"] != filepath.Join(root, "player.gd") {
 		t.Errorf("absolutePath = %v", structured["absolutePath"])
 	}
-	if structured["exists"] != true {
-		t.Errorf("exists = %v, want true", structured["exists"])
+	if structured["exists"] != false {
+		t.Errorf("exists = %v, want false", structured["exists"])
 	}
-	if structured["uid"] != "uid://fallback" {
-		t.Errorf("uid = %v, want uid://fallback", structured["uid"])
+	if _, ok := structured["uid"]; ok {
+		t.Errorf("uid = %v, want it absent when no structured output was emitted", structured["uid"])
 	}
 }
 
