@@ -1405,7 +1405,12 @@ func manage_scene_signals(params):
         var lines = content.split("\n")
         for line in lines:
             if line.begins_with("[connection"):
-                connections.append(line.strip_edges())
+                connections.append({
+                    "signal": _connection_field(line, "signal"),
+                    "from": _connection_field(line, "from"),
+                    "to": _connection_field(line, "to"),
+                    "method": _connection_field(line, "method"),
+                })
         print(JSON_START)
         print(JSON.stringify({"connections": connections}))
         print(JSON_END)

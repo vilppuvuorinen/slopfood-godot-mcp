@@ -1,7 +1,9 @@
 package tools
 
 import (
+	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -94,7 +96,7 @@ func TestManageSceneSignalsSuccess(t *testing.T) {
 }
 
 func TestManageSceneSignalsListStructured(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"connections":["[connection signal=\"pressed\" from=\"root\" to=\"root\" method=\"on_pressed\"]"]}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"connections":[{"signal":"pressed","from":".","to":".","method":"on_pressed"}]}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
@@ -104,10 +106,25 @@ func TestManageSceneSignalsListStructured(t *testing.T) {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
 	text := result.Content[0].Text
-	for _, want := range []string{`"connections"`, `[connection signal=\"pressed\" from=\"root\" to=\"root\" method=\"on_pressed\"]`} {
-		if !strings.Contains(text, want) {
-			t.Errorf("text = %q, want it to contain %q", text, want)
-		}
+	var decoded struct {
+		Connections []struct {
+			Signal string `json:"signal"`
+			From   string `json:"from"`
+			To     string `json:"to"`
+			Method string `json:"method"`
+		} `json:"connections"`
+	}
+	if err := json.Unmarshal([]byte(text), &decoded); err != nil {
+		t.Fatalf("decode %q: %v", text, err)
+	}
+	want := []struct {
+		Signal string `json:"signal"`
+		From   string `json:"from"`
+		To     string `json:"to"`
+		Method string `json:"method"`
+	}{{"pressed", ".", ".", "on_pressed"}}
+	if !reflect.DeepEqual(decoded.Connections, want) {
+		t.Errorf("connections = %+v, want %+v", decoded.Connections, want)
 	}
 	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
 		t.Errorf("text still contains markers: %q", text)

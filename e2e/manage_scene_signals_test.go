@@ -1,7 +1,9 @@
 package e2e
 
 import (
+	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -19,13 +21,46 @@ func TestManageSceneSignalsSchema(t *testing.T) {
 // Godot.
 func TestManageSceneSignalsTool(t *testing.T) {
 	t.Run("lists signals", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/signals.tscn", "Node2D")
+		_, session := seedScene(t, "scenes/signals.tscn", "Button")
 
+		empty := requireToolText(t, session, "manage_scene_signals", map[string]any{
+			"scenePath": "scenes/signals.tscn",
+			"action":    "list",
+		})
+		requireContains(t, empty, `"connections"`)
+
+		requireToolText(t, session, "manage_scene_signals", map[string]any{
+			"scenePath":  "scenes/signals.tscn",
+			"action":     "add",
+			"signalName": "pressed",
+			"sourcePath": "root",
+			"targetPath": "root",
+			"method":     "on_pressed",
+		})
 		text := requireToolText(t, session, "manage_scene_signals", map[string]any{
 			"scenePath": "scenes/signals.tscn",
 			"action":    "list",
 		})
-		requireContains(t, text, `"connections"`)
+		var decoded struct {
+			Connections []struct {
+				Signal string `json:"signal"`
+				From   string `json:"from"`
+				To     string `json:"to"`
+				Method string `json:"method"`
+			} `json:"connections"`
+		}
+		if err := json.Unmarshal([]byte(text), &decoded); err != nil {
+			t.Fatalf("decode %q: %v", text, err)
+		}
+		want := []struct {
+			Signal string `json:"signal"`
+			From   string `json:"from"`
+			To     string `json:"to"`
+			Method string `json:"method"`
+		}{{"pressed", ".", ".", "on_pressed"}}
+		if !reflect.DeepEqual(decoded.Connections, want) {
+			t.Errorf("connections = %+v, want %+v", decoded.Connections, want)
+		}
 	})
 
 	t.Run("adds then removes a connection", func(t *testing.T) {
