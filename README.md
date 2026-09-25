@@ -8,8 +8,9 @@ One server process is bound to one Godot project, chosen at spawn in order of
 precedence: `--project /path`, then `$GODOT_PROJECT`, then the working
 directory. The bound path is the only place a caller can learn which project is
 in scope: it is advertised in the server's instructions (both the legacy
-`initialize` handshake and the stateless `server/discover` result), and
-project-scoped results echo it back.
+`initialize` handshake and the stateless `server/discover` result), and it is
+echoed by `get_project_info.path` and by the `projectPath` field of the status
+envelope.
 
 Tools take paths relative to the bound project and never accept a project
 argument, so there is no cursor, select tool, or per-call override. A second

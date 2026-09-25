@@ -134,12 +134,25 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 
 	if payload, ok := markerJSON(stdout); ok {
-		return mcp.JSONResult(payload), nil
+		if json.Valid([]byte(payload)) {
+			return mcp.JSONResult(payload), nil
+		}
+		return readSceneRawResult("read_scene returned invalid JSON", payload, stderr), nil
 	}
+	return readSceneRawResult("read_scene returned no structured output", stdout, stderr), nil
+}
 
-	text := "Scene read output:\n" + stdout
-	if stderr != "" {
-		text += "\nErrors:\n" + stderr
+// readSceneRawResult reports a read_scene run whose output did not yield a node
+// tree: the raw engine output plus a reason. It fills the error/raw branch of
+// readSceneOutputSchema, so a caller that advertised an output schema always
+// receives structuredContent instead of a bare text result.
+func readSceneRawResult(reason, raw, stderrText string) mcp.ToolResult {
+	text := "Scene read output:\n" + raw
+	if stderrText != "" {
+		text += "\nErrors:\n" + stderrText
 	}
-	return mcp.TextResult(text), nil
+	return mcp.StructuredResult(text, map[string]any{
+		"error": reason,
+		"raw":   raw,
+	})
 }

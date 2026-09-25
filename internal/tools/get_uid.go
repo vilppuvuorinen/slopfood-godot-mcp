@@ -118,6 +118,12 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 		return mcp.JSONResult(payload), nil
 	}
 
-	message := fmt.Sprintf("UID for %s: %s", args.FilePath, strings.TrimSpace(stdout))
-	return mcp.TextResult(message), nil
+	uid := strings.TrimSpace(stdout)
+	message := fmt.Sprintf("UID for %s: %s", args.FilePath, uid)
+	return mcp.StructuredResult(message, map[string]any{
+		"file":         args.FilePath,
+		"absolutePath": fileFull,
+		"uid":          uid,
+		"exists":       true,
+	}), nil
 }

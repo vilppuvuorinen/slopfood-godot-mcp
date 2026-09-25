@@ -63,6 +63,35 @@ func TestGetUIDSuccess(t *testing.T) {
 	}
 }
 
+func TestGetUIDNoMarkersStructured(t *testing.T) {
+	fake := fakeGodotOps(t, fakeUIDVersion+"\necho 'uid://fallback'")
+	t.Setenv(godot.PathEnv, fake)
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "player.gd"), "script")
+
+	result := callToolArgs(t, getUID(), root, `{"filePath":"player.gd"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+	}
+	if structured["file"] != "player.gd" {
+		t.Errorf("file = %v, want player.gd", structured["file"])
+	}
+	if structured["absolutePath"] != filepath.Join(root, "player.gd") {
+		t.Errorf("absolutePath = %v", structured["absolutePath"])
+	}
+	if structured["exists"] != true {
+		t.Errorf("exists = %v, want true", structured["exists"])
+	}
+	if structured["uid"] != "uid://fallback" {
+		t.Errorf("uid = %v, want uid://fallback", structured["uid"])
+	}
+}
+
 func TestGetUIDVersionGate(t *testing.T) {
 	fake := fakeGodotOps(t, `if [ "$1" = "--version" ]; then echo "4.3.1.stable"; exit 0; fi`+"\nexit 1")
 	t.Setenv(godot.PathEnv, fake)

@@ -132,6 +132,16 @@ func TestReadSceneRawWhenNoMarkers(t *testing.T) {
 	if !strings.Contains(result.Content[0].Text, "Scene read output:\nplain output") {
 		t.Errorf("text = %q", result.Content[0].Text)
 	}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+	}
+	if got := strings.TrimSpace(structured["raw"].(string)); got != "plain output" {
+		t.Errorf("raw = %q, want plain output", got)
+	}
+	if _, ok := structured["error"].(string); !ok {
+		t.Errorf("error = %v, want a string reason", structured["error"])
+	}
 }
 
 func TestReadSceneRawWhenMarkersInvalid(t *testing.T) {
@@ -150,6 +160,16 @@ func TestReadSceneRawWhenMarkersInvalid(t *testing.T) {
 	}
 	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
 		t.Errorf("text still contains markers: %q", text)
+	}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+	}
+	if structured["raw"] != "not-json" {
+		t.Errorf("raw = %v, want not-json", structured["raw"])
+	}
+	if _, ok := structured["error"].(string); !ok {
+		t.Errorf("error = %v, want a string reason", structured["error"])
 	}
 }
 
