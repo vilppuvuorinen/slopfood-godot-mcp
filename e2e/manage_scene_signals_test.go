@@ -193,20 +193,70 @@ func TestManageSceneSignalsTool(t *testing.T) {
 		requireContains(t, firstText(t, res), "Source node not found: root/Missing")
 	})
 
-	t.Run("rejects unsafe field", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/unsafe.tscn", "Node2D")
+	t.Run("rejects missing target node", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/dangling_target.tscn", "Button")
 		res := callTool(t, session, "manage_scene_signals", map[string]any{
-			"scenePath":  "scenes/unsafe.tscn",
+			"scenePath":  "scenes/dangling_target.tscn",
 			"action":     "add",
-			"signalName": `pr"essed`,
+			"signalName": "pressed",
 			"sourcePath": "root",
-			"targetPath": "root",
+			"targetPath": "root/Missing",
 			"method":     "on_pressed",
 		})
 		if !res.IsError {
 			t.Fatalf("expected an error result: %s", firstText(t, res))
 		}
-		requireContains(t, firstText(t, res), "cannot contain quotes")
+		requireContains(t, firstText(t, res), "Target node not found: root/Missing")
+	})
+
+	t.Run("remove with no match leaves the connection", func(t *testing.T) {
+		root, session := seedScene(t, "scenes/nomatch.tscn", "Button")
+		requireToolText(t, session, "manage_scene_signals", map[string]any{
+			"scenePath":  "scenes/nomatch.tscn",
+			"action":     "add",
+			"signalName": "pressed",
+			"sourcePath": "root",
+			"targetPath": "root",
+			"method":     "on_pressed",
+		})
+		connection := `[connection signal="pressed" from="." to="." method="on_pressed"]`
+
+		// The method does not match the stored connection, so removal is a
+		// successful no-op rather than a silent deletion of a sibling.
+		text := requireToolText(t, session, "manage_scene_signals", map[string]any{
+			"scenePath":  "scenes/nomatch.tscn",
+			"action":     "remove",
+			"signalName": "pressed",
+			"sourcePath": "root",
+			"targetPath": "root",
+			"method":     "on_other",
+		})
+		requireContains(t, text, "No matching signal connection removed")
+		requireContains(t, readFile(t, filepath.Join(root, "scenes", "nomatch.tscn")), connection)
+	})
+
+	t.Run("rejects unsafe field", func(t *testing.T) {
+		for name, field := range map[string]string{
+			"quote":     `pr"essed`,
+			"backslash": `on\pressed`,
+			"newline":   "on\npressed",
+		} {
+			t.Run(name, func(t *testing.T) {
+				_, session := seedScene(t, "scenes/unsafe.tscn", "Node2D")
+				res := callTool(t, session, "manage_scene_signals", map[string]any{
+					"scenePath":  "scenes/unsafe.tscn",
+					"action":     "add",
+					"signalName": "pressed",
+					"sourcePath": "root",
+					"targetPath": "root",
+					"method":     field,
+				})
+				if !res.IsError {
+					t.Fatalf("expected an error result: %s", firstText(t, res))
+				}
+				requireContains(t, firstText(t, res), "cannot contain quotes, backslashes, or newlines")
+			})
+		}
 	})
 }
 

@@ -117,6 +117,43 @@ func TestReadSceneTool(t *testing.T) {
 		}
 	})
 
+	t.Run("depth zero returns the node alone", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/depth0.tscn", "Node2D")
+		requireToolText(t, session, "add_node", map[string]any{
+			"scenePath": "scenes/depth0.tscn",
+			"nodeType":  "Sprite2D",
+			"nodeName":  "Player",
+		})
+
+		text := requireToolText(t, session, "read_scene", map[string]any{
+			"scenePath": "scenes/depth0.tscn",
+			"depth":     0,
+		})
+		var tree sceneNode
+		if err := json.Unmarshal([]byte(text), &tree); err != nil {
+			t.Fatalf("unmarshal %q: %v", text, err)
+		}
+		if tree.Name != "root" || len(tree.Children) != 0 {
+			t.Errorf("depth-0 tree = %+v, want the root with no children", tree)
+		}
+	})
+
+	t.Run("explicit root nodePath", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/rootpath.tscn", "Node2D")
+
+		text := requireToolText(t, session, "read_scene", map[string]any{
+			"scenePath": "scenes/rootpath.tscn",
+			"nodePath":  "root",
+		})
+		var tree sceneNode
+		if err := json.Unmarshal([]byte(text), &tree); err != nil {
+			t.Fatalf("unmarshal %q: %v", text, err)
+		}
+		if tree.Name != "root" || tree.Type != "Node2D" {
+			t.Errorf("root = %+v", tree)
+		}
+	})
+
 	t.Run("unknown nodePath", func(t *testing.T) {
 		_, session := seedScene(t, "scenes/unknown.tscn", "Node2D")
 
@@ -256,5 +293,13 @@ func TestReadSceneErrors(t *testing.T) {
 		requireToolError(t, session, "read_scene", map[string]any{
 			"scenePath": "missing.tscn",
 		}, "Scene file does not exist: missing.tscn")
+	})
+
+	t.Run("negative depth", func(t *testing.T) {
+		session := connectProject(t, newProject(t))
+		requireToolError(t, session, "read_scene", map[string]any{
+			"scenePath": "main.tscn",
+			"depth":     -1,
+		}, "depth must be zero or greater.")
 	})
 }

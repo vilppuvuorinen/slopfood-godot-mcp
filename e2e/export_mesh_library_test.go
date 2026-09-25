@@ -165,6 +165,53 @@ func TestExportMeshLibraryCollisionAndPreview(t *testing.T) {
 	)
 }
 
+// TestExportMeshLibraryDescendantAndPreview covers the two mesh-collection
+// branches a direct MeshInstance3D child never reaches: a mesh found on a
+// descendant of a holder node, and the absence of a preview when the mesh's
+// material carries no albedo texture.
+func TestExportMeshLibraryDescendantAndPreview(t *testing.T) {
+	t.Run("finds a mesh on a descendant", func(t *testing.T) {
+		root, session := seedScene(t, "scenes/main.tscn", "Node3D")
+		writeE2EFile(t, filepath.Join(root, "box.tres"), boxMeshResource)
+
+		// Holder is not itself a mesh; only the descendant search can collect
+		// its MeshInstance3D child.
+		requireToolText(t, session, "add_node", map[string]any{
+			"scenePath": "scenes/main.tscn",
+			"nodeType":  "Node3D",
+			"nodeName":  "Holder",
+		})
+		requireToolText(t, session, "add_node", map[string]any{
+			"scenePath":      "scenes/main.tscn",
+			"nodeType":       "MeshInstance3D",
+			"nodeName":       "Mesh",
+			"parentNodePath": "root/Holder",
+			"properties":     map[string]any{"mesh": "res://box.tres"},
+		})
+
+		output := filepath.Join(root, "exported", "descendant.tres")
+		text := requireToolText(t, session, "export_mesh_library", map[string]any{
+			"scenePath":  "scenes/main.tscn",
+			"outputPath": "exported/descendant.tres",
+		})
+		requirePrefix(t, text, "MeshLibrary exported successfully to: "+output)
+
+		// The item is named for the top-level child, not the found descendant.
+		requireContains(t, readFile(t, output), `item/0/name = "Holder"`, `path="res://box.tres"`)
+	})
+
+	t.Run("omits a preview when the mesh has no albedo texture", func(t *testing.T) {
+		root, session := seedMeshScene(t)
+
+		output := filepath.Join(root, "exported", "plain.tres")
+		requireToolText(t, session, "export_mesh_library", map[string]any{
+			"scenePath":  "scenes/main.tscn",
+			"outputPath": "exported/plain.tres",
+		})
+		requireNotContains(t, readFile(t, output), "preview")
+	})
+}
+
 // TestExportMeshLibraryErrors covers the reference's validation messages.
 func TestExportMeshLibraryErrors(t *testing.T) {
 	t.Run("missing params", func(t *testing.T) {

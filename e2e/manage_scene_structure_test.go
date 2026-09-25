@@ -54,6 +54,32 @@ func TestManageSceneStructureTool(t *testing.T) {
 		requireContains(t, scene, `[node name="Player"`, `[node name="Player2"`)
 	})
 
+	t.Run("duplicates a node with children", func(t *testing.T) {
+		root, session := seedScene(t, "scenes/duplicate_tree.tscn", "Node2D")
+		requireToolText(t, session, "add_node", map[string]any{
+			"scenePath": "scenes/duplicate_tree.tscn",
+			"nodeType":  "Node2D",
+			"nodeName":  "Parent",
+		})
+		requireToolText(t, session, "add_node", map[string]any{
+			"scenePath":      "scenes/duplicate_tree.tscn",
+			"nodeType":       "Sprite2D",
+			"nodeName":       "Child",
+			"parentNodePath": "root/Parent",
+		})
+
+		requireToolText(t, session, "manage_scene_structure", map[string]any{
+			"scenePath": "scenes/duplicate_tree.tscn",
+			"action":    "duplicate",
+			"nodePath":  "root/Parent",
+		})
+
+		// The duplicate's child must be owned back to the scene root, or the
+		// pack step drops it; its parent attribute proves it survived.
+		scene := readFile(t, filepath.Join(root, "scenes", "duplicate_tree.tscn"))
+		requireContains(t, scene, `[node name="Parent2"`, `parent="Parent2"`)
+	})
+
 	t.Run("moves a node", func(t *testing.T) {
 		root, session := seedScene(t, "scenes/move.tscn", "Node2D")
 		for _, name := range []string{"Player", "World"} {
@@ -159,6 +185,25 @@ func TestManageSceneStructureErrors(t *testing.T) {
 			t.Fatal("manage_scene_structure: expected an error result")
 		}
 		requireContains(t, firstText(t, res), "manage_scene_structure failed", "Cannot move a node into itself or one of its descendants")
+	})
+
+	t.Run("move to a missing parent", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/structure.tscn", "Node2D")
+		requireToolText(t, session, "add_node", map[string]any{
+			"scenePath": "scenes/structure.tscn",
+			"nodeType":  "Node2D",
+			"nodeName":  "Player",
+		})
+		res := callTool(t, session, "manage_scene_structure", map[string]any{
+			"scenePath":     "scenes/structure.tscn",
+			"action":        "move",
+			"nodePath":      "root/Player",
+			"newParentPath": "root/Missing",
+		})
+		if !res.IsError {
+			t.Fatal("manage_scene_structure: expected an error result")
+		}
+		requireContains(t, firstText(t, res), "manage_scene_structure failed", "New parent not found: root/Missing")
 	})
 
 	t.Run("rename without newName", func(t *testing.T) {

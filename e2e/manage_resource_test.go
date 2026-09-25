@@ -70,6 +70,35 @@ func TestManageResourceTool(t *testing.T) {
 		requireNotContains(t, text, `"metallic"`)
 	})
 
+	t.Run("filters with a single-character wildcard", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
+
+		text := requireToolText(t, session, "manage_resource", map[string]any{
+			"resourcePath":   "resources/mat.tres",
+			"action":         "read",
+			"propertyFilter": []any{"albed?_color"},
+		})
+		requireContains(t, text, `"albedo_color"`)
+		requireNotContains(t, text, `"metallic"`)
+	})
+
+	t.Run("filter matching nothing yields no properties", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
+
+		text := requireToolText(t, session, "manage_resource", map[string]any{
+			"resourcePath":   "resources/mat.tres",
+			"action":         "read",
+			"propertyFilter": []any{"nonexistent_*"},
+		})
+		requireContains(t, text, `"properties": {}`)
+	})
+
 	t.Run("modifies then re-reads a resource", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
@@ -216,6 +245,48 @@ func TestManageResourceThemeConvertsTypes(t *testing.T) {
 	requirePrefix(t, modifyText, "manage_resource succeeded.")
 
 	requireContains(t, readFile(t, themeFile), "Color(0, 0, 1, 1)")
+}
+
+// TestManageResourceThemeMoreCategories covers the theme item categories whose
+// value type is inferred from the item path rather than an existing property:
+// constants are integers and fonts are object references.
+func TestManageResourceThemeMoreCategories(t *testing.T) {
+	root := newProject(t)
+	session := connectProject(t, root)
+	requireGodot(t, session)
+
+	requireToolText(t, session, "manage_resource", map[string]any{
+		"resourcePath": "themes/font.tres",
+		"action":       "create",
+		"resourceType": "SystemFont",
+	})
+
+	requireToolText(t, session, "manage_resource", map[string]any{
+		"resourcePath": "themes/categories.tres",
+		"action":       "create",
+		"resourceType": "Theme",
+		"properties": map[string]any{
+			"Label/constants/outline_size": 4,
+			"Label/fonts/font":             "res://themes/font.tres",
+		},
+	})
+
+	content := readFile(t, filepath.Join(root, "themes", "categories.tres"))
+	requireContains(t, content, "Label/constants/outline_size = 4", "font.tres")
+
+	readText := requireToolText(t, session, "manage_resource", map[string]any{
+		"resourcePath": "themes/categories.tres",
+		"action":       "read",
+	})
+	var payload struct {
+		Properties map[string]any `json:"properties"`
+	}
+	if err := json.Unmarshal([]byte(readText), &payload); err != nil {
+		t.Fatalf("unmarshal theme payload: %v\n%s", err, readText)
+	}
+	if got := payload.Properties["Label/constants/outline_size"]; got != float64(4) {
+		t.Errorf("outline_size = %#v, want 4", got)
+	}
 }
 
 // TestManageResourceErrors covers the reference's validation and failure
