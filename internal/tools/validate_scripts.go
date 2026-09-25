@@ -39,7 +39,7 @@ func validateScripts() mcp.Tool {
 				"fileCount":       map[string]any{"type": "integer"},
 				"filesWithErrors": map[string]any{"type": "integer"},
 				"allValid":        map[string]any{"type": "boolean"},
-				"results":         map[string]any{"type": "array", "items": map[string]any{"type": "object"}},
+				"results":         map[string]any{"type": "array", "items": validateScriptResultSchema()},
 			},
 			"required": []string{"scope", "fileCount", "filesWithErrors", "allValid", "results"},
 		},
@@ -77,6 +77,53 @@ type validateScriptsReport struct {
 	FilesWithErrors int    `json:"filesWithErrors"`
 	AllValid        bool   `json:"allValid"`
 	Results         []any  `json:"results"`
+}
+
+// scriptDiagnosticSchema describes one diagnostic in a checked script's errors
+// array. Only message is always present; file and line are omitted when the
+// engine did not report a location.
+func scriptDiagnosticSchema() map[string]any {
+	return map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"message": map[string]any{"type": "string"},
+			"file":    map[string]any{"type": "string", "description": "Script path, relative to the bound project"},
+			"line":    map[string]any{"type": "integer"},
+		},
+		"required": []string{"message"},
+	}
+}
+
+// validateScriptResultSchema describes one validate_scripts results entry. A
+// checked script carries valid/errorCount/errors, while a skipped candidate
+// carries error; checked discriminates the two shapes, so a schema consumer
+// sees the per-file contract instead of an unconstrained object.
+func validateScriptResultSchema() map[string]any {
+	scriptPath := map[string]any{"type": "string", "description": "Script path, relative to the bound project"}
+	checked := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"scriptPath": scriptPath,
+			"checked":    map[string]any{"const": true},
+			"valid":      map[string]any{"type": "boolean"},
+			"errorCount": map[string]any{"type": "integer"},
+			"errors":     map[string]any{"type": "array", "items": scriptDiagnosticSchema()},
+		},
+		"required": []string{"scriptPath", "checked", "valid", "errorCount", "errors"},
+	}
+	skipped := map[string]any{
+		"type": "object",
+		"properties": map[string]any{
+			"scriptPath": scriptPath,
+			"checked":    map[string]any{"const": false},
+			"error":      map[string]any{"type": "string"},
+		},
+		"required": []string{"scriptPath", "checked", "error"},
+	}
+	return map[string]any{
+		"description": "One checked or skipped script",
+		"oneOf":       []any{checked, skipped},
+	}
 }
 
 // maxValidateScripts is the reference server's batch cap.

@@ -25,37 +25,64 @@ func readScene() mcp.Tool {
 			},
 			"required": []string{"scenePath"},
 		},
-		OutputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"name":   map[string]any{"type": "string"},
-				"type":   map[string]any{"type": "string"},
-				"script": map[string]any{"type": "string", "description": "Script path, relative to the bound project"},
-				"properties": map[string]any{
-					"type":                 "object",
-					"description":          "Node properties in the tool value contract",
-					"additionalProperties": godotValueSchema("JSON-native values are nested; engine-only types are tagged objects such as {\"$type\":\"Vector2\",\"x\":1,\"y\":2}"),
-				},
-				"groups": map[string]any{
-					"type":  "array",
-					"items": map[string]any{"type": "string"},
-				},
-				"children": map[string]any{
-					"type":  "array",
-					"items": map[string]any{"type": "object"},
-				},
-				"error": map[string]any{"type": "string"},
-				"raw":   map[string]any{"type": "string"},
-			},
-			// A readable scene yields a node tree, while a scene the engine
-			// cannot instantiate yields its raw text so the caller can still
-			// inspect it. Advertise both so neither shape is misreported.
-			"anyOf": []any{
-				map[string]any{"required": []string{"name", "type"}},
-				map[string]any{"required": []string{"error", "raw"}},
-			},
+		OutputSchema: readSceneOutputSchema(),
+		Handler:      handleReadScene,
+	}
+}
+
+// readSceneOutputSchema describes both read_scene results: a readable scene
+// yields a node tree (the sceneNode shape), while a scene the engine cannot
+// instantiate yields its raw text so the caller can still inspect it. children
+// recurses through $defs/sceneNode, so any depth of tree is described.
+func readSceneOutputSchema() map[string]any {
+	properties := sceneNodeProperties()
+	properties["error"] = map[string]any{"type": "string"}
+	properties["raw"] = map[string]any{"type": "string"}
+	return map[string]any{
+		"type":       "object",
+		"properties": properties,
+		// A readable scene yields a node tree, while a scene the engine
+		// cannot instantiate yields its raw text so the caller can still
+		// inspect it. Advertise both so neither shape is misreported.
+		"anyOf": []any{
+			map[string]any{"required": []string{"name", "type"}},
+			map[string]any{"required": []string{"error", "raw"}},
 		},
-		Handler: handleReadScene,
+		"$defs": map[string]any{"sceneNode": sceneNodeSchema()},
+	}
+}
+
+// sceneNodeSchema describes one node in read_scene's tree. children refers back
+// to this definition so nested nodes share the same shape.
+func sceneNodeSchema() map[string]any {
+	return map[string]any{
+		"type":       "object",
+		"properties": sceneNodeProperties(),
+		"required":   []string{"name", "type"},
+	}
+}
+
+// sceneNodeProperties is the property map of a scene node. children points at
+// the sceneNode definition under the output schema's $defs for recursion.
+func sceneNodeProperties() map[string]any {
+	return map[string]any{
+		"name":   map[string]any{"type": "string"},
+		"type":   map[string]any{"type": "string"},
+		"script": map[string]any{"type": "string", "description": "Script path, relative to the bound project"},
+		"properties": map[string]any{
+			"type":                 "object",
+			"description":          "Node properties in the tool value contract",
+			"additionalProperties": godotValueSchema("JSON-native values are nested; engine-only types are tagged objects such as {\"$type\":\"Vector2\",\"x\":1,\"y\":2}"),
+		},
+		"groups": map[string]any{
+			"type":  "array",
+			"items": map[string]any{"type": "string"},
+		},
+		"children": map[string]any{
+			"type":        "array",
+			"description": "Child nodes, each with the same shape",
+			"items":       map[string]any{"$ref": "#/$defs/sceneNode"},
+		},
 	}
 }
 

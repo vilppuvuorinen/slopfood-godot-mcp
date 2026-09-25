@@ -70,6 +70,51 @@ func TestValidateScriptsSchema(t *testing.T) {
 	}
 }
 
+// TestValidateScriptsResultSchema verifies each results entry is described as a
+// checked or skipped element discriminated by checked, rather than a bare object.
+func TestValidateScriptsResultSchema(t *testing.T) {
+	tool := validateScripts()
+	props, ok := tool.OutputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T", tool.OutputSchema["properties"])
+	}
+	results, ok := props["results"].(map[string]any)
+	if !ok || results["type"] != "array" {
+		t.Fatalf("results = %v, want an array", props["results"])
+	}
+	item, ok := results["items"].(map[string]any)
+	if !ok {
+		t.Fatalf("results.items = %T", results["items"])
+	}
+	branches, ok := item["oneOf"].([]any)
+	if !ok || len(branches) != 2 {
+		t.Fatalf("results.items.oneOf = %#v, want two branches", item["oneOf"])
+	}
+
+	checked, _ := branches[0].(map[string]any)
+	checkedProps, _ := checked["properties"].(map[string]any)
+	if got := checkedProps["checked"].(map[string]any)["const"]; got != true {
+		t.Errorf("checked branch const = %v, want true", got)
+	}
+	if !hasRequired(checked, "scriptPath", "checked", "valid", "errorCount", "errors") {
+		t.Errorf("checked branch required = %v", checked["required"])
+	}
+	errors, _ := checkedProps["errors"].(map[string]any)
+	diag, _ := errors["items"].(map[string]any)
+	if diag["type"] != "object" || !hasRequired(diag, "message") {
+		t.Errorf("diagnostic schema = %#v", errors["items"])
+	}
+
+	skipped, _ := branches[1].(map[string]any)
+	skippedProps, _ := skipped["properties"].(map[string]any)
+	if got := skippedProps["checked"].(map[string]any)["const"]; got != false {
+		t.Errorf("skipped branch const = %v, want false", got)
+	}
+	if !hasRequired(skipped, "scriptPath", "checked", "error") {
+		t.Errorf("skipped branch required = %v", skipped["required"])
+	}
+}
+
 func TestValidateScriptsExplicit(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, fakeValidateGodot))
 
