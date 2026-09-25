@@ -64,7 +64,7 @@ func TestManageExportPresetsAddAndList(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read export_presets.cfg: %v", err)
 	}
-	for _, want := range []string{"[preset.", `name="Linux"`, `platform="Linux"`, "runnable=true"} {
+	for _, want := range []string{"[preset.0]", `name="Linux"`, `platform="Linux"`, "runnable=true"} {
 		if !strings.Contains(string(content), want) {
 			t.Errorf("export_presets.cfg = %q, want it to contain %q", content, want)
 		}
@@ -97,6 +97,56 @@ func TestManageExportPresetsAddRunnableDefaultsFalse(t *testing.T) {
 	}
 	if !strings.Contains(string(content), "runnable=false") {
 		t.Errorf("export_presets.cfg = %q, want runnable=false", content)
+	}
+}
+
+func TestManageExportPresetsAddSequentialIndices(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+
+	first := callToolArgs(t, manageExportPresets(), root, `{"action":"add","name":"Linux","platform":"Linux"}`)
+	if first.IsError {
+		t.Fatalf("unexpected error: %+v", first.Content)
+	}
+	content, err := os.ReadFile(filepath.Join(root, "export_presets.cfg"))
+	if err != nil {
+		t.Fatalf("read export_presets.cfg: %v", err)
+	}
+	if !strings.Contains(string(content), "[preset.0]") {
+		t.Errorf("export_presets.cfg = %q, want [preset.0]", content)
+	}
+
+	second := callToolArgs(t, manageExportPresets(), root, `{"action":"add","name":"Web","platform":"Web"}`)
+	if second.IsError {
+		t.Fatalf("unexpected error: %+v", second.Content)
+	}
+	content, err = os.ReadFile(filepath.Join(root, "export_presets.cfg"))
+	if err != nil {
+		t.Fatalf("read export_presets.cfg: %v", err)
+	}
+	if !strings.Contains(string(content), "[preset.1]") {
+		t.Errorf("export_presets.cfg = %q, want [preset.1]", content)
+	}
+}
+
+// TestManageExportPresetsAddAfterGap checks that adding to a file whose
+// indices are not contiguous (for example after a remove) still picks a fresh,
+// non-colliding index.
+func TestManageExportPresetsAddAfterGap(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "export_presets.cfg"), "[preset.1]\n\nname=\"Nameless\"\n")
+
+	result := callToolArgs(t, manageExportPresets(), root, `{"action":"add","name":"Web","platform":"Web"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	content, err := os.ReadFile(filepath.Join(root, "export_presets.cfg"))
+	if err != nil {
+		t.Fatalf("read export_presets.cfg: %v", err)
+	}
+	if !strings.Contains(string(content), "[preset.2]") {
+		t.Errorf("export_presets.cfg = %q, want [preset.2]", content)
 	}
 }
 

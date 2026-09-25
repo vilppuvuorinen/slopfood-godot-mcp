@@ -7,8 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
-	"time"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
@@ -92,6 +92,7 @@ var (
 	exportPresetNamePattern     = regexp.MustCompile(`(?m)^name="((?:[^"\\]|\\.)*)"`)
 	exportPresetPlatformPattern = regexp.MustCompile(`(?m)^platform="((?:[^"\\]|\\.)*)"`)
 	exportPresetBlockPattern    = regexp.MustCompile(`(?m)^\[preset\.`)
+	exportPresetIndexPattern    = regexp.MustCompile(`(?m)^\[preset\.(\d+)\]`)
 )
 
 func handleManageExportPresets(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -168,16 +169,28 @@ func exportPresetBlocks(content string) []string {
 	return out
 }
 
+// nextExportPresetIndex returns one past the highest existing `[preset.N]`
+// index, or 0 when there are none. The editor stores presets sequentially, so
+// appending at max+1 matches what it would write and survives gaps left by a
+// previous remove.
+func nextExportPresetIndex(content string) int {
+	next := 0
+	for _, match := range exportPresetIndexPattern.FindAllStringSubmatch(content, -1) {
+		n, err := strconv.Atoi(match[1])
+		if err != nil {
+			continue
+		}
+		if n >= next {
+			next = n + 1
+		}
+	}
+	return next
+}
+
 func addExportPreset(project, presetsFile string, args manageExportPresetsArgs) mcp.ToolResult {
 	if args.Name == "" || args.Platform == "" {
 		return mcp.ErrorResult("name and platform are required for add action.")
 	}
-	block := fmt.Sprintf("\n[preset.%d]\n\nname=%s\nplatform=%s\nrunnable=%s\n",
-		time.Now().UnixMilli(),
-		godotconfig.FormatValue(godotconfig.String(args.Name)),
-		godotconfig.FormatValue(godotconfig.String(args.Platform)),
-		godotconfig.FormatValue(godotconfig.Bool(args.Runnable)))
-
 	content := ""
 	data, err := os.ReadFile(presetsFile)
 	if err != nil && !os.IsNotExist(err) {
@@ -186,6 +199,11 @@ func addExportPreset(project, presetsFile string, args manageExportPresetsArgs) 
 	if err == nil {
 		content = string(data)
 	}
+	block := fmt.Sprintf("\n[preset.%d]\n\nname=%s\nplatform=%s\nrunnable=%s\n",
+		nextExportPresetIndex(content),
+		godotconfig.FormatValue(godotconfig.String(args.Name)),
+		godotconfig.FormatValue(godotconfig.String(args.Platform)),
+		godotconfig.FormatValue(godotconfig.Bool(args.Runnable)))
 	content += block
 	if err := os.WriteFile(presetsFile, []byte(content), 0o644); err != nil { //nolint:gosec // user-facing project file.
 		return exportPresetsFailure(err)
