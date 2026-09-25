@@ -7,6 +7,7 @@ import (
 	"io"
 	"log/slog"
 	"reflect"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -162,6 +163,55 @@ func TestToolsAdvertiseActionEnum(t *testing.T) {
 			if !ok || len(enum) == 0 {
 				t.Errorf("tool %q action has no enum: %v", tool.Name, actionProp)
 			}
+		}
+	}
+}
+
+// schemaKeywords mark a map as a JSON Schema node. A node with none of them is
+// a bare annotation, such as a value slot that only carries a description.
+var schemaKeywords = []string{
+	"type", "anyOf", "oneOf", "allOf", "not", "enum", "const",
+	"$ref", "properties", "additionalProperties", "items", "required",
+}
+
+// TestToolsAdvertiseValueTypes verifies no tool describes a value slot with a
+// bare description: every schema node names a type (or an equivalent keyword),
+// so the tool value contract is visible to schema consumers.
+func TestToolsAdvertiseValueTypes(t *testing.T) {
+	for _, category := range AllCategories {
+		for _, newTool := range categoryTools[category] {
+			tool := newTool()
+			assertTypedSchemas(t, tool.Name, "inputSchema", tool.InputSchema)
+			assertTypedSchemas(t, tool.Name, "outputSchema", tool.OutputSchema)
+		}
+	}
+}
+
+// assertTypedSchemas walks a schema tree and fails on any map that carries a
+// description without a schema keyword to constrain the value.
+func assertTypedSchemas(t *testing.T, toolName, path string, node any) {
+	t.Helper()
+	switch n := node.(type) {
+	case map[string]any:
+		typed := false
+		for _, keyword := range schemaKeywords {
+			if _, ok := n[keyword]; ok {
+				typed = true
+				break
+			}
+		}
+		if !typed {
+			if _, ok := n["description"]; ok {
+				t.Errorf("tool %q %s is a bare description: %v", toolName, path, n)
+			}
+			return
+		}
+		for key, value := range n {
+			assertTypedSchemas(t, toolName, path+"."+key, value)
+		}
+	case []any:
+		for i, value := range n {
+			assertTypedSchemas(t, toolName, path+"["+strconv.Itoa(i)+"]", value)
 		}
 	}
 }

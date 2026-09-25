@@ -102,10 +102,22 @@ func statusResult(message string, fields map[string]any) mcp.ToolResult {
 
 // godotValueSchema describes one value in the tool value contract for schema
 // consumers: JSON-native data, or a tagged object such as
-// {"$type":"Vector2","x":1,"y":2} for an engine-only type. It is deliberately
-// permissive; the decoder enforces which $type a slot accepts.
+// {"$type":"Vector2","x":1,"y":2} for an engine-only type. type names the
+// JSON-native types and anyOf repeats them as discrete branches, so a client
+// that reads either form sees the contract instead of an unconstrained value.
+// It is deliberately permissive; the decoder enforces which $type a slot
+// accepts.
 func godotValueSchema(description string) map[string]any {
-	return map[string]any{"description": description}
+	types := []string{"null", "boolean", "string", "number", "array", "object"}
+	branches := make([]any, 0, len(types))
+	for _, name := range types {
+		branches = append(branches, map[string]any{"type": name})
+	}
+	return map[string]any{
+		"description": description,
+		"type":        types,
+		"anyOf":       branches,
+	}
 }
 
 // propertiesSchema is the input schema shared by every tool that takes a map

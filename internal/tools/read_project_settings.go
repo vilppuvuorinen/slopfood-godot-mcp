@@ -35,9 +35,12 @@ func readProjectSettings() mcp.Tool {
 				"projectPath":  map[string]any{"type": "string"},
 				"settingCount": map[string]any{"type": "integer"},
 				"sections": map[string]any{
-					"type":                 "object",
-					"description":          "Every setting stored in project.godot, grouped by section, with values in the tool value contract",
-					"additionalProperties": map[string]any{"type": "object"},
+					"type":        "object",
+					"description": "Every setting stored in project.godot, grouped by section, with values in the tool value contract",
+					"additionalProperties": map[string]any{
+						"type":                 "object",
+						"additionalProperties": godotValueSchema("A setting value in the tool value contract"),
+					},
 				},
 			},
 			"required": []string{"projectPath", "settingCount", "sections"},

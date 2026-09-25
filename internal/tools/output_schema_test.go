@@ -20,6 +20,38 @@ func hasRequired(schema map[string]any, keys ...string) bool {
 	return true
 }
 
+// TestGodotValueSchemaAdvertisesContract verifies a value slot names the
+// JSON-native types and repeats them as anyOf branches, so the value contract
+// is visible in the schema instead of a bare description.
+func TestGodotValueSchemaAdvertisesContract(t *testing.T) {
+	schema := godotValueSchema("A value in the tool value contract")
+	if schema["description"] != "A value in the tool value contract" {
+		t.Errorf("description = %v", schema["description"])
+	}
+
+	want := []string{"null", "boolean", "string", "number", "array", "object"}
+	types, ok := schema["type"].([]string)
+	if !ok || len(types) != len(want) {
+		t.Fatalf("type = %#v, want %v", schema["type"], want)
+	}
+	for i, name := range want {
+		if types[i] != name {
+			t.Errorf("type[%d] = %q, want %q", i, types[i], name)
+		}
+	}
+
+	branches, ok := schema["anyOf"].([]any)
+	if !ok || len(branches) != len(want) {
+		t.Fatalf("anyOf = %#v, want %d branches", schema["anyOf"], len(want))
+	}
+	for i, name := range want {
+		branch, ok := branches[i].(map[string]any)
+		if !ok || branch["type"] != name {
+			t.Errorf("anyOf[%d] = %#v, want type %q", i, branches[i], name)
+		}
+	}
+}
+
 // TestStatusOutputSchemaRequiresEnvelope verifies the status envelope is
 // advertised and required, so a mutation result is never described loosely.
 func TestStatusOutputSchemaRequiresEnvelope(t *testing.T) {
