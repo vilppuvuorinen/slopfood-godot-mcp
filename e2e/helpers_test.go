@@ -94,12 +94,12 @@ func connectWithProtocolVersion(t *testing.T, protocolVersion string) *mcp.Clien
 	return session
 }
 
-// requireGodot skips a test when no usable Godot executable is configured, so
-// the black-box suite still passes on machines (and CI) without the engine.
+// requireGodot fails a test when no usable Godot executable is configured. A
+// missing engine is a broken environment, not a reason to pass the suite.
 func requireGodot(t *testing.T, session *mcp.ClientSession) {
 	t.Helper()
 	if res := callTool(t, session, "get_godot_version", nil); res.IsError {
-		t.Skipf("Godot unavailable, skipping: %s", firstText(t, res))
+		t.Fatalf("Godot unavailable: %s", firstText(t, res))
 	}
 }
 
@@ -345,7 +345,7 @@ func newProject(t *testing.T) string {
 }
 
 // seedScene creates scenePath in a fresh project, starts a server bound to that
-// project, and returns the project root and its session. It skips when
+// project, and returns the project root and its session. It fails when
 // create_scene fails, which usually means Godot is unavailable.
 func seedScene(t *testing.T, scenePath string, rootNodeType ...string) (string, *mcp.ClientSession) {
 	t.Helper()
@@ -358,7 +358,7 @@ func seedScene(t *testing.T, scenePath string, rootNodeType ...string) (string, 
 	}
 	res := callTool(t, session, "create_scene", args)
 	if res.IsError {
-		t.Skipf("create_scene failed, skipping: %s", firstText(t, res))
+		t.Fatalf("create_scene failed: %s", firstText(t, res))
 	}
 	requirePrefix(t, firstText(t, res), "Scene created successfully at: "+scenePath)
 	return root, session

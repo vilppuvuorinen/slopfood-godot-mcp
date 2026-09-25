@@ -71,7 +71,7 @@ func seedMeshScene(t *testing.T) (string, *mcp.ClientSession) {
 		"properties": map[string]any{"mesh": "res://box.tres"},
 	})
 	if res.IsError {
-		t.Skipf("add_node failed, skipping: %s", firstText(t, res))
+		t.Fatalf("add_node failed: %s", firstText(t, res))
 	}
 	return root, session
 }

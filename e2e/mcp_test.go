@@ -28,7 +28,7 @@ func TestGetGodotVersionTool(t *testing.T) {
 
 	res := callTool(t, session, "get_godot_version", nil)
 	if res.IsError {
-		t.Skipf("Godot unavailable, skipping: %+v", res.Content)
+		t.Fatalf("Godot unavailable: %+v", res.Content)
 	}
 	if len(res.Content) != 1 {
 		t.Fatalf("content = %+v", res.Content)

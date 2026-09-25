@@ -3,7 +3,6 @@ package e2e
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -71,8 +70,8 @@ binary_format/embed_pck=false
 `
 
 // TestExportProjectTool drives a real export. The real export needs installed
-// export templates (scripts/download-godot.py with GODOT_TEMPLATES=1), so a
-// template error skips rather than fails the suite.
+// export templates (scripts/download-godot.py with GODOT_TEMPLATES=1); a missing
+// template fails the suite rather than passing it.
 func TestExportProjectTool(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
@@ -92,9 +91,6 @@ func TestExportProjectTool(t *testing.T) {
 	})
 	text := firstText(t, res)
 	if res.IsError {
-		if strings.Contains(text, "export template") {
-			t.Skipf("export templates unavailable, skipping: %s", text)
-		}
 		t.Fatalf("unexpected error: %s", text)
 	}
 	requirePrefix(t, text, "Export succeeded.\n\nOutput:")

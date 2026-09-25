@@ -48,7 +48,7 @@ func TestGetProjectInfoSchema(t *testing.T) {
 }
 
 // TestGetProjectInfoTool exercises name extraction and structure counting
-// through the MCP client. It skips when Godot is not installed, since the
+// through the MCP client. It fails when Godot is not installed, since the
 // reference probes `godot --version`.
 func TestGetProjectInfoTool(t *testing.T) {
 	t.Run("reports project info", func(t *testing.T) {
