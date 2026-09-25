@@ -97,10 +97,19 @@ cd e2e
 XDG_DATA_HOME="$(cd .. && pwd)/.godot" GO_DOT_MCP_BIN="$(cd .. && pwd)/bin/go-dot-mcp" go test ./...
 ```
 
-CI tests against the latest Godot builds rather than a pinned manifest:
-`.github/workflows/godot-latest.yml` resolves the supported minor lines and
+CI runs on `main` and manual dispatch only. Every run does the `make check`
+surface, then tests against the latest Godot builds rather than a pinned
+manifest: `.github/workflows/ci.yml` resolves the supported minor lines and
 downloads the newest matching release (dev/beta/rc included), so a future
 release surfaces breakage with no manifest change.
+
+## Releasing
+
+Dispatch the `CI` workflow with a `version` input (`vMAJOR.MINOR.PATCH`) to tag
+the resolved commit and publish cross-compiled linux/darwin/windows binaries
+(amd64 and arm64) as a GitHub Release. Dispatch against any ref to release that
+commit; the release job only runs once every check, including the full Godot
+matrix, has passed.
 
 ## Tooling
 
