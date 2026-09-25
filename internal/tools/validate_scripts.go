@@ -35,7 +35,11 @@ func validateScripts() mcp.Tool {
 		OutputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"scope":           map[string]any{"type": "string"},
+				"scope": map[string]any{
+					"type":        "string",
+					"enum":        []string{"changed", "all", "explicit"},
+					"description": `How candidates were selected: "changed", "all", or "explicit" when scriptPaths was provided`,
+				},
 				"fileCount":       map[string]any{"type": "integer"},
 				"filesWithErrors": map[string]any{"type": "integer"},
 				"allValid":        map[string]any{"type": "boolean"},

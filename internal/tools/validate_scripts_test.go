@@ -70,6 +70,34 @@ func TestValidateScriptsSchema(t *testing.T) {
 	}
 }
 
+// TestValidateScriptsOutputScopeSchema verifies the output schema documents
+// every scope value the handler can report, including "explicit" which is not
+// an accepted input enum value.
+func TestValidateScriptsOutputScopeSchema(t *testing.T) {
+	tool := validateScripts()
+	props, ok := tool.OutputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T", tool.OutputSchema["properties"])
+	}
+	scope, ok := props["scope"].(map[string]any)
+	if !ok || scope["type"] != "string" {
+		t.Fatalf("scope property = %v", props["scope"])
+	}
+	enum, ok := scope["enum"].([]string)
+	if !ok {
+		t.Fatalf("scope enum = %T, want []string", scope["enum"])
+	}
+	want := map[string]bool{"changed": true, "all": true, "explicit": true}
+	if len(enum) != len(want) {
+		t.Fatalf("scope enum = %v, want %v", enum, want)
+	}
+	for _, v := range enum {
+		if !want[v] {
+			t.Errorf("unexpected scope enum value %q", v)
+		}
+	}
+}
+
 // TestValidateScriptsResultSchema verifies each results entry is described as a
 // checked or skipped element discriminated by checked, rather than a bare object.
 func TestValidateScriptsResultSchema(t *testing.T) {
