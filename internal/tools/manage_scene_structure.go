@@ -15,9 +15,8 @@ func manageSceneStructure() mcp.Tool {
 		Title:       "Manage Scene Structure",
 		Description: "Rename/duplicate/move nodes within .tscn scenes",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
+		InputSchema: actionInputSchema(
+			map[string]any{
 				"scenePath": map[string]any{
 					"type":        "string",
 					"description": "Scene file path (relative to project)",
@@ -40,8 +39,13 @@ func manageSceneStructure() mcp.Tool {
 					"description": "New parent path, relative to the scene root (for move)",
 				},
 			},
-			"required": []string{"scenePath", "action", "nodePath"},
-		},
+			[]string{"scenePath", "action", "nodePath"},
+			[]actionVariant{
+				{Action: "rename", Required: []string{"newName"}},
+				{Action: "duplicate"},
+				{Action: "move", Required: []string{"newParentPath"}},
+			},
+		),
 		OutputSchema: statusOutputSchema(map[string]any{
 			"scenePath":     map[string]any{"type": "string"},
 			"action":        map[string]any{"type": "string"},

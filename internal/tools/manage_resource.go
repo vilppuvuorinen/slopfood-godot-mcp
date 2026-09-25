@@ -15,9 +15,8 @@ func manageResource() mcp.Tool {
 		Title:       "Manage Resource",
 		Description: "Create, read, or modify .tres/.res resource files",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
+		InputSchema: actionInputSchema(
+			map[string]any{
 				"resourcePath": map[string]any{
 					"type":        "string",
 					"description": "Resource file path (relative to project)",
@@ -33,8 +32,13 @@ func manageResource() mcp.Tool {
 				},
 				"properties": propertiesSchema("Properties to set, as name to godotValue pairs"),
 			},
-			"required": []string{"resourcePath", "action"},
-		},
+			[]string{"resourcePath", "action"},
+			[]actionVariant{
+				{Action: "create", Required: []string{"resourceType"}},
+				{Action: "read"},
+				{Action: "modify"},
+			},
+		),
 		OutputSchema: actionOutputSchema(
 			map[string]any{
 				"resourcePath": map[string]any{"type": "string"},

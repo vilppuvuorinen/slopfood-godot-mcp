@@ -216,6 +216,156 @@ func assertTypedSchemas(t *testing.T, toolName, path string, node any) {
 	}
 }
 
+// TestActionInputSchemaBuildsVariants verifies the discriminated action schema
+// pins each action and requires the common fields plus that action's own.
+func TestActionInputSchemaBuildsVariants(t *testing.T) {
+	schema := actionInputSchema(
+		map[string]any{
+			"action": map[string]any{"type": "string", "enum": []string{"list", "add"}},
+			"path":   map[string]any{"type": "string"},
+			"name":   map[string]any{"type": "string"},
+		},
+		[]string{"path"},
+		[]actionVariant{
+			{Action: "list"},
+			{Action: "add", Required: []string{"name"}},
+		},
+	)
+
+	if !hasRequired(schema, "path") {
+		t.Fatalf("common required = %v", schema["required"])
+	}
+	if !hasRequired(schema, "action") {
+		t.Fatalf("common required = %v, want action", schema["required"])
+	}
+	branches, ok := schema["oneOf"].([]any)
+	if !ok || len(branches) != 2 {
+		t.Fatalf("oneOf = %#v, want two branches", schema["oneOf"])
+	}
+
+	list, _ := branches[0].(map[string]any)
+	listProps, _ := list["properties"].(map[string]any)
+	listAction, _ := listProps["action"].(map[string]any)
+	if listAction["const"] != "list" {
+		t.Errorf("branch 0 action = %#v, want const list", listProps["action"])
+	}
+	if !hasRequired(list, "path") || hasRequired(list, "name") {
+		t.Errorf("list required = %v, want path only", list["required"])
+	}
+
+	add, _ := branches[1].(map[string]any)
+	addProps, _ := add["properties"].(map[string]any)
+	addAction, _ := addProps["action"].(map[string]any)
+	if addAction["const"] != "add" {
+		t.Errorf("branch 1 action = %#v, want const add", addProps["action"])
+	}
+	if !hasRequired(add, "path", "name") {
+		t.Errorf("add required = %v, want path and name", add["required"])
+	}
+}
+
+// TestActionToolsAdvertiseVariants verifies every action-routed tool constrains
+// each action's required fields with a discriminated oneOf, so the schema
+// reveals the per-action contract instead of only the common fields.
+func TestActionToolsAdvertiseVariants(t *testing.T) {
+	want := map[string]struct {
+		common  []string
+		actions map[string][]string
+	}{
+		"manage_scene_structure": {
+			common: []string{"scenePath", "action", "nodePath"},
+			actions: map[string][]string{
+				"rename":    {"newName"},
+				"duplicate": {},
+				"move":      {"newParentPath"},
+			},
+		},
+		"manage_scene_signals": {
+			common: []string{"scenePath", "action"},
+			actions: map[string][]string{
+				"list":   {},
+				"add":    {"signalName", "sourcePath", "targetPath", "method"},
+				"remove": {"signalName", "sourcePath", "targetPath"},
+			},
+		},
+		"manage_resource": {
+			common: []string{"resourcePath", "action"},
+			actions: map[string][]string{
+				"create": {"resourceType"},
+				"read":   {},
+				"modify": {},
+			},
+		},
+		"manage_input_map": {
+			common: []string{"action"},
+			actions: map[string][]string{
+				"list":   {},
+				"add":    {"actionName"},
+				"remove": {"actionName"},
+			},
+		},
+		"manage_export_presets": {
+			common: []string{"action"},
+			actions: map[string][]string{
+				"list":   {},
+				"add":    {"name", "platform"},
+				"remove": {"name"},
+			},
+		},
+	}
+
+	seen := make(map[string]bool)
+	for _, category := range AllCategories {
+		for _, newTool := range categoryTools[category] {
+			tool := newTool()
+			spec, ok := want[tool.Name]
+			if !ok {
+				continue
+			}
+			seen[tool.Name] = true
+
+			common, _ := tool.InputSchema["required"].([]string)
+			if strings.Join(common, ",") != strings.Join(spec.common, ",") {
+				t.Errorf("tool %q required = %v, want %v", tool.Name, common, spec.common)
+			}
+
+			branches, ok := tool.InputSchema["oneOf"].([]any)
+			if !ok {
+				t.Errorf("tool %q has no oneOf", tool.Name)
+				continue
+			}
+			if len(branches) != len(spec.actions) {
+				t.Errorf("tool %q oneOf has %d branches, want %d", tool.Name, len(branches), len(spec.actions))
+			}
+			for _, branch := range branches {
+				b, ok := branch.(map[string]any)
+				if !ok {
+					t.Errorf("tool %q branch = %T", tool.Name, branch)
+					continue
+				}
+				props, _ := b["properties"].(map[string]any)
+				actionProp, _ := props["action"].(map[string]any)
+				action, _ := actionProp["const"].(string)
+				extras, known := spec.actions[action]
+				if !known {
+					t.Errorf("tool %q has a branch for unknown action %q", tool.Name, action)
+					continue
+				}
+				required, _ := b["required"].([]string)
+				expected := append(append([]string{}, spec.common...), extras...)
+				if strings.Join(required, ",") != strings.Join(expected, ",") {
+					t.Errorf("tool %q action %q required = %v, want %v", tool.Name, action, required, expected)
+				}
+			}
+		}
+	}
+	for name := range want {
+		if !seen[name] {
+			t.Errorf("tool %q was not registered", name)
+		}
+	}
+}
+
 // TestToolsConstrainAdvertisedStatus verifies no tool advertises the success and
 // message envelope loosely. A mutation requires both fields, while an
 // action-routed tool separates them into an anyOf branch so a read or list

@@ -15,9 +15,8 @@ func manageSceneSignals() mcp.Tool {
 		Title:       "Manage Scene Signals",
 		Description: "List/add/remove signal connections in .tscn files",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
+		InputSchema: actionInputSchema(
+			map[string]any{
 				"scenePath": map[string]any{
 					"type":        "string",
 					"description": "Scene file path (relative to project)",
@@ -44,8 +43,13 @@ func manageSceneSignals() mcp.Tool {
 					"description": "Target method name (required for add; optional filter for remove)",
 				},
 			},
-			"required": []string{"scenePath", "action"},
-		},
+			[]string{"scenePath", "action"},
+			[]actionVariant{
+				{Action: "list"},
+				{Action: "add", Required: []string{"signalName", "sourcePath", "targetPath", "method"}},
+				{Action: "remove", Required: []string{"signalName", "sourcePath", "targetPath"}},
+			},
+		),
 		OutputSchema: actionOutputSchema(
 			map[string]any{
 				"scenePath":  map[string]any{"type": "string"},

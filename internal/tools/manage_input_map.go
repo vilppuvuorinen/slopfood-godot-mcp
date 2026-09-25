@@ -18,9 +18,8 @@ func manageInputMap() mcp.Tool {
 		Title:       "Manage Input Map",
 		Description: "Add, remove, or list input actions and bindings",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
+		InputSchema: actionInputSchema(
+			map[string]any{
 				"action": map[string]any{
 					"type":        "string",
 					"enum":        []string{"list", "add", "remove"},
@@ -39,8 +38,13 @@ func manageInputMap() mcp.Tool {
 					"description": "Deadzone for the action. Default: 0.5",
 				},
 			},
-			"required": []string{"action"},
-		},
+			[]string{"action"},
+			[]actionVariant{
+				{Action: "list"},
+				{Action: "add", Required: []string{"actionName"}},
+				{Action: "remove", Required: []string{"actionName"}},
+			},
+		),
 		OutputSchema: actionOutputSchema(
 			map[string]any{
 				"actionName": map[string]any{"type": "string"},

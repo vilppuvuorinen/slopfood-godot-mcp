@@ -132,6 +132,58 @@ func propertiesSchema(description string) map[string]any {
 	}
 }
 
+// actionVariant is one branch of a discriminated action input schema: the
+// action it pins and the fields that action requires on top of the common
+// required fields.
+type actionVariant struct {
+	Action   string
+	Required []string
+}
+
+// actionInputSchema builds the object input schema for a tool routed by an
+// "action" property. properties lists every accepted argument (including
+// action with its enum) and commonRequired are the fields every action needs.
+// The returned schema adds a discriminated oneOf over variants: each branch
+// pins action with const and requires the common fields plus that action's own
+// fields, so a schema consumer sees what each action needs instead of one flat
+// required list. Exactly one branch matches a well-formed call, while a call
+// missing a per-action field matches none.
+func actionInputSchema(properties map[string]any, commonRequired []string, variants []actionVariant) map[string]any {
+	required := make([]string, 0, len(commonRequired)+1)
+	hasAction := false
+	for _, field := range commonRequired {
+		if field == "action" {
+			hasAction = true
+		}
+		required = append(required, field)
+	}
+	if !hasAction {
+		required = append([]string{"action"}, required...)
+	}
+	schema := map[string]any{
+		"type":       "object",
+		"properties": properties,
+		"required":   required,
+	}
+	if len(variants) == 0 {
+		return schema
+	}
+	branches := make([]any, 0, len(variants))
+	for _, variant := range variants {
+		branchRequired := make([]string, 0, len(required)+len(variant.Required))
+		branchRequired = append(branchRequired, required...)
+		branchRequired = append(branchRequired, variant.Required...)
+		branches = append(branches, map[string]any{
+			"properties": map[string]any{
+				"action": map[string]any{"const": variant.Action},
+			},
+			"required": branchRequired,
+		})
+	}
+	schema["oneOf"] = branches
+	return schema
+}
+
 // statusOutputSchema returns the object output schema shared by the mutation
 // tools. Every successful result carries the status envelope, so success and
 // message are both advertised and required alongside any tool-specific

@@ -20,9 +20,8 @@ func manageExportPresets() mcp.Tool {
 		Title:       "Manage Export Presets",
 		Description: "Create or modify export preset configuration",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
-		InputSchema: map[string]any{
-			"type": "object",
-			"properties": map[string]any{
+		InputSchema: actionInputSchema(
+			map[string]any{
 				"action": map[string]any{
 					"type":        "string",
 					"enum":        []string{"list", "add", "remove"},
@@ -41,8 +40,13 @@ func manageExportPresets() mcp.Tool {
 					"description": "Whether this preset is runnable. Default: false",
 				},
 			},
-			"required": []string{"action"},
-		},
+			[]string{"action"},
+			[]actionVariant{
+				{Action: "list"},
+				{Action: "add", Required: []string{"name", "platform"}},
+				{Action: "remove", Required: []string{"name"}},
+			},
+		),
 		OutputSchema: actionOutputSchema(
 			map[string]any{
 				"name":     map[string]any{"type": "string"},
