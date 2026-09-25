@@ -64,14 +64,15 @@ func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) 
 	if !validPath(project) {
 		return mcp.ErrorResult("Invalid project path."), nil
 	}
-	if _, ok := confineAbsPath(project, args.OutputPath); !ok {
+	outputPath, ok := confineAbsPath(project, args.OutputPath)
+	if !ok {
 		return mcp.ErrorResult("Invalid output path."), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
 		return mcp.ErrorResult("Not a valid Godot project: " + project), nil
 	}
 
-	stdout, stderr, exitCode, err := godot.Export(ctx, godot.Path(), project, args.PresetName, args.OutputPath, args.Debug)
+	stdout, stderr, exitCode, err := godot.Export(ctx, godot.Path(), project, args.PresetName, outputPath, args.Debug)
 	if err != nil {
 		return mcp.ErrorResult("Export failed: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
@@ -80,11 +81,11 @@ func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) 
 	}
 	output := stdout
 	if output == "" {
-		output = args.OutputPath
+		output = outputPath
 	}
 	return statusResult(project, "Export succeeded.\n\nOutput: "+output, map[string]any{
 		"presetName": args.PresetName,
-		"outputPath": args.OutputPath,
+		"outputPath": outputPath,
 		"debug":      args.Debug,
 		"output":     output,
 	}), nil

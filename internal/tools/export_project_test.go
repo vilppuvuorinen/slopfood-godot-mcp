@@ -49,7 +49,7 @@ func TestExportProjectSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "Export succeeded.\n\nOutput: ") {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{"--headless", "--export-release", "Linux", "build/game.x86_64"} {
+	for _, want := range []string{"--headless", "--export-release", "Linux", filepath.Join(root, "build/game.x86_64")} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
@@ -94,7 +94,7 @@ func TestExportProjectUsesOutputPathWhenStdoutEmpty(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	if got, want := result.Content[0].Text, "Export succeeded.\n\nOutput: build/game.x86_64"; got != want {
+	if got, want := result.Content[0].Text, "Export succeeded.\n\nOutput: "+filepath.Join(root, "build/game.x86_64"); got != want {
 		t.Errorf("text = %q, want %q", got, want)
 	}
 }
