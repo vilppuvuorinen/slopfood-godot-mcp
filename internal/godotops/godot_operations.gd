@@ -1555,36 +1555,12 @@ func _convert_theme_property(theme, key, value):
         return value
     return _convert_value_for_type(type_id, value)
 
-# Validate that Godot itself loaded project.godot cleanly and report the
-# settings the engine actually applied. PropertySettings parses project.godot
-# during engine startup, before _init runs; when the file is malformed the
-# engine logs "Error parsing '<path>/project.godot'" to stderr and leaves the
-# affected settings at their defaults. This operation surfaces the settings
-# that differ from the engine defaults, so a caller can confirm both that the
-# project parsed and what Godot read back. Values use the tool value contract,
-# so a read value can be handed straight back to modify_project_settings.
+# Validate that Godot itself loaded project.godot cleanly. ProjectSettings
+# parses project.godot during engine startup, before _init runs; when the file
+# is malformed the engine logs "Error parsing '<path>/project.godot'" to stderr
+# and leaves the affected settings at their defaults. Starting the engine
+# against the project is the whole check, and the caller combines that stderr
+# diagnostic with the exit code, so this operation deliberately does no work of
+# its own and emits no payload for anyone to read.
 func validate_project(_params):
-    var sections = {}
-    var count = 0
-    for prop in ProjectSettings.get_property_list():
-        var setting_name = prop.name
-        var value = ProjectSettings.get_setting(setting_name)
-        if value != ProjectSettings.property_get_revert(setting_name):
-            var section = ""
-            var key = setting_name
-            var slash = setting_name.find("/")
-            if slash != -1:
-                section = setting_name.substr(0, slash)
-                key = setting_name.substr(slash + 1)
-            if not sections.has(section):
-                sections[section] = {}
-            sections[section][key] = _variant_to_json(value)
-            count += 1
-    var result = {
-        "projectPath": ProjectSettings.globalize_path("res://"),
-        "settingCount": count,
-        "sections": sections,
-    }
-    print(JSON_START)
-    print(JSON.stringify(result))
-    print(JSON_END)
+    pass
