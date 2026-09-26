@@ -231,6 +231,215 @@ func TestManageAnimationTool(t *testing.T) {
 			t.Errorf("payload = %+v, want length 3 pingpong", payload)
 		}
 	})
+
+	t.Run("adds the 3D and blend-shape track family", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+		createTestAnimation(t, session)
+
+		requireToolText(t, session, "manage_animation", map[string]any{
+			"resourcePath": "anims/walk.tres",
+			"action":       "add",
+			"trackType":    "position_3d",
+			"trackPath":    "root",
+			"keys": []any{
+				map[string]any{"time": 0, "value": map[string]any{"$type": "Vector3", "x": 1, "y": 2, "z": 3}},
+			},
+		})
+		requireToolText(t, session, "manage_animation", map[string]any{
+			"resourcePath": "anims/walk.tres",
+			"action":       "add",
+			"trackType":    "rotation_3d",
+			"trackPath":    "root",
+			"keys": []any{
+				map[string]any{"time": 0, "value": map[string]any{"$type": "Quaternion", "x": 0.5, "y": 0.5, "z": 0.5, "w": 0.5}},
+			},
+		})
+		requireToolText(t, session, "manage_animation", map[string]any{
+			"resourcePath": "anims/walk.tres",
+			"action":       "add",
+			"trackType":    "scale_3d",
+			"trackPath":    "root",
+			"keys": []any{
+				map[string]any{"time": 0, "value": map[string]any{"$type": "Vector3", "x": 2, "y": 3, "z": 4}},
+			},
+		})
+		requireToolText(t, session, "manage_animation", map[string]any{
+			"resourcePath": "anims/walk.tres",
+			"action":       "add",
+			"trackType":    "blend_shape",
+			"trackPath":    "root",
+			"keys": []any{
+				map[string]any{"time": 0.25, "value": 0.75},
+			},
+		})
+
+		payload := readAnimationPayload(t, session)
+		wantTypes := []string{"position_3d", "rotation_3d", "scale_3d", "blend_shape"}
+		if len(payload.Tracks) != len(wantTypes) {
+			t.Fatalf("tracks = %v, want %d", payload.Tracks, len(wantTypes))
+		}
+		for i, want := range wantTypes {
+			if got := payload.Tracks[i]["type"]; got != want {
+				t.Errorf("track %d type = %v, want %q", i, got, want)
+			}
+		}
+
+		position := godotMap(t, firstKeyValue(t, payload.Tracks[0]))
+		if position["$type"] != "Vector3" || position["x"] != float64(1) || position["y"] != float64(2) || position["z"] != float64(3) {
+			t.Errorf("position key = %v", position)
+		}
+		rotation := godotMap(t, firstKeyValue(t, payload.Tracks[1]))
+		if rotation["$type"] != "Quaternion" || rotation["w"] != float64(0.5) {
+			t.Errorf("rotation key = %v", rotation)
+		}
+		scale := godotMap(t, firstKeyValue(t, payload.Tracks[2]))
+		if scale["$type"] != "Vector3" || scale["x"] != float64(2) {
+			t.Errorf("scale key = %v", scale)
+		}
+		if got := firstKeyValue(t, payload.Tracks[3]); got != float64(0.75) {
+			t.Errorf("blend shape key = %v, want 0.75", got)
+		}
+	})
+
+	t.Run("adds a bezier track with and without handles", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+		createTestAnimation(t, session)
+
+		requireToolText(t, session, "manage_animation", map[string]any{
+			"resourcePath": "anims/walk.tres",
+			"action":       "add",
+			"trackType":    "bezier",
+			"trackPath":    "root",
+			"keys": []any{
+				map[string]any{
+					"time":      0,
+					"value":     1.5,
+					"inHandle":  map[string]any{"$type": "Vector2", "x": 0.25, "y": 0},
+					"outHandle": map[string]any{"$type": "Vector2", "x": -0.25, "y": 0},
+				},
+				// No handles: the bridge must default both to zero.
+				map[string]any{"time": 1, "value": 2.5},
+			},
+		})
+
+		payload := readAnimationPayload(t, session)
+		if len(payload.Tracks) != 1 || payload.Tracks[0]["type"] != "bezier" {
+			t.Fatalf("tracks = %v, want one bezier", payload.Tracks)
+		}
+		keys, _ := payload.Tracks[0]["keys"].([]any)
+		if len(keys) != 2 {
+			t.Fatalf("keys = %v, want two", keys)
+		}
+		first, _ := keys[0].(map[string]any)
+		if first["value"] != float64(1.5) {
+			t.Errorf("first bezier value = %v, want 1.5", first["value"])
+		}
+		second, _ := keys[1].(map[string]any)
+		if second["value"] != float64(2.5) {
+			t.Errorf("second bezier value = %v, want 2.5", second["value"])
+		}
+		// The first key supplies handles and the second omits them, so both
+		// decode arms of the handle reader run. Godot's bezier insert does not
+		// retain handle offsets in supported builds, so only the emitted shape
+		// is pinned here.
+		for _, key := range []map[string]any{first, second} {
+			for _, field := range []string{"inHandle", "outHandle"} {
+				if handle, _ := key[field].(map[string]any); handle["$type"] != "Vector2" {
+					t.Errorf("%s = %v, want a tagged Vector2", field, key[field])
+				}
+			}
+		}
+	})
+
+	t.Run("adds audio and nested animation tracks", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+		createTestAnimation(t, session)
+
+		// An animation track's value is the name of the animation to play,
+		// decoded as a StringName; an audio track's value is a resource
+		// reference. Each track carries two keys, one bare and one tagged, so
+		// both decode arms run.
+		requireToolText(t, session, "manage_animation", map[string]any{
+			"resourcePath": "anims/walk.tres",
+			"action":       "add",
+			"trackType":    "animation",
+			"keys": []any{
+				map[string]any{"time": 0, "value": "idle"},
+				map[string]any{"time": 1, "value": map[string]any{"$type": "StringName", "value": "idle"}},
+			},
+		})
+		requireToolText(t, session, "manage_resource", map[string]any{
+			"resourcePath": "anims/beep.tres",
+			"action":       "create",
+			"resourceType": "AudioStreamWAV",
+		})
+		requireToolText(t, session, "manage_animation", map[string]any{
+			"resourcePath": "anims/walk.tres",
+			"action":       "add",
+			"trackType":    "audio",
+			"keys": []any{
+				map[string]any{"time": 0, "value": "res://anims/beep.tres", "startOffset": 0.1, "endOffset": 0.5},
+				map[string]any{"time": 1, "value": map[string]any{"$type": "Resource", "path": "res://anims/beep.tres"}},
+			},
+		})
+
+		payload := readAnimationPayload(t, session)
+		if len(payload.Tracks) != 2 {
+			t.Fatalf("tracks = %v, want two", payload.Tracks)
+		}
+		if payload.Tracks[0]["type"] != "animation" || payload.Tracks[1]["type"] != "audio" {
+			t.Fatalf("track types = %v, %v", payload.Tracks[0]["type"], payload.Tracks[1]["type"])
+		}
+		for _, value := range keyValues(t, payload.Tracks[0]) {
+			name, ok := value.(map[string]any)
+			if !ok || name["$type"] != "StringName" || name["value"] != "idle" {
+				t.Errorf("animation key value = %v, want StringName idle", value)
+			}
+		}
+		for _, value := range keyValues(t, payload.Tracks[1]) {
+			key, ok := value.(map[string]any)
+			if !ok {
+				t.Errorf("audio key value = %v, want an object", value)
+				continue
+			}
+			stream, ok := key["stream"].(map[string]any)
+			if !ok || stream["$type"] != "Resource" || stream["path"] != "res://anims/beep.tres" {
+				t.Errorf("audio key stream = %v, want a Resource at res://anims/beep.tres", key["stream"])
+			}
+		}
+	})
+}
+
+// firstKeyValue returns the "value" of a track's first key, failing when the
+// track has no keys.
+func firstKeyValue(t *testing.T, track map[string]any) any {
+	t.Helper()
+	values := keyValues(t, track)
+	if len(values) == 0 {
+		t.Fatalf("track %v has no keys", track)
+	}
+	return values[0]
+}
+
+// keyValues returns the "value" of every key on a track, in key order.
+func keyValues(t *testing.T, track map[string]any) []any {
+	t.Helper()
+	keys, _ := track["keys"].([]any)
+	out := make([]any, 0, len(keys))
+	for _, item := range keys {
+		key, ok := item.(map[string]any)
+		if !ok {
+			t.Fatalf("key = %#v", item)
+		}
+		out = append(out, key["value"])
+	}
+	return out
 }
 
 // TestManageAnimationErrors covers the validation and engine failure paths.

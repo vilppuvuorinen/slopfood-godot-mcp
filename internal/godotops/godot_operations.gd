@@ -1963,7 +1963,7 @@ func _insert_animation_key(animation, track_index, type_id, time, key) -> bool:
             return false
         animation.audio_track_insert_key(track_index, time, stream, _animation_number_default(key.get("startOffset", 0.0), "startOffset"), _animation_number_default(key.get("endOffset", 0.0), "endOffset"))
     elif type_id == Animation.TYPE_ANIMATION:
-        var nested = _animation_resource_value(value)
+        var nested = _animation_string_name(value)
         if _decode_error != "":
             return false
         animation.animation_track_insert_key(track_index, time, nested)
@@ -2022,14 +2022,25 @@ func _animation_number(value, label) -> float:
 func _animation_number_default(value, label) -> float:
     return _animation_number(value, label)
 
-# Decode a resource reference for an audio or animation track value: a res://
-# path or a tagged Resource.
+# Decode a resource reference for an audio track value: a res:// path or a
+# tagged Resource.
 func _animation_resource_value(value):
     if value is String:
         return _decode_resource_path(value)
     if value is Dictionary and value.has("$type"):
         return _decode_typed(value)
     _decode_error = "expected a res:// path or tagged Resource for this track's value"
+    return null
+
+# Decode an animation-track value: the name of the animation to play, as a bare
+# string or a tagged StringName. Unlike an audio track, the engine stores a
+# StringName here, not a Resource.
+func _animation_string_name(value):
+    if value is String:
+        return StringName(value)
+    if value is Dictionary and value.get("$type", "") == "StringName":
+        return _decode_typed(value)
+    _decode_error = "expected an animation name string or tagged StringName for this track's value"
     return null
 
 func _track_type_id(name) -> int:

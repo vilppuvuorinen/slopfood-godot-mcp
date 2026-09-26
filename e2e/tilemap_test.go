@@ -66,6 +66,47 @@ func readTilesetPayload(t *testing.T, session *mcp.ClientSession) testTilesetPay
 	return payload
 }
 
+// tileAlternatives returns the alternatives of the first tile of the first
+// source in a tileset payload.
+func tileAlternatives(t *testing.T, payload testTilesetPayload) []map[string]any {
+	t.Helper()
+	if len(payload.Sources) == 0 {
+		t.Fatal("tileset has no sources")
+	}
+	tiles, _ := payload.Sources[0]["tiles"].([]any)
+	if len(tiles) == 0 {
+		t.Fatal("atlas source has no tiles")
+	}
+	tile, ok := tiles[0].(map[string]any)
+	if !ok {
+		t.Fatalf("tile = %#v", tiles[0])
+	}
+	raw, _ := tile["alternatives"].([]any)
+	out := make([]map[string]any, 0, len(raw))
+	for _, item := range raw {
+		alt, ok := item.(map[string]any)
+		if !ok {
+			t.Fatalf("alternative = %#v", item)
+		}
+		out = append(out, alt)
+	}
+	return out
+}
+
+// requireExtraAlternative returns the id of the first non-base alternative on
+// the first tile. The base tile is alternative 0, so a freshly added
+// alternative carries a positive id.
+func requireExtraAlternative(t *testing.T, payload testTilesetPayload) int {
+	t.Helper()
+	for _, alt := range tileAlternatives(t, payload) {
+		if id, ok := alt["id"].(float64); ok && id != 0 {
+			return int(id)
+		}
+	}
+	t.Fatalf("no non-base alternative in %v", tileAlternatives(t, payload))
+	return 0
+}
+
 // seedAtlasTexture writes a Texture2D resource the atlas source can reference.
 // A GradientTexture2D needs no import step, unlike a raw PNG.
 func seedAtlasTexture(t *testing.T, root string) {
@@ -160,7 +201,43 @@ func TestManageTilesetTool(t *testing.T) {
 		}
 	})
 
-	t.Run("adds a scenes source with a scene tile", func(t *testing.T) {
+	t.Run("removes a tile alternative", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+		seedAtlasTexture(t, root)
+		setupTestTileSet(t, session)
+
+		requireToolText(t, session, "manage_tileset", map[string]any{
+			"resourcePath": "tiles/set.tres",
+			"action":       "addAlternative",
+			"sourceId":     0,
+			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
+		})
+		added := readTilesetPayload(t, session)
+		if got := len(tileAlternatives(t, added)); got != 2 {
+			t.Fatalf("alternatives after add = %d, want 2", got)
+		}
+		alternativeID := requireExtraAlternative(t, added)
+
+		requireToolText(t, session, "manage_tileset", map[string]any{
+			"resourcePath":  "tiles/set.tres",
+			"action":        "removeAlternative",
+			"sourceId":      0,
+			"atlasCoords":   map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
+			"alternativeId": alternativeID,
+		})
+
+		remaining := tileAlternatives(t, readTilesetPayload(t, session))
+		if len(remaining) != 1 {
+			t.Fatalf("alternatives after remove = %v, want only the base", remaining)
+		}
+		if base, _ := remaining[0]["id"].(float64); base != 0 {
+			t.Errorf("remaining alternative id = %v, want the base 0", base)
+		}
+	})
+
+	t.Run("adds and removes a scenes source tile", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
@@ -188,7 +265,25 @@ func TestManageTilesetTool(t *testing.T) {
 		tiles, _ := payload.Sources[1]["tiles"].([]any)
 		tile, _ := tiles[0].(map[string]any)
 		if tile["scene"] != "props/box.tscn" {
-			t.Errorf("scene tile = %v", tile)
+			t.Fatalf("scene tile = %v", tile)
+		}
+		sceneTileID, ok := tile["sceneTileId"].(float64)
+		if !ok {
+			t.Fatalf("sceneTileId = %#v, want a number", tile["sceneTileId"])
+		}
+
+		// A scenes-collection tile is removed by sceneTileId, not atlasCoords.
+		requireToolText(t, session, "manage_tileset", map[string]any{
+			"resourcePath": "tiles/set.tres",
+			"action":       "removeTile",
+			"sourceId":     1,
+			"sceneTileId":  int(sceneTileID),
+		})
+
+		payload = readTilesetPayload(t, session)
+		tiles, _ = payload.Sources[1]["tiles"].([]any)
+		if len(tiles) != 0 {
+			t.Errorf("scene tiles after removal = %v, want none", tiles)
 		}
 	})
 
@@ -422,6 +517,41 @@ func TestManageTilemapTool(t *testing.T) {
 		payload := readTilemapPayload(t, session)
 		if len(payload.UsedCells) != 0 {
 			t.Errorf("usedCells = %v, want none after clear", payload.UsedCells)
+		}
+	})
+
+	t.Run("places a cell with an alternative tile", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		requireGodot(t, session)
+		seedAtlasTexture(t, root)
+		setupTestTileSet(t, session)
+		setupTilemapScene(t, session)
+
+		requireToolText(t, session, "manage_tileset", map[string]any{
+			"resourcePath": "tiles/set.tres",
+			"action":       "addAlternative",
+			"sourceId":     0,
+			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
+		})
+		alternativeID := requireExtraAlternative(t, readTilesetPayload(t, session))
+
+		requireToolText(t, session, "manage_tilemap", map[string]any{
+			"scenePath":       "scenes/level.tscn",
+			"nodePath":        "root/Ground",
+			"action":          "setCell",
+			"coords":          map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
+			"sourceId":        0,
+			"atlasCoords":     map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
+			"alternativeTile": alternativeID,
+		})
+
+		payload := readTilemapPayload(t, session)
+		if len(payload.UsedCells) != 1 {
+			t.Fatalf("usedCells = %v, want one", payload.UsedCells)
+		}
+		if got := payload.UsedCells[0]["alternativeTile"]; got != float64(alternativeID) {
+			t.Errorf("alternativeTile = %v, want %d", got, alternativeID)
 		}
 	})
 }
