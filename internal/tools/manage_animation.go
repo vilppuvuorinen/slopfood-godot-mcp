@@ -43,7 +43,7 @@ func manageAnimation() mcp.Tool {
 		Name:        "manage_animation",
 		Title:       "Manage Animation",
 		Description: "Create or modify Animation resources and their tracks",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: actionInputSchema(
 			map[string]any{
 				"resourcePath": map[string]any{

@@ -14,7 +14,7 @@ func clearTilemap() mcp.Tool {
 		Name:        "clear_tilemap",
 		Title:       "Clear Tilemap",
 		Description: "Clear every cell on a TileMapLayer node in a scene",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

@@ -18,7 +18,7 @@ func manageTheme() mcp.Tool {
 		Name:        "manage_theme",
 		Title:       "Manage Theme",
 		Description: "Create or modify Theme resources, their types, variations, and items",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: actionInputSchema(
 			map[string]any{
 				"resourcePath": map[string]any{

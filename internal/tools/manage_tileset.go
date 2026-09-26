@@ -24,7 +24,7 @@ func manageTileset() mcp.Tool {
 		Name:        "manage_tileset",
 		Title:       "Manage TileSet",
 		Description: "Create or modify TileSet resources and their sources and tiles",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: actionInputSchema(
 			map[string]any{
 				"resourcePath": map[string]any{

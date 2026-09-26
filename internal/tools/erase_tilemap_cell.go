@@ -14,7 +14,7 @@ func eraseTilemapCell() mcp.Tool {
 		Name:        "erase_tilemap_cell",
 		Title:       "Erase Tilemap Cell",
 		Description: "Erase a tile from a TileMapLayer node in a scene",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

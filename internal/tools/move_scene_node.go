@@ -14,7 +14,7 @@ func moveSceneNode() mcp.Tool {
 		Name:        "move_scene_node",
 		Title:       "Move Scene Node",
 		Description: "Move a node to a new parent in a .tscn scene",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

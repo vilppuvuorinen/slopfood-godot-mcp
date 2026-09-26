@@ -14,7 +14,7 @@ func addSceneSignal() mcp.Tool {
 		Name:        "add_scene_signal",
 		Title:       "Add Scene Signal",
 		Description: "Add a signal connection in a .tscn scene",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

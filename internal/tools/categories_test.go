@@ -138,13 +138,23 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 	}
 }
 
-// TestToolAnnotationsMatchBehavior pins the read-only/destructive hints to what
-// each tool actually does, so a mislabeled hint cannot survive a change. A
-// read-only tool must say so and never claim to be destructive. Every other
-// tool may write, so it must not claim to be read-only; tools that only add
-// data (create_project refuses to overwrite, add_node appends and never deletes
-// a sibling, update_project_uids only writes missing UID sidecars) declare
-// themselves non-destructive, and every remaining writer is destructive.
+// TestToolAnnotationsMatchBehavior pins every tool's behavior hints to a single
+// stated rule, so a mislabeled or omitted hint cannot survive a change.
+//
+//   - Read-only tools advertise readOnlyHint and never claim to be destructive.
+//   - A writer is destructive unless every effect is the creation of content
+//     that cannot replace what is already there: create_project refuses an
+//     existing project.godot and update_project_uids only writes missing .uid
+//     sidecars, so those two are additive; every other writer can rewrite or
+//     delete existing content.
+//   - A writer is idempotent when repeating the identical call leaves the
+//     project unchanged: assignments, guarded inserts, overwrites, and
+//     deletes. Tools whose actions mint new content each call (a node, a
+//     duplicate, a track, a preset, a tileset source or tile) are not
+//     idempotent.
+//
+// Every writer must declare both destructiveHint and idempotentHint, so an
+// omission fails the test rather than silently falling back to a default.
 func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	readOnly := map[string]bool{
 		"get_godot_version":     true,
@@ -164,15 +174,38 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"read_theme":            true,
 		"validate_scripts":      true,
 	}
-	additive := map[string]bool{
-		"add_node":            true,
+	nonDestructive := map[string]bool{
 		"create_project":      true,
 		"update_project_uids": true,
+	}
+	idempotent := map[string]bool{
+		"add_scene_signal":        true,
+		"attach_script":           true,
+		"clear_tilemap":           true,
+		"create_project":          true,
+		"create_scene":            true,
+		"erase_tilemap_cell":      true,
+		"export_mesh_library":     true,
+		"export_project":          true,
+		"manage_import":           true,
+		"manage_input_map":        true,
+		"manage_plugins":          true,
+		"manage_resource":         true,
+		"manage_theme":            true,
+		"modify_project_settings": true,
+		"modify_scene_node":       true,
+		"move_scene_node":         true,
+		"remove_scene_node":       true,
+		"remove_scene_signal":     true,
+		"rename_scene_node":       true,
+		"set_tilemap_cell":        true,
+		"update_project_uids":     true,
 	}
 	for _, category := range AllCategories {
 		for _, newTool := range categoryTools[category] {
 			tool := newTool()
 			if tool.Annotations == nil {
+				t.Errorf("tool %q has no annotations", tool.Name)
 				continue
 			}
 			if readOnly[tool.Name] {
@@ -187,12 +220,15 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 			if tool.Annotations.ReadOnlyHint != nil && *tool.Annotations.ReadOnlyHint {
 				t.Errorf("writing tool %q advertises readOnlyHint", tool.Name)
 			}
-			wantDestructive := !additive[tool.Name]
-			if wantDestructive && (tool.Annotations.DestructiveHint == nil || !*tool.Annotations.DestructiveHint) {
-				t.Errorf("destructive tool %q does not advertise destructiveHint", tool.Name)
+			if tool.Annotations.DestructiveHint == nil {
+				t.Errorf("writing tool %q does not declare destructiveHint", tool.Name)
+			} else if want := !nonDestructive[tool.Name]; *tool.Annotations.DestructiveHint != want {
+				t.Errorf("writing tool %q destructiveHint = %t, want %t", tool.Name, *tool.Annotations.DestructiveHint, want)
 			}
-			if !wantDestructive && tool.Annotations.DestructiveHint != nil && *tool.Annotations.DestructiveHint {
-				t.Errorf("additive tool %q advertises destructiveHint", tool.Name)
+			if tool.Annotations.IdempotentHint == nil {
+				t.Errorf("writing tool %q does not declare idempotentHint", tool.Name)
+			} else if want := idempotent[tool.Name]; *tool.Annotations.IdempotentHint != want {
+				t.Errorf("writing tool %q idempotentHint = %t, want %t", tool.Name, *tool.Annotations.IdempotentHint, want)
 			}
 		}
 	}

@@ -14,7 +14,7 @@ func duplicateSceneNode() mcp.Tool {
 		Name:        "duplicate_scene_node",
 		Title:       "Duplicate Scene Node",
 		Description: "Duplicate a node within a .tscn scene",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

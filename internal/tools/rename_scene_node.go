@@ -14,7 +14,7 @@ func renameSceneNode() mcp.Tool {
 		Name:        "rename_scene_node",
 		Title:       "Rename Scene Node",
 		Description: "Rename a node in a .tscn scene",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

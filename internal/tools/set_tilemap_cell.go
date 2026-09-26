@@ -14,7 +14,7 @@ func setTilemapCell() mcp.Tool {
 		Name:        "set_tilemap_cell",
 		Title:       "Set Tilemap Cell",
 		Description: "Place a tile on a TileMapLayer node in a scene",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

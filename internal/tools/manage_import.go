@@ -17,7 +17,7 @@ func manageImport() mcp.Tool {
 		Name:        "manage_import",
 		Title:       "Manage Import Metadata",
 		Description: "Set or remove a resource's import parameter and reimport it",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: actionInputSchema(
 			map[string]any{
 				"resourcePath": map[string]any{

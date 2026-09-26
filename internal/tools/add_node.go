@@ -14,7 +14,7 @@ func addNode() mcp.Tool {
 		Name:        "add_node",
 		Title:       "Add Node",
 		Description: "Add a built-in node or a scene instance to an existing scene (rewrites the .tscn file)",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
