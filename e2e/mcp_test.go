@@ -141,9 +141,6 @@ func TestStructuredContent(t *testing.T) {
 	if !ok {
 		t.Fatalf("structuredContent type %T", res.StructuredContent)
 	}
-	if structured["path"] != root {
-		t.Fatalf("path = %v, want %v", structured["path"], root)
-	}
 	if _, ok := structured["structure"].(map[string]any); !ok {
 		t.Fatalf("structure type %T", structured["structure"])
 	}

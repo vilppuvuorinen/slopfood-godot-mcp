@@ -75,9 +75,6 @@ func TestGetProjectInfoSuccess(t *testing.T) {
 	if info.Name != "My Game" {
 		t.Errorf("name = %q, want My Game", info.Name)
 	}
-	if info.Path != root {
-		t.Errorf("path = %q, want %q", info.Path, root)
-	}
 	if info.GodotVersion != "4.7.2.stable.official.fake" {
 		t.Errorf("godotVersion = %q", info.GodotVersion)
 	}

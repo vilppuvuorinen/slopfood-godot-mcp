@@ -8,7 +8,6 @@ import (
 
 type projectInfoResult struct {
 	Name         string `json:"name"`
-	Path         string `json:"path"`
 	GodotVersion string `json:"godotVersion"`
 	Structure    struct {
 		Scenes  int `json:"scenes"`
@@ -60,9 +59,6 @@ func TestGetProjectInfoTool(t *testing.T) {
 		info := decodeProjectInfo(t, requireToolText(t, session, "get_project_info", map[string]any{}))
 		if info.Name != "E2E Game" {
 			t.Errorf("name = %q, want E2E Game", info.Name)
-		}
-		if info.Path != root {
-			t.Errorf("path = %q, want %q", info.Path, root)
 		}
 		if info.GodotVersion == "" {
 			t.Error("godotVersion is empty")

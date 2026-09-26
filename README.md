@@ -8,9 +8,8 @@ One server process is bound to one Godot project, chosen at spawn in order of
 precedence: `--project /path`, then `$GODOT_PROJECT`, then the working
 directory. The bound path is the only place a caller can learn which project is
 in scope: it is advertised in the server's instructions (both the legacy
-`initialize` handshake and the stateless `server/discover` result), and it is
-echoed by `get_project_info.path` and by the `projectPath` field of the status
-envelope.
+`initialize` handshake and the stateless `server/discover` result) and echoed
+by the `projectPath` field of the status envelope.
 
 Tools take paths relative to the bound project and never accept a project
 argument, so there is no cursor, select tool, or per-call override. A second
@@ -29,10 +28,10 @@ forward slashes (`scenes/main.tscn`, `scripts/player.gd`); the engine's
 `sourcePath`, `parentNodePath`) are relative to the scene root, not to the
 project.
 
-The bound project's absolute location is the one deliberate exception: it is
-reported by `get_project_info.path` and by the `projectPath` field of the
-status envelope, so a caller can tell which project is in scope. Every other
-path-valued result field is project-relative.
+The bound project's absolute location is the one deliberate exception: the
+`projectPath` field of the status envelope reports it, so a caller can tell
+which project is in scope. Every other path-valued result field is
+project-relative.
 
 ## Tools and `--enable` categories
 

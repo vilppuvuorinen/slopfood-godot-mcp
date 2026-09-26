@@ -31,7 +31,6 @@ func getProjectInfo() mcp.Tool {
 			"type": "object",
 			"properties": map[string]any{
 				"name":         map[string]any{"type": "string"},
-				"path":         map[string]any{"type": "string", "description": "Absolute host filesystem path to the bound project root"},
 				"godotVersion": map[string]any{"type": "string"},
 				"structure": map[string]any{
 					"type": "object",
@@ -44,17 +43,15 @@ func getProjectInfo() mcp.Tool {
 					"required": []string{"scenes", "scripts", "assets", "other"},
 				},
 			},
-			"required": []string{"name", "path", "godotVersion", "structure"},
+			"required": []string{"name", "godotVersion", "structure"},
 		},
 		Handler: handleGetProjectInfo,
 	}
 }
 
-// projectInfo is the JSON payload returned on success. Field order matches the
-// reference server's object literal.
+// projectInfo is the JSON payload returned on success.
 type projectInfo struct {
 	Name         string           `json:"name"`
-	Path         string           `json:"path"`
 	GodotVersion string           `json:"godotVersion"`
 	Structure    projectStructure `json:"structure"`
 }
@@ -84,7 +81,6 @@ func handleGetProjectInfo(ctx context.Context, raw json.RawMessage) (any, error)
 
 	info := projectInfo{
 		Name:         readProjectName(project, projectFile),
-		Path:         project,
 		GodotVersion: version,
 		Structure:    countProjectStructure(project),
 	}
