@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
@@ -13,14 +14,14 @@ func readResource() mcp.Tool {
 	return mcp.Tool{
 		Name:        "read_resource",
 		Title:       "Read Resource",
-		Description: "Read .tres/.res resource files",
+		Description: "Read engine-decoded binary .res resource files (text .tres files are read directly)",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"resourcePath": map[string]any{
 					"type":        "string",
-					"description": "Resource file path (relative to project)",
+					"description": "Binary .res resource path (relative to project)",
 				},
 				"propertyFilter": map[string]any{
 					"type":        "array",
@@ -55,6 +56,15 @@ func handleReadResource(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
 		return notAProjectResult(project), nil
+	}
+
+	// A .tres is plain text, so the engine round-trip this tool performs adds
+	// nothing a direct read would not: reject it and point at the file itself.
+	if strings.HasSuffix(strings.ToLower(args.ResourcePath), ".tres") {
+		return mcp.ErrorResult(
+			"read_resource reads binary .res resources; "+args.ResourcePath+" is a text .tres file.",
+			"Read .tres files directly",
+		), nil
 	}
 
 	params := map[string]any{

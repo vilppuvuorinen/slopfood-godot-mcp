@@ -47,7 +47,7 @@ func TestManageResourceReadForwardsPropertyFilter(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readResource(), root, `{"resourcePath":"resources/mat.tres","propertyFilter":["metallic","albedo_*"]}`)
+	result := callToolArgs(t, readResource(), root, `{"resourcePath":"resources/mat.res","propertyFilter":["metallic","albedo_*"]}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -78,7 +78,7 @@ func TestManageResourceReadSuccess(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readResource(), root, `{"resourcePath":"resources/mat.tres"}`)
+	result := callToolArgs(t, readResource(), root, `{"resourcePath":"resources/mat.res"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -89,7 +89,7 @@ func TestManageResourceReadSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "manage_resource succeeded.") {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{`"resourcePath":"resources/mat.tres"`, `"action":"read"`} {
+	for _, want := range []string{`"resourcePath":"resources/mat.res"`, `"action":"read"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
@@ -100,16 +100,16 @@ func TestManageResourceReadSuccess(t *testing.T) {
 }
 
 func TestManageResourceReadStructured(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"type":"StandardMaterial3D","path":"resources/mat.tres"}\n<<<GODOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"type":"StandardMaterial3D","path":"resources/mat.res"}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readResource(), root, `{"resourcePath":"resources/mat.tres"}`)
+	result := callToolArgs(t, readResource(), root, `{"resourcePath":"resources/mat.res"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
 	text := result.Content[0].Text
-	for _, want := range []string{`"type": "StandardMaterial3D"`, `"path": "resources/mat.tres"`} {
+	for _, want := range []string{`"type": "StandardMaterial3D"`, `"path": "resources/mat.res"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
@@ -197,6 +197,7 @@ func TestManageResourceValidation(t *testing.T) {
 		{name: "missing resource path", tool: readResource, project: root, args: `{}`, want: "resourcePath is required."},
 		{name: "create without resource type", tool: manageResource, project: root, args: `{"resourcePath":"mat.tres","action":"create"}`, want: "resourceType is required for the create action."},
 		{name: "modify without properties", tool: manageResource, project: root, args: `{"resourcePath":"mat.tres","action":"modify"}`, want: "properties is required for the modify action."},
+		{name: "text .tres rejected", tool: readResource, project: root, args: `{"resourcePath":"mat.tres"}`, want: "read_resource reads binary .res resources"},
 		{name: "invalid project path", tool: readResource, project: "../escape", args: `{"resourcePath":"mat.tres"}`, want: "Invalid path."},
 		{name: "invalid resource path", tool: readResource, project: root, args: `{"resourcePath":"../escape.tres"}`, want: "Invalid path."},
 		{name: "not a project", tool: readResource, project: notAProject, args: `{"resourcePath":"mat.tres"}`, want: "Not a valid Godot project"},
@@ -219,7 +220,7 @@ func TestManageResourceScriptFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readResource(), root, `{"resourcePath":"mat.tres"}`)
+	result := callToolArgs(t, readResource(), root, `{"resourcePath":"mat.res"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -236,7 +237,7 @@ func TestManageResourceSpawnFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readResource(), root, `{"resourcePath":"mat.tres"}`)
+	result := callToolArgs(t, readResource(), root, `{"resourcePath":"mat.res"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

@@ -3,16 +3,35 @@ package e2e
 import (
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// resourceTres is a minimal StandardMaterial3D resource so the read/modify
-// manage_resource e2e tests start from an existing file.
+// resourceTres is a minimal StandardMaterial3D resource so tests that inspect a
+// hand-written text resource have one.
 const resourceTres = `[gd_resource type="StandardMaterial3D" format=3]
 
 [resource]
 metallic = 0.5
 `
+
+// seedMaterialRes creates a binary resources/mat.res StandardMaterial3D through
+// the engine. read_resource rejects the text .tres form, so a readable fixture
+// must be a binary file the engine wrote.
+func seedMaterialRes(t *testing.T, session *mcp.ClientSession) {
+	t.Helper()
+	requireToolText(t, session, "manage_resource", map[string]any{
+		"resourcePath": "resources/mat.res",
+		"action":       "create",
+		"resourceType": "StandardMaterial3D",
+		"properties": map[string]any{
+			"metallic":     0.5,
+			"albedo_color": map[string]any{"$type": "Color", "r": 1, "g": 0, "b": 0, "a": 1},
+		},
+	})
+}
 
 // TestManageResourceSchema ports the reference's tool-definition expectations
 // for manage_resource over the real stdio surface.
@@ -26,7 +45,7 @@ func TestManageResourceSchema(t *testing.T) {
 
 // TestReadResourceSchema ports the read-only resource tool's expectations.
 func TestReadResourceSchema(t *testing.T) {
-	schema := requireSchema(t, "read_resource", "Read .tres/.res resource files")
+	schema := requireSchema(t, "read_resource", "Read engine-decoded binary .res resource files (text .tres files are read directly)")
 	schema.requireRequired(t, "resourcePath")
 	schema.requireStringProps(t, "resourcePath")
 	schema.requireType(t, "propertyFilter", "array")
@@ -39,10 +58,10 @@ func TestManageResourceTool(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
-		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
+		seedMaterialRes(t, session)
 
 		text := requireToolText(t, session, "read_resource", map[string]any{
-			"resourcePath": "resources/mat.tres",
+			"resourcePath": "resources/mat.res",
 		})
 		var payload map[string]any
 		if err := json.Unmarshal([]byte(text), &payload); err != nil {
@@ -58,17 +77,17 @@ func TestManageResourceTool(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
-		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
+		seedMaterialRes(t, session)
 
 		text := requireToolText(t, session, "read_resource", map[string]any{
-			"resourcePath":   "resources/mat.tres",
+			"resourcePath":   "resources/mat.res",
 			"propertyFilter": []any{"metallic"},
 		})
 		requireContains(t, text, `"metallic": 0.5`)
 		requireNotContains(t, text, `"albedo_color"`)
 
 		text = requireToolText(t, session, "read_resource", map[string]any{
-			"resourcePath":   "resources/mat.tres",
+			"resourcePath":   "resources/mat.res",
 			"propertyFilter": []any{"albedo_*"},
 		})
 		requireContains(t, text, `"albedo_color"`)
@@ -79,10 +98,10 @@ func TestManageResourceTool(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
-		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
+		seedMaterialRes(t, session)
 
 		text := requireToolText(t, session, "read_resource", map[string]any{
-			"resourcePath":   "resources/mat.tres",
+			"resourcePath":   "resources/mat.res",
 			"propertyFilter": []any{"albed?_color"},
 		})
 		requireContains(t, text, `"albedo_color"`)
@@ -93,10 +112,10 @@ func TestManageResourceTool(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
-		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
+		seedMaterialRes(t, session)
 
 		text := requireToolText(t, session, "read_resource", map[string]any{
-			"resourcePath":   "resources/mat.tres",
+			"resourcePath":   "resources/mat.res",
 			"propertyFilter": []any{"nonexistent_*"},
 		})
 		requireContains(t, text, `"properties": {}`)
@@ -106,17 +125,17 @@ func TestManageResourceTool(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
-		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
+		seedMaterialRes(t, session)
 
 		modifyText := requireToolText(t, session, "manage_resource", map[string]any{
-			"resourcePath": "resources/mat.tres",
+			"resourcePath": "resources/mat.res",
 			"action":       "modify",
 			"properties":   map[string]any{"metallic": 0.75},
 		})
 		requirePrefix(t, modifyText, "manage_resource succeeded.")
 
 		readText := requireToolText(t, session, "read_resource", map[string]any{
-			"resourcePath": "resources/mat.tres",
+			"resourcePath": "resources/mat.res",
 		})
 		requireContains(t, readText, `"metallic": 0.75`)
 	})
@@ -127,7 +146,7 @@ func TestManageResourceTool(t *testing.T) {
 		requireGodot(t, session)
 
 		createText := requireToolText(t, session, "manage_resource", map[string]any{
-			"resourcePath": "materials/red.tres",
+			"resourcePath": "materials/red.res",
 			"action":       "create",
 			"resourceType": "StandardMaterial3D",
 			"properties": map[string]any{
@@ -136,13 +155,24 @@ func TestManageResourceTool(t *testing.T) {
 		})
 		requirePrefix(t, createText, "manage_resource succeeded.")
 
-		content := readFile(t, filepath.Join(root, "materials", "red.tres"))
-		requireContains(t, content, `[gd_resource type="StandardMaterial3D"`)
-
 		readText := requireToolText(t, session, "read_resource", map[string]any{
-			"resourcePath": "materials/red.tres",
+			"resourcePath": "materials/red.res",
 		})
-		requireContains(t, readText, `"type": "StandardMaterial3D"`, `"path": "materials/red.tres"`)
+		requireContains(t, readText, `"type": "StandardMaterial3D"`, `"path": "materials/red.res"`)
+	})
+
+	t.Run("rejects a text .tres", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
+
+		res := callTool(t, session, "read_resource", map[string]any{
+			"resourcePath": "resources/mat.tres",
+		})
+		if !res.IsError {
+			t.Fatalf("expected an error for a text .tres: %s", firstText(t, res))
+		}
+		requireContains(t, firstText(t, res), "read_resource reads binary .res resources")
 	})
 }
 
@@ -154,31 +184,28 @@ func TestManageResourceTheme(t *testing.T) {
 	requireGodot(t, session)
 
 	createText := requireToolText(t, session, "manage_resource", map[string]any{
-		"resourcePath": "themes/main.tres",
+		"resourcePath": "themes/main.res",
 		"action":       "create",
 		"resourceType": "Theme",
 		"properties":   map[string]any{"default_font_size": 16},
 	})
 	requirePrefix(t, createText, "manage_resource succeeded.")
 
-	themeFile := filepath.Join(root, "themes", "main.tres")
-	requireContains(t, readFile(t, themeFile), `[gd_resource type="Theme"`)
-
 	readText := requireToolText(t, session, "read_resource", map[string]any{
-		"resourcePath": "themes/main.tres",
+		"resourcePath": "themes/main.res",
 	})
 	requireContains(t, readText, `"type": "Theme"`, `"properties"`, `"default_font_size": 16`)
 	requireNotContains(t, readText, "THEME_JSON_START")
 
 	modifyText := requireToolText(t, session, "manage_resource", map[string]any{
-		"resourcePath": "themes/main.tres",
+		"resourcePath": "themes/main.res",
 		"action":       "modify",
 		"properties":   map[string]any{"default_font_size": 20},
 	})
 	requirePrefix(t, modifyText, "manage_resource succeeded.")
 
 	reReadText := requireToolText(t, session, "read_resource", map[string]any{
-		"resourcePath": "themes/main.tres",
+		"resourcePath": "themes/main.res",
 	})
 	requireContains(t, reReadText, `"type": "Theme"`, `"default_font_size": 20`)
 }
@@ -193,34 +220,25 @@ func TestManageResourceThemeConvertsTypes(t *testing.T) {
 	requireGodot(t, session)
 
 	requireToolText(t, session, "manage_resource", map[string]any{
-		"resourcePath": "themes/panel_box.tres",
+		"resourcePath": "themes/panel_box.res",
 		"action":       "create",
 		"resourceType": "StyleBoxFlat",
 	})
 
 	createText := requireToolText(t, session, "manage_resource", map[string]any{
-		"resourcePath": "themes/main.tres",
+		"resourcePath": "themes/main.res",
 		"action":       "create",
 		"resourceType": "Theme",
 		"properties": map[string]any{
 			"Label/colors/font_color":    map[string]any{"$type": "Color", "r": 1, "g": 0, "b": 0, "a": 1},
 			"Label/font_sizes/font_size": 24,
-			"Panel/styles/panel":         "res://themes/panel_box.tres",
+			"Panel/styles/panel":         "res://themes/panel_box.res",
 		},
 	})
 	requirePrefix(t, createText, "manage_resource succeeded.")
 
-	themeFile := filepath.Join(root, "themes", "main.tres")
-	content := readFile(t, themeFile)
-	requireContains(t, content,
-		"Color(1, 0, 0, 1)",
-		"Label/font_sizes/font_size = 24",
-		"panel_box.tres",
-	)
-	requireNotContains(t, content, "Panel/styles/panel = null")
-
 	readText := requireToolText(t, session, "read_resource", map[string]any{
-		"resourcePath": "themes/main.tres",
+		"resourcePath": "themes/main.res",
 	})
 	var readPayload struct {
 		Properties map[string]any `json:"properties"`
@@ -232,9 +250,17 @@ func TestManageResourceThemeConvertsTypes(t *testing.T) {
 	if !ok || fontColor["$type"] != "Color" || fontColor["r"] != float64(1) {
 		t.Errorf("font_color = %#v, want a tagged red Color", readPayload.Properties["Label/colors/font_color"])
 	}
+	if got := readPayload.Properties["Label/font_sizes/font_size"]; got != float64(24) {
+		t.Errorf("font_size = %#v, want 24", got)
+	}
+	panel, ok := readPayload.Properties["Panel/styles/panel"].(map[string]any)
+	panelPath, _ := panel["path"].(string)
+	if !ok || !strings.Contains(panelPath, "panel_box.res") {
+		t.Errorf("panel = %#v, want a reference to panel_box.res", readPayload.Properties["Panel/styles/panel"])
+	}
 
 	modifyText := requireToolText(t, session, "manage_resource", map[string]any{
-		"resourcePath": "themes/main.tres",
+		"resourcePath": "themes/main.res",
 		"action":       "modify",
 		"properties": map[string]any{
 			"Label/colors/font_color": map[string]any{"$type": "Color", "r": 0, "g": 0, "b": 1, "a": 1},
@@ -242,7 +268,19 @@ func TestManageResourceThemeConvertsTypes(t *testing.T) {
 	})
 	requirePrefix(t, modifyText, "manage_resource succeeded.")
 
-	requireContains(t, readFile(t, themeFile), "Color(0, 0, 1, 1)")
+	reReadText := requireToolText(t, session, "read_resource", map[string]any{
+		"resourcePath": "themes/main.res",
+	})
+	var reReadPayload struct {
+		Properties map[string]any `json:"properties"`
+	}
+	if err := json.Unmarshal([]byte(reReadText), &reReadPayload); err != nil {
+		t.Fatalf("unmarshal theme payload: %v\n%s", err, reReadText)
+	}
+	fontColor, ok = reReadPayload.Properties["Label/colors/font_color"].(map[string]any)
+	if !ok || fontColor["b"] != float64(1) {
+		t.Errorf("font_color = %#v, want a tagged blue Color", reReadPayload.Properties["Label/colors/font_color"])
+	}
 }
 
 // TestManageResourceThemeMoreCategories covers the theme item categories whose
@@ -254,26 +292,23 @@ func TestManageResourceThemeMoreCategories(t *testing.T) {
 	requireGodot(t, session)
 
 	requireToolText(t, session, "manage_resource", map[string]any{
-		"resourcePath": "themes/font.tres",
+		"resourcePath": "themes/font.res",
 		"action":       "create",
 		"resourceType": "SystemFont",
 	})
 
 	requireToolText(t, session, "manage_resource", map[string]any{
-		"resourcePath": "themes/categories.tres",
+		"resourcePath": "themes/categories.res",
 		"action":       "create",
 		"resourceType": "Theme",
 		"properties": map[string]any{
 			"Label/constants/outline_size": 4,
-			"Label/fonts/font":             "res://themes/font.tres",
+			"Label/fonts/font":             "res://themes/font.res",
 		},
 	})
 
-	content := readFile(t, filepath.Join(root, "themes", "categories.tres"))
-	requireContains(t, content, "Label/constants/outline_size = 4", "font.tres")
-
 	readText := requireToolText(t, session, "read_resource", map[string]any{
-		"resourcePath": "themes/categories.tres",
+		"resourcePath": "themes/categories.res",
 	})
 	var payload struct {
 		Properties map[string]any `json:"properties"`
@@ -283,6 +318,11 @@ func TestManageResourceThemeMoreCategories(t *testing.T) {
 	}
 	if got := payload.Properties["Label/constants/outline_size"]; got != float64(4) {
 		t.Errorf("outline_size = %#v, want 4", got)
+	}
+	font, ok := payload.Properties["Label/fonts/font"].(map[string]any)
+	fontPath, _ := font["path"].(string)
+	if !ok || !strings.Contains(fontPath, "font.res") {
+		t.Errorf("font = %#v, want a reference to font.res", payload.Properties["Label/fonts/font"])
 	}
 }
 
@@ -383,27 +423,27 @@ func TestManageResourceErrors(t *testing.T) {
 		requireGodot(t, session)
 
 		res := callTool(t, session, "read_resource", map[string]any{
-			"resourcePath": "resources/missing.tres",
+			"resourcePath": "resources/missing.res",
 		})
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
-		requireContains(t, firstText(t, res), "manage_resource failed", "Resource not found: res://resources/missing.tres")
+		requireContains(t, firstText(t, res), "manage_resource failed", "Resource not found: res://resources/missing.res")
 	})
 
 	t.Run("unloadable resource", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
-		writeE2EFile(t, filepath.Join(root, "resources", "bad.tres"), "this is not a valid resource\n")
+		writeE2EFile(t, filepath.Join(root, "resources", "bad.res"), "this is not a valid resource\n")
 
 		res := callTool(t, session, "read_resource", map[string]any{
-			"resourcePath": "resources/bad.tres",
+			"resourcePath": "resources/bad.res",
 		})
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
-		requireContains(t, firstText(t, res), "manage_resource failed", "Failed to load resource: res://resources/bad.tres")
+		requireContains(t, firstText(t, res), "manage_resource failed", "Failed to load resource: res://resources/bad.res")
 	})
 
 	t.Run("invalid property value", func(t *testing.T) {
