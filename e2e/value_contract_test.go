@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -91,6 +92,113 @@ func TestValueContractScriptHalf(t *testing.T) {
 	if !reflect.DeepEqual(again, read) {
 		t.Errorf("write-back changed the value:\n first = %#v\n second = %#v", read, again)
 	}
+}
+
+// TestValueContractGoEncoderHalf feeds the Go encoder's output through the real
+// engine. modify_project_settings decodes each fixture value and formats its
+// Godot literal, which lands in project.godot; read_project_settings then loads
+// the file with Godot, so every literal the encoder produced must be one the
+// engine parses. Unlike TestValueContractScriptHalf, the engine never sees the
+// JSON contract here.
+func TestValueContractGoEncoderHalf(t *testing.T) {
+	contract := loadValueContract(t)
+	root := newProject(t)
+	session := connectProject(t, root)
+	requireGodot(t, session)
+
+	keys := make([]string, len(contract.Values))
+	for i, entry := range contract.Values {
+		keys[i] = fmt.Sprintf("k%02d", i)
+		res := callTool(t, session, "modify_project_settings", map[string]any{
+			"section": "contract",
+			"key":     keys[i],
+			"value":   entry.Value,
+		})
+		if res.IsError {
+			t.Fatalf("%s: modify_project_settings error: %s", entry.Name, firstText(t, res))
+		}
+	}
+
+	// The file holds exactly the literals the Go encoder formatted.
+	content := readFile(t, filepath.Join(root, "project.godot"))
+	for i, entry := range contract.Values {
+		if want := keys[i] + "=" + entry.Godot; !strings.Contains(content, want) {
+			t.Errorf("project.godot missing encoder output %q", want)
+		}
+	}
+
+	// read_project_settings loads the whole file with Godot first, so a literal
+	// the engine rejects fails here rather than silently passing.
+	sections := requireProjectSettingsRoundTrip(t, session)
+	stored, ok := sections["contract"]
+	if !ok {
+		t.Fatalf("contract section missing; sections = %#v", sections)
+	}
+	if len(stored) != len(contract.Values) {
+		t.Errorf("stored %d settings, want %d", len(stored), len(contract.Values))
+	}
+	for i, entry := range contract.Values {
+		got, ok := stored[keys[i]]
+		if !ok {
+			t.Errorf("%s: key %s missing from read-back", entry.Name, keys[i])
+			continue
+		}
+		// Tags the Go codec models directly come back exactly. Engine-only tags
+		// canonicalize to the GodotText escape hatch, whose round trip the Go
+		// half already pins; here the engine acceptance above is what matters.
+		if !valueContractTagsSurvive(entry.Value) {
+			continue
+		}
+		var want any
+		if err := json.Unmarshal(entry.Value, &want); err != nil {
+			t.Fatalf("unmarshal fixture %s: %v", entry.Name, err)
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("%s: read-back = %#v, want %#v", entry.Name, got, want)
+		}
+	}
+}
+
+// readbackTypedTags are the fixture tags the Go codec models as their own Value
+// type, so they survive a write-read round trip. Every other engine tag decodes
+// to Opaque and re-encodes as GodotText.
+var readbackTypedTags = map[string]bool{
+	"StringName":        true,
+	"PackedStringArray": true,
+	"GodotText":         true,
+}
+
+// valueContractTagsSurvive reports whether every tagged object in a fixture
+// value uses a tag the Go codec models directly, so the read-back equals the
+// fixture value. A value with an engine-only tag anywhere (including nested)
+// does not.
+func valueContractTagsSurvive(raw json.RawMessage) bool {
+	var tree any
+	if err := json.Unmarshal(raw, &tree); err != nil {
+		return false
+	}
+	var walk func(any) bool
+	walk = func(node any) bool {
+		switch n := node.(type) {
+		case map[string]any:
+			if tag, ok := n["$type"].(string); ok && !readbackTypedTags[tag] {
+				return false
+			}
+			for _, child := range n {
+				if !walk(child) {
+					return false
+				}
+			}
+		case []any:
+			for _, child := range n {
+				if !walk(child) {
+					return false
+				}
+			}
+		}
+		return true
+	}
+	return walk(tree)
 }
 
 // contractJSON builds a single Dictionary value keyed by fixture name, with each
