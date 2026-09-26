@@ -81,6 +81,18 @@ func lineOf(t *testing.T, src, substr string) int {
 	return 0
 }
 
+// runInstrumentedAt runs an instrumented script under a real engine, appending
+// hits to hitsPath, and fails when the engine exits non-zero.
+func runInstrumentedAt(t *testing.T, engine, project, script, hitsPath string) {
+	t.Helper()
+	cmd := exec.CommandContext(context.Background(), engine, //nolint:gosec // engine is the test's own binary.
+		"--headless", "--path", project, "--script", script)
+	cmd.Env = append(os.Environ(), fileEnv+"="+hitsPath)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("run instrumented script: %v\n%s", err, out)
+	}
+}
+
 // runInstrumented writes src to a file, runs it under a real engine, and
 // returns the reported hit lines.
 func runInstrumented(t *testing.T, engine, src string) map[int]bool {
@@ -89,13 +101,66 @@ func runInstrumented(t *testing.T, engine, src string) map[int]bool {
 	script := filepath.Join(dir, "instrumented.gd")
 	writeFile(t, script, src)
 	hits := filepath.Join(dir, "hits.txt")
-	cmd := exec.CommandContext(context.Background(), engine, //nolint:gosec // engine is the test's own binary.
-		"--headless", "--path", writeProject(t), "--script", script)
-	cmd.Env = append(os.Environ(), fileEnv+"="+hits)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("run instrumented script: %v\n%s", err, out)
-	}
+	runInstrumentedAt(t, engine, writeProject(t), script, hits)
 	return readHits(t, hits)
+}
+
+// TestInstrumentedScriptsAppendAcrossRuns guards the shared hit trace: every
+// engine process the e2e suite spawns writes to the same GDCOVER_FILE, so a
+// later run must add to the earlier run's hits instead of reopening the file in
+// truncating write mode. A regression here silently shrinks the bridge report
+// to whatever the last engine process happened to execute.
+func TestInstrumentedScriptsAppendAcrossRuns(t *testing.T) {
+	engine := requireGodot(t)
+	dir := t.TempDir()
+	project := writeProject(t)
+	hits := filepath.Join(dir, "hits.txt")
+
+	// The two scripts report different lines ("# first" on line 4, "# second"
+	// on line 6) so a set of hits distinguishes append from truncate.
+	first := `extends SceneTree
+
+func _init():
+    print("first")  # first
+    quit(0)
+`
+	second := `extends SceneTree
+
+# A leading comment shifts the body so the two runs report different lines.
+
+func _init():
+    print("second")  # second
+    quit(0)
+`
+
+	firstResult, err := Instrument([]byte(first))
+	if err != nil {
+		t.Fatalf("Instrument first: %v", err)
+	}
+	secondResult, err := Instrument([]byte(second))
+	if err != nil {
+		t.Fatalf("Instrument second: %v", err)
+	}
+
+	firstScript := filepath.Join(dir, "first.gd")
+	writeFile(t, firstScript, string(firstResult.Source))
+	runInstrumentedAt(t, engine, project, firstScript, hits)
+
+	secondScript := filepath.Join(dir, "second.gd")
+	writeFile(t, secondScript, string(secondResult.Source))
+	runInstrumentedAt(t, engine, project, secondScript, hits)
+
+	got := readHits(t, hits)
+	for _, line := range linesWith(first, "# first") {
+		if !got[line] {
+			t.Errorf("line %d from the first run was truncated; hits=%v", line, got)
+		}
+	}
+	for _, line := range linesWith(second, "# second") {
+		if !got[line] {
+			t.Errorf("line %d from the second run is missing; hits=%v", line, got)
+		}
+	}
 }
 
 // TestInstrumentedScriptReportsHits is the end-to-end proof: instrument a
