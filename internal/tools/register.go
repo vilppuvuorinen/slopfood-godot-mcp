@@ -12,22 +12,20 @@ import (
 type Category string
 
 const (
-	CategoryProject  Category = "project"
-	CategorySettings Category = "settings"
-	CategoryExport   Category = "export"
-	CategoryScene    Category = "scene"
-	CategoryNode     Category = "node"
-	CategorySignals  Category = "signals"
-	CategoryTilemap  Category = "tilemap"
-	CategoryScript   Category = "script"
-	CategoryAssets   Category = "assets"
-	CategoryMedia    Category = "media"
+	CategoryProject Category = "project"
+	CategoryExport  Category = "export"
+	CategoryScene   Category = "scene"
+	CategoryNode    Category = "node"
+	CategorySignals Category = "signals"
+	CategoryTilemap Category = "tilemap"
+	CategoryScript  Category = "script"
+	CategoryAssets  Category = "assets"
+	CategoryMedia   Category = "media"
 )
 
 // AllCategories lists every category in registration order.
 var AllCategories = []Category{
 	CategoryProject,
-	CategorySettings,
 	CategoryExport,
 	CategoryScene,
 	CategoryNode,
@@ -43,9 +41,6 @@ var AllCategories = []Category{
 var categoryTools = map[Category][]func() mcp.Tool{
 	CategoryProject: {
 		getGodotVersion, getProjectInfo, createProject, validateProject,
-	},
-	CategorySettings: {
-		managePlugins, readPlugins,
 	},
 	CategoryExport: {
 		manageExportPresets, exportProject,

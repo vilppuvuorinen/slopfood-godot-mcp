@@ -11,7 +11,6 @@ func TestEnableCategories(t *testing.T) {
 		for _, name := range []string{
 			"get_project_info",      // project
 			"validate_project",      // project
-			"manage_plugins",        // settings
 			"manage_export_presets", // export
 			"create_scene",          // scene
 			"add_node",              // node
@@ -34,11 +33,11 @@ func TestEnableCategories(t *testing.T) {
 	})
 
 	t.Run("comma-separated categories", func(t *testing.T) {
-		session := connectCategories(t, "project,settings")
+		session := connectCategories(t, "project,node")
 
 		findTool(t, session, "get_project_info")
 		findTool(t, session, "validate_project")
-		findTool(t, session, "manage_plugins")
+		findTool(t, session, "add_node")
 		requireToolAbsent(t, session, "create_scene")
 	})
 
@@ -48,7 +47,6 @@ func TestEnableCategories(t *testing.T) {
 		for _, name := range []string{
 			"get_project_info",      // project
 			"validate_project",      // project
-			"manage_plugins",        // settings
 			"manage_export_presets", // export
 			"create_scene",          // scene
 			"add_node",              // node

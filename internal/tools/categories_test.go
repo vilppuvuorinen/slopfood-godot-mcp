@@ -118,8 +118,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 34 {
-		t.Errorf("registered %d tools, want 34", len(seen))
+	if len(seen) != 32 {
+		t.Errorf("registered %d tools, want 32", len(seen))
 	}
 }
 
@@ -190,7 +190,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"get_godot_version": true,
 		"get_project_info":  true,
 		"read_animation":    true,
-		"read_plugins":      true,
 		"read_resource":     true,
 		"read_scene":        true,
 		"read_tilemap":      true,
@@ -213,7 +212,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"export_mesh_library": true,
 		"export_project":      true,
 		"reimport_project":    true,
-		"manage_plugins":      true,
 		"manage_resource":     true,
 		"manage_theme":        true,
 		"modify_scene_node":   true,

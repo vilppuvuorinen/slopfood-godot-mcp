@@ -283,12 +283,6 @@ func TestSuccessResultsMatchOutputSchema(t *testing.T) {
 		seedFile(t, filepath.Join(root, "export_presets.cfg"), "[preset.0]\n\nname=\"Linux\"\nplatform=\"Linux\"\n")
 		return root
 	}
-	projectWithPlugin := func(t *testing.T) string {
-		t.Helper()
-		root := project(t)
-		seedFile(t, filepath.Join(root, "addons", "demo", "plugin.cfg"), "[plugin]\n\nname=\"Demo\"\n")
-		return root
-	}
 	tests := []struct {
 		name  string
 		tool  func() mcp.Tool
@@ -298,9 +292,6 @@ func TestSuccessResultsMatchOutputSchema(t *testing.T) {
 		{name: "create_project", tool: createProject, args: `{"projectName":"Demo"}`, setup: func(t *testing.T) string { t.Helper(); return t.TempDir() }},
 		{name: "manage_export_presets add", tool: manageExportPresets, args: `{"action":"add","name":"Linux","platform":"Linux"}`, setup: project},
 		{name: "manage_export_presets remove", tool: manageExportPresets, args: `{"action":"remove","name":"Linux"}`, setup: projectWithPreset},
-		{name: "read_plugins", tool: readPlugins, args: `{}`, setup: projectWithPlugin},
-		{name: "manage_plugins enable", tool: managePlugins, args: `{"action":"enable","plugin":"addons/demo/plugin.cfg"}`, setup: projectWithPlugin},
-		{name: "manage_plugins disable", tool: managePlugins, args: `{"action":"disable","plugin":"addons/demo/plugin.cfg"}`, setup: projectWithPlugin},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

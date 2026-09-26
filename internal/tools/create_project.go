@@ -16,6 +16,9 @@ import (
 )
 
 const (
+	// godot4ConfigVersion is the config_version Godot 4.x writes to project.godot.
+	godot4ConfigVersion = 5
+
 	// defaultGodotVersion is written to config/features when the reference
 	// server has no version to go on.
 	defaultGodotVersion = "4.4"

@@ -7,7 +7,6 @@ import (
 	"context"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -153,7 +152,7 @@ func TestStructuredContent(t *testing.T) {
 // TestMutationToolMetadata asserts a mutation tool advertises an output schema
 // and non-read-only annotations.
 func TestMutationToolMetadata(t *testing.T) {
-	tool := findTool(t, connect(t), "manage_plugins")
+	tool := findTool(t, connect(t), "create_scene")
 	if tool.OutputSchema == nil {
 		t.Error("outputSchema missing")
 	}
@@ -166,21 +165,21 @@ func TestMutationToolMetadata(t *testing.T) {
 // structuredContent alongside its text block.
 func TestMutationStructuredContent(t *testing.T) {
 	root := newProject(t)
-	writeE2EFile(t, filepath.Join(root, "addons", "demo", "plugin.cfg"), "[plugin]\n\nname=\"Demo\"\n")
 	session := connectProject(t, root)
+	requireGodot(t, session)
 
-	res := callTool(t, session, "manage_plugins", map[string]any{
-		"action": "enable",
-		"plugin": "addons/demo/plugin.cfg",
+	res := callTool(t, session, "create_scene", map[string]any{
+		"scenePath":    "level.tscn",
+		"rootNodeType": "Node2D",
 	})
 	if res.IsError {
-		t.Fatalf("manage_plugins error: %s", firstText(t, res))
+		t.Fatalf("create_scene error: %s", firstText(t, res))
 	}
 	structured, ok := res.StructuredContent.(map[string]any)
 	if !ok {
 		t.Fatalf("structuredContent type %T", res.StructuredContent)
 	}
-	if structured["plugin"] != "addons/demo/plugin.cfg" {
-		t.Errorf("plugin = %v", structured["plugin"])
+	if structured["scenePath"] != "level.tscn" {
+		t.Errorf("scenePath = %v", structured["scenePath"])
 	}
 }

@@ -359,13 +359,3 @@ func notAProjectResult(projectPath string) mcp.ToolResult {
 		"Create a project with create_project if none exists",
 	)
 }
-
-// unsupportedProjectResult is the shared error for a project.godot this server
-// does not implement, so the caller gets a recovery hint instead of only the
-// parse failure.
-func unsupportedProjectResult(err error) mcp.ToolResult {
-	return mcp.ErrorResult(
-		"Unsupported Godot project: "+err.Error(),
-		"Use a Godot 4.x project (project.godot with config_version=5)",
-	)
-}

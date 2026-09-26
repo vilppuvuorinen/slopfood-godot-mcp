@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"testing"
-
-	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 // validateProjectPayload is the subset of validate_project's payload the tests
@@ -13,20 +11,6 @@ import (
 type validateProjectPayload struct {
 	Valid  bool     `json:"valid"`
 	Errors []string `json:"errors"`
-}
-
-// requireValidProject asserts the bound project loads cleanly through the
-// engine-backed validate_project tool.
-func requireValidProject(t *testing.T, session *mcp.ClientSession) {
-	t.Helper()
-	text := requireToolText(t, session, "validate_project", map[string]any{})
-	var payload validateProjectPayload
-	if err := json.Unmarshal([]byte(text), &payload); err != nil {
-		t.Fatalf("unmarshal validate_project %q: %v", text, err)
-	}
-	if !payload.Valid {
-		t.Errorf("project invalid: %v", payload.Errors)
-	}
 }
 
 // TestValidateProjectSchema pins the tool's input and output surface.
