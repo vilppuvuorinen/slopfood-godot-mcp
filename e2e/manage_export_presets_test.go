@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"testing"
 )
@@ -17,19 +16,9 @@ func TestManageExportPresetsSchema(t *testing.T) {
 }
 
 // TestManageExportPresetsTool drives the real manage_export_presets tool for
-// list, add, and remove.
+// add and remove.
 func TestManageExportPresetsTool(t *testing.T) {
-	t.Run("list empty", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
-		text := requireToolText(t, session, "read_export_presets", map[string]any{})
-		if got, want := text, "{\n  \"presets\": []\n}"; got != want {
-			t.Errorf("text = %q, want %q", got, want)
-		}
-	})
-
-	t.Run("add then list", func(t *testing.T) {
+	t.Run("add", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 
@@ -44,20 +33,6 @@ func TestManageExportPresetsTool(t *testing.T) {
 		}
 		requireContains(t, readFile(t, filepath.Join(root, "export_presets.cfg")),
 			"[preset.", `name="Linux"`, `platform="Linux"`, "runnable=true")
-
-		list := requireToolText(t, session, "read_export_presets", map[string]any{})
-		var decoded struct {
-			Presets []struct {
-				Name     string `json:"name"`
-				Platform string `json:"platform"`
-			} `json:"presets"`
-		}
-		if err := json.Unmarshal([]byte(list), &decoded); err != nil {
-			t.Fatalf("unmarshal %q: %v", list, err)
-		}
-		if len(decoded.Presets) != 1 || decoded.Presets[0].Name != "Linux" || decoded.Presets[0].Platform != "Linux" {
-			t.Errorf("presets = %+v", decoded.Presets)
-		}
 	})
 
 	t.Run("remove", func(t *testing.T) {
@@ -88,8 +63,10 @@ func TestManageExportPresetsErrors(t *testing.T) {
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
 		session := connectProject(t, root)
-		requireToolError(t, session, "read_export_presets", map[string]any{},
-			"Not a valid Godot project: "+root)
+		requireToolError(t, session, "manage_export_presets", map[string]any{
+			"action": "remove",
+			"name":   "Linux",
+		}, "Not a valid Godot project: "+root)
 	})
 
 	t.Run("add requires name and platform", func(t *testing.T) {

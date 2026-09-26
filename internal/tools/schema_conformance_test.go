@@ -296,7 +296,6 @@ func TestSuccessResultsMatchOutputSchema(t *testing.T) {
 		setup func(t *testing.T) string
 	}{
 		{name: "create_project", tool: createProject, args: `{"projectName":"Demo"}`, setup: func(t *testing.T) string { t.Helper(); return t.TempDir() }},
-		{name: "read_export_presets", tool: readExportPresets, args: `{}`, setup: project},
 		{name: "manage_export_presets add", tool: manageExportPresets, args: `{"action":"add","name":"Linux","platform":"Linux"}`, setup: project},
 		{name: "manage_export_presets remove", tool: manageExportPresets, args: `{"action":"remove","name":"Linux"}`, setup: projectWithPreset},
 		{name: "read_plugins", tool: readPlugins, args: `{}`, setup: projectWithPlugin},

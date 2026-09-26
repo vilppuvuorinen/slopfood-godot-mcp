@@ -63,22 +63,9 @@ type manageExportPresetsArgs struct {
 	Runnable bool   `json:"runnable"`
 }
 
-// exportPreset is one entry in the list action's JSON document.
-type exportPreset struct {
-	Name     string `json:"name"`
-	Platform string `json:"platform"`
-}
-
-// exportPresetList is the JSON document returned by the list action.
-type exportPresetList struct {
-	Presets []exportPreset `json:"presets"`
-}
-
 var (
-	exportPresetNamePattern     = regexp.MustCompile(`(?m)^name="((?:[^"\\]|\\.)*)"`)
-	exportPresetPlatformPattern = regexp.MustCompile(`(?m)^platform="((?:[^"\\]|\\.)*)"`)
-	exportPresetBlockPattern    = regexp.MustCompile(`(?m)^\[preset\.`)
-	exportPresetIndexPattern    = regexp.MustCompile(`(?m)^\[preset\.(\d+)\]`)
+	exportPresetBlockPattern = regexp.MustCompile(`(?m)^\[preset\.`)
+	exportPresetIndexPattern = regexp.MustCompile(`(?m)^\[preset\.(\d+)\]`)
 )
 
 func handleManageExportPresets(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -107,50 +94,6 @@ func handleManageExportPresets(ctx context.Context, raw json.RawMessage) (any, e
 		return removeExportPreset(project, presetsFile, args.Name, args.Action), nil
 	}
 	return mcp.ErrorResult(`Invalid action. Use "add" or "remove".`), nil
-}
-
-// listExportPresets reads the name and platform of every [preset.N] block,
-// defaulting the platform to "unknown", and pretty-prints the list. A missing
-// export_presets.cfg is an empty list.
-func listExportPresets(presetsFile string) mcp.ToolResult {
-	presets := []exportPreset{}
-	data, err := os.ReadFile(presetsFile)
-	if err != nil && !os.IsNotExist(err) {
-		return exportPresetsFailure(err)
-	}
-	if err == nil {
-		for _, block := range exportPresetBlocks(string(data)) {
-			match := exportPresetNamePattern.FindStringSubmatch(block)
-			if match == nil {
-				continue
-			}
-			preset := exportPreset{Name: godotconfig.UnescapeString(match[1]), Platform: "unknown"}
-			if platform := exportPresetPlatformPattern.FindStringSubmatch(block); platform != nil {
-				preset.Platform = godotconfig.UnescapeString(platform[1])
-			}
-			presets = append(presets, preset)
-		}
-	}
-	encoded, err := json.MarshalIndent(exportPresetList{Presets: presets}, "", "  ")
-	if err != nil {
-		return exportPresetsFailure(err)
-	}
-	return mcp.JSONResult(string(encoded))
-}
-
-// exportPresetBlocks splits content into its [preset.N] blocks, preserving
-// order.
-func exportPresetBlocks(content string) []string {
-	blocks := exportPresetBlockPattern.FindAllStringIndex(content, -1)
-	out := make([]string, 0, len(blocks))
-	for i, block := range blocks {
-		end := len(content)
-		if i+1 < len(blocks) {
-			end = blocks[i+1][0]
-		}
-		out = append(out, content[block[0]:end])
-	}
-	return out
 }
 
 // nextExportPresetIndex returns one past the highest existing `[preset.N]`

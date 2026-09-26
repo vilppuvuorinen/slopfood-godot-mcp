@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -70,20 +69,7 @@ func TestManageExportPresetsEchoesAction(t *testing.T) {
 	}
 }
 
-func TestManageExportPresetsListEmpty(t *testing.T) {
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, readExportPresets(), root, `{}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if got, want := result.Content[0].Text, "{\n  \"presets\": []\n}"; got != want {
-		t.Errorf("text = %q, want %q", got, want)
-	}
-}
-
-func TestManageExportPresetsAddAndList(t *testing.T) {
+func TestManageExportPresetsAdd(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
@@ -102,18 +88,6 @@ func TestManageExportPresetsAddAndList(t *testing.T) {
 		if !strings.Contains(string(content), want) {
 			t.Errorf("export_presets.cfg = %q, want it to contain %q", content, want)
 		}
-	}
-
-	list := callToolArgs(t, readExportPresets(), root, `{}`)
-	if list.IsError {
-		t.Fatalf("unexpected error: %+v", list.Content)
-	}
-	var decoded exportPresetList
-	if err := json.Unmarshal([]byte(list.Content[0].Text), &decoded); err != nil {
-		t.Fatalf("unmarshal %q: %v", list.Content[0].Text, err)
-	}
-	if len(decoded.Presets) != 1 || decoded.Presets[0].Name != "Linux" || decoded.Presets[0].Platform != "Linux" {
-		t.Errorf("presets = %+v", decoded.Presets)
 	}
 }
 
@@ -184,24 +158,6 @@ func TestManageExportPresetsAddAfterGap(t *testing.T) {
 	}
 }
 
-func TestManageExportPresetsListUnknownPlatform(t *testing.T) {
-	root := t.TempDir()
-	makeProject(t, root)
-	seedFile(t, filepath.Join(root, "export_presets.cfg"), "[preset.1]\n\nname=\"Nameless\"\n")
-
-	result := callToolArgs(t, readExportPresets(), root, `{}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	var decoded exportPresetList
-	if err := json.Unmarshal([]byte(result.Content[0].Text), &decoded); err != nil {
-		t.Fatalf("unmarshal %q: %v", result.Content[0].Text, err)
-	}
-	if len(decoded.Presets) != 1 || decoded.Presets[0].Platform != "unknown" {
-		t.Errorf("presets = %+v", decoded.Presets)
-	}
-}
-
 func TestManageExportPresetsRemove(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
@@ -251,8 +207,7 @@ func TestManageExportPresetsRemoveMissingFile(t *testing.T) {
 }
 
 // TestManageExportPresetsEscaping covers preset names and platforms that need
-// escaping, checks list decodes them, and confirms remove matches the encoded
-// name.
+// escaping and confirms remove matches the encoded name.
 func TestManageExportPresetsEscaping(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -280,15 +235,6 @@ func TestManageExportPresetsEscaping(t *testing.T) {
 				t.Errorf("export_presets.cfg = %q, want it to contain %q", data, wantName)
 			}
 
-			list := callToolArgs(t, readExportPresets(), root, `{}`)
-			var decoded exportPresetList
-			if unmarshalErr := json.Unmarshal([]byte(list.Content[0].Text), &decoded); unmarshalErr != nil {
-				t.Fatalf("unmarshal %q: %v", list.Content[0].Text, unmarshalErr)
-			}
-			if len(decoded.Presets) != 1 || decoded.Presets[0].Name != tt.preset || decoded.Presets[0].Platform != tt.platform {
-				t.Errorf("presets = %+v, want name %q platform %q", decoded.Presets, tt.preset, tt.platform)
-			}
-
 			remove := callToolArgs(t, manageExportPresets(), root, `{"action":"remove","name":`+jsonString(tt.preset)+`}`)
 			if remove.IsError {
 				t.Fatalf("unexpected error: %+v", remove.Content)
@@ -301,19 +247,6 @@ func TestManageExportPresetsEscaping(t *testing.T) {
 				t.Errorf("preset not removed:\n%s", data)
 			}
 		})
-	}
-}
-
-func TestManageExportPresetsNotAProjectSolutions(t *testing.T) {
-	result := callToolArgs(t, readExportPresets(), t.TempDir(), `{}`)
-	if !result.IsError {
-		t.Fatalf("expected an error result: %+v", result.Content)
-	}
-	if !strings.HasPrefix(result.Content[0].Text, "Not a valid Godot project: ") {
-		t.Errorf("message = %q", result.Content[0].Text)
-	}
-	if len(result.Content) != 2 || !strings.HasPrefix(result.Content[1].Text, "Possible solutions:") {
-		t.Errorf("solutions = %+v", result.Content)
 	}
 }
 
@@ -337,16 +270,16 @@ func TestManageExportPresetsErrors(t *testing.T) {
 		},
 		{
 			name:    "invalid path",
-			tool:    readExportPresets,
+			tool:    manageExportPresets,
 			project: "../escape",
-			args:    `{}`,
+			args:    `{"action":"remove","name":"Linux"}`,
 			want:    "Invalid path.",
 		},
 		{
 			name:    "not a project",
-			tool:    readExportPresets,
+			tool:    manageExportPresets,
 			project: notAProject,
-			args:    `{}`,
+			args:    `{"action":"remove","name":"Linux"}`,
 			want:    "Not a valid Godot project: ",
 		},
 		{

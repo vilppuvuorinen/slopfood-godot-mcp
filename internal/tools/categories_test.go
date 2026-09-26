@@ -118,8 +118,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 36 {
-		t.Errorf("registered %d tools, want 36", len(seen))
+	if len(seen) != 35 {
+		t.Errorf("registered %d tools, want 35", len(seen))
 	}
 }
 
@@ -187,19 +187,18 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 // omission fails the test rather than silently falling back to a default.
 func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	readOnly := map[string]bool{
-		"get_godot_version":   true,
-		"get_project_info":    true,
-		"read_export_presets": true,
-		"read_animation":      true,
-		"read_plugins":        true,
-		"read_resource":       true,
-		"read_scene":          true,
-		"read_scene_signals":  true,
-		"read_tilemap":        true,
-		"read_tileset":        true,
-		"read_theme":          true,
-		"validate_project":    true,
-		"validate_scripts":    true,
+		"get_godot_version":  true,
+		"get_project_info":   true,
+		"read_animation":     true,
+		"read_plugins":       true,
+		"read_resource":      true,
+		"read_scene":         true,
+		"read_scene_signals": true,
+		"read_tilemap":       true,
+		"read_tileset":       true,
+		"read_theme":         true,
+		"validate_project":   true,
+		"validate_scripts":   true,
 	}
 	nonDestructive := map[string]bool{
 		"create_project":   true,
