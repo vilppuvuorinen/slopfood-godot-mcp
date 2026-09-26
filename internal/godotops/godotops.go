@@ -34,12 +34,27 @@ var (
 // cache out of the real user cache.
 var userCacheDir = os.UserCacheDir
 
+// instrumentBridge, when non-nil, rewrites the embedded operations script
+// before it is materialized. A coverage build (the `gdcover` build tag) sets it
+// so the bridge reports line hits; normal builds leave it nil, keeping the
+// instrumenter out of the shipped binary.
+var instrumentBridge func(string) (string, error)
+
 // OperationsScript materializes the embedded godot_operations.gd to a file and
 // returns its path. Godot needs a real path for --script, and the binary is
 // dependency-free so it cannot ship a loose file.
 func OperationsScript() (string, error) {
 	once.Do(func() {
-		path, err = materialize("godot_operations", operationsScript)
+		content := operationsScript
+		if instrumentBridge != nil {
+			rewritten, instrumentErr := instrumentBridge(content)
+			if instrumentErr != nil {
+				err = fmt.Errorf("instrument operations script: %w", instrumentErr)
+				return
+			}
+			content = rewritten
+		}
+		path, err = materialize("godot_operations", content)
 	})
 	return path, err
 }

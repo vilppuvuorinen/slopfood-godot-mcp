@@ -1,6 +1,8 @@
 bin/
 coverage.out
 coverage-e2e/
+coverage-gdscript/
+coverage-gdscript.info
 .godot/
 __pycache__/
 *.pyc

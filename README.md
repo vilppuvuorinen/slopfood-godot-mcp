@@ -89,6 +89,13 @@ writing to a shared `GOCOVERDIR`, and merges the counters into
 `coverage-e2e.out`, which is the only profile that includes the engine-facing
 paths.
 
+The same run also measures the embedded GDScript bridge. `make e2e-cover` builds
+with `-tags gdcover`, which makes the server instrument `godot_operations.gd`
+before Godot loads it, and each spawned engine appends its hit trace to a shared
+file. That trace is converted to `coverage-gdscript.info` (LCOV), so one engine
+run yields both profiles. The instrumenter lives in `internal/gdcover` and is
+only linked into the `gdcover` build, never a release binary.
+
 Godot-dependent tests need an engine and export templates in the repo-local
 `.godot/`; templates are opt-in:
 
