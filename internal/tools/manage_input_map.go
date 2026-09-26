@@ -16,14 +16,14 @@ func manageInputMap() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_input_map",
 		Title:       "Manage Input Map",
-		Description: "Add, remove, or list input actions and bindings",
+		Description: "Add or remove input actions and bindings",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: actionInputSchema(
 			map[string]any{
 				"action": map[string]any{
 					"type":        "string",
-					"enum":        []string{"list", "add", "remove"},
-					"description": `"list", "add", or "remove"`,
+					"enum":        []string{"add", "remove"},
+					"description": `"add" or "remove"`,
 				},
 				"actionName": map[string]any{
 					"type":        "string",
@@ -40,21 +40,13 @@ func manageInputMap() mcp.Tool {
 			},
 			[]string{"action"},
 			[]actionVariant{
-				{Action: "list"},
 				{Action: "add", Required: []string{"actionName"}},
 				{Action: "remove", Required: []string{"actionName"}},
 			},
 		),
-		OutputSchema: actionOutputSchema(
-			map[string]any{
-				"actionName": map[string]any{"type": "string"},
-			},
-			map[string]any{
-				"type":                 "object",
-				"description":          "Input actions by name, with values in the tool value contract",
-				"additionalProperties": godotValueSchema("A value in the tool value contract"),
-			},
-		),
+		OutputSchema: statusOutputSchema(map[string]any{
+			"actionName": map[string]any{"type": "string"},
+		}),
 		Handler: handleManageInputMap,
 	}
 }
@@ -148,16 +140,6 @@ func handleManageInputMap(ctx context.Context, raw json.RawMessage) (any, error)
 	schema := store.schema
 
 	switch args.Action {
-	case "list":
-		actions, err := store.SectionValues("input")
-		if err != nil {
-			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
-		}
-		data, err := json.MarshalIndent(actions, "", "  ")
-		if err != nil {
-			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
-		}
-		return mcp.JSONResult(string(data)), nil
 	case "add":
 		if args.ActionName == "" {
 			return mcp.ErrorResult("actionName is required for add action."), nil
@@ -220,7 +202,7 @@ func handleManageInputMap(ctx context.Context, raw json.RawMessage) (any, error)
 			"actionName": args.ActionName,
 		}), nil
 	}
-	return mcp.ErrorResult(`Invalid action. Use "list", "add", or "remove".`), nil
+	return mcp.ErrorResult(`Invalid action. Use "add" or "remove".`), nil
 }
 
 // keySpecialGodot4 is Godot 4's KEY_SPECIAL bit (1<<22). Special keys are the

@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
 func TestManageInputMapSchema(t *testing.T) {
@@ -15,7 +16,7 @@ func TestManageInputMapSchema(t *testing.T) {
 	if tool.Name != "manage_input_map" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Add, remove, or list input actions and bindings" {
+	if tool.Description != "Add or remove input actions and bindings" {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
@@ -56,7 +57,7 @@ jump={"deadzone": 0.5}
 config/name="Demo"
 `)
 
-	result := callToolArgs(t, manageInputMap(), root, `{"action":"list"}`)
+	result := callToolArgs(t, readInputMap(), root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -79,7 +80,7 @@ func TestManageInputMapListEmpty(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageInputMap(), root, `{"action":"list"}`)
+	result := callToolArgs(t, readInputMap(), root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -282,7 +283,7 @@ func TestManageInputMapEscaping(t *testing.T) {
 				t.Errorf("project.godot = %q, want it to contain %q", data, tt.wantLine)
 			}
 
-			list := callToolArgs(t, manageInputMap(), root, `{"action":"list"}`)
+			list := callToolArgs(t, readInputMap(), root, `{}`)
 			var actions map[string]any
 			if unmarshalErr := json.Unmarshal([]byte(list.Content[0].Text), &actions); unmarshalErr != nil {
 				t.Fatalf("unmarshal %q: %v", list.Content[0].Text, unmarshalErr)
@@ -356,21 +357,22 @@ func TestManageInputMapErrors(t *testing.T) {
 
 	tests := []struct {
 		name    string
+		tool    func() mcp.Tool
 		project string
 		args    string
 		want    string
 	}{
-		{name: "missing params", args: `{}`, want: "action is required."},
-		{name: "missing action", project: root, args: `{}`, want: "action is required."},
-		{name: "invalid path", project: "../escape", args: `{"action":"list"}`, want: "Invalid path."},
-		{name: "not a project", project: notAProject, args: `{"action":"list"}`, want: "Not a valid Godot project: "},
-		{name: "add missing actionName", project: root, args: `{"action":"add"}`, want: "actionName is required for add action."},
-		{name: "remove missing actionName", project: root, args: `{"action":"remove"}`, want: "actionName is required for remove action."},
-		{name: "invalid action", project: root, args: `{"action":"bogus"}`, want: `Invalid action. Use "list", "add", or "remove".`},
+		{name: "missing params", tool: manageInputMap, args: `{}`, want: "action is required."},
+		{name: "missing action", tool: manageInputMap, project: root, args: `{}`, want: "action is required."},
+		{name: "invalid path", tool: readInputMap, project: "../escape", args: `{}`, want: "Invalid path."},
+		{name: "not a project", tool: readInputMap, project: notAProject, args: `{}`, want: "Not a valid Godot project: "},
+		{name: "add missing actionName", tool: manageInputMap, project: root, args: `{"action":"add"}`, want: "actionName is required for add action."},
+		{name: "remove missing actionName", tool: manageInputMap, project: root, args: `{"action":"remove"}`, want: "actionName is required for remove action."},
+		{name: "invalid action", tool: manageInputMap, project: root, args: `{"action":"bogus"}`, want: `Invalid action. Use "add" or "remove".`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, manageInputMap(), tt.project, tt.args)
+			result := callToolArgs(t, tt.tool(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -463,7 +465,7 @@ func TestManageInputMapRejectsUnsupportedSchema(t *testing.T) {
 	root := t.TempDir()
 	seedFile(t, filepath.Join(root, "project.godot"), "config_version=4\n")
 
-	result := callToolArgs(t, manageInputMap(), root, `{"action":"list"}`)
+	result := callToolArgs(t, readInputMap(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

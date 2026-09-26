@@ -13,7 +13,7 @@ func manageResource() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_resource",
 		Title:       "Manage Resource",
-		Description: "Create, read, or modify .tres/.res resource files",
+		Description: "Create or modify .tres/.res resource files",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: actionInputSchema(
 			map[string]any{
@@ -23,53 +23,35 @@ func manageResource() mcp.Tool {
 				},
 				"action": map[string]any{
 					"type":        "string",
-					"enum":        []string{"create", "read", "modify"},
-					"description": "Action: create, read, or modify",
+					"enum":        []string{"create", "modify"},
+					"description": "Action: create or modify",
 				},
 				"resourceType": map[string]any{
 					"type":        "string",
 					"description": `Godot class name for create (e.g., "StandardMaterial3D", "Theme", "Environment")`,
 				},
 				"properties": propertiesSchema("Properties to set, as name to godotValue pairs"),
-				"propertyFilter": map[string]any{
-					"type":        "array",
-					"items":       map[string]any{"type": "string"},
-					"description": "Read action only: limit the returned properties to these names (wildcards * and ? allowed)",
-				},
 			},
 			[]string{"resourcePath", "action"},
 			[]actionVariant{
 				{Action: "create", Required: []string{"resourceType"}},
-				{Action: "read"},
 				{Action: "modify"},
 			},
 		),
-		OutputSchema: actionOutputSchema(
-			map[string]any{
-				"resourcePath": map[string]any{"type": "string"},
-				"action":       map[string]any{"type": "string"},
-				"resourceType": map[string]any{"type": "string"},
-			},
-			payloadOutputSchema(map[string]any{
-				"type": map[string]any{"type": "string"},
-				"path": map[string]any{"type": "string", "description": "Resource path, relative to the bound project"},
-				"properties": map[string]any{
-					"type":                 "object",
-					"description":          "Resource properties in the tool value contract",
-					"additionalProperties": godotValueSchema("JSON-native values are nested; engine-only types are tagged objects"),
-				},
-			}),
-		),
+		OutputSchema: statusOutputSchema(map[string]any{
+			"resourcePath": map[string]any{"type": "string"},
+			"action":       map[string]any{"type": "string"},
+			"resourceType": map[string]any{"type": "string"},
+		}),
 		Handler: handleManageResource,
 	}
 }
 
 type manageResourceArgs struct {
-	ResourcePath   string         `json:"resourcePath"`
-	Action         string         `json:"action"`
-	ResourceType   string         `json:"resourceType"`
-	Properties     map[string]any `json:"properties"`
-	PropertyFilter []string       `json:"propertyFilter"`
+	ResourcePath string         `json:"resourcePath"`
+	Action       string         `json:"action"`
+	ResourceType string         `json:"resourceType"`
+	Properties   map[string]any `json:"properties"`
 }
 
 func handleManageResource(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -107,9 +89,6 @@ func handleManageResource(ctx context.Context, raw json.RawMessage) (any, error)
 	}
 	if args.Properties != nil {
 		params["properties"] = args.Properties
-	}
-	if args.Action == "read" && len(args.PropertyFilter) > 0 {
-		params["propertyFilter"] = args.PropertyFilter
 	}
 
 	return runHeadlessOperation(ctx, project, "manage_resource", params, fields)

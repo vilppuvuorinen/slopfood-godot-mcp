@@ -90,68 +90,35 @@ func TestMutationErrorCarriesStatusEnvelope(t *testing.T) {
 	}
 }
 
-// TestActionOutputSchemaSeparatesShapes verifies a mixed action tool advertises
-// the status envelope for mutations and the bare payload for reads via anyOf,
-// so the read shape never promises success or message.
-func TestActionOutputSchemaSeparatesShapes(t *testing.T) {
-	schema := actionOutputSchema(
-		map[string]any{"action": map[string]any{"type": "string"}},
-		payloadOutputSchema(map[string]any{"layers": map[string]any{"type": "array"}}),
-	)
-
-	props, ok := schema["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("properties = %T", schema["properties"])
-	}
-	for _, key := range []string{"success", "message", "action", "layers"} {
-		if _, present := props[key]; !present {
-			t.Errorf("missing merged property %q", key)
-		}
-	}
-	if _, hasRequired := schema["required"]; hasRequired {
-		t.Errorf("a mixed schema must not require one shape: %v", schema["required"])
-	}
-
-	branches, ok := schema["anyOf"].([]any)
-	if !ok || len(branches) != 2 {
-		t.Fatalf("anyOf = %#v, want two branches", schema["anyOf"])
-	}
-	status, ok := branches[0].(map[string]any)
-	if !ok || !hasRequired(status, "success", "message") {
-		t.Errorf("status branch must require the envelope: %#v", branches[0])
-	}
-	payload, ok := branches[1].(map[string]any)
-	if !ok || hasRequired(payload, "success") {
-		t.Errorf("payload branch must not require the envelope: %#v", branches[1])
-	}
-	payloadProps, _ := payload["properties"].(map[string]any)
-	if _, ok := payloadProps["layers"]; !ok {
-		t.Errorf("payload branch missing layers: %#v", payload)
-	}
-}
-
-// TestActionOutputSchemaCarriesFreeFormPayload verifies a free-form payload's
-// additionalProperties shape is carried to the top level, so a client that reads
-// only the merged properties still learns the list result is a name-to-value
-// map rather than an unconstrained object.
-func TestActionOutputSchemaCarriesFreeFormPayload(t *testing.T) {
-	payload := map[string]any{
+// TestReadOutputSchemaCarriesFreeFormPayload verifies a read tool's free-form
+// payload carries its additionalProperties shape to the top level, so a client
+// that reads only the top level still learns the list result is a name-to-value
+// map rather than an unconstrained object, and the error envelope stays an
+// accepted alternative through anyOf.
+func TestReadOutputSchemaCarriesFreeFormPayload(t *testing.T) {
+	schema := readOutputSchema(map[string]any{
 		"type":                 "object",
 		"additionalProperties": godotValueSchema("A value in the tool value contract"),
-	}
-	schema := actionOutputSchema(map[string]any{"action": map[string]any{"type": "string"}}, payload)
+	})
 	if _, ok := schema["additionalProperties"]; !ok {
-		t.Fatalf("action output schema = %#v, want the payload's additionalProperties", schema)
+		t.Fatalf("read output schema = %#v, want the payload's additionalProperties", schema)
+	}
+	branches, ok := schema["anyOf"].([]any)
+	if !ok || len(branches) != 2 {
+		t.Fatalf("anyOf = %#v, want the error and payload branches", schema["anyOf"])
+	}
+	if !hasRequired(asSchema(branches[0]), "success", "message") {
+		t.Errorf("error branch = %#v, want the envelope", branches[0])
 	}
 }
 
-// TestManageInputMapAdvertisesActionMap pins the free-form payload case to the
+// TestReadInputMapAdvertisesActionMap pins the free-form payload case to the
 // tool that has it: the list result is keyed by input action name, so the top
 // level of its output schema must describe that map.
-func TestManageInputMapAdvertisesActionMap(t *testing.T) {
-	tool := manageInputMap()
+func TestReadInputMapAdvertisesActionMap(t *testing.T) {
+	tool := readInputMap()
 	if _, ok := tool.OutputSchema["additionalProperties"]; !ok {
-		t.Errorf("manage_input_map output schema must describe the action-name map: %#v", tool.OutputSchema)
+		t.Errorf("read_input_map output schema must describe the action-name map: %#v", tool.OutputSchema)
 	}
 }
 

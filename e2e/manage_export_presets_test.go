@@ -9,7 +9,7 @@ import (
 // TestManageExportPresetsSchema ports the reference's tool-definition
 // expectations for manage_export_presets over the real stdio surface.
 func TestManageExportPresetsSchema(t *testing.T) {
-	schema := requireSchema(t, "manage_export_presets", "Create or modify export preset configuration")
+	schema := requireSchema(t, "manage_export_presets", "Create or remove export preset configuration")
 	schema.requireRequired(t, "action")
 	schema.requirePropCount(t, 4)
 	schema.requireStringProps(t, "action", "name", "platform")
@@ -23,9 +23,7 @@ func TestManageExportPresetsTool(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 
-		text := requireToolText(t, session, "manage_export_presets", map[string]any{
-			"action": "list",
-		})
+		text := requireToolText(t, session, "read_export_presets", map[string]any{})
 		if got, want := text, "{\n  \"presets\": []\n}"; got != want {
 			t.Errorf("text = %q, want %q", got, want)
 		}
@@ -47,9 +45,7 @@ func TestManageExportPresetsTool(t *testing.T) {
 		requireContains(t, readFile(t, filepath.Join(root, "export_presets.cfg")),
 			"[preset.", `name="Linux"`, `platform="Linux"`, "runnable=true")
 
-		list := requireToolText(t, session, "manage_export_presets", map[string]any{
-			"action": "list",
-		})
+		list := requireToolText(t, session, "read_export_presets", map[string]any{})
 		var decoded struct {
 			Presets []struct {
 				Name     string `json:"name"`
@@ -92,9 +88,8 @@ func TestManageExportPresetsErrors(t *testing.T) {
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
 		session := connectProject(t, root)
-		requireToolError(t, session, "manage_export_presets", map[string]any{
-			"action": "list",
-		}, "Not a valid Godot project: "+root)
+		requireToolError(t, session, "read_export_presets", map[string]any{},
+			"Not a valid Godot project: "+root)
 	})
 
 	t.Run("add requires name and platform", func(t *testing.T) {
@@ -119,6 +114,6 @@ func TestManageExportPresetsErrors(t *testing.T) {
 		session := connectProject(t, root)
 		requireToolError(t, session, "manage_export_presets", map[string]any{
 			"action": "bogus",
-		}, `Invalid action. Use "list", "add", or "remove".`)
+		}, `Invalid action. Use "add" or "remove".`)
 	})
 }

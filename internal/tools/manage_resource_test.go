@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
 func TestManageResourceSchema(t *testing.T) {
@@ -13,7 +14,7 @@ func TestManageResourceSchema(t *testing.T) {
 	if tool.Name != "manage_resource" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Create, read, or modify .tres/.res resource files" {
+	if tool.Description != "Create or modify .tres/.res resource files" {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
@@ -34,9 +35,8 @@ func TestManageResourceSchema(t *testing.T) {
 	if !ok || properties["type"] != "object" {
 		t.Errorf("properties property = %v", props["properties"])
 	}
-	filter, isMap := props["propertyFilter"].(map[string]any)
-	if !isMap || filter["type"] != "array" {
-		t.Errorf("propertyFilter property = %v", props["propertyFilter"])
+	if _, isMap := props["propertyFilter"].(map[string]any); isMap {
+		t.Errorf("manage_resource must not advertise the read-only propertyFilter: %v", props["propertyFilter"])
 	}
 }
 
@@ -47,7 +47,7 @@ func TestManageResourceReadForwardsPropertyFilter(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"resources/mat.tres","action":"read","propertyFilter":["metallic","albedo_*"]}`)
+	result := callToolArgs(t, readResource(), root, `{"resourcePath":"resources/mat.tres","propertyFilter":["metallic","albedo_*"]}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -78,7 +78,7 @@ func TestManageResourceReadSuccess(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"resources/mat.tres","action":"read"}`)
+	result := callToolArgs(t, readResource(), root, `{"resourcePath":"resources/mat.tres"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -104,7 +104,7 @@ func TestManageResourceReadStructured(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"resources/mat.tres","action":"read"}`)
+	result := callToolArgs(t, readResource(), root, `{"resourcePath":"resources/mat.tres"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -187,21 +187,22 @@ func TestManageResourceValidation(t *testing.T) {
 
 	tests := []struct {
 		name    string
+		tool    func() mcp.Tool
 		project string
 		args    string
 		want    string
 	}{
-		{name: "missing params", args: `{}`, want: "resourcePath and action are required."},
-		{name: "missing action", project: root, args: `{"resourcePath":"mat.tres"}`, want: "resourcePath and action are required."},
-		{name: "missing resource path", project: root, args: `{"action":"read"}`, want: "resourcePath and action are required."},
-		{name: "create without resource type", project: root, args: `{"resourcePath":"mat.tres","action":"create"}`, want: "resourceType is required for the create action."},
-		{name: "invalid project path", project: "../escape", args: `{"resourcePath":"mat.tres","action":"read"}`, want: "Invalid path."},
-		{name: "invalid resource path", project: root, args: `{"resourcePath":"../escape.tres","action":"read"}`, want: "Invalid path."},
-		{name: "not a project", project: notAProject, args: `{"resourcePath":"mat.tres","action":"read"}`, want: "Not a valid Godot project"},
+		{name: "missing params", tool: manageResource, args: `{}`, want: "resourcePath and action are required."},
+		{name: "missing action", tool: manageResource, project: root, args: `{"resourcePath":"mat.tres"}`, want: "resourcePath and action are required."},
+		{name: "missing resource path", tool: readResource, project: root, args: `{}`, want: "resourcePath is required."},
+		{name: "create without resource type", tool: manageResource, project: root, args: `{"resourcePath":"mat.tres","action":"create"}`, want: "resourceType is required for the create action."},
+		{name: "invalid project path", tool: readResource, project: "../escape", args: `{"resourcePath":"mat.tres"}`, want: "Invalid path."},
+		{name: "invalid resource path", tool: readResource, project: root, args: `{"resourcePath":"../escape.tres"}`, want: "Invalid path."},
+		{name: "not a project", tool: readResource, project: notAProject, args: `{"resourcePath":"mat.tres"}`, want: "Not a valid Godot project"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, manageResource(), tt.project, tt.args)
+			result := callToolArgs(t, tt.tool(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -217,7 +218,7 @@ func TestManageResourceScriptFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"mat.tres","action":"read"}`)
+	result := callToolArgs(t, readResource(), root, `{"resourcePath":"mat.tres"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -234,7 +235,7 @@ func TestManageResourceSpawnFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"mat.tres","action":"read"}`)
+	result := callToolArgs(t, readResource(), root, `{"resourcePath":"mat.tres"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

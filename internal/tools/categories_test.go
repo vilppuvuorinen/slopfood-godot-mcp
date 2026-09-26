@@ -113,8 +113,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 21 {
-		t.Errorf("registered %d tools, want 21", len(seen))
+	if len(seen) != 25 {
+		t.Errorf("registered %d tools, want 25", len(seen))
 	}
 }
 
@@ -150,8 +150,12 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"get_godot_version":     true,
 		"get_project_info":      true,
 		"get_uid":               true,
+		"read_export_presets":   true,
+		"read_input_map":        true,
 		"read_project_settings": true,
+		"read_resource":         true,
 		"read_scene":            true,
+		"read_scene_signals":    true,
 		"validate_scripts":      true,
 	}
 	additive := map[string]bool{
@@ -333,7 +337,6 @@ func TestActionToolsAdvertiseVariants(t *testing.T) {
 		"manage_scene_signals": {
 			common: []string{"scenePath", "action"},
 			actions: map[string][]string{
-				"list":   {},
 				"add":    {"signalName", "sourcePath", "targetPath", "method"},
 				"remove": {"signalName", "sourcePath", "targetPath"},
 			},
@@ -342,14 +345,12 @@ func TestActionToolsAdvertiseVariants(t *testing.T) {
 			common: []string{"resourcePath", "action"},
 			actions: map[string][]string{
 				"create": {"resourceType"},
-				"read":   {},
 				"modify": {},
 			},
 		},
 		"manage_input_map": {
 			common: []string{"action"},
 			actions: map[string][]string{
-				"list":   {},
 				"add":    {"actionName"},
 				"remove": {"actionName"},
 			},
@@ -357,7 +358,6 @@ func TestActionToolsAdvertiseVariants(t *testing.T) {
 		"manage_export_presets": {
 			common: []string{"action"},
 			actions: map[string][]string{
-				"list":   {},
 				"add":    {"name", "platform"},
 				"remove": {"name"},
 			},

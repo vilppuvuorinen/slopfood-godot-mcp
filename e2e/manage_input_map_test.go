@@ -9,7 +9,7 @@ import (
 // TestManageInputMapSchema ports the reference's tool-definition expectations
 // for manage_input_map over the real stdio surface.
 func TestManageInputMapSchema(t *testing.T) {
-	schema := requireSchema(t, "manage_input_map", "Add, remove, or list input actions and bindings")
+	schema := requireSchema(t, "manage_input_map", "Add or remove input actions and bindings")
 	schema.requireRequired(t, "action")
 	schema.requirePropCount(t, 4)
 	schema.requireStringProps(t, "action", "actionName", "key")
@@ -29,9 +29,7 @@ move_left={"deadzone": 0.5}
 jump={"deadzone": 0.5}
 `)
 		session := connectProject(t, root)
-		text := requireToolText(t, session, "manage_input_map", map[string]any{
-			"action": "list",
-		})
+		text := requireToolText(t, session, "read_input_map", map[string]any{})
 		var actions map[string]any
 		if err := json.Unmarshal([]byte(text), &actions); err != nil {
 			t.Fatalf("unmarshal %q: %v", text, err)
@@ -151,9 +149,8 @@ func TestManageInputMapErrors(t *testing.T) {
 	t.Run("not a project", func(t *testing.T) {
 		empty := t.TempDir()
 		session := connectProject(t, empty)
-		requireToolError(t, session, "manage_input_map", map[string]any{
-			"action": "list",
-		}, "Not a valid Godot project: "+empty)
+		requireToolError(t, session, "read_input_map", map[string]any{},
+			"Not a valid Godot project: "+empty)
 	})
 
 	root := newProject(t)
@@ -174,6 +171,6 @@ func TestManageInputMapErrors(t *testing.T) {
 	t.Run("invalid action", func(t *testing.T) {
 		requireToolError(t, session, "manage_input_map", map[string]any{
 			"action": "bogus",
-		}, `Invalid action. Use "list", "add", or "remove".`)
+		}, `Invalid action. Use "add" or "remove".`)
 	})
 }

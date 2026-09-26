@@ -18,14 +18,14 @@ func manageExportPresets() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_export_presets",
 		Title:       "Manage Export Presets",
-		Description: "Create or modify export preset configuration",
+		Description: "Create or remove export preset configuration",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: actionInputSchema(
 			map[string]any{
 				"action": map[string]any{
 					"type":        "string",
-					"enum":        []string{"list", "add", "remove"},
-					"description": `"list", "add", or "remove"`,
+					"enum":        []string{"add", "remove"},
+					"description": `"add" or "remove"`,
 				},
 				"name": map[string]any{
 					"type":        "string",
@@ -42,30 +42,15 @@ func manageExportPresets() mcp.Tool {
 			},
 			[]string{"action"},
 			[]actionVariant{
-				{Action: "list"},
 				{Action: "add", Required: []string{"name", "platform"}},
 				{Action: "remove", Required: []string{"name"}},
 			},
 		),
-		OutputSchema: actionOutputSchema(
-			map[string]any{
-				"name":     map[string]any{"type": "string"},
-				"platform": map[string]any{"type": "string"},
-				"runnable": map[string]any{"type": "boolean"},
-			},
-			payloadOutputSchema(map[string]any{
-				"presets": map[string]any{
-					"type": "array",
-					"items": map[string]any{
-						"type": "object",
-						"properties": map[string]any{
-							"name":     map[string]any{"type": "string"},
-							"platform": map[string]any{"type": "string"},
-						},
-					},
-				},
-			}),
-		),
+		OutputSchema: statusOutputSchema(map[string]any{
+			"name":     map[string]any{"type": "string"},
+			"platform": map[string]any{"type": "string"},
+			"runnable": map[string]any{"type": "boolean"},
+		}),
 		Handler: handleManageExportPresets,
 	}
 }
@@ -115,14 +100,12 @@ func handleManageExportPresets(ctx context.Context, raw json.RawMessage) (any, e
 
 	presetsFile := filepath.Join(project, "export_presets.cfg")
 	switch args.Action {
-	case "list":
-		return listExportPresets(presetsFile), nil
 	case "add":
 		return addExportPreset(project, presetsFile, args), nil
 	case "remove":
 		return removeExportPreset(project, presetsFile, args.Name), nil
 	}
-	return mcp.ErrorResult(`Invalid action. Use "list", "add", or "remove".`), nil
+	return mcp.ErrorResult(`Invalid action. Use "add" or "remove".`), nil
 }
 
 // listExportPresets reads the name and platform of every [preset.N] block,

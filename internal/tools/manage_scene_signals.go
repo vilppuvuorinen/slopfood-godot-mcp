@@ -13,7 +13,7 @@ func manageSceneSignals() mcp.Tool {
 	return mcp.Tool{
 		Name:        "manage_scene_signals",
 		Title:       "Manage Scene Signals",
-		Description: "List/add/remove signal connections in .tscn files",
+		Description: "Add or remove signal connections in .tscn files",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: actionInputSchema(
 			map[string]any{
@@ -23,8 +23,8 @@ func manageSceneSignals() mcp.Tool {
 				},
 				"action": map[string]any{
 					"type":        "string",
-					"enum":        []string{"list", "add", "remove"},
-					"description": "Action: list, add, remove",
+					"enum":        []string{"add", "remove"},
+					"description": "Action: add, remove",
 				},
 				"signalName": map[string]any{
 					"type":        "string",
@@ -45,35 +45,18 @@ func manageSceneSignals() mcp.Tool {
 			},
 			[]string{"scenePath", "action"},
 			[]actionVariant{
-				{Action: "list"},
 				{Action: "add", Required: []string{"signalName", "sourcePath", "targetPath", "method"}},
 				{Action: "remove", Required: []string{"signalName", "sourcePath", "targetPath"}},
 			},
 		),
-		OutputSchema: actionOutputSchema(
-			map[string]any{
-				"scenePath":  map[string]any{"type": "string"},
-				"action":     map[string]any{"type": "string"},
-				"signalName": map[string]any{"type": "string"},
-				"sourcePath": map[string]any{"type": "string"},
-				"targetPath": map[string]any{"type": "string"},
-				"method":     map[string]any{"type": "string"},
-			},
-			payloadOutputSchema(map[string]any{
-				"connections": map[string]any{
-					"type": "array",
-					"items": map[string]any{
-						"type": "object",
-						"properties": map[string]any{
-							"signal": map[string]any{"type": "string"},
-							"from":   map[string]any{"type": "string"},
-							"to":     map[string]any{"type": "string"},
-							"method": map[string]any{"type": "string"},
-						},
-					},
-				},
-			}),
-		),
+		OutputSchema: statusOutputSchema(map[string]any{
+			"scenePath":  map[string]any{"type": "string"},
+			"action":     map[string]any{"type": "string"},
+			"signalName": map[string]any{"type": "string"},
+			"sourcePath": map[string]any{"type": "string"},
+			"targetPath": map[string]any{"type": "string"},
+			"method":     map[string]any{"type": "string"},
+		}),
 		Handler: handleManageSceneSignals,
 	}
 }
@@ -99,7 +82,6 @@ func handleManageSceneSignals(ctx context.Context, raw json.RawMessage) (any, er
 		return requiredArgsResult("scenePath", "action"), nil
 	}
 	switch args.Action {
-	case "list":
 	case "add":
 		if args.SignalName == "" || args.SourcePath == "" || args.TargetPath == "" || args.Method == "" {
 			return mcp.ErrorResult("signalName, sourcePath, targetPath, and method are required for add."), nil
@@ -109,7 +91,7 @@ func handleManageSceneSignals(ctx context.Context, raw json.RawMessage) (any, er
 			return mcp.ErrorResult("signalName, sourcePath, and targetPath are required for remove."), nil
 		}
 	default:
-		return mcp.ErrorResult("Unknown action: " + args.Action + ". Use list, add, or remove."), nil
+		return mcp.ErrorResult("Unknown action: " + args.Action + ". Use add or remove."), nil
 	}
 	sceneFull, pathOK := confinePath(project, args.ScenePath)
 	if !validPath(project) || !pathOK {

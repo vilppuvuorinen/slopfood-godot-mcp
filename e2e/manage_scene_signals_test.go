@@ -11,7 +11,7 @@ import (
 // TestManageSceneSignalsSchema ports the reference's tool-definition
 // expectations for manage_scene_signals over the real stdio surface.
 func TestManageSceneSignalsSchema(t *testing.T) {
-	schema := requireSchema(t, "manage_scene_signals", "List/add/remove signal connections in .tscn files")
+	schema := requireSchema(t, "manage_scene_signals", "Add or remove signal connections in .tscn files")
 	schema.requireRequired(t, "scenePath", "action")
 	schema.requireStringProps(t, "scenePath", "action", "signalName", "sourcePath", "targetPath", "method")
 	schema.requirePropCount(t, 6)
@@ -23,9 +23,8 @@ func TestManageSceneSignalsTool(t *testing.T) {
 	t.Run("lists signals", func(t *testing.T) {
 		_, session := seedScene(t, "scenes/signals.tscn", "Button")
 
-		empty := requireToolText(t, session, "manage_scene_signals", map[string]any{
+		empty := requireToolText(t, session, "read_scene_signals", map[string]any{
 			"scenePath": "scenes/signals.tscn",
-			"action":    "list",
 		})
 		requireContains(t, empty, `"connections"`)
 
@@ -37,9 +36,8 @@ func TestManageSceneSignalsTool(t *testing.T) {
 			"targetPath": "root",
 			"method":     "on_pressed",
 		})
-		text := requireToolText(t, session, "manage_scene_signals", map[string]any{
+		text := requireToolText(t, session, "read_scene_signals", map[string]any{
 			"scenePath": "scenes/signals.tscn",
-			"action":    "list",
 		})
 		var decoded struct {
 			Connections []struct {
@@ -271,17 +269,15 @@ func TestManageSceneSignalsErrors(t *testing.T) {
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
 		session := connectProject(t, root)
-		requireToolError(t, session, "manage_scene_signals", map[string]any{
+		requireToolError(t, session, "read_scene_signals", map[string]any{
 			"scenePath": "main.tscn",
-			"action":    "list",
 		}, "Not a valid Godot project: "+root)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
 		session := connectProject(t, newProject(t))
-		requireToolError(t, session, "manage_scene_signals", map[string]any{
+		requireToolError(t, session, "read_scene_signals", map[string]any{
 			"scenePath": "missing.tscn",
-			"action":    "list",
 		}, "Scene file does not exist: missing.tscn")
 	})
 
@@ -307,6 +303,6 @@ func TestManageSceneSignalsErrors(t *testing.T) {
 		requireToolError(t, session, "manage_scene_signals", map[string]any{
 			"scenePath": "main.tscn",
 			"action":    "frobnicate",
-		}, "Unknown action: frobnicate. Use list, add, or remove.")
+		}, "Unknown action: frobnicate. Use add or remove.")
 	})
 }

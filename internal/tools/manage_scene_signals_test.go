@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
 
 func TestManageSceneSignalsSchema(t *testing.T) {
@@ -15,7 +16,7 @@ func TestManageSceneSignalsSchema(t *testing.T) {
 	if tool.Name != "manage_scene_signals" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "List/add/remove signal connections in .tscn files" {
+	if tool.Description != "Add or remove signal connections in .tscn files" {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
@@ -46,12 +47,6 @@ func TestManageSceneSignalsSuccess(t *testing.T) {
 		present []string
 		omitted []string
 	}{
-		{
-			name:    "list",
-			args:    `{"scenePath":"scenes/main.tscn","action":"list"}`,
-			present: []string{`"action":"list"`, `"scenePath":"scenes/main.tscn"`},
-			omitted: []string{"signalName", "sourcePath", "targetPath", "method"},
-		},
 		{
 			name: "add",
 			args: `{"scenePath":"scenes/main.tscn","action":"add","signalName":"pressed","sourcePath":"root","targetPath":"root","method":"on_pressed"}`,
@@ -95,13 +90,34 @@ func TestManageSceneSignalsSuccess(t *testing.T) {
 	}
 }
 
-func TestManageSceneSignalsListStructured(t *testing.T) {
+func TestReadSceneSignalsForwards(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, readSceneSignals(), root, `{"scenePath":"scenes/main.tscn"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	for _, want := range []string{`"action":"list"`, `"scenePath":"scenes/main.tscn"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text = %q, want it to contain %q", text, want)
+		}
+	}
+	if strings.Contains(text, "signalName") || strings.Contains(text, "sourcePath") {
+		t.Errorf("text = %q, want no mutation fields", text)
+	}
+}
+
+func TestReadSceneSignalsStructured(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"connections":[{"signal":"pressed","from":".","to":".","method":"on_pressed"}]}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, manageSceneSignals(), root, `{"scenePath":"scenes/main.tscn","action":"list"}`)
+	result := callToolArgs(t, readSceneSignals(), root, `{"scenePath":"scenes/main.tscn"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -139,26 +155,27 @@ func TestManageSceneSignalsValidation(t *testing.T) {
 
 	tests := []struct {
 		name    string
+		tool    func() mcp.Tool
 		project string
 		args    string
 		want    string
 	}{
-		{name: "missing everything", args: `{}`, want: "scenePath and action are required."},
-		{name: "missing scene", project: root, args: `{"action":"list"}`, want: "scenePath and action are required."},
-		{name: "missing action", project: root, args: `{"scenePath":"main.tscn"}`, want: "scenePath and action are required."},
-		{name: "invalid project path", project: "../escape", args: `{"scenePath":"main.tscn","action":"list"}`, want: "Invalid path."},
-		{name: "invalid scene path", project: root, args: `{"scenePath":"../escape.tscn","action":"list"}`, want: "Invalid path."},
-		{name: "not a project", project: notAProject, args: `{"scenePath":"main.tscn","action":"list"}`, want: "Not a valid Godot project"},
-		{name: "missing scene file", project: root, args: `{"scenePath":"missing.tscn","action":"list"}`, want: "Scene file does not exist: missing.tscn"},
-		{name: "add missing fields", project: root, args: `{"scenePath":"main.tscn","action":"add","signalName":"pressed"}`, want: "signalName, sourcePath, targetPath, and method are required for add."},
-		{name: "remove missing signal", project: root, args: `{"scenePath":"main.tscn","action":"remove"}`, want: "signalName, sourcePath, and targetPath are required for remove."},
-		{name: "remove missing source", project: root, args: `{"scenePath":"main.tscn","action":"remove","signalName":"released","targetPath":"root"}`, want: "signalName, sourcePath, and targetPath are required for remove."},
-		{name: "remove missing target", project: root, args: `{"scenePath":"main.tscn","action":"remove","signalName":"released","sourcePath":"root"}`, want: "signalName, sourcePath, and targetPath are required for remove."},
-		{name: "unknown action", project: root, args: `{"scenePath":"main.tscn","action":"frobnicate"}`, want: "Unknown action: frobnicate. Use list, add, or remove."},
+		{name: "missing everything", tool: manageSceneSignals, args: `{}`, want: "scenePath and action are required."},
+		{name: "missing scene path", tool: readSceneSignals, project: root, args: `{}`, want: "scenePath is required."},
+		{name: "missing action", tool: manageSceneSignals, project: root, args: `{"scenePath":"main.tscn"}`, want: "scenePath and action are required."},
+		{name: "invalid project path", tool: readSceneSignals, project: "../escape", args: `{"scenePath":"main.tscn"}`, want: "Invalid path."},
+		{name: "invalid scene path", tool: readSceneSignals, project: root, args: `{"scenePath":"../escape.tscn"}`, want: "Invalid path."},
+		{name: "not a project", tool: readSceneSignals, project: notAProject, args: `{"scenePath":"main.tscn"}`, want: "Not a valid Godot project"},
+		{name: "missing scene file", tool: readSceneSignals, project: root, args: `{"scenePath":"missing.tscn"}`, want: "Scene file does not exist: missing.tscn"},
+		{name: "add missing fields", tool: manageSceneSignals, project: root, args: `{"scenePath":"main.tscn","action":"add","signalName":"pressed"}`, want: "signalName, sourcePath, targetPath, and method are required for add."},
+		{name: "remove missing signal", tool: manageSceneSignals, project: root, args: `{"scenePath":"main.tscn","action":"remove"}`, want: "signalName, sourcePath, and targetPath are required for remove."},
+		{name: "remove missing source", tool: manageSceneSignals, project: root, args: `{"scenePath":"main.tscn","action":"remove","signalName":"released","targetPath":"root"}`, want: "signalName, sourcePath, and targetPath are required for remove."},
+		{name: "remove missing target", tool: manageSceneSignals, project: root, args: `{"scenePath":"main.tscn","action":"remove","signalName":"released","sourcePath":"root"}`, want: "signalName, sourcePath, and targetPath are required for remove."},
+		{name: "unknown action", tool: manageSceneSignals, project: root, args: `{"scenePath":"main.tscn","action":"frobnicate"}`, want: "Unknown action: frobnicate. Use add or remove."},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, manageSceneSignals(), tt.project, tt.args)
+			result := callToolArgs(t, tt.tool(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -193,7 +210,7 @@ func TestManageSceneSignalsSpawnFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, manageSceneSignals(), root, `{"scenePath":"scenes/main.tscn","action":"list"}`)
+	result := callToolArgs(t, readSceneSignals(), root, `{"scenePath":"scenes/main.tscn"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

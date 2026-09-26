@@ -26,9 +26,7 @@ move_left={"deadzone": 0.5}
 
 	t.Run("input map", func(t *testing.T) {
 		var list map[string]any
-		text := requireToolText(t, session, "manage_input_map", map[string]any{
-			"action": "list",
-		})
+		text := requireToolText(t, session, "read_input_map", map[string]any{})
 		if err := json.Unmarshal([]byte(text), &list); err != nil {
 			t.Fatalf("unmarshal %q: %v", text, err)
 		}

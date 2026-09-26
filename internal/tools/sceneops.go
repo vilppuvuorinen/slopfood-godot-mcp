@@ -242,8 +242,11 @@ func errorOutputSchema() map[string]any {
 // ErrorResult emits. The top-level properties describe the payload alone, so a
 // read never advertises the envelope's success/message fields it does not
 // return; the anyOf branch keeps the envelope an advertised shape rather than
-// an undeclared one. A payload's $defs are hoisted to the top level so its
-// $refs stay resolvable from the document root.
+// an undeclared one. A free-form payload declares its entries through
+// additionalProperties rather than named properties; that whole-object shape is
+// hoisted to the top level too, so a client reading only the top level still
+// sees it. A payload's $defs are hoisted so its $refs stay resolvable from the
+// document root.
 func readOutputSchema(payloadSchema map[string]any) map[string]any {
 	schema := map[string]any{
 		"type":       "object",
@@ -253,38 +256,11 @@ func readOutputSchema(payloadSchema map[string]any) map[string]any {
 			payloadSchema,
 		},
 	}
-	if defs, ok := payloadSchema["$defs"]; ok {
-		schema["$defs"] = defs
-	}
-	return schema
-}
-
-// actionOutputSchema returns the object output schema for a tool whose
-// structured result depends on the action: a mutation returns the status
-// envelope while a read or list returns a payload without it. payloadSchema is
-// the full object schema for the payload shape, so a fixed-field payload uses
-// payloadOutputSchema and a free-form one can declare additionalProperties.
-// Both shapes are advertised with anyOf so a read is never described as
-// returning success and message, and no action is described by fields it does
-// not return. The merged properties still list every field for clients that do
-// not read schema branches. A free-form payload declares its entries through
-// additionalProperties rather than named properties; that whole-object shape is
-// carried up too, so a client reading only the top level still sees it.
-func actionOutputSchema(status map[string]any, payloadSchema map[string]any) map[string]any {
-	properties := statusProperties(status)
-	for name, schema := range payloadProperties(payloadSchema) {
-		properties[name] = schema
-	}
-	schema := map[string]any{
-		"type":       "object",
-		"properties": properties,
-		"anyOf": []any{
-			statusOutputSchema(status),
-			payloadSchema,
-		},
-	}
 	if extra, ok := payloadSchema["additionalProperties"]; ok {
 		schema["additionalProperties"] = extra
+	}
+	if defs, ok := payloadSchema["$defs"]; ok {
+		schema["$defs"] = defs
 	}
 	return schema
 }
