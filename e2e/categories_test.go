@@ -5,15 +5,19 @@ import "testing"
 // TestEnableCategories exercises the --enable category gating over the real
 // stdio surface.
 func TestEnableCategories(t *testing.T) {
-	t.Run("default registers project only", func(t *testing.T) {
+	t.Run("default registers every category", func(t *testing.T) {
 		session := connectSession(t, nil)
 
-		findTool(t, session, "get_project_info")
 		for _, name := range []string{
-			"read_project_settings", "manage_export_presets", "create_scene",
-			"add_node", "attach_script", "manage_resource",
+			"get_project_info",      // project
+			"read_project_settings", // settings
+			"manage_export_presets", // export
+			"create_scene",          // scene
+			"add_node",              // node
+			"attach_script",         // script
+			"manage_resource",       // resources
 		} {
-			requireToolAbsent(t, session, name)
+			findTool(t, session, name)
 		}
 	})
 

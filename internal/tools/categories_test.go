@@ -20,8 +20,8 @@ func TestResolveCategories(t *testing.T) {
 		raw  []string
 		want []Category
 	}{
-		{name: "empty defaults to project", raw: nil, want: []Category{CategoryProject}},
-		{name: "blank value defaults to project", raw: []string{""}, want: []Category{CategoryProject}},
+		{name: "empty defaults to all", raw: nil, want: AllCategories},
+		{name: "blank value defaults to all", raw: []string{""}, want: AllCategories},
 		{name: "all expands", raw: []string{"all"}, want: AllCategories},
 		{name: "comma separated", raw: []string{"scene,script"}, want: []Category{CategoryScene, CategoryScript}},
 		{name: "repeated flags", raw: []string{"project", "node"}, want: []Category{CategoryProject, CategoryNode}},

@@ -37,16 +37,16 @@ holds. Every other path-valued result field is project-relative.
 
 ## Tools and `--enable` categories
 
-Tools are grouped into categories by what they act on. `project` is registered
-by default; passing `--enable` replaces that default, so `project` must be named
-explicitly to keep it. The flag is repeatable and accepts comma-separated names;
-`all` selects every category.
+Tools are grouped into categories by what they act on. Every category is
+registered by default; passing `--enable` replaces that default, so any category
+to keep must be named explicitly. The flag is repeatable and accepts
+comma-separated names; `all` selects every category.
 
 ```
-go-dot-mcp                                     # project only
+go-dot-mcp                                     # every category
 go-dot-mcp --enable scene,script               # scene and script, no project
 go-dot-mcp --enable project --enable node      # project and node
-go-dot-mcp --enable all                        # everything
+go-dot-mcp --enable all                        # every category
 ```
 
 ## Protocol

@@ -59,8 +59,10 @@ var categoryTools = map[Category][]func() mcp.Tool{
 	},
 }
 
-// DefaultCategories is the set registered when --enable is not passed.
-var DefaultCategories = []Category{CategoryProject}
+// DefaultCategories is the set registered when --enable is not passed. It is a
+// copy of AllCategories, not an alias, so a caller can mutate it without
+// disturbing the canonical order.
+var DefaultCategories = append([]Category(nil), AllCategories...)
 
 // Register adds the tools in the given categories to the server, binding every
 // project-scoped tool to project. The root is fixed for the life of the server,

@@ -70,7 +70,7 @@ func run() error {
 		project     = flag.String("project", "", "Godot project directory to bind to (default: $"+projectEnv+", then the working directory)")
 		enable      enableValues
 	)
-	flag.Var(&enable, "enable", "tool categories to enable (repeatable, comma-separated; default \"project\"; \"all\" selects every category)")
+	flag.Var(&enable, "enable", "tool categories to enable (repeatable, comma-separated; default \"all\"; any name replaces the default)")
 	flag.Parse()
 
 	if *showVersion {
