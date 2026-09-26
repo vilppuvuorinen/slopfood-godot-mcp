@@ -32,8 +32,8 @@ import (
 // hit. It is exported so tests and reports can recognize injected code.
 const HitFunc = "__gdcover_hit"
 
-// fileEnv names the environment variable that holds the hit output path.
-const fileEnv = "GDCOVER_FILE"
+// FileEnv is the default environment variable that holds the hit output path.
+const FileEnv = "GDCOVER_FILE"
 
 // funcHeader matches a named function declaration. Lambda expressions have no
 // name and are handled as ordinary statements or openers by their context.
@@ -46,16 +46,25 @@ type Result struct {
 	Lines  []int
 }
 
-// Instrument returns a copy of src with line-coverage instrumentation injected.
+// Instrument returns a copy of src with line-coverage instrumentation injected,
+// writing hits to the path named by FileEnv.
+func Instrument(src []byte) (Result, error) {
+	return InstrumentEnv(src, FileEnv)
+}
+
+// InstrumentEnv is Instrument with a caller-chosen hit-output environment
+// variable. Distinct variables keep the traces of concurrently instrumented
+// scripts separate, so a run that exercises more than one embedded script can
+// attribute every hit to the script that emitted it.
 //
 // Each executable statement inside a top-level function reports the line it
 // starts on, and the body of every branch or loop reports the line of its
-// header when that body runs. Hits are appended to the GDCOVER_FILE, one
-// integer per line, in execution order.
+// header when that body runs. Hits are appended to the file named by fileEnv,
+// one integer per line, in execution order.
 //
-// Instrument returns an error if src already contains instrumentation, so a
+// InstrumentEnv returns an error if src already contains instrumentation, so a
 // second pass cannot double-inject.
-func Instrument(src []byte) (Result, error) {
+func InstrumentEnv(src []byte, fileEnv string) (Result, error) {
 	if bytes.Contains(src, []byte(HitFunc)) {
 		return Result{}, errors.New("gdcover: script is already instrumented")
 	}
@@ -143,15 +152,15 @@ func Instrument(src []byte) (Result, error) {
 	}
 
 	header := headerEnd(lines)
-	out := make([]string, 0, len(lines)+len(prologue(indent))+1)
+	out := make([]string, 0, len(lines)+len(prologue(indent, fileEnv))+1)
 	if header < 0 {
-		out = append(out, prologue(indent)...)
+		out = append(out, prologue(indent, fileEnv)...)
 	}
 	for i, line := range lines {
 		out = append(out, before[i]...)
 		out = append(out, strings.TrimRight(line, "\r"))
 		if i == header {
-			out = append(out, prologue(indent)...)
+			out = append(out, prologue(indent, fileEnv)...)
 		}
 		out = append(out, after[i]...)
 	}
@@ -175,8 +184,9 @@ func hit(indent string, line int) string {
 
 // prologue is the helper injected after the script's header declarations. It
 // opens the output file lazily and appends each hit immediately, so hits are
-// preserved even when the script calls quit() partway through.
-func prologue(unit string) []string {
+// preserved even when the script calls quit() partway through. fileEnv names
+// the environment variable that holds the output path.
+func prologue(unit, fileEnv string) []string {
 	return []string{
 		`var __gdcover_path: String = OS.get_environment("` + fileEnv + `")`,
 		`var __gdcover_out: FileAccess`,

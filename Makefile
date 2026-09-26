@@ -52,26 +52,31 @@ e2e: build
 # view of the engine-facing half of the server: unit tests mock Godot out and
 # the black-box e2e module cannot instrument the server's packages.
 #
-# The same run also measures the embedded GDScript bridge. The -tags gdcover
-# build instruments godot_operations.gd before Godot sees it, and every spawned
-# engine appends its hit trace to GDCOVER_FILE. That trace is turned into an
-# LCOV report afterwards, so one engine run yields both profiles.
+# The same run also measures both embedded GDScript scripts. The -tags gdcover
+# build instruments godot_operations.gd and validate_script.gd before Godot sees
+# them; every spawned engine appends each script's hits to its own trace
+# (GDCOVER_FILE and GDCOVER_VALIDATE_FILE). Those traces become two LCOV reports
+# afterwards, so one engine run yields three profiles.
 COVERDIR ?= $(CURDIR)/coverage-e2e
 E2E_COVERPROFILE := coverage-e2e.out
 GDCOVERDIR ?= $(CURDIR)/coverage-gdscript
 GDCOVER_HITS := $(GDCOVERDIR)/hits.txt
 GDCOVER_PROFILE := coverage-gdscript.info
+GDCOVER_VALIDATE_HITS := $(GDCOVERDIR)/validate-hits.txt
+GDCOVER_VALIDATE_PROFILE := coverage-validate-gdscript.info
 
 .PHONY: e2e-cover
 e2e-cover:
-	rm -rf '$(COVERDIR)' '$(GDCOVERDIR)' $(E2E_COVERPROFILE) $(GDCOVER_PROFILE)
+	rm -rf '$(COVERDIR)' '$(GDCOVERDIR)' $(E2E_COVERPROFILE) $(GDCOVER_PROFILE) $(GDCOVER_VALIDATE_PROFILE)
 	mkdir -p '$(COVERDIR)' '$(GDCOVERDIR)'
 	$(GO) build $(GOFLAGS) -cover -tags gdcover -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY)-cover $(CMD)
-	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GO_DOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)-cover' GOCOVERDIR='$(COVERDIR)' GDCOVER_FILE='$(GDCOVER_HITS)' $(GO) test $(GOFLAGS) -count=1 ./...
+	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GO_DOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)-cover' GOCOVERDIR='$(COVERDIR)' GDCOVER_FILE='$(GDCOVER_HITS)' GDCOVER_VALIDATE_FILE='$(GDCOVER_VALIDATE_HITS)' $(GO) test $(GOFLAGS) -count=1 ./...
 	$(GO) tool covdata textfmt -i='$(COVERDIR)' -o=$(E2E_COVERPROFILE)
 	@$(GO) tool cover -func=$(E2E_COVERPROFILE) | tail -1
 	$(GO) run ./cmd/gdcover lcov -source internal/godotops/godot_operations.gd -hits '$(GDCOVER_HITS)' -out $(GDCOVER_PROFILE)
 	@printf 'GDScript bridge coverage written to %s\n' '$(GDCOVER_PROFILE)'
+	$(GO) run ./cmd/gdcover lcov -source internal/godotops/validate_script.gd -hits '$(GDCOVER_VALIDATE_HITS)' -out $(GDCOVER_VALIDATE_PROFILE)
+	@printf 'GDScript validate-script coverage written to %s\n' '$(GDCOVER_VALIDATE_PROFILE)'
 
 .PHONY: bench
 bench:
@@ -108,7 +113,7 @@ check: fmt vet lint test e2e
 
 .PHONY: clean
 clean:
-	rm -rf bin coverage.out $(E2E_COVERPROFILE) '$(COVERDIR)' $(GDCOVER_PROFILE) '$(GDCOVERDIR)'
+	rm -rf bin coverage.out $(E2E_COVERPROFILE) '$(COVERDIR)' $(GDCOVER_PROFILE) $(GDCOVER_VALIDATE_PROFILE) '$(GDCOVERDIR)'
 
 .PHONY: help
 help:
@@ -119,6 +124,6 @@ help:
 	@printf '  test     run tests with coverage\n'
 	@printf '  godot    download pinned Godot builds (GODOT_TEMPLATES=1 adds export templates)\n'
 	@printf '  e2e      build, then run the SDK-backed black-box tests\n'
-	@printf '  e2e-cover  e2e coverage: Go to %s, GDScript bridge to %s\n' '$(E2E_COVERPROFILE)' '$(GDCOVER_PROFILE)'
+	@printf '  e2e-cover  e2e coverage: Go to %s, GDScript bridge to %s and %s\n' '$(E2E_COVERPROFILE)' '$(GDCOVER_PROFILE)' '$(GDCOVER_VALIDATE_PROFILE)'
 	@printf '  fmt/vet/lint/check  code quality\n'
 	@printf '  clean    remove build artifacts\n'

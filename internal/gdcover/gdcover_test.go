@@ -134,6 +134,32 @@ func TestInstrumentUsesTabsWhenScriptDoes(t *testing.T) {
 	}
 }
 
+// TestInstrumentEnvNamesItsOutputVariable checks that a custom hit-output
+// variable is baked into the injected helper, so several instrumented scripts
+// writing in the same run keep separate traces. Instrument keeps the default.
+func TestInstrumentEnvNamesItsOutputVariable(t *testing.T) {
+	src := []byte("extends Node\n\nfunc _init():\n    pass\n")
+
+	def, err := Instrument(src)
+	if err != nil {
+		t.Fatalf("Instrument: %v", err)
+	}
+	if !strings.Contains(string(def.Source), `OS.get_environment("`+FileEnv+`")`) {
+		t.Errorf("default prologue does not read %s:\n%s", FileEnv, def.Source)
+	}
+
+	custom, err := InstrumentEnv(src, "GDCOVER_OTHER_FILE")
+	if err != nil {
+		t.Fatalf("InstrumentEnv: %v", err)
+	}
+	if !strings.Contains(string(custom.Source), `OS.get_environment("GDCOVER_OTHER_FILE")`) {
+		t.Errorf("custom prologue does not read its variable:\n%s", custom.Source)
+	}
+	if strings.Contains(string(custom.Source), FileEnv) {
+		t.Errorf("custom prologue still references %s:\n%s", FileEnv, custom.Source)
+	}
+}
+
 func TestInstrumentRejectsDoubleInstrumentation(t *testing.T) {
 	src := []byte("extends Node\n\nfunc _init():\n    pass\n")
 	once, err := Instrument(src)

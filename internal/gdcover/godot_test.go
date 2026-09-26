@@ -87,7 +87,7 @@ func runInstrumentedAt(t *testing.T, engine, project, script, hitsPath string) {
 	t.Helper()
 	cmd := exec.CommandContext(context.Background(), engine, //nolint:gosec // engine is the test's own binary.
 		"--headless", "--path", project, "--script", script)
-	cmd.Env = append(os.Environ(), fileEnv+"="+hitsPath)
+	cmd.Env = append(os.Environ(), FileEnv+"="+hitsPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("run instrumented script: %v\n%s", err, out)
 	}
@@ -248,7 +248,7 @@ func TestInstrumentedOperationsScriptReportsHits(t *testing.T) {
 	engine := requireGodot(t)
 	script, original := instrumentedOperationsScript(t)
 	hits := filepath.Join(t.TempDir(), "hits.txt")
-	t.Setenv(fileEnv, hits)
+	t.Setenv(FileEnv, hits)
 
 	_, stderr, exit, err := godot.RunOperation(context.Background(), engine,
 		writeProject(t), script, "validate_project", godot.OperationParams{"operation": "validate_project"})

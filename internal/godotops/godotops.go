@@ -34,11 +34,26 @@ var (
 // cache out of the real user cache.
 var userCacheDir = os.UserCacheDir
 
+// ValidateHitsEnv names the environment variable the instrumented validate
+// script reads for its hit trace. OperationsHitsEnv is the same for the
+// operations bridge. They are distinct so that one engine run can attribute
+// hits to the script that emitted them; the coverage build bakes each name into
+// its script's prologue and `make e2e-cover` sets both on every spawned server.
+const (
+	OperationsHitsEnv = "GDCOVER_FILE"
+	ValidateHitsEnv   = "GDCOVER_VALIDATE_FILE"
+)
+
 // instrumentBridge, when non-nil, rewrites the embedded operations script
 // before it is materialized. A coverage build (the `gdcover` build tag) sets it
 // so the bridge reports line hits; normal builds leave it nil, keeping the
 // instrumenter out of the shipped binary.
 var instrumentBridge func(string) (string, error)
+
+// instrumentValidate, when non-nil, rewrites the embedded validate script
+// before it is materialized, mirroring instrumentBridge for the second embedded
+// script.
+var instrumentValidate func(string) (string, error)
 
 // OperationsScript materializes the embedded godot_operations.gd to a file and
 // returns its path. Godot needs a real path for --script, and the binary is
@@ -64,7 +79,16 @@ func OperationsScript() (string, error) {
 // --script.
 func ValidateScript() (string, error) {
 	validateOnce.Do(func() {
-		validatePath, validateErr = materialize("validate_script", validateScript)
+		content := validateScript
+		if instrumentValidate != nil {
+			rewritten, instrumentErr := instrumentValidate(content)
+			if instrumentErr != nil {
+				validateErr = fmt.Errorf("instrument validate script: %w", instrumentErr)
+				return
+			}
+			content = rewritten
+		}
+		validatePath, validateErr = materialize("validate_script", content)
 	})
 	return validatePath, validateErr
 }
