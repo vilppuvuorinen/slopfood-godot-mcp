@@ -113,8 +113,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 31 {
-		t.Errorf("registered %d tools, want 31", len(seen))
+	if len(seen) != 33 {
+		t.Errorf("registered %d tools, want 33", len(seen))
 	}
 }
 
@@ -159,6 +159,7 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"read_scene_signals":    true,
 		"read_tilemap":          true,
 		"read_tileset":          true,
+		"read_theme":            true,
 		"validate_scripts":      true,
 	}
 	additive := map[string]bool{
@@ -395,6 +396,18 @@ func TestActionToolsAdvertiseVariants(t *testing.T) {
 				"setCell":   {"coords", "sourceId", "atlasCoords"},
 				"eraseCell": {"coords"},
 				"clear":     {},
+			},
+		},
+		"manage_theme": {
+			common: []string{"resourcePath", "action"},
+			actions: map[string][]string{
+				"create":             {},
+				"modify":             {},
+				"removeType":         {"themeType"},
+				"setTypeVariation":   {"themeType", "baseType"},
+				"clearTypeVariation": {"themeType"},
+				"setItem":            {"themeType", "itemType", "itemName", "value"},
+				"clearItem":          {"themeType", "itemType", "itemName"},
 			},
 		},
 	}

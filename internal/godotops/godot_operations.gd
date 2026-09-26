@@ -80,6 +80,8 @@ func _init():
             manage_animation(params)
         "manage_tileset":
             manage_tileset(params)
+        "manage_theme":
+            manage_theme(params)
         "manage_tilemap":
             manage_tilemap(params)
         "validate_project":
@@ -2426,6 +2428,205 @@ func _enum_name(mapping, value) -> String:
         if mapping[name] == value:
             return name
     return "unknown"
+
+# Theme item categories as they appear in the tool contract, mapped to the
+# engine's Theme.DataType values.
+const THEME_ITEM_TYPES = {
+    "color": Theme.DATA_TYPE_COLOR,
+    "constant": Theme.DATA_TYPE_CONSTANT,
+    "font": Theme.DATA_TYPE_FONT,
+    "fontSize": Theme.DATA_TYPE_FONT_SIZE,
+    "icon": Theme.DATA_TYPE_ICON,
+    "stylebox": Theme.DATA_TYPE_STYLEBOX,
+}
+
+# Read/create/modify a Theme resource and its types, variations, and items.
+# Theme items are keyed by composite names and variations are not storage
+# properties at all, so the generic manage_resource codec cannot express the
+# full contract; this operation is the dedicated authoring path, mirroring
+# manage_animation for tracks and manage_tileset for sources and tiles.
+func manage_theme(params):
+    var resource_path = params.get("resourcePath", "")
+    var action = params.get("action", "read")
+    var full_path = resource_path
+    if not full_path.begins_with("res://"):
+        full_path = "res://" + full_path
+
+    if action == "read":
+        _read_theme(full_path)
+        return
+
+    if action == "create":
+        var created = Theme.new()
+        if not _apply_theme_defaults(created, params):
+            printerr("Invalid theme property: " + _decode_error)
+            quit(1)
+            return
+        if not _save_resource(created, full_path):
+            return
+        print("Theme created: " + full_path)
+        return
+
+    var theme = _load_theme(full_path)
+    if theme == null:
+        return
+
+    match action:
+        "modify":
+            if not _apply_theme_defaults(theme, params):
+                printerr("Invalid theme property: " + _decode_error)
+                quit(1)
+                return
+        "removeType":
+            theme.remove_type(StringName(str(params.get("themeType", ""))))
+        "setTypeVariation":
+            theme.set_type_variation(StringName(str(params.get("themeType", ""))), StringName(str(params.get("baseType", ""))))
+        "clearTypeVariation":
+            theme.clear_type_variation(StringName(str(params.get("themeType", ""))))
+        "setItem":
+            if not _set_theme_item(theme, params):
+                printerr("Invalid theme item: " + _decode_error)
+                quit(1)
+                return
+        "clearItem":
+            if not _clear_theme_item(theme, params):
+                printerr("Invalid theme item: " + _decode_error)
+                quit(1)
+                return
+        _:
+            printerr("Unknown manage_theme action: " + action)
+            quit(1)
+            return
+
+    if not _save_resource(theme, full_path):
+        return
+    print("Theme " + action + " succeeded: " + full_path)
+
+# Load a Theme with the shared not-found and type checks. Returns null after
+# signalling failure, because quit() does not stop the current call.
+func _load_theme(full_path):
+    if not ResourceLoader.exists(full_path):
+        printerr("Theme resource not found: " + full_path)
+        quit(1)
+        return null
+    var resource = ResourceLoader.load(full_path)
+    if resource == null:
+        printerr("Failed to load theme: " + full_path)
+        quit(1)
+        return null
+    if not (resource is Theme):
+        printerr("Not a Theme resource: " + full_path)
+        quit(1)
+        return null
+    return resource
+
+# Apply the theme-level defaults defaultFont, defaultFontSize, and
+# defaultBaseScale when present.
+func _apply_theme_defaults(theme, params) -> bool:
+    if params.has("defaultFont"):
+        var value = params["defaultFont"]
+        if value is String and not value.begins_with("res://") and not value.begins_with("user://"):
+            value = "res://" + value
+        var font = _decode_object(value)
+        if _decode_error != "":
+            return false
+        if not (font is Font):
+            _decode_error = "defaultFont must be a Font resource"
+            return false
+        theme.default_font = font
+    if params.has("defaultFontSize"):
+        var size = params["defaultFontSize"]
+        if not (size is int or size is float):
+            _decode_error = "defaultFontSize must be a number"
+            return false
+        theme.default_font_size = int(size)
+    if params.has("defaultBaseScale"):
+        var scale = params["defaultBaseScale"]
+        if not (scale is int or scale is float):
+            _decode_error = "defaultBaseScale must be a number"
+            return false
+        theme.default_base_scale = float(scale)
+    return true
+
+# Set one theme item, converting the value to the item category's engine type.
+func _set_theme_item(theme, params) -> bool:
+    var type_id = _theme_item_type_id(params.get("itemType", ""))
+    if type_id == -1:
+        _decode_error = "unknown itemType: " + str(params.get("itemType", ""))
+        return false
+    var value = _convert_theme_item_value(type_id, params.get("value", null))
+    if _decode_error != "":
+        return false
+    theme.set_theme_item(type_id, StringName(str(params.get("itemName", ""))), StringName(str(params.get("themeType", ""))), value)
+    return true
+
+# Remove one theme item from a type.
+func _clear_theme_item(theme, params) -> bool:
+    var type_id = _theme_item_type_id(params.get("itemType", ""))
+    if type_id == -1:
+        _decode_error = "unknown itemType: " + str(params.get("itemType", ""))
+        return false
+    theme.clear_theme_item(type_id, StringName(str(params.get("itemName", ""))), StringName(str(params.get("themeType", ""))))
+    return true
+
+# Convert a caller's value to the engine type its item category requires: a
+# tagged Color, an integer for constant/fontSize, or a resource for
+# font/icon/stylebox.
+func _convert_theme_item_value(type_id, value):
+    match type_id:
+        Theme.DATA_TYPE_COLOR:
+            return _require_tagged_type(value, TYPE_COLOR, "a color item value")
+        Theme.DATA_TYPE_CONSTANT, Theme.DATA_TYPE_FONT_SIZE:
+            return _convert_value_for_type(TYPE_INT, value)
+        Theme.DATA_TYPE_FONT, Theme.DATA_TYPE_ICON, Theme.DATA_TYPE_STYLEBOX:
+            if value is String and not value.begins_with("res://") and not value.begins_with("user://"):
+                value = "res://" + value
+            return _convert_value_for_type(TYPE_OBJECT, value)
+    _decode_error = "unsupported item type"
+    return null
+
+func _theme_item_type_id(name) -> int:
+    if THEME_ITEM_TYPES.has(name):
+        return THEME_ITEM_TYPES[name]
+    return -1
+
+# Emit a Theme as a JSON payload: the theme-level defaults and one object per
+# type with its items grouped by category.
+func _read_theme(full_path):
+    var theme = _load_theme(full_path)
+    if theme == null:
+        return
+    var types = []
+    for type_name in theme.get_type_list():
+        types.append(_theme_type_to_json(theme, type_name))
+    var result = {
+        "path": project_relative(full_path),
+        "defaultFont": _variant_to_json(theme.default_font),
+        "defaultFontSize": theme.default_font_size if theme.has_default_font_size() else null,
+        "defaultBaseScale": theme.default_base_scale if theme.has_default_base_scale() else null,
+        "types": types,
+    }
+    print(JSON_START)
+    print(JSON.stringify(result))
+    print(JSON_END)
+
+func _theme_type_to_json(theme, type_name) -> Dictionary:
+    return {
+        "name": String(type_name),
+        "variationBase": String(theme.get_type_variation_base(type_name)),
+        "colors": _theme_items_to_json(theme, Theme.DATA_TYPE_COLOR, type_name),
+        "constants": _theme_items_to_json(theme, Theme.DATA_TYPE_CONSTANT, type_name),
+        "fonts": _theme_items_to_json(theme, Theme.DATA_TYPE_FONT, type_name),
+        "fontSizes": _theme_items_to_json(theme, Theme.DATA_TYPE_FONT_SIZE, type_name),
+        "icons": _theme_items_to_json(theme, Theme.DATA_TYPE_ICON, type_name),
+        "styleboxes": _theme_items_to_json(theme, Theme.DATA_TYPE_STYLEBOX, type_name),
+    }
+
+func _theme_items_to_json(theme, type_id, theme_type) -> Dictionary:
+    var items = {}
+    for name in theme.get_theme_item_list(type_id, theme_type):
+        items[String(name)] = _variant_to_json(theme.get_theme_item(type_id, name, theme_type))
+    return items
 
 # Read or edit the cells of a TileMapLayer node in a scene. Cells are not
 # properties (the layer stores them in an opaque tile_map_data blob), so a
