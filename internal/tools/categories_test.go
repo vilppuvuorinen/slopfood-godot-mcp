@@ -134,9 +134,20 @@ func TestCategoryBudget(t *testing.T) {
 	}
 }
 
+// schemaOptionalReads are read tools whose payload is self-describing, so they
+// deliberately advertise no output schema: structured content plus text is more
+// powerful token for token than a declared schema that can drift from what the
+// engine emits. Every other tool must still advertise one.
+var schemaOptionalReads = map[string]bool{
+	"read_tilemap": true,
+	"read_tileset": true,
+	"read_theme":   true,
+}
+
 // TestToolsAdvertiseMetadata verifies every tool carries the metadata modern
-// clients rely on: a title, behavior annotations, and an output schema so
-// structured results can be consumed programmatically.
+// clients rely on: a title, behavior annotations, and (except for the
+// self-describing reads) an output schema so structured results can be consumed
+// programmatically.
 func TestToolsAdvertiseMetadata(t *testing.T) {
 	for _, category := range AllCategories {
 		for _, newTool := range categoryTools[category] {
@@ -147,7 +158,7 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 			if tool.Annotations == nil {
 				t.Errorf("tool %q has no annotations", tool.Name)
 			}
-			if tool.OutputSchema == nil {
+			if tool.OutputSchema == nil && !schemaOptionalReads[tool.Name] {
 				t.Errorf("tool %q has no output schema", tool.Name)
 			}
 		}

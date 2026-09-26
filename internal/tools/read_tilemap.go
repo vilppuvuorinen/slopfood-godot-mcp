@@ -29,36 +29,7 @@ func readTilemap() mcp.Tool {
 			},
 			"required": []string{"scenePath", "nodePath"},
 		},
-		OutputSchema: tilemapPayloadSchema(),
-		Handler:      handleReadTilemap,
-	}
-}
-
-// tilemapPayloadSchema describes read_tilemap's payload: the node's tileset and
-// one object per placed cell.
-func tilemapPayloadSchema() map[string]any {
-	return payloadOutputSchema(map[string]any{
-		"scenePath": map[string]any{"type": "string", "description": "Scene path, relative to the bound project"},
-		"nodePath":  map[string]any{"type": "string", "description": "Node path, relative to the scene root"},
-		"tileSet":   map[string]any{"type": "string", "description": "TileSet resource path, relative to the bound project (empty when unset)"},
-		"usedCells": map[string]any{"type": "array", "description": "Placed cells, sorted by coordinates", "items": tilemapCellSchema()},
-	})
-}
-
-func tilemapCellSchema() map[string]any {
-	return map[string]any{
-		"type":        "object",
-		"description": "One placed cell",
-		"properties": map[string]any{
-			"coords":          godotValueSchema("Cell coordinates as a Vector2i"),
-			"sourceId":        map[string]any{"type": "integer", "description": "TileSet source id"},
-			"atlasCoords":     godotValueSchema("Tile atlas coordinates as a Vector2i"),
-			"alternativeTile": map[string]any{"type": "integer", "description": "Alternative tile id"},
-			"flippedH":        map[string]any{"type": "boolean", "description": "Whether the cell is flipped horizontally"},
-			"flippedV":        map[string]any{"type": "boolean", "description": "Whether the cell is flipped vertically"},
-			"transposed":      map[string]any{"type": "boolean", "description": "Whether the cell is transposed"},
-		},
-		"required": []string{"coords", "sourceId", "atlasCoords", "alternativeTile", "flippedH", "flippedV", "transposed"},
+		Handler: handleReadTilemap,
 	}
 }
 
