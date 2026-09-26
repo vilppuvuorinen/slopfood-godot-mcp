@@ -8,9 +8,9 @@ import (
 // TestAddNodeSchema ports the reference's tool-definition expectations for
 // add_node over the real stdio surface.
 func TestAddNodeSchema(t *testing.T) {
-	schema := requireSchema(t, "add_node", "Add a node to an existing scene (rewrites the .tscn file)")
-	schema.requireRequired(t, "scenePath", "nodeType", "nodeName")
-	schema.requireProps(t, "scenePath", "parentNodePath", "nodeType", "nodeName", "properties")
+	schema := requireSchema(t, "add_node", "Add a built-in node or a scene instance to an existing scene (rewrites the .tscn file)")
+	schema.requireRequired(t, "scenePath", "nodeName")
+	schema.requireProps(t, "scenePath", "parentNodePath", "nodeType", "instancePath", "nodeName", "properties")
 	schema.requireType(t, "properties", "object")
 }
 
@@ -29,6 +29,27 @@ func TestAddNodeTool(t *testing.T) {
 		scene := readFile(t, filepath.Join(root, "scenes", "main.tscn"))
 		requireContains(t, scene, `[node name="Player" type="Sprite2D"`)
 	})
+
+	t.Run("adds a scene instance", func(t *testing.T) {
+		root, session := seedScene(t, "scenes/main.tscn")
+		res := callTool(t, session, "create_scene", map[string]any{"scenePath": "scenes/enemy.tscn"})
+		if res.IsError {
+			t.Fatalf("create_scene failed: %s", firstText(t, res))
+		}
+
+		text := requireToolText(t, session, "add_node", map[string]any{
+			"scenePath":    "scenes/main.tscn",
+			"instancePath": "scenes/enemy.tscn",
+			"nodeName":     "Foe",
+		})
+		requirePrefix(t, text, "Scene 'scenes/enemy.tscn' instanced as 'Foe' added successfully to 'scenes/main.tscn'.")
+
+		scene := readFile(t, filepath.Join(root, "scenes", "main.tscn"))
+		requireContains(t, scene,
+			`[ext_resource type="PackedScene" path="res://scenes/enemy.tscn"`,
+			`instance=ExtResource(`,
+		)
+	})
 }
 
 // TestAddNodeErrors covers the reference's validation and failure messages.
@@ -36,7 +57,38 @@ func TestAddNodeErrors(t *testing.T) {
 	t.Run("missing params", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireToolError(t, session, "add_node", map[string]any{}, "scenePath, nodeType, and nodeName are required.")
+		requireToolError(t, session, "add_node", map[string]any{}, "scenePath and nodeName are required.")
+	})
+
+	t.Run("both sources", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/main.tscn")
+		res := callTool(t, session, "create_scene", map[string]any{"scenePath": "scenes/enemy.tscn"})
+		if res.IsError {
+			t.Fatalf("create_scene failed: %s", firstText(t, res))
+		}
+		requireToolError(t, session, "add_node", map[string]any{
+			"scenePath":    "scenes/main.tscn",
+			"nodeType":     "Sprite2D",
+			"instancePath": "scenes/enemy.tscn",
+			"nodeName":     "Player",
+		}, "Provide exactly one of nodeType or instancePath.")
+	})
+
+	t.Run("neither source", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/main.tscn")
+		requireToolError(t, session, "add_node", map[string]any{
+			"scenePath": "scenes/main.tscn",
+			"nodeName":  "Player",
+		}, "Provide exactly one of nodeType or instancePath.")
+	})
+
+	t.Run("missing instance scene", func(t *testing.T) {
+		_, session := seedScene(t, "scenes/main.tscn")
+		requireToolError(t, session, "add_node", map[string]any{
+			"scenePath":    "scenes/main.tscn",
+			"instancePath": "scenes/missing.tscn",
+			"nodeName":     "Foe",
+		}, "Instance scene does not exist: scenes/missing.tscn")
 	})
 
 	t.Run("invalid path", func(t *testing.T) {

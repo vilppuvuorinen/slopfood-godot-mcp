@@ -357,6 +357,16 @@ func sceneMissingResult(scenePath string) mcp.ToolResult {
 	)
 }
 
+// instanceMissingResult is the error for an instancePath that does not resolve
+// to a file, so the caller learns which of the two add_node sources is missing.
+func instanceMissingResult(instancePath string) mcp.ToolResult {
+	return mcp.ErrorResult(
+		"Instance scene does not exist: "+instancePath,
+		"Ensure the instance path is correct",
+		"Use create_scene to create the scene to instance first",
+	)
+}
+
 // notAProjectResult is the shared error for a projectPath without a
 // project.godot file, matching the reference server's message and solutions.
 func notAProjectResult(projectPath string) mcp.ToolResult {

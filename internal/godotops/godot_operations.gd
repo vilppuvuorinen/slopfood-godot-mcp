@@ -298,12 +298,34 @@ func add_node(params):
         if not parent:
             printerr("Parent node not found: " + parent_path)
             quit(1)
-    var new_node = track_temp(instantiate_class(params.nodeType))
-    if not new_node:
-        printerr("Failed to instantiate node of type: " + params.nodeType)
-        printerr("Make sure the class exists and can be instantiated")
-        printerr("Check if the class is registered in ClassDB or available as a script")
-        quit(1)
+    var instance_path = str(params.get("instancePath", ""))
+    var new_node = null
+    if not instance_path.is_empty():
+        # Add an instance of another scene rather than a fresh node. PackedScene
+        # .instantiate() stamps the root's scene_file_path, so packing the parent
+        # records the node as an ExtResource-backed instance instead of
+        # flattening the subtree into the parent scene.
+        var full_instance_path = instance_path
+        if not full_instance_path.begins_with("res://"):
+            full_instance_path = "res://" + full_instance_path
+        if not FileAccess.file_exists(full_instance_path):
+            printerr("Instance scene does not exist at: " + full_instance_path)
+            quit(1)
+        var packed_instance = load(full_instance_path)
+        if not (packed_instance is PackedScene):
+            printerr("Not a scene file: " + full_instance_path)
+            quit(1)
+        new_node = track_temp(packed_instance.instantiate())
+        if not new_node:
+            printerr("Failed to instantiate scene: " + full_instance_path)
+            quit(1)
+    else:
+        new_node = track_temp(instantiate_class(params.nodeType))
+        if not new_node:
+            printerr("Failed to instantiate node of type: " + params.nodeType)
+            printerr("Make sure the class exists and can be instantiated")
+            printerr("Check if the class is registered in ClassDB or available as a script")
+            quit(1)
     new_node.name = params.nodeName
     if params.has("properties"):
         if not _apply_properties(new_node, params.properties):
@@ -318,7 +340,10 @@ func add_node(params):
     if result == OK:
         var save_error = ResourceSaver.save(packed_scene, absolute_scene_path)
         if save_error == OK:
-            print("Node '" + params.nodeName + "' of type '" + params.nodeType + "' added successfully")
+            if instance_path.is_empty():
+                print("Node '" + params.nodeName + "' of type '" + params.nodeType + "' added successfully")
+            else:
+                print("Scene '" + instance_path + "' instanced as '" + params.nodeName + "' added successfully")
         else:
             printerr("Failed to save scene: " + str(save_error))
             quit(1)

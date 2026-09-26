@@ -13,7 +13,7 @@ func addNode() mcp.Tool {
 	return mcp.Tool{
 		Name:        "add_node",
 		Title:       "Add Node",
-		Description: "Add a node to an existing scene (rewrites the .tscn file)",
+		Description: "Add a built-in node or a scene instance to an existing scene (rewrites the .tscn file)",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
@@ -28,7 +28,11 @@ func addNode() mcp.Tool {
 				},
 				"nodeType": map[string]any{
 					"type":        "string",
-					"description": "Type of node to add (e.g., Sprite2D, CollisionShape2D)",
+					"description": "Type of node to add (e.g., Sprite2D, CollisionShape2D); provide exactly one of nodeType or instancePath",
+				},
+				"instancePath": map[string]any{
+					"type":        "string",
+					"description": "Path to a scene file to instance as the new node (relative to project); provide exactly one of nodeType or instancePath",
 				},
 				"nodeName": map[string]any{
 					"type":        "string",
@@ -36,12 +40,17 @@ func addNode() mcp.Tool {
 				},
 				"properties": propertiesSchema("Optional properties to set on the node, as name to godotValue pairs"),
 			},
-			"required": []string{"scenePath", "nodeType", "nodeName"},
+			"required": []string{"scenePath", "nodeName"},
+			"oneOf": []any{
+				map[string]any{"required": []string{"nodeType"}},
+				map[string]any{"required": []string{"instancePath"}},
+			},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"scenePath":      map[string]any{"type": "string"},
 			"nodeName":       map[string]any{"type": "string"},
 			"nodeType":       map[string]any{"type": "string"},
+			"instancePath":   map[string]any{"type": "string"},
 			"parentNodePath": map[string]any{"type": "string"},
 		}),
 		Handler: handleAddNode,
@@ -52,6 +61,7 @@ type addNodeArgs struct {
 	ScenePath      string         `json:"scenePath"`
 	ParentNodePath string         `json:"parentNodePath"`
 	NodeType       string         `json:"nodeType"`
+	InstancePath   string         `json:"instancePath"`
 	NodeName       string         `json:"nodeName"`
 	Properties     map[string]any `json:"properties"`
 }
@@ -64,14 +74,20 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 		}
 	}
 	project := projectRoot(ctx)
-	if args.ScenePath == "" || args.NodeType == "" || args.NodeName == "" {
-		return requiredArgsResult("scenePath", "nodeType", "nodeName"), nil
+	if args.ScenePath == "" || args.NodeName == "" {
+		return requiredArgsResult("scenePath", "nodeName"), nil
+	}
+	if (args.NodeType == "") == (args.InstancePath == "") {
+		return mcp.ErrorResult(
+			"Provide exactly one of nodeType or instancePath.",
+			"Set nodeType to add a built-in node, or instancePath to add an instance of a scene",
+		), nil
 	}
 	sceneFull, pathOK := confinePath(project, args.ScenePath)
 	if !validPath(project) || !pathOK {
 		return invalidPathResult(), nil
 	}
-	if !validClassName(args.NodeType) {
+	if args.NodeType != "" && !validClassName(args.NodeType) {
 		return mcp.ErrorResult(
 			"Invalid nodeType",
 			"nodeType must be a built-in Godot class name (no paths, no file extensions)",
@@ -88,8 +104,26 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 
 	params := map[string]any{
 		"scenePath": args.ScenePath,
-		"nodeType":  args.NodeType,
 		"nodeName":  args.NodeName,
+	}
+	fields := map[string]any{
+		"scenePath": args.ScenePath,
+		"nodeName":  args.NodeName,
+	}
+	if args.NodeType != "" {
+		params["nodeType"] = args.NodeType
+		fields["nodeType"] = args.NodeType
+	}
+	if args.InstancePath != "" {
+		instanceFull, instanceOK := confinePath(project, args.InstancePath)
+		if !validPath(project) || !instanceOK {
+			return invalidPathResult(), nil
+		}
+		if !pathExists(instanceFull) {
+			return instanceMissingResult(args.InstancePath), nil
+		}
+		params["instancePath"] = args.InstancePath
+		fields["instancePath"] = args.InstancePath
 	}
 	if args.ParentNodePath != "" {
 		params["parentNodePath"] = args.ParentNodePath
@@ -116,11 +150,11 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 		), nil
 	}
 
-	message := fmt.Sprintf("Node '%s' of type '%s' added successfully to '%s'.\n\nOutput: %s", args.NodeName, args.NodeType, args.ScenePath, stdout)
-	fields := map[string]any{
-		"scenePath": args.ScenePath,
-		"nodeName":  args.NodeName,
-		"nodeType":  args.NodeType,
+	var message string
+	if args.InstancePath != "" {
+		message = fmt.Sprintf("Scene '%s' instanced as '%s' added successfully to '%s'.\n\nOutput: %s", args.InstancePath, args.NodeName, args.ScenePath, stdout)
+	} else {
+		message = fmt.Sprintf("Node '%s' of type '%s' added successfully to '%s'.\n\nOutput: %s", args.NodeName, args.NodeType, args.ScenePath, stdout)
 	}
 	if args.ParentNodePath != "" {
 		fields["parentNodePath"] = args.ParentNodePath
