@@ -37,7 +37,7 @@ func TestGetUIDTool(t *testing.T) {
 		text := requireToolText(t, session, "get_uid", map[string]any{
 			"filePath": "orphan.gd",
 		})
-		requireContains(t, text, `"exists": false`)
+		requireContains(t, text, `"uidExists": false`)
 	})
 }
 

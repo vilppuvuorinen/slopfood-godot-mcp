@@ -554,7 +554,7 @@ func get_uid(params):
             "file": project_relative(file_path),
             "absolutePath": absolute_path,
             "uid": uid_content.strip_edges(),
-            "exists": true
+            "uidExists": true
         }
         print(JSON_START)
         print(JSON.stringify(result))
@@ -564,7 +564,7 @@ func get_uid(params):
         var result = {
             "file": project_relative(file_path),
             "absolutePath": absolute_path,
-            "exists": false,
+            "uidExists": false,
             "message": "UID file does not exist for this file. Use update_project_uids to scan the project and generate UIDs."
         }
         print(JSON_START)

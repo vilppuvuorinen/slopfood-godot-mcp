@@ -38,7 +38,7 @@ func TestGetUIDSchema(t *testing.T) {
 }
 
 func TestGetUIDSuccess(t *testing.T) {
-	fake := fakeGodotOps(t, fakeUIDVersion+"\nprintf '<<<GO_DOT_MCP_JSON_START>>>\n{\"file\":\"res://player.gd\",\"uid\":\"uid://abc\",\"exists\":true}\n<<<GO_DOT_MCP_JSON_END>>>\n'")
+	fake := fakeGodotOps(t, fakeUIDVersion+"\nprintf '<<<GO_DOT_MCP_JSON_START>>>\n{\"file\":\"res://player.gd\",\"uid\":\"uid://abc\",\"uidExists\":true}\n<<<GO_DOT_MCP_JSON_END>>>\n'")
 	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)
@@ -55,8 +55,8 @@ func TestGetUIDSuccess(t *testing.T) {
 	if !strings.Contains(text, `"uid": "uid://abc"`) {
 		t.Errorf("text = %q, want it to contain pretty uid field", text)
 	}
-	if !strings.Contains(text, `"exists": true`) {
-		t.Errorf("text = %q, want it to contain pretty exists field", text)
+	if !strings.Contains(text, `"uidExists": true`) {
+		t.Errorf("text = %q, want it to contain pretty uidExists field", text)
 	}
 	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
 		t.Errorf("text still contains markers: %q", text)
@@ -84,8 +84,8 @@ func TestGetUIDNoMarkersStructured(t *testing.T) {
 	if structured["absolutePath"] != filepath.Join(root, "player.gd") {
 		t.Errorf("absolutePath = %v", structured["absolutePath"])
 	}
-	if structured["exists"] != false {
-		t.Errorf("exists = %v, want false", structured["exists"])
+	if structured["uidExists"] != false {
+		t.Errorf("uidExists = %v, want false", structured["uidExists"])
 	}
 	if _, ok := structured["uid"]; ok {
 		t.Errorf("uid = %v, want it absent when no structured output was emitted", structured["uid"])

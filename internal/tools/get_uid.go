@@ -32,10 +32,10 @@ func getUID() mcp.Tool {
 				"file":         map[string]any{"type": "string", "description": "Path to the file, relative to the bound project"},
 				"absolutePath": map[string]any{"type": "string", "description": "Absolute host filesystem path to the file"},
 				"uid":          map[string]any{"type": "string"},
-				"exists":       map[string]any{"type": "boolean"},
+				"uidExists":    map[string]any{"type": "boolean", "description": "Whether a .uid sidecar exists for the file; not whether the file itself exists"},
 				"message":      map[string]any{"type": "string"},
 			},
-			"required": []string{"file", "absolutePath", "exists"},
+			"required": []string{"file", "absolutePath", "uidExists"},
 		}),
 		Handler: handleGetUID,
 	}
@@ -115,7 +115,7 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 	return mcp.StructuredResult(message, map[string]any{
 		"file":         args.FilePath,
 		"absolutePath": fileFull,
-		"exists":       false,
+		"uidExists":    false,
 		"message":      message,
 	}), nil
 }
