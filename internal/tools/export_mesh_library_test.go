@@ -52,10 +52,15 @@ func TestExportMeshLibrarySuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "MeshLibrary exported successfully to: "+output) {
 		t.Errorf("text = %q", text)
 	}
-	for _, want := range []string{`"scenePath":"scenes/main.tscn"`, `"outputPath":` + jsonString(output)} {
-		if !strings.Contains(text, want) {
-			t.Errorf("text = %q, want it to contain %q", text, want)
-		}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+	}
+	if got := structured["outputPath"]; got != "exported/meshlib.res" {
+		t.Errorf("outputPath = %v, want the caller's relative path", got)
+	}
+	if got := structured["resolvedOutputPath"]; got != output {
+		t.Errorf("resolvedOutputPath = %v, want %q", got, output)
 	}
 	if strings.Contains(text, "meshItemNames") {
 		t.Errorf("text = %q, want it not to contain mesh_item_names", text)
@@ -78,8 +83,15 @@ func TestExportMeshLibraryAbsoluteOutputPath(t *testing.T) {
 	if !strings.HasPrefix(text, "MeshLibrary exported successfully to: "+output) {
 		t.Errorf("text = %q", text)
 	}
-	if !strings.Contains(text, `"outputPath":`+jsonString(output)) {
-		t.Errorf("text = %q, want it to forward the absolute output path", text)
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+	}
+	if got := structured["outputPath"]; got != output {
+		t.Errorf("outputPath = %v, want it to echo the absolute output path", got)
+	}
+	if got := structured["resolvedOutputPath"]; got != output {
+		t.Errorf("resolvedOutputPath = %v, want the absolute output path", got)
 	}
 }
 

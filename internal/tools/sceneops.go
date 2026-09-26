@@ -295,6 +295,15 @@ func payloadProperties(schema map[string]any) map[string]any {
 // solutions field is reserved for errors and described only there.
 const envelopeMessageContract = "Human-readable outcome: the success summary on success, or the failure reason on an error."
 
+// outputPathEchoDescription and resolvedOutputPathDescription describe an
+// export's output path pair, shared by export_project and export_mesh_library.
+// The echo field repeats the caller's own argument so the result maps back to
+// the request, while the resolved field reports where the file actually landed.
+const (
+	outputPathEchoDescription     = "The output path exactly as the caller supplied it."
+	resolvedOutputPathDescription = "Absolute host path the export was written to; a relative outputPath resolves against the project root."
+)
+
 // statusProperties builds the property map for the status envelope, starting
 // from success and message and adding each tool-specific field.
 func statusProperties(properties map[string]any) map[string]any {

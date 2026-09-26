@@ -25,7 +25,7 @@ func exportProject() mcp.Tool {
 				},
 				"outputPath": map[string]any{
 					"type":        "string",
-					"description": "Output file path for the exported build",
+					"description": "Output file path for the exported build; relative paths resolve against the project root, absolute paths are allowed",
 				},
 				"debug": map[string]any{
 					"type":        "boolean",
@@ -35,9 +35,10 @@ func exportProject() mcp.Tool {
 			"required": []string{"presetName", "outputPath"},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
-			"presetName": map[string]any{"type": "string"},
-			"outputPath": map[string]any{"type": "string"},
-			"debug":      map[string]any{"type": "boolean"},
+			"presetName":         map[string]any{"type": "string"},
+			"outputPath":         map[string]any{"type": "string", "description": outputPathEchoDescription},
+			"resolvedOutputPath": map[string]any{"type": "string", "description": resolvedOutputPathDescription},
+			"debug":              map[string]any{"type": "boolean"},
 		}),
 		Handler: handleExportProject,
 	}
@@ -83,8 +84,9 @@ func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) 
 		output = outputPath
 	}
 	return statusResult(project, "Export succeeded.\n\nOutput: "+output, map[string]any{
-		"presetName": args.PresetName,
-		"outputPath": outputPath,
-		"debug":      args.Debug,
+		"presetName":         args.PresetName,
+		"outputPath":         args.OutputPath,
+		"resolvedOutputPath": outputPath,
+		"debug":              args.Debug,
 	}), nil
 }

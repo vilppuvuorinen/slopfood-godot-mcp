@@ -54,6 +54,16 @@ func TestExportProjectSuccess(t *testing.T) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
 	}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+	}
+	if got := structured["outputPath"]; got != "build/game.x86_64" {
+		t.Errorf("outputPath = %v, want the caller's relative path", got)
+	}
+	if got, want := structured["resolvedOutputPath"], filepath.Join(root, "build/game.x86_64"); got != want {
+		t.Errorf("resolvedOutputPath = %v, want %q", got, want)
+	}
 }
 
 func TestExportProjectAbsoluteOutputPath(t *testing.T) {
