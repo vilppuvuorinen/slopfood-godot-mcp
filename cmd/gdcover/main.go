@@ -9,7 +9,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/gdcover"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/gdcover"
 )
 
 func main() {

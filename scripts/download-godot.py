@@ -96,7 +96,7 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPO_ROOT = SCRIPT_DIR.parent
 DEFAULT_MANIFEST = SCRIPT_DIR / "godot.versions"
-USER_AGENT = "go-dot-mcp-download-godot"
+USER_AGENT = "slopfood-godot-mcp-download-godot"
 BUILDS_READY = set()
 
 

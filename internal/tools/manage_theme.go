@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 // themeItemTypeNames are the tool contract's names for the Theme item

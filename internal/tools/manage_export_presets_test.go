@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 func TestManageExportPresetsSchema(t *testing.T) {

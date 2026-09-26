@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
-BINARY := go-dot-mcp
-CMD := ./cmd/go-dot-mcp
+BINARY := slopfood-godot-mcp
+CMD := ./cmd/slopfood-godot-mcp
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 
@@ -38,13 +38,13 @@ godot:
 
 # e2e drives a pre-built server binary with the official MCP SDK client. It is
 # a standalone black-box module, so the SDK never enters the server's module
-# graph. The binary is built first and handed to the tests via GO_DOT_MCP_BIN.
+# graph. The binary is built first and handed to the tests via GODOT_MCP_BIN.
 #
 # The e2e module has no non-test code, so -covermode here measures nothing; the
 # server is a child process. Use e2e-cover for real coverage of the server.
 .PHONY: e2e
 e2e: build
-	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GO_DOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)' $(GO) test $(GOFLAGS) -count=1 ./...
+	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GODOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)' $(GO) test $(GOFLAGS) -count=1 ./...
 
 # e2e-cover is e2e with a coverage-instrumented server binary. Building with
 # -cover and pointing every spawned server at a shared GOCOVERDIR makes each
@@ -70,7 +70,7 @@ e2e-cover:
 	rm -rf '$(COVERDIR)' '$(GDCOVERDIR)' $(E2E_COVERPROFILE) $(GDCOVER_PROFILE) $(GDCOVER_VALIDATE_PROFILE)
 	mkdir -p '$(COVERDIR)' '$(GDCOVERDIR)'
 	$(GO) build $(GOFLAGS) -cover -tags gdcover -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY)-cover $(CMD)
-	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GO_DOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)-cover' GOCOVERDIR='$(COVERDIR)' GDCOVER_FILE='$(GDCOVER_HITS)' GDCOVER_VALIDATE_FILE='$(GDCOVER_VALIDATE_HITS)' $(GO) test $(GOFLAGS) -count=1 ./...
+	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GODOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)-cover' GOCOVERDIR='$(COVERDIR)' GDCOVER_FILE='$(GDCOVER_HITS)' GDCOVER_VALIDATE_FILE='$(GDCOVER_VALIDATE_HITS)' $(GO) test $(GOFLAGS) -count=1 ./...
 	$(GO) tool covdata textfmt -i='$(COVERDIR)' -o=$(E2E_COVERPROFILE)
 	@$(GO) tool cover -func=$(E2E_COVERPROFILE) | tail -1
 	$(GO) run ./cmd/gdcover lcov -source internal/godotops/godot_operations.gd -hits '$(GDCOVER_HITS)' -out $(GDCOVER_PROFILE)

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 func TestManageResourceSchema(t *testing.T) {
@@ -100,7 +100,7 @@ func TestManageResourceReadSuccess(t *testing.T) {
 }
 
 func TestManageResourceReadStructured(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"type":"StandardMaterial3D","path":"resources/mat.tres"}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"type":"StandardMaterial3D","path":"resources/mat.tres"}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 

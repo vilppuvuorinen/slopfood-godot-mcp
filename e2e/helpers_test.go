@@ -15,7 +15,7 @@ import (
 
 // binaryEnv is the path to the server binary under test. Build it before
 // running these tests; the test itself never builds anything.
-const binaryEnv = "GO_DOT_MCP_BIN"
+const binaryEnv = "GODOT_MCP_BIN"
 
 // connect starts the server binary with every tool category enabled and returns
 // a connected MCP client session. The server binds to the working directory, so
@@ -57,7 +57,7 @@ func connectSession(t *testing.T, env []string, args ...string) *mcp.ClientSessi
 
 	cmd := exec.CommandContext(context.Background(), binary, args...) //nolint:gosec // the binary path is supplied by the test harness.
 	cmd.Env = append(os.Environ(), env...)
-	client := mcp.NewClient(&mcp.Implementation{Name: "go-dot-mcp-e2e", Version: "0.0.1"}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "slopfood-godot-mcp-e2e", Version: "0.0.1"}, nil)
 	session, err := client.Connect(context.Background(), &mcp.CommandTransport{Command: cmd}, nil)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
@@ -82,7 +82,7 @@ func connectWithProtocolVersion(t *testing.T, protocolVersion string) *mcp.Clien
 
 	cmd := exec.CommandContext(context.Background(), binary, "--enable", "all") //nolint:gosec // the binary path is supplied by the test harness.
 	cmd.Env = os.Environ()
-	client := mcp.NewClient(&mcp.Implementation{Name: "go-dot-mcp-e2e", Version: "0.0.1"}, nil)
+	client := mcp.NewClient(&mcp.Implementation{Name: "slopfood-godot-mcp-e2e", Version: "0.0.1"}, nil)
 	session, err := client.Connect(context.Background(), &mcp.CommandTransport{Command: cmd}, &mcp.ClientSessionOptions{ProtocolVersion: protocolVersion})
 	if err != nil {
 		t.Fatalf("connect: %v", err)

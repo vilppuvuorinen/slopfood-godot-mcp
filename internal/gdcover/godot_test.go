@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotops"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
 )
 
 // requireGodot returns a usable engine path or skips the test. The unit-test

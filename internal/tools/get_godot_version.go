@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 func getGodotVersion() mcp.Tool {

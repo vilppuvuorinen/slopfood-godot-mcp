@@ -1,4 +1,4 @@
-module github.com/vilppuvuorinen/go-dot-mcp/e2e
+module github.com/vilppuvuorinen/slopfood-godot-mcp/e2e
 
 go 1.27.1
 

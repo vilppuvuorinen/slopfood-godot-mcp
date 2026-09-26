@@ -2,7 +2,7 @@
 
 package godotops
 
-import "github.com/vilppuvuorinen/go-dot-mcp/internal/gdcover"
+import "github.com/vilppuvuorinen/slopfood-godot-mcp/internal/gdcover"
 
 // Linking the instrumenter is opt-in so the default server binary stays
 // dependency-free. `make e2e-cover` builds with `-tags gdcover`. Both embedded

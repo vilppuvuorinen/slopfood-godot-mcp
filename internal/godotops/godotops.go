@@ -163,9 +163,9 @@ func complete(path, content string) bool {
 func cacheDir() (string, error) {
 	dirs := make([]string, 0, 2)
 	if base, err := userCacheDir(); err == nil {
-		dirs = append(dirs, filepath.Join(base, "go-dot-mcp", "scripts"))
+		dirs = append(dirs, filepath.Join(base, "godot-mcp", "scripts"))
 	}
-	dirs = append(dirs, filepath.Join(os.TempDir(), fmt.Sprintf("go-dot-mcp-scripts-%d", os.Getuid())))
+	dirs = append(dirs, filepath.Join(os.TempDir(), fmt.Sprintf("godot-mcp-scripts-%d", os.Getuid())))
 
 	var lastErr error
 	for _, dir := range dirs {

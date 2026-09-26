@@ -3,8 +3,8 @@ package tools
 import (
 	"fmt"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotconfig"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 // settingsStore is the single access point for project.godot. It holds the

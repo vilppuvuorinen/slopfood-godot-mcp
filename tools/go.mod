@@ -1,4 +1,4 @@
-module github.com/vilppuvuorinen/go-dot-mcp/tools
+module github.com/vilppuvuorinen/slopfood-godot-mcp/tools
 
 go 1.27.1
 

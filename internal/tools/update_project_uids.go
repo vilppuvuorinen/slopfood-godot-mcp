@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"regexp"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 // importAllowedStderr lists editor-mode stderr lines that do not indicate a

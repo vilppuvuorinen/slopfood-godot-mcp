@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 func TestSetTilemapCellSchema(t *testing.T) {
@@ -123,7 +123,7 @@ func TestClearTilemapForwardsAction(t *testing.T) {
 }
 
 func TestReadTilemapStructured(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"scenePath":"scenes/level.tscn","nodePath":"root/Ground","tileSet":"tiles/set.tres","usedCells":[{"coords":{"$type":"Vector2i","x":0,"y":0},"sourceId":0,"atlasCoords":{"$type":"Vector2i","x":1,"y":1},"alternativeTile":0,"flippedH":false,"flippedV":false,"transposed":false}]}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"scenePath":"scenes/level.tscn","nodePath":"root/Ground","tileSet":"tiles/set.tres","usedCells":[{"coords":{"$type":"Vector2i","x":0,"y":0},"sourceId":0,"atlasCoords":{"$type":"Vector2i","x":1,"y":1},"alternativeTile":0,"flippedH":false,"flippedV":false,"transposed":false}]}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := tilemapProject(t)
 
 	result := callToolArgs(t, readTilemap(), root, `{"scenePath":"scenes/level.tscn","nodePath":"root/Ground"}`)

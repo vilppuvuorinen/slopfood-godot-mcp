@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 // schemaViolation returns a description of the first way value fails to satisfy

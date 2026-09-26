@@ -12,8 +12,8 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/tools"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/tools"
 )
 
 var version = "dev"
@@ -98,7 +98,7 @@ func run() error {
 	defer stop()
 
 	srv := mcp.NewServer(mcp.ServerInfo{
-		Name:    "go-dot-mcp",
+		Name:    "slopfood-godot-mcp",
 		Version: version,
 	}, logger)
 	srv.Instructions = fmt.Sprintf(

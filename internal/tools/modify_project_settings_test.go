@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotconfig"
 )
 
 func TestModifyProjectSettingsSchema(t *testing.T) {

@@ -4,8 +4,8 @@
 # copied verbatim from those projects.
 extends SceneTree
 
-const JSON_START = "<<<GO_DOT_MCP_JSON_START>>>"
-const JSON_END = "<<<GO_DOT_MCP_JSON_END>>>"
+const JSON_START = "<<<GODOT_MCP_JSON_START>>>"
+const JSON_END = "<<<GODOT_MCP_JSON_END>>>"
 
 # Bridge contract
 #

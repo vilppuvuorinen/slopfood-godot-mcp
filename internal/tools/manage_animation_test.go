@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 func TestManageAnimationSchema(t *testing.T) {
@@ -119,7 +119,7 @@ func TestManageAnimationSetAndRemoveForwardIndex(t *testing.T) {
 }
 
 func TestReadAnimationStructured(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"path":"anims/walk.tres","length":2,"loopMode":"linear","step":0.1,"tracks":[]}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"path":"anims/walk.tres","length":2,"loopMode":"linear","step":0.1,"tracks":[]}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 

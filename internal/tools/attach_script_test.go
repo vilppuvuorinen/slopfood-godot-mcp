@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 )
 
 func TestAttachScriptSchema(t *testing.T) {

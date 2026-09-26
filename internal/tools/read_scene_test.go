@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 )
 
 func TestReadSceneSchema(t *testing.T) {
@@ -89,7 +89,7 @@ func TestReadSceneOutputSchemaDescribesChildren(t *testing.T) {
 }
 
 func TestReadSceneSuccess(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","children":[{"name":"Child","type":"Sprite2D"}]}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","children":[{"name":"Child","type":"Sprite2D"}]}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
@@ -113,7 +113,7 @@ func TestReadSceneSuccess(t *testing.T) {
 }
 
 func TestReadScenePreservesNestedPropertyValues(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","properties":{"config":{"myKey":1,"nested":{"a":[1,2,3]}},"position":{"$type":"Vector2","x":0,"y":0}}}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","properties":{"config":{"myKey":1,"nested":{"a":[1,2,3]}},"position":{"$type":"Vector2","x":0,"y":0}}}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
@@ -175,7 +175,7 @@ func TestReadSceneNoMarkersIsError(t *testing.T) {
 // like the markerless case, it is a failure rather than the raw-text success it
 // once was.
 func TestReadSceneInvalidJSONIsError(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\nnot-json\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\nnot-json\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")

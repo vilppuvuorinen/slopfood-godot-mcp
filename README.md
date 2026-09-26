@@ -1,4 +1,4 @@
-# go-dot-mcp
+# slopfood-godot-mcp
 
 A zero-dependency Go MCP server for Godot. Zero dependencies is a hard requirement: the standard library is the only dependency, ever.
 
@@ -17,8 +17,8 @@ argument, so there is no cursor, select tool, or per-call override. A second
 project is a second server entry:
 
 ```
-go-dot-mcp --project /path/to/game --enable all
-GODOT_PROJECT=/path/to/game go-dot-mcp --enable all
+slopfood-godot-mcp --project /path/to/game --enable all
+GODOT_PROJECT=/path/to/game slopfood-godot-mcp --enable all
 ```
 
 ## Path conventions
@@ -43,10 +43,10 @@ to keep must be named explicitly. The flag is repeatable and accepts
 comma-separated names; `all` selects every category.
 
 ```
-go-dot-mcp                                     # every category
-go-dot-mcp --enable scene,script               # scene and script, no project
-go-dot-mcp --enable project --enable node      # project and node
-go-dot-mcp --enable all                        # every category
+slopfood-godot-mcp                                     # every category
+slopfood-godot-mcp --enable scene,script               # scene and script, no project
+slopfood-godot-mcp --enable project --enable node      # project and node
+slopfood-godot-mcp --enable all                        # every category
 ```
 
 ## Protocol
@@ -116,7 +116,7 @@ To run the e2e suite by hand, build first and set both variables (an absolute,
 ```
 make build
 cd e2e
-XDG_DATA_HOME="$(cd .. && pwd)/.godot" GO_DOT_MCP_BIN="$(cd .. && pwd)/bin/go-dot-mcp" go test ./...
+XDG_DATA_HOME="$(cd .. && pwd)/.godot" GODOT_MCP_BIN="$(cd .. && pwd)/bin/slopfood-godot-mcp" go test ./...
 ```
 
 CI runs on `main` and manual dispatch only. Every run does the `make check`

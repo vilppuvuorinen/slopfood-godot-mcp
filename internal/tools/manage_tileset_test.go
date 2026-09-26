@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 func TestManageTilesetSchema(t *testing.T) {
@@ -126,7 +126,7 @@ func TestManageTilesetAddTileAndDataForwardFields(t *testing.T) {
 }
 
 func TestReadTilesetStructured(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\n{"path":"tiles/set.tres","tileSize":{"$type":"Vector2i","x":16,"y":16},"tileShape":"square","tileLayout":"stacked","tileOffsetAxis":"horizontal","uvClipping":false,"sources":[]}\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"path":"tiles/set.tres","tileSize":{"$type":"Vector2i","x":16,"y":16},"tileShape":"square","tileLayout":"stacked","tileOffsetAxis":"horizontal","uvClipping":false,"sources":[]}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 

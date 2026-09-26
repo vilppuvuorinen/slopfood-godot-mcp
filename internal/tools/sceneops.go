@@ -8,15 +8,15 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotops"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotconfig"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 const (
-	jsonStartMarker = "<<<GO_DOT_MCP_JSON_START>>>"
-	jsonEndMarker   = "<<<GO_DOT_MCP_JSON_END>>>"
+	jsonStartMarker = "<<<GODOT_MCP_JSON_START>>>"
+	jsonEndMarker   = "<<<GODOT_MCP_JSON_END>>>"
 )
 
 // markerJSON returns the JSON payload between jsonStartMarker and

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 )
 
 const fakeUIDVersion = `if [ "$1" = "--version" ]; then echo "4.7.2.stable.official.fake"; exit 0; fi`
@@ -43,7 +43,7 @@ func TestGetUIDSchema(t *testing.T) {
 }
 
 func TestGetUIDSuccess(t *testing.T) {
-	fake := fakeGodotOps(t, fakeUIDVersion+"\nprintf '<<<GO_DOT_MCP_JSON_START>>>\n{\"file\":\"player.gd\",\"absolutePath\":\"/x/player.gd\",\"uid\":\"uid://abc\"}\n<<<GO_DOT_MCP_JSON_END>>>\n'")
+	fake := fakeGodotOps(t, fakeUIDVersion+"\nprintf '<<<GODOT_MCP_JSON_START>>>\n{\"file\":\"player.gd\",\"absolutePath\":\"/x/player.gd\",\"uid\":\"uid://abc\"}\n<<<GODOT_MCP_JSON_END>>>\n'")
 	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)

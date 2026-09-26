@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
-	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotconfig"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 func modifyProjectSettings() mcp.Tool {

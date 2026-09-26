@@ -13,7 +13,7 @@ func withCache(t *testing.T) string {
 	base := t.TempDir()
 	userCacheDir = func() (string, error) { return base, nil }
 	t.Cleanup(func() { userCacheDir = os.UserCacheDir })
-	return filepath.Join(base, "go-dot-mcp", "scripts")
+	return filepath.Join(base, "godot-mcp", "scripts")
 }
 
 func TestMaterializeReusesPath(t *testing.T) {
