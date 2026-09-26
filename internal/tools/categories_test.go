@@ -118,8 +118,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 32 {
-		t.Errorf("registered %d tools, want 32", len(seen))
+	if len(seen) != 31 {
+		t.Errorf("registered %d tools, want 31", len(seen))
 	}
 }
 
@@ -405,13 +405,6 @@ func TestActionToolsAdvertiseVariants(t *testing.T) {
 			actions: map[string][]string{
 				"create": {"resourceType"},
 				"modify": {"properties"},
-			},
-		},
-		"manage_export_presets": {
-			common: []string{"action"},
-			actions: map[string][]string{
-				"add":    {"name", "platform"},
-				"remove": {"name"},
 			},
 		},
 		"manage_animation": {

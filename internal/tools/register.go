@@ -43,7 +43,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		getGodotVersion, getProjectInfo, createProject, validateProject,
 	},
 	CategoryExport: {
-		manageExportPresets, exportProject,
+		exportProject,
 	},
 	CategoryScene: {
 		createScene, readScene, exportMeshLibrary,

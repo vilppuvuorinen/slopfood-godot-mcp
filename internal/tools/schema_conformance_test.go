@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -271,18 +270,6 @@ func TestErrorResultMatchesStatusOutputSchema(t *testing.T) {
 // payload that drifts from its schema fails a test rather than surfacing to a
 // client that validates eagerly.
 func TestSuccessResultsMatchOutputSchema(t *testing.T) {
-	project := func(t *testing.T) string {
-		t.Helper()
-		root := t.TempDir()
-		makeProject(t, root)
-		return root
-	}
-	projectWithPreset := func(t *testing.T) string {
-		t.Helper()
-		root := project(t)
-		seedFile(t, filepath.Join(root, "export_presets.cfg"), "[preset.0]\n\nname=\"Linux\"\nplatform=\"Linux\"\n")
-		return root
-	}
 	tests := []struct {
 		name  string
 		tool  func() mcp.Tool
@@ -290,8 +277,6 @@ func TestSuccessResultsMatchOutputSchema(t *testing.T) {
 		setup func(t *testing.T) string
 	}{
 		{name: "create_project", tool: createProject, args: `{"projectName":"Demo"}`, setup: func(t *testing.T) string { t.Helper(); return t.TempDir() }},
-		{name: "manage_export_presets add", tool: manageExportPresets, args: `{"action":"add","name":"Linux","platform":"Linux"}`, setup: project},
-		{name: "manage_export_presets remove", tool: manageExportPresets, args: `{"action":"remove","name":"Linux"}`, setup: projectWithPreset},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
