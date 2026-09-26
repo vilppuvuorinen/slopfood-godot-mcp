@@ -118,8 +118,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 39 {
-		t.Errorf("registered %d tools, want 39", len(seen))
+	if len(seen) != 37 {
+		t.Errorf("registered %d tools, want 37", len(seen))
 	}
 }
 
@@ -140,7 +140,6 @@ func TestCategoryBudget(t *testing.T) {
 // engine emits. Every other tool must still advertise one.
 var schemaOptionalReads = map[string]bool{
 	"read_animation": true,
-	"read_import":    true,
 	"read_resource":  true,
 	"read_scene":     true,
 	"read_theme":     true,
@@ -175,9 +174,9 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 //   - Read-only tools advertise readOnlyHint and never claim to be destructive.
 //   - A writer is destructive unless every effect is the creation of content
 //     that cannot replace what is already there: create_project refuses an
-//     existing project.godot and update_project_uids only writes missing .uid
-//     sidecars, so those two are additive; every other writer can rewrite or
-//     delete existing content.
+//     existing project.godot and reimport_project only writes missing sidecars
+//     and regenerated artifacts, so those two are additive; every other writer
+//     can rewrite or delete existing content.
 //   - A writer is idempotent when repeating the identical call leaves the
 //     project unchanged: assignments, guarded inserts, overwrites, and
 //     deletes. Tools whose actions mint new content each call (a node, a
@@ -194,7 +193,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"read_export_presets": true,
 		"read_animation":      true,
 		"read_plugins":        true,
-		"read_import":         true,
 		"read_resource":       true,
 		"read_scene":          true,
 		"read_scene_signals":  true,
@@ -205,8 +203,8 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"validate_scripts":    true,
 	}
 	nonDestructive := map[string]bool{
-		"create_project":      true,
-		"update_project_uids": true,
+		"create_project":   true,
+		"reimport_project": true,
 	}
 	idempotent := map[string]bool{
 		"add_scene_signal":    true,
@@ -217,7 +215,7 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"erase_tilemap_cell":  true,
 		"export_mesh_library": true,
 		"export_project":      true,
-		"manage_import":       true,
+		"reimport_project":    true,
 		"manage_plugins":      true,
 		"manage_resource":     true,
 		"manage_theme":        true,
@@ -227,7 +225,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"remove_scene_signal": true,
 		"rename_scene_node":   true,
 		"set_tilemap_cell":    true,
-		"update_project_uids": true,
 	}
 	for _, category := range AllCategories {
 		for _, newTool := range categoryTools[category] {

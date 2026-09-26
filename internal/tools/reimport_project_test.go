@@ -8,19 +8,15 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 )
 
-func TestUpdateProjectUIDsSchema(t *testing.T) {
-	tool := updateProjectUIDs()
-	if tool.Name != "update_project_uids" {
+func TestReimportProjectSchema(t *testing.T) {
+	tool := reimportProject()
+	if tool.Name != "reimport_project" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Generate missing resource UIDs in a Godot project by scanning it in the editor" {
+	if tool.Description != "Reimport a Godot project by scanning it in the editor, generating .import sidecars and missing resource UIDs" {
 		t.Errorf("description = %q", tool.Description)
 	}
-	// The Godot 4.4+ requirement is part of the schema, not only the prose
-	// description, so a schema-driven client can see it.
-	if schema := tool.InputSchema["description"]; !strings.Contains(schema.(string), "4.4") {
-		t.Errorf("input schema description = %v, want the 4.4 requirement", schema)
-	}
+	// The scan is project-wide, so the tool takes no arguments.
 	required, ok := tool.InputSchema["required"].([]string)
 	if !ok || len(required) != 0 {
 		t.Errorf("required = %v", tool.InputSchema["required"])
@@ -34,13 +30,13 @@ func TestUpdateProjectUIDsSchema(t *testing.T) {
 	}
 }
 
-func TestUpdateProjectUIDsSuccess(t *testing.T) {
-	fake := fakeGodotOps(t, fakeUIDVersion+"\necho \"$@\"")
+func TestReimportProjectSuccess(t *testing.T) {
+	fake := fakeGodotOps(t, `echo "$@"`)
 	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, updateProjectUIDs(), root, `{}`)
+	result := callToolArgs(t, reimportProject(), root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -48,11 +44,12 @@ func TestUpdateProjectUIDsSuccess(t *testing.T) {
 		t.Fatalf("content = %+v", result.Content)
 	}
 	text := result.Content[0].Text
-	if !strings.HasPrefix(text, "Project UIDs updated successfully.") {
+	if !strings.HasPrefix(text, "Project reimported successfully.") {
 		t.Errorf("text = %q", text)
 	}
 	// The scan must be driven by --import: a runtime script (resave_resources)
-	// cannot generate UIDs, and resaving resources would strip existing ones.
+	// cannot generate UIDs or apply imports, and resaving resources would strip
+	// existing UIDs.
 	if !strings.Contains(text, "--import") {
 		t.Errorf("text = %q, want it to contain --import", text)
 	}
@@ -64,25 +61,7 @@ func TestUpdateProjectUIDsSuccess(t *testing.T) {
 	}
 }
 
-func TestUpdateProjectUIDsVersionGate(t *testing.T) {
-	fake := fakeGodotOps(t, `if [ "$1" = "--version" ]; then echo "4.3.1.stable"; exit 0; fi`+"\nexit 1")
-	t.Setenv(godot.PathEnv, fake)
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, updateProjectUIDs(), root, `{}`)
-	if !result.IsError {
-		t.Fatalf("expected an error result: %+v", result.Content)
-	}
-	if len(result.Content) != 2 {
-		t.Fatalf("content = %+v", result.Content)
-	}
-	if got := result.Content[0].Text; got != "UIDs are only supported in Godot 4.4 or later. Current version: 4.3.1.stable" {
-		t.Errorf("message = %q", got)
-	}
-}
-
-func TestUpdateProjectUIDsValidation(t *testing.T) {
+func TestReimportProjectValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 	notAProject := t.TempDir()
@@ -99,7 +78,7 @@ func TestUpdateProjectUIDsValidation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, updateProjectUIDs(), tt.project, tt.args)
+			result := callToolArgs(t, reimportProject(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -110,20 +89,20 @@ func TestUpdateProjectUIDsValidation(t *testing.T) {
 	}
 }
 
-func TestUpdateProjectUIDsScriptFailure(t *testing.T) {
-	fake := fakeGodotOps(t, fakeUIDVersion+"\necho 'Failed to update project UIDs: boom' >&2; exit 1")
+func TestReimportProjectScriptFailure(t *testing.T) {
+	fake := fakeGodotOps(t, `echo 'Failed to reimport project: boom' >&2; exit 1`)
 	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, updateProjectUIDs(), root, `{}`)
+	result := callToolArgs(t, reimportProject(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
 	if len(result.Content) != 2 {
 		t.Fatalf("content = %+v", result.Content)
 	}
-	if !strings.HasPrefix(result.Content[0].Text, "Failed to update project UIDs: ") {
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to reimport project: ") {
 		t.Errorf("message = %q", result.Content[0].Text)
 	}
 	if !strings.HasPrefix(result.Content[1].Text, "Possible solutions:") {
@@ -131,31 +110,16 @@ func TestUpdateProjectUIDsScriptFailure(t *testing.T) {
 	}
 }
 
-func TestUpdateProjectUIDsSpawnFailure(t *testing.T) {
+func TestReimportProjectSpawnFailure(t *testing.T) {
 	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, updateProjectUIDs(), root, `{}`)
+	result := callToolArgs(t, reimportProject(), root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
-	if !strings.HasPrefix(result.Content[0].Text, "Failed to update project UIDs: ") {
-		t.Errorf("message = %q", result.Content[0].Text)
-	}
-}
-
-func TestUpdateProjectUIDsVersionFailure(t *testing.T) {
-	fake := fakeGodotOps(t, `echo "boom" >&2; exit 1`)
-	t.Setenv(godot.PathEnv, fake)
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, updateProjectUIDs(), root, `{}`)
-	if !result.IsError {
-		t.Fatalf("expected an error result: %+v", result.Content)
-	}
-	if !strings.HasPrefix(result.Content[0].Text, "Failed to update project UIDs: ") {
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to reimport project: ") {
 		t.Errorf("message = %q", result.Content[0].Text)
 	}
 }

@@ -67,8 +67,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		attachScript, validateScripts,
 	},
 	CategoryAssets: {
-		manageResource, readResource, getUID, updateProjectUIDs,
-		manageImport, readImport,
+		manageResource, readResource, getUID, reimportProject,
 	},
 	CategoryMedia: {
 		manageAnimation, readAnimation, manageTileset, readTileset,

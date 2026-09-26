@@ -41,7 +41,7 @@ func TestGetUIDTool(t *testing.T) {
 			t.Fatal("expected an error for a file without a UID sidecar")
 		}
 		requirePrefix(t, firstText(t, res), "Failed to get UID:")
-		requireContains(t, firstText(t, res), "update_project_uids")
+		requireContains(t, firstText(t, res), "reimport_project")
 	})
 }
 

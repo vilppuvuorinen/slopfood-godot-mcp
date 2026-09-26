@@ -622,7 +622,7 @@ func get_uid(result: Result, params) -> Result:
     # error for the expected missing case.
     var uid_path = file_path + ".uid"
     if not FileAccess.file_exists(uid_path):
-        result.err("No UID sidecar for " + project_relative(file_path) + ". Use update_project_uids to scan the project and generate UIDs.")
+        result.err("No UID sidecar for " + project_relative(file_path) + ". Use reimport_project to scan the project and generate UIDs.")
         return result.fail()
     var f = FileAccess.open(uid_path, FileAccess.READ)
     if not f:

@@ -159,11 +159,11 @@ func discoverPlugins(project string) []pluginInfo {
 			info := pluginInfo{Path: filepath.ToSlash(rel)}
 			if data, err := os.ReadFile(full); err == nil {
 				if config, err := godotconfig.Parse(string(data)); err == nil {
-					info.Name = configString(config, "plugin", "name")
-					info.Description = configString(config, "plugin", "description")
-					info.Author = configString(config, "plugin", "author")
-					info.Version = configString(config, "plugin", "version")
-					info.Script = configString(config, "plugin", "script")
+					info.Name = pluginString(config, "name")
+					info.Description = pluginString(config, "description")
+					info.Author = pluginString(config, "author")
+					info.Version = pluginString(config, "version")
+					info.Script = pluginString(config, "script")
 				}
 			}
 			plugins = append(plugins, info)

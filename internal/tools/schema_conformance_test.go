@@ -289,12 +289,6 @@ func TestSuccessResultsMatchOutputSchema(t *testing.T) {
 		seedFile(t, filepath.Join(root, "addons", "demo", "plugin.cfg"), "[plugin]\n\nname=\"Demo\"\n")
 		return root
 	}
-	projectWithImport := func(t *testing.T) string {
-		t.Helper()
-		root := project(t)
-		seedFile(t, filepath.Join(root, "icon.svg.import"), "[remap]\n\nimporter=\"texture\"\n")
-		return root
-	}
 	tests := []struct {
 		name  string
 		tool  func() mcp.Tool
@@ -308,7 +302,6 @@ func TestSuccessResultsMatchOutputSchema(t *testing.T) {
 		{name: "read_plugins", tool: readPlugins, args: `{}`, setup: projectWithPlugin},
 		{name: "manage_plugins enable", tool: managePlugins, args: `{"action":"enable","plugin":"addons/demo/plugin.cfg"}`, setup: projectWithPlugin},
 		{name: "manage_plugins disable", tool: managePlugins, args: `{"action":"disable","plugin":"addons/demo/plugin.cfg"}`, setup: projectWithPlugin},
-		{name: "read_import", tool: readImport, args: `{"resourcePath":"icon.svg"}`, setup: projectWithImport},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

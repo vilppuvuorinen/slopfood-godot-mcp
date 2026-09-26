@@ -190,10 +190,10 @@ func setEnabledPlugins(store *settingsStore, enabled []string) {
 	store.Set(editorPluginsSection, editorPluginsKey, godotconfig.PackedStringArray(enabled))
 }
 
-// configString returns a ConfigFile string value, or "" when the key is absent
-// or is not a string.
-func configString(config *godotconfig.Config, section, key string) string {
-	value, ok := config.Get(section, key)
+// pluginString returns a plugin.cfg [plugin] string value, or "" when the key
+// is absent or is not a string.
+func pluginString(config *godotconfig.Config, key string) string {
+	value, ok := config.Get("plugin", key)
 	if !ok {
 		return ""
 	}

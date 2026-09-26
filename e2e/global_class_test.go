@@ -10,7 +10,7 @@ import (
 // instantiation path (get_script_by_name followed by script.new()), which a
 // built-in ClassDB node never reaches. The global class registry is populated
 // by an editor filesystem scan, so an --import (driven here by
-// update_project_uids) must run after the script is written and before
+// reimport_project) must run after the script is written and before
 // add_node names the class.
 func TestAddNodeFromGlobalClass(t *testing.T) {
 	root := newProject(t)
@@ -18,7 +18,7 @@ func TestAddNodeFromGlobalClass(t *testing.T) {
 	requireGodot(t, session)
 
 	writeE2EFile(t, filepath.Join(root, "scripts", "player.gd"), "class_name Player\nextends Node2D\n")
-	requireToolText(t, session, "update_project_uids", map[string]any{})
+	requireToolText(t, session, "reimport_project", map[string]any{})
 
 	requireToolText(t, session, "create_scene", map[string]any{
 		"scenePath":    "scenes/main.tscn",

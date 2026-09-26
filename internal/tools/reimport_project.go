@@ -22,26 +22,28 @@ var importAllowedStderr = []*regexp.Regexp{
 	regexp.MustCompile(`^at: _get_and_create_snapshot_storage_dir`),
 }
 
-func updateProjectUIDs() mcp.Tool {
+func reimportProject() mcp.Tool {
 	return mcp.Tool{
-		Name:        "update_project_uids",
-		Title:       "Update Project UIDs",
-		Description: "Generate missing resource UIDs in a Godot project by scanning it in the editor",
+		Name:        "reimport_project",
+		Title:       "Reimport Project",
+		Description: "Reimport a Godot project by scanning it in the editor, generating .import sidecars and missing resource UIDs",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
-			"type":        "object",
-			"description": "Requires Godot 4.4 or later, which introduced UID sidecars.",
+			"type": "object",
+			// The scan is project-wide; there is no per-resource apply, so the
+			// tool takes no arguments and applies every pending .import edit.
+			"description": "Runs the editor filesystem scan, which materializes .import sidecars for new sources and applies edits to existing ones.",
 			"properties":  map[string]any{},
 			"required":    []string{},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"projectPath": map[string]any{"type": "string"},
 		}),
-		Handler: handleUpdateProjectUIDs,
+		Handler: handleReimportProject,
 	}
 }
 
-func handleUpdateProjectUIDs(ctx context.Context, _ json.RawMessage) (any, error) {
+func handleReimportProject(ctx context.Context, _ json.RawMessage) (any, error) {
 	project := projectRoot(ctx)
 	if !validPath(project) {
 		return invalidPathResult(), nil
@@ -51,33 +53,17 @@ func handleUpdateProjectUIDs(ctx context.Context, _ json.RawMessage) (any, error
 		return notAProjectResult(project), nil
 	}
 
-	version, err := godot.Version(ctx, godot.Path())
-	if err != nil {
-		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
-			"Failed to update project UIDs: "+err.Error(),
-			"Ensure Godot is installed correctly",
-			"Check if the GODOT_PATH environment variable is set correctly",
-			"Verify the project path is accessible",
-		), nil
-	}
-	if !godot.UIDCapable(version) {
-		return mcp.ErrorResult(
-			"UIDs are only supported in Godot 4.4 or later. Current version: "+version,
-			"Upgrade to Godot 4.4 or later to use UIDs",
-			"Use resource paths instead of UIDs for this version of Godot",
-		), nil
-	}
-
-	// `--import` drives the editor filesystem scan, which is the only headless
-	// mechanism that writes `.uid` sidecars for scripts and shaders. Resaving
+	// `--import` drives the editor filesystem scan, the only headless mechanism
+	// that both writes `.import` sidecars for new sources and reapplies edited
+	// ones, and that writes `.uid` sidecars for scripts and shaders. Resaving
 	// resources at runtime cannot do it: ResourceSaver.save has no UID logic,
 	// and without EditorFileSystem the text saver actively strips existing
 	// `uid=` references. Scanning is non-destructive, so this leaves every
-	// already-assigned UID untouched.
+	// already-assigned UID and up-to-date artifact untouched.
 	stdout, stderr, exitCode, err := godot.Import(ctx, godot.Path(), project)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
-			"Failed to update project UIDs: "+err.Error(),
+			"Failed to reimport project: "+err.Error(),
 			"Ensure Godot is installed correctly",
 			"Check if the GODOT_PATH environment variable is set correctly",
 			"Verify the project path is accessible",
@@ -85,11 +71,11 @@ func handleUpdateProjectUIDs(ctx context.Context, _ json.RawMessage) (any, error
 	}
 	if scriptFailed(exitCode, stderr, importAllowedStderr...) {
 		return mcp.ErrorResult(
-			"Failed to update project UIDs: "+stderr,
+			"Failed to reimport project: "+stderr,
 			"Check if the project is valid",
 			"Ensure you have write permissions to the project directory",
 		), nil
 	}
 
-	return statusResult(project, "Project UIDs updated successfully.\n\nOutput: "+stdout, nil), nil
+	return statusResult(project, "Project reimported successfully.\n\nOutput: "+stdout, nil), nil
 }
