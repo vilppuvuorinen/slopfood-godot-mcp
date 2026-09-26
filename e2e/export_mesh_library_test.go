@@ -292,7 +292,11 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 		if !res.IsError {
 			t.Fatal("export_mesh_library: expected an error result")
 		}
-		requireContains(t, firstText(t, res), "Failed to export mesh library", "Failed to create directory", "Failed to save MeshLibrary")
+		// The handler reports the directory failure and stops; it must not go on
+		// to attempt the save and report a second, misleading error.
+		text := firstText(t, res)
+		requireContains(t, text, "Failed to export mesh library", "Failed to create directory")
+		requireNotContains(t, text, "Failed to save MeshLibrary")
 	})
 
 	t.Run("save failure", func(t *testing.T) {
