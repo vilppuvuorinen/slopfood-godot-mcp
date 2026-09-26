@@ -130,9 +130,6 @@ func validateScriptResultSchema() map[string]any {
 	}
 }
 
-// maxValidateScripts is the reference server's batch cap.
-const maxValidateScripts = 60
-
 func handleValidateScripts(ctx context.Context, raw json.RawMessage) (any, error) {
 	var args validateScriptsArgs
 	if len(raw) > 0 && string(raw) != "null" {
@@ -189,12 +186,6 @@ func handleValidateScripts(ctx context.Context, raw json.RawMessage) (any, error
 			continue
 		}
 		toCheck = append(toCheck, rel)
-	}
-
-	if len(toCheck) > maxValidateScripts {
-		return mcp.ErrorResult(fmt.Sprintf(
-			"Too many scripts to validate (%d > %d). Narrow the scope or pass an explicit scriptPaths list.",
-			len(toCheck), maxValidateScripts)), nil
 	}
 
 	filesWithErrors := 0

@@ -2,9 +2,7 @@ package tools
 
 import (
 	"encoding/json"
-	"fmt"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
@@ -233,28 +231,6 @@ func TestValidateScriptsChangedOutsideGit(t *testing.T) {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
 	want := `Not a git repository (or git is unavailable). Use scope: "all" or pass scriptPaths.`
-	if result.Content[0].Text != want {
-		t.Errorf("message = %q, want %q", result.Content[0].Text, want)
-	}
-}
-
-func TestValidateScriptsTooMany(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, fakeValidateGodot))
-
-	root := t.TempDir()
-	makeProject(t, root)
-	paths := make([]string, 0, 61)
-	for i := 0; i < 61; i++ {
-		name := fmt.Sprintf("script%d.gd", i)
-		seedFile(t, filepath.Join(root, name), "extends Node\n")
-		paths = append(paths, `"`+name+`"`)
-	}
-
-	result := callToolArgs(t, validateScripts(), root, `{"scriptPaths":[`+strings.Join(paths, ",")+`]}`)
-	if !result.IsError {
-		t.Fatalf("expected an error result: %+v", result.Content)
-	}
-	want := "Too many scripts to validate (61 > 60). Narrow the scope or pass an explicit scriptPaths list."
 	if result.Content[0].Text != want {
 		t.Errorf("message = %q, want %q", result.Content[0].Text, want)
 	}
