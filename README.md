@@ -98,6 +98,11 @@ traces are converted to `coverage-gdscript.info` and
 profiles. The instrumenter lives in `internal/gdcover` and is only linked into
 the `gdcover` build, never a release binary.
 
+Coverage profiles are generated artifacts. `make e2e-cover` deletes and rewrites
+them on every run, `make clean` removes them, and they are gitignored. A profile
+left on disk may therefore predate the current code, so rerun the target before
+reading one.
+
 Godot-dependent tests need an engine and export templates in the repo-local
 `.godot/`; templates are opt-in:
 
