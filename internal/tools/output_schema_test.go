@@ -62,6 +62,9 @@ func TestGodotValueSchemaAdvertisesContract(t *testing.T) {
 
 // TestStatusOutputSchemaRequiresEnvelope verifies the status envelope is
 // advertised and required, so a mutation result is never described loosely.
+// It also verifies the success schema omits solutions, which only an error
+// result ever carries, and documents message's meaning through the shared
+// contract.
 func TestStatusOutputSchemaRequiresEnvelope(t *testing.T) {
 	schema := statusOutputSchema(map[string]any{"name": map[string]any{"type": "string"}})
 	if !hasRequired(schema, "success", "message") {
@@ -75,6 +78,31 @@ func TestStatusOutputSchemaRequiresEnvelope(t *testing.T) {
 		if _, ok := props[key]; !ok {
 			t.Errorf("missing property %q", key)
 		}
+	}
+	if _, ok := props["solutions"]; ok {
+		t.Error("success schema advertises solutions, which success never returns")
+	}
+	message, _ := props["message"].(map[string]any)
+	if got, _ := message["description"].(string); got != envelopeMessageContract {
+		t.Errorf("message description = %q, want %q", got, envelopeMessageContract)
+	}
+}
+
+// TestErrorOutputSchemaReservesSolutions verifies solutions is advertised on
+// the error envelope alone, described as an error-only field, so a client
+// learns it accompanies failures rather than appearing in every result.
+func TestErrorOutputSchemaReservesSolutions(t *testing.T) {
+	schema := errorOutputSchema()
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T", schema["properties"])
+	}
+	solutions, ok := props["solutions"].(map[string]any)
+	if !ok {
+		t.Fatalf("error schema must advertise solutions: %#v", props)
+	}
+	if description, _ := solutions["description"].(string); description == "" {
+		t.Error("solutions must be described as error-only")
 	}
 }
 

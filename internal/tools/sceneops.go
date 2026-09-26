@@ -239,9 +239,13 @@ func errorOutputSchema() map[string]any {
 	return map[string]any{
 		"type": "object",
 		"properties": map[string]any{
-			"success":   map[string]any{"const": false},
-			"message":   map[string]any{"type": "string"},
-			"solutions": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"success": map[string]any{"const": false},
+			"message": map[string]any{"type": "string", "description": envelopeMessageContract},
+			"solutions": map[string]any{
+				"type":        "array",
+				"items":       map[string]any{"type": "string"},
+				"description": "Recovery hints for the failure; only an error result carries solutions.",
+			},
 		},
 		"required": []string{"success", "message"},
 	}
@@ -285,13 +289,18 @@ func payloadProperties(schema map[string]any) map[string]any {
 	return properties
 }
 
+// envelopeMessageContract is the one description of the status envelope's
+// message field, shared by the success and error schemas so a client reads the
+// same meaning either way: a summary on success, the reason on an error. The
+// solutions field is reserved for errors and described only there.
+const envelopeMessageContract = "Human-readable outcome: the success summary on success, or the failure reason on an error."
+
 // statusProperties builds the property map for the status envelope, starting
 // from success and message and adding each tool-specific field.
 func statusProperties(properties map[string]any) map[string]any {
-	props := make(map[string]any, len(properties)+4)
+	props := make(map[string]any, len(properties)+3)
 	props["success"] = map[string]any{"type": "boolean"}
-	props["message"] = map[string]any{"type": "string"}
-	props["solutions"] = map[string]any{"type": "array", "items": map[string]any{"type": "string"}}
+	props["message"] = map[string]any{"type": "string", "description": envelopeMessageContract}
 	props["projectPath"] = map[string]any{"type": "string", "description": "Absolute host filesystem path to the bound project root"}
 	for name, schema := range properties {
 		props[name] = schema
