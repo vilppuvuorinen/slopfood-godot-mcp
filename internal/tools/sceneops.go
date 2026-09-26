@@ -357,6 +357,17 @@ func sceneMissingResult(scenePath string) mcp.ToolResult {
 	)
 }
 
+// baseSceneMissingResult is the error for a create_scene baseScenePath that does
+// not resolve to a file, so the caller learns which of the two root sources is
+// missing.
+func baseSceneMissingResult(baseScenePath string) mcp.ToolResult {
+	return mcp.ErrorResult(
+		"Base scene does not exist: "+baseScenePath,
+		"Ensure the base scene path is correct",
+		"Use create_scene to create the base scene first",
+	)
+}
+
 // instanceMissingResult is the error for an instancePath that does not resolve
 // to a file, so the caller learns which of the two add_node sources is missing.
 func instanceMissingResult(instancePath string) mcp.ToolResult {

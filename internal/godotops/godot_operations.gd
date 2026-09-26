@@ -184,7 +184,74 @@ func instantiate_class(name_of_class):
         printerr("Failed to instantiate class: " + name_of_class)
     return result
 
-# Create a new scene with a specified root node type
+# Ensure the directory holding a target scene file exists, creating it
+# recursively. Returns false (after printing the reason) when it cannot be
+# created.
+func _ensure_scene_directory(full_scene_path):
+    var scene_dir_res = full_scene_path.get_base_dir()
+    var scene_dir_abs = ProjectSettings.globalize_path(scene_dir_res)
+    var scene_dir_relative = scene_dir_res.substr(6)  # Remove "res://" prefix
+    if scene_dir_relative.is_empty():
+        return true
+    if DirAccess.dir_exists_absolute(scene_dir_abs):
+        return true
+    var dir = DirAccess.open("res://")
+    if dir == null:
+        var open_error = DirAccess.get_open_error()
+        printerr("Failed to open res:// directory: " + str(open_error))
+        var make_dir_error = DirAccess.make_dir_recursive_absolute(scene_dir_abs)
+        if make_dir_error != OK:
+            printerr("Failed to create directory using absolute path")
+            printerr("Error code: " + str(make_dir_error))
+            return false
+    else:
+        var make_dir_error = dir.make_dir_recursive(scene_dir_relative)
+        if make_dir_error != OK:
+            printerr("Failed to create directory: " + scene_dir_relative)
+            printerr("Error code: " + str(make_dir_error))
+            return false
+    if not DirAccess.dir_exists_absolute(scene_dir_abs):
+        printerr("Directory reported as created but does not exist: " + scene_dir_abs)
+        printerr("This may indicate a problem with path resolution or permissions")
+        return false
+    return true
+
+# Create an inherited scene: a scene whose root node instances another
+# PackedScene. The engine cannot author one at runtime (PackedScene.pack
+# flattens instances), so the minimal file is written directly. base_scene_path
+# may be project-relative or a res:// path.
+func _create_inherited_scene(full_scene_path, base_scene_path):
+    var full_base_path = base_scene_path
+    if not full_base_path.begins_with("res://"):
+        full_base_path = "res://" + full_base_path
+    if "\"" in full_base_path or "\n" in full_base_path:
+        printerr("Invalid base scene path: " + base_scene_path)
+        quit(1)
+        return
+    if not FileAccess.file_exists(full_base_path):
+        printerr("Base scene does not exist at: " + full_base_path)
+        quit(1)
+        return
+
+    var content = "[gd_scene load_steps=2 format=3]\n\n"
+    content += "[ext_resource type=\"PackedScene\" path=\"" + full_base_path + "\" id=\"1_base\"]\n\n"
+    content += "[node name=\"root\" instance=ExtResource(\"1_base\")]\n"
+
+    var file = FileAccess.open(full_scene_path, FileAccess.WRITE)
+    if file == null:
+        printerr("Failed to create scene: " + full_scene_path)
+        quit(1)
+        return
+    file.store_string(content)
+    file.close()
+    if not FileAccess.file_exists(full_scene_path):
+        printerr("Failed to create scene: " + full_scene_path)
+        quit(1)
+        return
+    print("Scene created successfully at: " + project_relative(full_scene_path))
+
+# Create a new scene with a specified root node type, or an inherited scene when
+# baseScenePath names another scene.
 func create_scene(params):
     print("Creating scene: " + params.scenePath)
     
@@ -192,11 +259,17 @@ func create_scene(params):
     var full_scene_path = params.scenePath
     if not full_scene_path.begins_with("res://"):
         full_scene_path = "res://" + full_scene_path
-    # Convert resource path to an absolute path
-    var absolute_scene_path = ProjectSettings.globalize_path(full_scene_path)
-    # Get the scene directory paths
-    var scene_dir_res = full_scene_path.get_base_dir()
-    var scene_dir_abs = absolute_scene_path.get_base_dir()
+    if not _ensure_scene_directory(full_scene_path):
+        quit(1)
+        return
+
+    # An inherited scene's root is an instance of the base scene rather than a
+    # fresh node, so baseScenePath replaces rootNodeType entirely.
+    var base_scene_path = str(params.get("baseScenePath", ""))
+    if not base_scene_path.is_empty():
+        _create_inherited_scene(full_scene_path, base_scene_path)
+        return
+
     # Use traditional if-else statement for better compatibility
     var root_node_type = "Node2D"  # Default value
     if params.has("rootNodeType"):
@@ -214,40 +287,6 @@ func create_scene(params):
     var packed_scene = PackedScene.new()
     var result = packed_scene.pack(scene_root)
     if result == OK:
-        # Ensure the scene directory exists using DirAccess
-        # Get the scene directory relative to res://
-        var scene_dir_relative = scene_dir_res.substr(6)  # Remove "res://" prefix
-        # Create the directory if needed
-        if not scene_dir_relative.is_empty():
-            # First check if it exists
-            var dir_exists = DirAccess.dir_exists_absolute(scene_dir_abs)
-            if not dir_exists:
-                # Try to create the directory using DirAccess
-                var dir = DirAccess.open("res://")
-                if dir == null:
-                    var open_error = DirAccess.get_open_error()
-                    printerr("Failed to open res:// directory: " + str(open_error))
-                    
-                    # Try alternative approach with absolute path
-                    var make_dir_error = DirAccess.make_dir_recursive_absolute(scene_dir_abs)
-                    if make_dir_error != OK:
-                        printerr("Failed to create directory using absolute path")
-                        printerr("Error code: " + str(make_dir_error))
-                        quit(1)
-                else:
-                    # Create the directory using the DirAccess instance
-                    var make_dir_error = dir.make_dir_recursive(scene_dir_relative)
-                    if make_dir_error != OK:
-                        printerr("Failed to create directory: " + scene_dir_relative)
-                        printerr("Error code: " + str(make_dir_error))
-                        quit(1)
-                
-                # Verify the directory was created
-                dir_exists = DirAccess.dir_exists_absolute(scene_dir_abs)
-                if not dir_exists:
-                    printerr("Directory reported as created but does not exist: " + scene_dir_abs)
-                    printerr("This may indicate a problem with path resolution or permissions")
-                    quit(1)
         # Save the scene
         var save_error = ResourceSaver.save(packed_scene, full_scene_path)
         if save_error == OK:
@@ -289,6 +328,9 @@ func add_node(params):
     if not FileAccess.file_exists(absolute_scene_path):
         printerr("Scene file does not exist at: " + absolute_scene_path)
         quit(1)
+    if _reject_inherited_scene(full_scene_path):
+        quit(1)
+        return
     
     var scene = load(full_scene_path)
     if not scene:
@@ -590,11 +632,85 @@ func read_scene(params):
 
     var tree_data = _walk_scene_tree(start_node, depth)
 
+    # An inherited scene's root instances another PackedScene. Instantiating it
+    # resolves every node's scene_file_path, so the in-memory tree alone cannot
+    # tell an inherited scene from a plain one; the raw file is the only signal.
+    # Report it so a caller does not mistake the copied base subtree for local
+    # nodes.
+    var base_scene_path = _inherited_scene_base(full_scene_path)
+    if not base_scene_path.is_empty():
+        tree_data["baseScenePath"] = base_scene_path
+
     print(JSON_START)
     print(JSON.stringify(tree_data))
     print(JSON_END)
 
     scene_root.queue_free()
+
+# Return the project-relative path of the PackedScene a scene file inherits
+# from, or "" when the file is not an inherited scene. The scene root is the
+# first [node] line and, unlike a child, carries no parent attribute; when it
+# has an instance=ExtResource("id") reference, that id resolves through the
+# file's [ext_resource] entries.
+func _inherited_scene_base(full_scene_path):
+    var content = FileAccess.get_file_as_string(full_scene_path)
+    if content.is_empty():
+        return ""
+    var ext_paths = {}
+    var root_instance = ""
+    for raw_line in content.split("\n"):
+        var line = raw_line.strip_edges()
+        if line.begins_with("[ext_resource"):
+            var id = _tscn_attr(line, "id")
+            var path = _tscn_attr(line, "path")
+            if not id.is_empty() and not path.is_empty():
+                ext_paths[id] = path
+        elif line.begins_with("[node"):
+            if not (" parent=" in line):
+                var marker = "instance=ExtResource("
+                var at = line.find(marker)
+                if at != -1:
+                    var rest = line.substr(at + marker.length())
+                    if rest.begins_with("\""):
+                        var end = rest.find("\"", 1)
+                        if end != -1:
+                            root_instance = rest.substr(1, end - 1)
+            break
+    if root_instance.is_empty():
+        return ""
+    return project_relative(str(ext_paths.get(root_instance, "")))
+
+# Read a name="value" attribute from a .tscn block header. The name must start
+# its own attribute (preceded by a space), so an id lookup does not match inside
+# uid=.
+func _tscn_attr(line, name):
+    var marker = name + "=\""
+    var start = 0
+    while true:
+        var at = line.find(marker, start)
+        if at == -1:
+            return ""
+        if at > 0 and line[at - 1] == " ":
+            var value_start = at + marker.length()
+            var end = line.find("\"", value_start)
+            if end == -1:
+                return ""
+            return line.substr(value_start, end - value_start)
+        start = at + 1
+
+# Refuse a structural edit that would flatten an inherited scene. The mutators
+# below load, instantiate, and repack with PackedScene.pack(), which cannot
+# re-serialize an inherited root as an instance: it would replace the base
+# reference with a full copy of the base subtree. Returns true when the caller
+# must stop.
+func _reject_inherited_scene(full_scene_path):
+    var base_scene_path = _inherited_scene_base(full_scene_path)
+    if base_scene_path.is_empty():
+        return false
+    printerr("Cannot edit inherited scene: " + full_scene_path)
+    printerr("Its root instances " + base_scene_path + "; editing it would flatten the base scene into this file")
+    printerr("Edit the base scene instead, or recreate this scene with create_scene")
+    return true
 
 # Walk a scene tree and build a dictionary describing each node. depth is the
 # number of child levels still to include below node: -1 means no limit, 0
@@ -1003,6 +1119,9 @@ func modify_node(params):
     if not FileAccess.file_exists(full_scene_path):
         printerr("Scene file does not exist at: " + full_scene_path)
         quit(1)
+    if _reject_inherited_scene(full_scene_path):
+        quit(1)
+        return
 
     var scene = load(full_scene_path)
     if not scene:
@@ -1058,6 +1177,9 @@ func remove_node(params):
     if not FileAccess.file_exists(full_scene_path):
         printerr("Scene file does not exist at: " + full_scene_path)
         quit(1)
+    if _reject_inherited_scene(full_scene_path):
+        quit(1)
+        return
 
     var scene = load(full_scene_path)
     if not scene:
@@ -1258,6 +1380,9 @@ func manage_scene_structure(params):
         printerr("Scene not found: " + full_path)
         quit(1)
         return
+    if _reject_inherited_scene(full_path):
+        quit(1)
+        return
 
     var scene = load(full_path) as PackedScene
     if scene == null:
@@ -1375,6 +1500,9 @@ func attach_script(params):
     if not FileAccess.file_exists(full_scene_path):
         printerr("Scene file does not exist at: " + full_scene_path)
         quit(1)
+    if _reject_inherited_scene(full_scene_path):
+        quit(1)
+        return
 
     if not FileAccess.file_exists(full_script_path):
         printerr("Script file does not exist at: " + full_script_path)

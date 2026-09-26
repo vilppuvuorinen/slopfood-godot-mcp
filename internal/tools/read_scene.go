@@ -49,6 +49,12 @@ func readSceneOutputSchema() map[string]any {
 	properties := sceneNodeProperties()
 	properties["reason"] = map[string]any{"type": "string"}
 	properties["raw"] = map[string]any{"type": "string"}
+	// baseScenePath is emitted on the returned root of an inherited scene, not
+	// on every nested node, so it is added here rather than in sceneNodeProperties.
+	properties["baseScenePath"] = map[string]any{
+		"type":        "string",
+		"description": "Project-relative path of the base scene when this scene inherits from one; only the returned root of an inherited scene carries it",
+	}
 	return readOutputSchema(map[string]any{
 		"type":       "object",
 		"properties": properties,

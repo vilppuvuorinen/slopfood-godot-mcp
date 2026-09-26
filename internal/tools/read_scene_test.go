@@ -76,8 +76,12 @@ func TestReadSceneOutputSchemaDescribesChildren(t *testing.T) {
 		t.Errorf("sceneNode definition = %#v", defs["sceneNode"])
 	}
 	nodeProps, _ := node["properties"].(map[string]any)
-	if _, ok := nodeProps["children"]; !ok {
+	if _, present := nodeProps["children"]; !present {
 		t.Error("sceneNode definition must describe nested children")
+	}
+	base, isMap := props["baseScenePath"].(map[string]any)
+	if !isMap || base["type"] != "string" {
+		t.Errorf("baseScenePath = %#v, want the inherited base path described at the top level", props["baseScenePath"])
 	}
 }
 
