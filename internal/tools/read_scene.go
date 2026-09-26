@@ -34,63 +34,7 @@ func readScene() mcp.Tool {
 			},
 			"required": []string{"scenePath"},
 		},
-		OutputSchema: readSceneOutputSchema(),
-		Handler:      handleReadScene,
-	}
-}
-
-// readSceneOutputSchema describes a successful read_scene result: the node
-// tree. children recurses through $defs/sceneNode, so any depth of tree is
-// described, and the required fields sit at the top level. A scene the engine
-// cannot read is an error result rather than a second, degraded success shape,
-// so the declared payload is always a node tree.
-func readSceneOutputSchema() map[string]any {
-	properties := sceneNodeProperties()
-	// baseScenePath is emitted on the returned root of an inherited scene, not
-	// on every nested node, so it is added here rather than in sceneNodeProperties.
-	properties["baseScenePath"] = map[string]any{
-		"type":        "string",
-		"description": "Project-relative path of the base scene when this scene inherits from one; only the returned root of an inherited scene carries it",
-	}
-	return map[string]any{
-		"type":       "object",
-		"properties": properties,
-		"required":   []string{"name", "type"},
-		"$defs":      map[string]any{"sceneNode": sceneNodeSchema()},
-	}
-}
-
-// sceneNodeSchema describes one node in read_scene's tree. children refers back
-// to this definition so nested nodes share the same shape.
-func sceneNodeSchema() map[string]any {
-	return map[string]any{
-		"type":       "object",
-		"properties": sceneNodeProperties(),
-		"required":   []string{"name", "type"},
-	}
-}
-
-// sceneNodeProperties is the property map of a scene node. children points at
-// the sceneNode definition under the output schema's $defs for recursion.
-func sceneNodeProperties() map[string]any {
-	return map[string]any{
-		"name":   map[string]any{"type": "string"},
-		"type":   map[string]any{"type": "string"},
-		"script": map[string]any{"type": "string", "description": "Script path, relative to the bound project"},
-		"properties": map[string]any{
-			"type":                 "object",
-			"description":          "Node properties in the tool value contract",
-			"additionalProperties": godotValueSchema("A node property value in the tool value contract"),
-		},
-		"groups": map[string]any{
-			"type":  "array",
-			"items": map[string]any{"type": "string"},
-		},
-		"children": map[string]any{
-			"type":        "array",
-			"description": "Child nodes, each with the same shape",
-			"items":       map[string]any{"$ref": "#/$defs/sceneNode"},
-		},
+		Handler: handleReadScene,
 	}
 }
 

@@ -25,52 +25,7 @@ func readAnimation() mcp.Tool {
 			},
 			"required": []string{"resourcePath"},
 		},
-		OutputSchema: animationPayloadSchema(),
-		Handler:      handleReadAnimation,
-	}
-}
-
-// animationPayloadSchema describes read_animation's payload: the animation-level
-// settings plus one object per track.
-func animationPayloadSchema() map[string]any {
-	return payloadOutputSchema(map[string]any{
-		"path":     map[string]any{"type": "string", "description": "Animation resource path, relative to the bound project"},
-		"length":   map[string]any{"type": "number", "description": "Animation length in seconds"},
-		"loopMode": map[string]any{"type": "string", "description": "Loop mode: none, linear, or pingpong"},
-		"step":     map[string]any{"type": "number", "description": "Step granularity in seconds"},
-		"tracks":   map[string]any{"type": "array", "description": "Animation tracks in index order", "items": animationTrackSchema()},
-	})
-}
-
-func animationTrackSchema() map[string]any {
-	return map[string]any{
-		"type":        "object",
-		"description": "One animation track",
-		"properties": map[string]any{
-			"index":         map[string]any{"type": "integer", "description": "Track index"},
-			"type":          map[string]any{"type": "string", "description": "Track type name from the tool contract"},
-			"path":          map[string]any{"type": "string", "description": "Track path, relative to the AnimationPlayer"},
-			"interpolation": map[string]any{"type": "string", "description": "Interpolation: nearest, linear, or cubic"},
-			"loopWrap":      map[string]any{"type": "boolean", "description": "Whether interpolation wraps across the loop boundary"},
-			"enabled":       map[string]any{"type": "boolean", "description": "Whether the track contributes to playback"},
-			"keys":          map[string]any{"type": "array", "description": "Keyframes in track order", "items": animationReadKeySchema()},
-		},
-		"required": []string{"index", "type", "path", "interpolation", "loopWrap", "enabled", "keys"},
-	}
-}
-
-func animationReadKeySchema() map[string]any {
-	return map[string]any{
-		"type":        "object",
-		"description": "One keyframe; a method value is {method, args} and a bezier key adds inHandle and outHandle",
-		"properties": map[string]any{
-			"time":       map[string]any{"type": "number", "description": "Key time in seconds"},
-			"value":      godotValueSchema("Key value in the tool value contract"),
-			"transition": map[string]any{"type": "number", "description": "Interpolation transition"},
-			"inHandle":   godotValueSchema("Bezier in-handle offset"),
-			"outHandle":  godotValueSchema("Bezier out-handle offset"),
-		},
-		"required": []string{"time", "value"},
+		Handler: handleReadAnimation,
 	}
 }
 

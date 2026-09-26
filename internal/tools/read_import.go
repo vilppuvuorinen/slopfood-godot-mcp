@@ -32,22 +32,6 @@ func readImport() mcp.Tool {
 			},
 			"required": []string{"resourcePath"},
 		},
-		OutputSchema: payloadOutputSchema(map[string]any{
-			"sourcePath": map[string]any{"type": "string", "description": "Imported resource path, relative to the bound project"},
-			"importPath": map[string]any{"type": "string", "description": "Metadata path, relative to the bound project"},
-			"importer":   map[string]any{"type": "string", "description": "Importer name from [remap], or an empty string"},
-			"type":       map[string]any{"type": "string", "description": "Resource type from [remap], or an empty string"},
-			"uid":        map[string]any{"type": "string", "description": "Resource UID from [remap], or an empty string"},
-			"path":       map[string]any{"type": "string", "description": "Imported artifact path from [remap], or an empty string"},
-			"metadata":   godotValueSchema("The importer's metadata dictionary from [remap]"),
-			"sourceFile": map[string]any{"type": "string", "description": "res:// source path from [deps], or an empty string"},
-			"destFiles":  map[string]any{"type": "array", "description": "Imported artifact res:// paths from [deps]", "items": map[string]any{"type": "string"}},
-			"params": map[string]any{
-				"type":                 "object",
-				"description":          "Import parameters from [params], with values in the tool value contract",
-				"additionalProperties": godotValueSchema("An import parameter value"),
-			},
-		}),
 		Handler: handleReadImport,
 	}
 }

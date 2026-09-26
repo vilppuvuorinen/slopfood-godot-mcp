@@ -59,35 +59,6 @@ func TestReadSceneForwardsScopeOptions(t *testing.T) {
 	}
 }
 
-func TestReadSceneOutputSchemaDescribesChildren(t *testing.T) {
-	tool := readScene()
-	props, ok := tool.OutputSchema["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("properties = %T", tool.OutputSchema["properties"])
-	}
-	children, _ := props["children"].(map[string]any)
-	if children["type"] != "array" {
-		t.Fatalf("children = %#v, want an array", props["children"])
-	}
-	items, _ := children["items"].(map[string]any)
-	if items["$ref"] != "#/$defs/sceneNode" {
-		t.Errorf("children.items = %#v, want a sceneNode $ref", children["items"])
-	}
-	defs, _ := tool.OutputSchema["$defs"].(map[string]any)
-	node, _ := defs["sceneNode"].(map[string]any)
-	if node["type"] != "object" || !hasRequired(node, "name", "type") {
-		t.Errorf("sceneNode definition = %#v", defs["sceneNode"])
-	}
-	nodeProps, _ := node["properties"].(map[string]any)
-	if _, present := nodeProps["children"]; !present {
-		t.Error("sceneNode definition must describe nested children")
-	}
-	base, isMap := props["baseScenePath"].(map[string]any)
-	if !isMap || base["type"] != "string" {
-		t.Errorf("baseScenePath = %#v, want the inherited base path described at the top level", props["baseScenePath"])
-	}
-}
-
 func TestReadSceneSuccess(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","children":[{"name":"Child","type":"Sprite2D"}]}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()

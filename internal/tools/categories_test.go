@@ -139,9 +139,13 @@ func TestCategoryBudget(t *testing.T) {
 // powerful token for token than a declared schema that can drift from what the
 // engine emits. Every other tool must still advertise one.
 var schemaOptionalReads = map[string]bool{
-	"read_tilemap": true,
-	"read_tileset": true,
-	"read_theme":   true,
+	"read_animation": true,
+	"read_import":    true,
+	"read_resource":  true,
+	"read_scene":     true,
+	"read_theme":     true,
+	"read_tilemap":   true,
+	"read_tileset":   true,
 }
 
 // TestToolsAdvertiseMetadata verifies every tool carries the metadata modern

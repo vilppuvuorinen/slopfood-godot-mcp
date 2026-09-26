@@ -114,33 +114,6 @@ func TestMutationErrorCarriesStatusEnvelope(t *testing.T) {
 	}
 }
 
-// TestReadOutputSchemaPinsPayload verifies a read tool's output schema is its
-// success payload alone: the payload's required fields sit at the top level, so
-// a client that ignores schema branches still sees the contract, and no error
-// envelope is advertised because a failure is signalled by isError rather than
-// by a second, non-error shape.
-func TestReadOutputSchemaPinsPayload(t *testing.T) {
-	tool := readScene()
-	if !hasRequired(tool.OutputSchema, "name", "type") {
-		t.Fatalf("read_scene required = %v, want name and type at the top level", tool.OutputSchema["required"])
-	}
-	if _, present := tool.OutputSchema["anyOf"]; present {
-		t.Errorf("read_scene advertises schema branches: %#v", tool.OutputSchema["anyOf"])
-	}
-	props, ok := tool.OutputSchema["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("properties = %T", tool.OutputSchema["properties"])
-	}
-	for _, key := range []string{"success", "message", "solutions"} {
-		if _, present := props[key]; present {
-			t.Errorf("read_scene advertises %q, which the payload never returns", key)
-		}
-	}
-	if _, ok := tool.OutputSchema["$defs"]; !ok {
-		t.Error("read_scene must keep its $defs at the top level for $ref resolution")
-	}
-}
-
 // TestPayloadOutputSchemaPinsShape verifies a bare payload schema declares its
 // fields and requires every one, while still omitting the status envelope, so
 // a read or list result is described as precisely as a mutation's envelope.
