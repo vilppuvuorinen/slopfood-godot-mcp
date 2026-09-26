@@ -7,6 +7,27 @@ extends SceneTree
 const JSON_START = "<<<GO_DOT_MCP_JSON_START>>>"
 const JSON_END = "<<<GO_DOT_MCP_JSON_END>>>"
 
+# Bridge contract
+#
+# Every handler has the signature `func <name>(result: Result, params) -> Result`
+# and reports exclusively through the Result it is handed:
+#
+#   - Progress goes to stdout: log_info(result, ...) buffers a line that _finish
+#     prints to standard output. A structured payload is JSON between
+#     JSON_START and JSON_END, which the Go side extracts with markerJSON; an
+#     operation without one reports status text instead.
+#   - Diagnostics go to stderr: log_error(result, ...) buffers a line that
+#     _finish prints to standard error. The Go side fails the operation on any
+#     stderr line, so nothing benign is written there.
+#   - A handler returns the same Result on success, or result.fail(...) (which
+#     flips ok to false and buffers the reason) on failure. Helpers that report
+#     failure return null/false for their caller to propagate.
+#
+# A handler never calls print()/printerr() and never calls quit(): _init is the
+# only place that flushes the buffers and sets the exit code, through _finish.
+# This keeps a failing handler from leaving a partial payload on stdout and
+# keeps the exit status decided once.
+
 # Result carries a handler's outcome back to the dispatcher. ok is the exit
 # status; stdout and stderr are buffers the dispatcher flushes to the matching
 # standard streams. Handlers write through out()/err() instead of printing, so

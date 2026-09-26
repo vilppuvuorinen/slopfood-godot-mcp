@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -70,16 +69,16 @@ var headlessSolutions = []string{
 // failure it returns "<operation> failed: <detail>" with the shared solutions.
 // Callers validate arguments, paths, and project/scene existence first.
 //
-// allowed lists stderr line patterns the operation may emit without it counting
-// as a failure; any other stderr line fails the operation even on exit 0.
-//
-//nolint:unparam // allowed is the per-tool hook for known-benign stderr; no operation needs one yet.
-func runHeadlessOperation(ctx context.Context, projectPath, operation string, params, fields map[string]any, allowed ...*regexp.Regexp) (any, error) {
+// It treats every stderr line as a failure. When an operation emits benign
+// engine noise it cannot prevent, add that pattern to a per-tool allowlist and
+// pass it to scriptFailed (see stderr.go) together with a test, rather than
+// carrying an unused hook here.
+func runHeadlessOperation(ctx context.Context, projectPath, operation string, params, fields map[string]any) (any, error) {
 	stdout, stderr, exitCode, err := runOperation(ctx, projectPath, operation, params)
 	if err != nil {
 		return mcp.ErrorResult(operation+" failed: "+err.Error(), headlessSolutions...), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	if scriptFailed(exitCode, stderr, allowed...) {
+	if scriptFailed(exitCode, stderr) {
 		return mcp.ErrorResult(operation+" failed: "+stderr, headlessSolutions...), nil
 	}
 	if payload, ok := markerJSON(stdout); ok {
