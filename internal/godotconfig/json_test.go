@@ -2,6 +2,7 @@ package godotconfig
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path/filepath"
@@ -145,6 +146,57 @@ func TestValueToJSONRoundTrip(t *testing.T) {
 			t.Errorf("round trip = %s, want %s", got, want)
 		}
 	}
+}
+
+// TestValueContractTagsMatchDecoder pins the exported ValueContractTags list,
+// which schema consumers read, to the decoder: every advertised tag is
+// recognized by taggedValue, and the conformance fixture introduces no tag the
+// list does not advertise. A tag added to the switch without the list (or the
+// reverse) then fails here rather than silently leaving the schema stale.
+func TestValueContractTagsMatchDecoder(t *testing.T) {
+	advertised := map[string]bool{}
+	for _, tag := range ValueContractTags {
+		advertised[tag] = true
+		if _, err := taggedValue(tag, map[string]any{"$type": tag}); err != nil && err.Error() == fmt.Sprintf("unknown $type %q", tag) {
+			t.Errorf("advertised tag %q is not recognized by taggedValue", tag)
+		}
+	}
+	for _, entry := range loadValueContract(t).Values {
+		for _, tag := range collectTypeTags(t, entry.Value) {
+			if !advertised[tag] {
+				t.Errorf("conformance fixture uses $type %q, which ValueContractTags does not advertise", tag)
+			}
+		}
+	}
+}
+
+// collectTypeTags returns every $type tag named anywhere in a JSON value, so a
+// fixture tag no schema advertises is caught.
+func collectTypeTags(t *testing.T, raw json.RawMessage) []string {
+	t.Helper()
+	var tree any
+	if err := json.Unmarshal(raw, &tree); err != nil {
+		t.Fatalf("unmarshal fixture value: %v", err)
+	}
+	var tags []string
+	var walk func(any)
+	walk = func(node any) {
+		switch n := node.(type) {
+		case map[string]any:
+			if tag, ok := n["$type"].(string); ok {
+				tags = append(tags, tag)
+			}
+			for _, child := range n {
+				walk(child)
+			}
+		case []any:
+			for _, child := range n {
+				walk(child)
+			}
+		}
+	}
+	walk(tree)
+	return tags
 }
 
 func TestDecodeJSONValueScalars(t *testing.T) {

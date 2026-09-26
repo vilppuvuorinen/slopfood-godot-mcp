@@ -36,7 +36,7 @@ func readResource() mcp.Tool {
 			"properties": map[string]any{
 				"type":                 "object",
 				"description":          "Resource properties in the tool value contract",
-				"additionalProperties": godotValueSchema("JSON-native values are nested; engine-only types are tagged objects"),
+				"additionalProperties": godotValueSchema("A resource property value in the tool value contract"),
 			},
 		})),
 		Handler: handleReadResource,

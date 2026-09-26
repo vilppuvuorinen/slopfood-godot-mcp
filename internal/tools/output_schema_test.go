@@ -1,6 +1,11 @@
 package tools
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
+)
 
 // hasRequired reports whether schema requires every key.
 func hasRequired(schema map[string]any, keys ...string) bool {
@@ -23,11 +28,20 @@ func hasRequired(schema map[string]any, keys ...string) bool {
 // TestGodotValueSchemaAdvertisesContract verifies a value slot names the
 // JSON-native types as anyOf branches with single string types, so the value
 // contract is visible without an array-valued top-level type that stricter
-// schema clients reject.
+// schema clients reject. It also verifies every value slot appends the shared
+// tag-enumerating contract, so a client learns the engine-only $type tags from
+// the schema alone.
 func TestGodotValueSchemaAdvertisesContract(t *testing.T) {
-	schema := godotValueSchema("A value in the tool value contract")
-	if schema["description"] != "A value in the tool value contract" {
-		t.Errorf("description = %v", schema["description"])
+	const local = "A value in the tool value contract"
+	schema := godotValueSchema(local)
+	description, _ := schema["description"].(string)
+	if !strings.HasPrefix(description, local) {
+		t.Errorf("description = %v, want it to start with %q", schema["description"], local)
+	}
+	for _, tag := range godotconfig.ValueContractTags {
+		if !strings.Contains(description, tag) {
+			t.Errorf("description omits $type tag %q", tag)
+		}
 	}
 	if _, present := schema["type"]; present {
 		t.Errorf("type = %#v, want no top-level type", schema["type"])

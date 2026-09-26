@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/godotops"
 	"github.com/vilppuvuorinen/go-dot-mcp/internal/mcp"
 )
@@ -103,13 +104,22 @@ func statusResult(project, message string, fields map[string]any) mcp.ToolResult
 	return mcp.StructuredResult(message, value)
 }
 
+// godotValueContract is the one description of the tool value contract shared
+// by every value slot: JSON-native data, or an engine-only type as a tagged
+// object whose "$type" is one of the tags godotconfig.ValueContractTags lists.
+// Building it from that list keeps the advertised set next to the decoder.
+var godotValueContract = "Engine-only types use a tagged object such as " +
+	`{"$type":"Vector2","x":1,"y":2}` + "; recognized $type tags: " +
+	strings.Join(godotconfig.ValueContractTags, ", ") + "."
+
 // godotValueSchema describes one value in the tool value contract for schema
 // consumers: JSON-native data, or a tagged object such as
 // {"$type":"Vector2","x":1,"y":2} for an engine-only type. anyOf names the
 // JSON-native types as discrete branches with a single string type each; the
 // top level stays untyped so stricter clients never see an array-valued type.
-// It is deliberately permissive; the decoder enforces which $type a slot
-// accepts.
+// Every slot appends the shared tag-enumerating contract to its own description,
+// so a client learns the whole tag set from any slot. It is deliberately
+// permissive; the decoder enforces which $type a slot accepts.
 func godotValueSchema(description string) map[string]any {
 	types := []string{"null", "boolean", "string", "number", "array", "object"}
 	branches := make([]any, 0, len(types))
@@ -117,7 +127,7 @@ func godotValueSchema(description string) map[string]any {
 		branches = append(branches, map[string]any{"type": name})
 	}
 	return map[string]any{
-		"description": description,
+		"description": description + " " + godotValueContract,
 		"anyOf":       branches,
 	}
 }

@@ -197,6 +197,34 @@ func numberValue(n json.Number) (Value, error) {
 	return Float(f), nil
 }
 
+// ValueContractTags enumerates the engine-only $type tags taggedValue accepts,
+// in the order the conformance fixture introduces them. It is the schema-facing
+// half of the codec: tools build their value-contract description from it, so
+// the advertised tag set stays next to the switch that owns it. Resource is
+// deliberately absent because taggedValue rejects it.
+var ValueContractTags = []string{
+	"StringName",
+	"Vector2",
+	"Vector2i",
+	"Vector3",
+	"Vector3i",
+	"Vector4",
+	"Vector4i",
+	"Color",
+	"Quaternion",
+	"Plane",
+	"Rect2",
+	"Rect2i",
+	"Transform2D",
+	"Basis",
+	"AABB",
+	"Transform3D",
+	"NodePath",
+	"PackedStringArray",
+	"Dictionary",
+	"GodotText",
+}
+
 // taggedValue builds the Value for a recognized $type. Every constructor is
 // emitted as a numeric Godot literal, the form the ConfigFile parser accepts.
 func taggedValue(tag string, obj map[string]any) (Value, error) {

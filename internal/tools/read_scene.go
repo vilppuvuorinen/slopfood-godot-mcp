@@ -84,7 +84,7 @@ func sceneNodeProperties() map[string]any {
 		"properties": map[string]any{
 			"type":                 "object",
 			"description":          "Node properties in the tool value contract",
-			"additionalProperties": godotValueSchema("JSON-native values are nested; engine-only types are tagged objects such as {\"$type\":\"Vector2\",\"x\":1,\"y\":2}"),
+			"additionalProperties": godotValueSchema("A node property value in the tool value contract"),
 		},
 		"groups": map[string]any{
 			"type":  "array",
