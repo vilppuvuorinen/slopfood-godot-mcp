@@ -38,6 +38,38 @@ func TestManageExportPresetsSchema(t *testing.T) {
 	}
 }
 
+// TestManageExportPresetsEchoesAction pins that a success envelope reports the
+// action the caller sent, so a client can map the result back to it.
+func TestManageExportPresetsEchoesAction(t *testing.T) {
+	tests := []struct {
+		name string
+		args string
+		want string
+	}{
+		{name: "add", args: `{"action":"add","name":"Linux","platform":"Linux"}`, want: "add"},
+		{name: "remove", args: `{"action":"remove","name":"Linux"}`, want: "remove"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			makeProject(t, root)
+			seedFile(t, filepath.Join(root, "export_presets.cfg"), "[preset.0]\n\nname=\"Linux\"\nplatform=\"Linux\"\n")
+
+			result := callToolArgs(t, manageExportPresets(), root, tt.args)
+			if result.IsError {
+				t.Fatalf("unexpected error: %+v", result.Content)
+			}
+			structured, ok := result.StructuredContent.(map[string]any)
+			if !ok {
+				t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+			}
+			if structured["action"] != tt.want {
+				t.Errorf("action = %v, want %q", structured["action"], tt.want)
+			}
+		})
+	}
+}
+
 func TestManageExportPresetsListEmpty(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

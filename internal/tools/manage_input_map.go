@@ -45,6 +45,7 @@ func manageInputMap() mcp.Tool {
 			},
 		),
 		OutputSchema: statusOutputSchema(map[string]any{
+			"action":     map[string]any{"type": "string"},
 			"actionName": map[string]any{"type": "string"},
 		}),
 		Handler: handleManageInputMap,
@@ -170,6 +171,7 @@ func handleManageInputMap(ctx context.Context, raw json.RawMessage) (any, error)
 				return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 			}
 			return statusResult(project, fmt.Sprintf(`Input action "%s" updated (event merged into existing action).`, args.ActionName), map[string]any{
+				"action":     args.Action,
 				"actionName": args.ActionName,
 			}), nil
 		}
@@ -188,6 +190,7 @@ func handleManageInputMap(ctx context.Context, raw json.RawMessage) (any, error)
 			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
 		return statusResult(project, fmt.Sprintf(`Input action "%s" added.`, args.ActionName), map[string]any{
+			"action":     args.Action,
 			"actionName": args.ActionName,
 		}), nil
 	case "remove":
@@ -199,6 +202,7 @@ func handleManageInputMap(ctx context.Context, raw json.RawMessage) (any, error)
 			return mcp.ErrorResult("Failed to manage input map: " + err.Error()), nil //nolint:nilerr // the failure is reported through the tool result.
 		}
 		return statusResult(project, fmt.Sprintf(`Input action "%s" removed.`, args.ActionName), map[string]any{
+			"action":     args.Action,
 			"actionName": args.ActionName,
 		}), nil
 	}

@@ -42,6 +42,37 @@ func TestManageInputMapSchema(t *testing.T) {
 	}
 }
 
+// TestManageInputMapEchoesAction pins that a success envelope reports the
+// action the caller sent, so a client can map the result back to it.
+func TestManageInputMapEchoesAction(t *testing.T) {
+	tests := []struct {
+		name string
+		args string
+		want string
+	}{
+		{name: "add", args: `{"action":"add","actionName":"jump","key":"Space"}`, want: "add"},
+		{name: "remove", args: `{"action":"remove","actionName":"jump"}`, want: "remove"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			root := t.TempDir()
+			makeProject(t, root)
+
+			result := callToolArgs(t, manageInputMap(), root, tt.args)
+			if result.IsError {
+				t.Fatalf("unexpected error: %+v", result.Content)
+			}
+			structured, ok := result.StructuredContent.(map[string]any)
+			if !ok {
+				t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+			}
+			if structured["action"] != tt.want {
+				t.Errorf("action = %v, want %q", structured["action"], tt.want)
+			}
+		})
+	}
+}
+
 func TestManageInputMapList(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

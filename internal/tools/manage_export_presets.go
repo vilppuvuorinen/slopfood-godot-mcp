@@ -47,6 +47,7 @@ func manageExportPresets() mcp.Tool {
 			},
 		),
 		OutputSchema: statusOutputSchema(map[string]any{
+			"action":   map[string]any{"type": "string"},
 			"name":     map[string]any{"type": "string"},
 			"platform": map[string]any{"type": "string"},
 			"runnable": map[string]any{"type": "boolean"},
@@ -103,7 +104,7 @@ func handleManageExportPresets(ctx context.Context, raw json.RawMessage) (any, e
 	case "add":
 		return addExportPreset(project, presetsFile, args), nil
 	case "remove":
-		return removeExportPreset(project, presetsFile, args.Name), nil
+		return removeExportPreset(project, presetsFile, args.Name, args.Action), nil
 	}
 	return mcp.ErrorResult(`Invalid action. Use "add" or "remove".`), nil
 }
@@ -192,13 +193,14 @@ func addExportPreset(project, presetsFile string, args manageExportPresetsArgs) 
 		return exportPresetsFailure(err)
 	}
 	return statusResult(project, fmt.Sprintf("Export preset \"%s\" added for platform \"%s\".", args.Name, args.Platform), map[string]any{
+		"action":   args.Action,
 		"name":     args.Name,
 		"platform": args.Platform,
 		"runnable": args.Runnable,
 	})
 }
 
-func removeExportPreset(project, presetsFile, name string) mcp.ToolResult {
+func removeExportPreset(project, presetsFile, name, action string) mcp.ToolResult {
 	if name == "" {
 		return mcp.ErrorResult("name is required for remove action.")
 	}
@@ -214,7 +216,8 @@ func removeExportPreset(project, presetsFile, name string) mcp.ToolResult {
 		return exportPresetsFailure(err)
 	}
 	return statusResult(project, fmt.Sprintf("Export preset \"%s\" removed.", name), map[string]any{
-		"name": name,
+		"action": action,
+		"name":   name,
 	})
 }
 
