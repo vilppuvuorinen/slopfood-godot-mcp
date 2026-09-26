@@ -37,6 +37,11 @@ func unexpectedStderr(stderr string, allowed ...*regexp.Regexp) string {
 // not listed in allowed is unexpected and also fails. The operations script
 // calls quit(1) on every error branch, but engine-level failures log to stderr
 // and still exit 0, so both signals are needed.
+//
+// The allowed patterns are the per-tool allowlist for known-benign engine
+// output: a tool declares them for engine noise it cannot prevent and does not
+// treat as a failure. Add a pattern only for output outside the operation's
+// control that is provably benign, and keep it as narrow as the line it matches.
 func scriptFailed(exitCode int, stderr string, allowed ...*regexp.Regexp) bool {
 	return exitCode != 0 || unexpectedStderr(stderr, allowed...) != ""
 }
