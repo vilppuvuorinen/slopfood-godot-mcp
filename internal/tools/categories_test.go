@@ -125,10 +125,10 @@ func TestCategoryToolsUnique(t *testing.T) {
 	}
 }
 
-// schemaOptionalReads are read tools whose payload is self-describing, so they
-// deliberately advertise no output schema: structured content plus text is more
-// powerful token for token than a declared schema that can drift from what the
-// engine emits. Every other tool must still advertise one.
+// schemaOptionalReads are read-only tools whose payload is self-describing, so
+// they deliberately advertise no output schema: structured content plus text is
+// more powerful token for token than a declared schema that can drift from what
+// the handler emits. Every other tool must still advertise one.
 var schemaOptionalReads = map[string]bool{
 	"read_animation":       true,
 	"read_binary_resource": true,
@@ -136,6 +136,7 @@ var schemaOptionalReads = map[string]bool{
 	"read_theme":           true,
 	"read_tilemap":         true,
 	"read_tileset":         true,
+	"validate_scripts":     true,
 }
 
 // TestToolsAdvertiseMetadata verifies every tool carries the metadata modern
