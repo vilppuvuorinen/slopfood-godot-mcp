@@ -180,13 +180,13 @@ func TestReadSceneTool(t *testing.T) {
 			t.Fatalf("read_scene: unexpected error: %s", firstText(t, res))
 		}
 		var payload struct {
-			Error string `json:"error"`
-			Raw   string `json:"raw"`
+			Reason string `json:"reason"`
+			Raw    string `json:"raw"`
 		}
 		if err := json.Unmarshal([]byte(firstText(t, res)), &payload); err != nil {
 			t.Fatalf("unmarshal %q: %v", firstText(t, res), err)
 		}
-		if payload.Error == "" || !strings.Contains(payload.Raw, "StandardMaterial3D") {
+		if payload.Reason == "" || !strings.Contains(payload.Raw, "StandardMaterial3D") {
 			t.Errorf("fallback payload = %+v", payload)
 		}
 	})

@@ -163,8 +163,8 @@ func TestReadSceneRawWhenNoMarkers(t *testing.T) {
 	if got := strings.TrimSpace(structured["raw"].(string)); got != "plain output" {
 		t.Errorf("raw = %q, want plain output", got)
 	}
-	if _, ok := structured["error"].(string); !ok {
-		t.Errorf("error = %v, want a string reason", structured["error"])
+	if _, ok := structured["reason"].(string); !ok {
+		t.Errorf("reason = %v, want a string", structured["reason"])
 	}
 }
 
@@ -192,8 +192,8 @@ func TestReadSceneRawWhenMarkersInvalid(t *testing.T) {
 	if structured["raw"] != "not-json" {
 		t.Errorf("raw = %v, want not-json", structured["raw"])
 	}
-	if _, ok := structured["error"].(string); !ok {
-		t.Errorf("error = %v, want a string reason", structured["error"])
+	if _, ok := structured["reason"].(string); !ok {
+		t.Errorf("reason = %v, want a string", structured["reason"])
 	}
 }
 

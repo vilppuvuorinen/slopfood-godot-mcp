@@ -47,7 +47,7 @@ func readScene() mcp.Tool {
 // advertises the error branch alongside the two success shapes.
 func readSceneOutputSchema() map[string]any {
 	properties := sceneNodeProperties()
-	properties["error"] = map[string]any{"type": "string"}
+	properties["reason"] = map[string]any{"type": "string"}
 	properties["raw"] = map[string]any{"type": "string"}
 	return readOutputSchema(map[string]any{
 		"type":       "object",
@@ -58,7 +58,7 @@ func readSceneOutputSchema() map[string]any {
 		// that a payload carrying both is invalid rather than valid twice.
 		"oneOf": []any{
 			map[string]any{"required": []string{"name", "type"}},
-			map[string]any{"required": []string{"error", "raw"}},
+			map[string]any{"required": []string{"reason", "raw"}},
 		},
 		"$defs": map[string]any{"sceneNode": sceneNodeSchema()},
 	})
@@ -163,7 +163,7 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 }
 
 // readSceneRawResult reports a read_scene run whose output did not yield a node
-// tree: the raw engine output plus a reason. It fills the error/raw branch of
+// tree: the raw engine output plus a reason. It fills the reason/raw branch of
 // readSceneOutputSchema, so a caller that advertised an output schema always
 // receives structuredContent instead of a bare text result.
 func readSceneRawResult(reason, raw, stderrText string) mcp.ToolResult {
@@ -172,7 +172,7 @@ func readSceneRawResult(reason, raw, stderrText string) mcp.ToolResult {
 		text += "\nErrors:\n" + stderrText
 	}
 	return mcp.StructuredResult(text, map[string]any{
-		"error": reason,
-		"raw":   raw,
+		"reason": reason,
+		"raw":    raw,
 	})
 }

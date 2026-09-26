@@ -524,7 +524,7 @@ func read_scene(params):
             var raw_content = f.get_as_text()
             f.close()
             print(JSON_START)
-            print(JSON.stringify({"error": "Failed to instantiate scene, returning raw text", "raw": raw_content.substr(0, 4096)}))
+            print(JSON.stringify({"reason": "Failed to instantiate scene, returning raw text", "raw": raw_content.substr(0, 4096)}))
             print(JSON_END)
             return
         quit(1)
