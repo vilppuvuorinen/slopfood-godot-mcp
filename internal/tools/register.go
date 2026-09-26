@@ -56,6 +56,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 	},
 	CategoryResources: {
 		manageResource, readResource, getUID, updateProjectUIDs,
+		manageAnimation, readAnimation,
 	},
 }
 

@@ -113,8 +113,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 25 {
-		t.Errorf("registered %d tools, want 25", len(seen))
+	if len(seen) != 27 {
+		t.Errorf("registered %d tools, want 27", len(seen))
 	}
 }
 
@@ -152,6 +152,7 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"get_uid":               true,
 		"read_export_presets":   true,
 		"read_input_map":        true,
+		"read_animation":        true,
 		"read_project_settings": true,
 		"read_resource":         true,
 		"read_scene":            true,
@@ -360,6 +361,16 @@ func TestActionToolsAdvertiseVariants(t *testing.T) {
 			actions: map[string][]string{
 				"add":    {"name", "platform"},
 				"remove": {"name"},
+			},
+		},
+		"manage_animation": {
+			common: []string{"resourcePath", "action"},
+			actions: map[string][]string{
+				"create": {},
+				"modify": {},
+				"add":    {"trackType"},
+				"set":    {"trackIndex"},
+				"remove": {"trackIndex"},
 			},
 		},
 	}

@@ -76,6 +76,8 @@ func _init():
             get_uid(params)
         "manage_resource":
             manage_resource(params)
+        "manage_animation":
+            manage_animation(params)
         "validate_project":
             validate_project(params)
         _:
@@ -1579,6 +1581,399 @@ func _convert_theme_property(theme, key, value):
     if type_id == -1:
         return value
     return _convert_value_for_type(type_id, value)
+
+# Track type, loop mode, and interpolation names as they appear in the tool
+# contract, mapped to the engine's enum values.
+const ANIMATION_TRACK_TYPES = {
+    "value": Animation.TYPE_VALUE,
+    "position_3d": Animation.TYPE_POSITION_3D,
+    "rotation_3d": Animation.TYPE_ROTATION_3D,
+    "scale_3d": Animation.TYPE_SCALE_3D,
+    "blend_shape": Animation.TYPE_BLEND_SHAPE,
+    "method": Animation.TYPE_METHOD,
+    "bezier": Animation.TYPE_BEZIER,
+    "audio": Animation.TYPE_AUDIO,
+    "animation": Animation.TYPE_ANIMATION,
+}
+
+const ANIMATION_LOOP_MODES = {
+    "none": Animation.LOOP_NONE,
+    "linear": Animation.LOOP_LINEAR,
+    "pingpong": Animation.LOOP_PINGPONG,
+}
+
+const ANIMATION_INTERPOLATIONS = {
+    "nearest": Animation.INTERPOLATION_NEAREST,
+    "linear": Animation.INTERPOLATION_LINEAR,
+    "cubic": Animation.INTERPOLATION_CUBIC,
+}
+
+# Read/create/modify an Animation resource and its tracks. Tracks are not
+# properties, so the generic manage_resource codec cannot touch them; this
+# operation is the dedicated path for animation authoring.
+func manage_animation(params):
+    var resource_path = params.get("resourcePath", "")
+    var action = params.get("action", "read")
+    var full_path = resource_path
+    if not full_path.begins_with("res://"):
+        full_path = "res://" + full_path
+
+    if action == "read":
+        _read_animation(full_path)
+        return
+
+    if action == "create":
+        var created = Animation.new()
+        if not _apply_animation_properties(created, params):
+            printerr("Invalid animation property: " + _decode_error)
+            quit(1)
+            return
+        if not _save_resource(created, full_path):
+            return
+        print("Animation created: " + full_path)
+        return
+
+    var animation = _load_animation(full_path)
+    if animation == null:
+        return
+
+    if action == "modify":
+        if not _apply_animation_properties(animation, params):
+            printerr("Invalid animation property: " + _decode_error)
+            quit(1)
+            return
+    elif action == "add":
+        if not _add_animation_track(animation, params):
+            printerr("Invalid animation track: " + _decode_error)
+            quit(1)
+            return
+    elif action == "set":
+        if not _set_animation_track(animation, params):
+            printerr("Invalid animation track: " + _decode_error)
+            quit(1)
+            return
+    elif action == "remove":
+        if not _remove_animation_track(animation, params):
+            printerr("Invalid animation track: " + _decode_error)
+            quit(1)
+            return
+    else:
+        printerr("Unknown manage_animation action: " + action)
+        quit(1)
+        return
+
+    if not _save_resource(animation, full_path):
+        return
+    print("Animation " + action + " succeeded: " + full_path)
+
+# Load an Animation resource with the shared not-found and type checks. Returns
+# null after signalling failure, because quit() does not stop the current call.
+func _load_animation(full_path):
+    if not ResourceLoader.exists(full_path):
+        printerr("Animation resource not found: " + full_path)
+        quit(1)
+        return null
+    var resource = ResourceLoader.load(full_path)
+    if resource == null:
+        printerr("Failed to load animation: " + full_path)
+        quit(1)
+        return null
+    if not (resource is Animation):
+        printerr("Not an Animation resource: " + full_path)
+        quit(1)
+        return null
+    return resource
+
+# Apply the animation-level properties length, loopMode, and step when present.
+func _apply_animation_properties(animation, params) -> bool:
+    if params.has("length"):
+        var length = params["length"]
+        if not (length is int or length is float):
+            _decode_error = "length must be a number"
+            return false
+        animation.length = float(length)
+    if params.has("loopMode"):
+        var mode = str(params["loopMode"])
+        if not ANIMATION_LOOP_MODES.has(mode):
+            _decode_error = "unknown loopMode: " + mode
+            return false
+        animation.loop_mode = ANIMATION_LOOP_MODES[mode]
+    if params.has("step"):
+        var step = params["step"]
+        if not (step is int or step is float):
+            _decode_error = "step must be a number"
+            return false
+        animation.step = float(step)
+    return true
+
+# Append a track built from the caller's trackType, trackPath, interpolation,
+# and keys.
+func _add_animation_track(animation, params) -> bool:
+    var type_id = _track_type_id(params.get("trackType", ""))
+    if type_id == -1:
+        _decode_error = "unknown trackType: " + str(params.get("trackType", ""))
+        return false
+    var track_index = animation.add_track(type_id)
+    return _configure_animation_track(animation, track_index, params)
+
+# Update an existing track selected by trackIndex.
+func _set_animation_track(animation, params) -> bool:
+    var track_index = _track_index(animation, params)
+    if track_index < 0:
+        return false
+    return _configure_animation_track(animation, track_index, params)
+
+# Configure a track's path, interpolation, loop wrap, enabled flag, and keys.
+# A keys list replaces the track's existing keys wholesale, so set is
+# deterministic rather than appending to whatever was there.
+func _configure_animation_track(animation, track_index, params) -> bool:
+    if params.has("trackPath"):
+        animation.track_set_path(track_index, NodePath(str(params["trackPath"])))
+    if params.has("interpolation"):
+        var name = str(params["interpolation"])
+        if not ANIMATION_INTERPOLATIONS.has(name):
+            _decode_error = "unknown interpolation: " + name
+            return false
+        animation.track_set_interpolation_type(track_index, ANIMATION_INTERPOLATIONS[name])
+    if params.has("loopWrap"):
+        animation.track_set_interpolation_loop_wrap(track_index, bool(params["loopWrap"]))
+    if params.has("enabled"):
+        animation.track_set_enabled(track_index, bool(params["enabled"]))
+    if params.has("keys"):
+        return _insert_animation_keys(animation, track_index, params["keys"])
+    return true
+
+# Remove the track selected by trackIndex.
+func _remove_animation_track(animation, params) -> bool:
+    var track_index = _track_index(animation, params)
+    if track_index < 0:
+        return false
+    animation.remove_track(track_index)
+    return true
+
+# Resolve and bounds-check the caller's trackIndex.
+func _track_index(animation, params) -> int:
+    if not params.has("trackIndex"):
+        _decode_error = "trackIndex is required"
+        return -1
+    var track_index = int(params["trackIndex"])
+    if track_index < 0 or track_index >= animation.get_track_count():
+        _decode_error = "trackIndex out of range: " + str(track_index)
+        return -1
+    return track_index
+
+# Replace a track's keys with the caller's list, then insert each one.
+func _insert_animation_keys(animation, track_index, keys) -> bool:
+    if not (keys is Array):
+        _decode_error = "keys must be an array"
+        return false
+    var type_id = animation.track_get_type(track_index)
+    while animation.track_get_key_count(track_index) > 0:
+        animation.track_remove_key(track_index, 0)
+    for key in keys:
+        if not (key is Dictionary) or not key.has("time"):
+            _decode_error = "each key needs a \"time\" number"
+            return false
+        var time = key["time"]
+        if not (time is int or time is float):
+            _decode_error = "each key needs a \"time\" number"
+            return false
+        if not _insert_animation_key(animation, track_index, type_id, float(time), key):
+            return false
+    return true
+
+# Insert one key, decoding its value for the track's type. Value tracks take a
+# value in the tool value contract, 3D tracks take the matching tagged vector,
+# method tracks take {method, args}, and bezier tracks take a number plus
+# optional inHandle/outHandle offsets.
+func _insert_animation_key(animation, track_index, type_id, time, key) -> bool:
+    var value = key.get("value", null)
+    if type_id == Animation.TYPE_VALUE:
+        var decoded = _decode_value(value)
+        if _decode_error != "":
+            return false
+        animation.track_insert_key(track_index, time, decoded, _animation_number_default(key.get("transition", 1.0), "transition"))
+    elif type_id == Animation.TYPE_POSITION_3D:
+        var position = _require_animation_type(value, TYPE_VECTOR3, "a position key value")
+        if _decode_error != "":
+            return false
+        animation.position_track_insert_key(track_index, time, position)
+    elif type_id == Animation.TYPE_ROTATION_3D:
+        var rotation = _require_animation_type(value, TYPE_QUATERNION, "a rotation key value")
+        if _decode_error != "":
+            return false
+        animation.rotation_track_insert_key(track_index, time, rotation)
+    elif type_id == Animation.TYPE_SCALE_3D:
+        var scale = _require_animation_type(value, TYPE_VECTOR3, "a scale key value")
+        if _decode_error != "":
+            return false
+        animation.scale_track_insert_key(track_index, time, scale)
+    elif type_id == Animation.TYPE_BLEND_SHAPE:
+        animation.blend_shape_track_insert_key(track_index, time, _animation_number(value, "a blend shape key value"))
+    elif type_id == Animation.TYPE_METHOD:
+        animation.track_insert_key(track_index, time, _decode_method_key(value))
+    elif type_id == Animation.TYPE_BEZIER:
+        var bezier_value = _animation_number(value, "a bezier key value")
+        if _decode_error != "":
+            return false
+        var in_handle = _animation_vector2_or_zero(key.get("inHandle", null))
+        if _decode_error != "":
+            return false
+        var out_handle = _animation_vector2_or_zero(key.get("outHandle", null))
+        if _decode_error != "":
+            return false
+        animation.bezier_track_insert_key(track_index, time, bezier_value, in_handle, out_handle)
+    elif type_id == Animation.TYPE_AUDIO:
+        var stream = _animation_resource_value(value)
+        if _decode_error != "":
+            return false
+        animation.audio_track_insert_key(track_index, time, stream, _animation_number_default(key.get("startOffset", 0.0), "startOffset"), _animation_number_default(key.get("endOffset", 0.0), "endOffset"))
+    elif type_id == Animation.TYPE_ANIMATION:
+        var nested = _animation_resource_value(value)
+        if _decode_error != "":
+            return false
+        animation.animation_track_insert_key(track_index, time, nested)
+    else:
+        _decode_error = "unsupported track type"
+        return false
+    return _decode_error == ""
+
+# Decode a method-track key value, an object with a "method" string and an
+# optional "args" array.
+func _decode_method_key(value):
+    if not (value is Dictionary) or not (value.get("method", null) is String):
+        _decode_error = "a method key value must be an object with a \"method\" string"
+        return null
+    var args = []
+    if value.has("args"):
+        var decoded = _decode_value(value["args"])
+        if _decode_error != "":
+            return null
+        if not (decoded is Array):
+            _decode_error = "a method key's \"args\" must be an array"
+            return null
+        args = decoded
+    return {"method": StringName(value["method"]), "args": args}
+
+# Decode a value that must be a tagged object of the given Variant type.
+func _require_animation_type(value, type_id, label):
+    if not (value is Dictionary) or not value.has("$type"):
+        _decode_error = "expected a tagged {\"$type\": ...} value for " + label
+        return null
+    var decoded = _decode_typed(value)
+    if _decode_error != "":
+        return null
+    if typeof(decoded) != type_id:
+        _decode_error = label + " must be a " + type_string(type_id)
+        return null
+    return decoded
+
+# Decode a Vector2 handle, defaulting to zero when the caller omits it.
+func _animation_vector2_or_zero(value) -> Vector2:
+    if value == null:
+        return Vector2.ZERO
+    var decoded = _require_animation_type(value, TYPE_VECTOR2, "a bezier handle")
+    if _decode_error != "":
+        return Vector2.ZERO
+    return decoded
+
+# Read a number, reporting through the shared decode error.
+func _animation_number(value, label) -> float:
+    if value is int or value is float:
+        return float(value)
+    _decode_error = label + " must be a number"
+    return 0.0
+
+# Read a number that has a default when the caller omits the field.
+func _animation_number_default(value, label) -> float:
+    return _animation_number(value, label)
+
+# Decode a resource reference for an audio or animation track value: a res://
+# path or a tagged Resource.
+func _animation_resource_value(value):
+    if value is String:
+        return _decode_resource_path(value)
+    if value is Dictionary and value.has("$type"):
+        return _decode_typed(value)
+    _decode_error = "expected a res:// path or tagged Resource for this track's value"
+    return null
+
+func _track_type_id(name) -> int:
+    if ANIMATION_TRACK_TYPES.has(name):
+        return ANIMATION_TRACK_TYPES[name]
+    return -1
+
+func _track_type_name(type_id) -> String:
+    for name in ANIMATION_TRACK_TYPES:
+        if ANIMATION_TRACK_TYPES[name] == type_id:
+            return name
+    return "unknown"
+
+func _loop_mode_name(mode) -> String:
+    for name in ANIMATION_LOOP_MODES:
+        if ANIMATION_LOOP_MODES[name] == mode:
+            return name
+    return "none"
+
+func _interpolation_name(type_id) -> String:
+    for name in ANIMATION_INTERPOLATIONS:
+        if ANIMATION_INTERPOLATIONS[name] == type_id:
+            return name
+    return "linear"
+
+# Emit an Animation resource as a JSON payload: length, loopMode, step, and one
+# object per track with its keys.
+func _read_animation(full_path):
+    var animation = _load_animation(full_path)
+    if animation == null:
+        return
+    var tracks = []
+    for index in range(animation.get_track_count()):
+        tracks.append(_animation_track_to_json(animation, index))
+    var result = {
+        "path": project_relative(full_path),
+        "length": animation.length,
+        "loopMode": _loop_mode_name(animation.loop_mode),
+        "step": animation.step,
+        "tracks": tracks,
+    }
+    print(JSON_START)
+    print(JSON.stringify(result))
+    print(JSON_END)
+
+func _animation_track_to_json(animation, index) -> Dictionary:
+    var type_id = animation.track_get_type(index)
+    var keys = []
+    for key_index in range(animation.track_get_key_count(index)):
+        keys.append(_animation_key_to_json(animation, index, type_id, key_index))
+    return {
+        "index": index,
+        "type": _track_type_name(type_id),
+        "path": String(animation.track_get_path(index)),
+        "interpolation": _interpolation_name(animation.track_get_interpolation_type(index)),
+        "loopWrap": animation.track_get_interpolation_loop_wrap(index),
+        "enabled": animation.track_is_enabled(index),
+        "keys": keys,
+    }
+
+func _animation_key_to_json(animation, index, type_id, key_index) -> Dictionary:
+    var key = {
+        "time": animation.track_get_key_time(index, key_index),
+        "transition": animation.track_get_key_transition(index, key_index),
+        "value": null,
+    }
+    if type_id == Animation.TYPE_METHOD:
+        key["value"] = {
+            "method": String(animation.method_track_get_name(index, key_index)),
+            "args": _variant_to_json(animation.method_track_get_params(index, key_index)),
+        }
+    elif type_id == Animation.TYPE_BEZIER:
+        key["value"] = animation.bezier_track_get_key_value(index, key_index)
+        key["inHandle"] = _variant_to_json(animation.bezier_track_get_key_in_handle(index, key_index))
+        key["outHandle"] = _variant_to_json(animation.bezier_track_get_key_out_handle(index, key_index))
+    else:
+        key["value"] = _variant_to_json(animation.track_get_key_value(index, key_index))
+    return key
 
 # Validate that Godot itself loaded project.godot cleanly. ProjectSettings
 # parses project.godot during engine startup, before _init runs; when the file
