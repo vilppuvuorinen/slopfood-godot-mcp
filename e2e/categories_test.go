@@ -14,8 +14,11 @@ func TestEnableCategories(t *testing.T) {
 			"manage_export_presets", // export
 			"create_scene",          // scene
 			"add_node",              // node
+			"add_scene_signal",      // signals
+			"set_tilemap_cell",      // tilemap
 			"attach_script",         // script
 			"manage_resource",       // assets
+			"read_animation",        // media
 		} {
 			findTool(t, session, name)
 		}
@@ -46,8 +49,11 @@ func TestEnableCategories(t *testing.T) {
 			"manage_export_presets", // export
 			"create_scene",          // scene
 			"add_node",              // node
+			"add_scene_signal",      // signals
+			"set_tilemap_cell",      // tilemap
 			"attach_script",         // script
 			"manage_resource",       // assets
+			"read_animation",        // media
 		} {
 			findTool(t, session, name)
 		}

@@ -25,6 +25,9 @@ func TestResolveCategories(t *testing.T) {
 		{name: "all expands", raw: []string{"all"}, want: AllCategories},
 		{name: "comma separated", raw: []string{"scene,script"}, want: []Category{CategoryScene, CategoryScript}},
 		{name: "assets category", raw: []string{"assets"}, want: []Category{CategoryAssets}},
+		{name: "signals category", raw: []string{"signals"}, want: []Category{CategorySignals}},
+		{name: "tilemap category", raw: []string{"tilemap"}, want: []Category{CategoryTilemap}},
+		{name: "media category", raw: []string{"media"}, want: []Category{CategoryMedia}},
 		{name: "repeated flags", raw: []string{"project", "node"}, want: []Category{CategoryProject, CategoryNode}},
 		{name: "deduplicates preserving order", raw: []string{"node,project,node"}, want: []Category{CategoryNode, CategoryProject}},
 		{name: "trims whitespace", raw: []string{" scene , node "}, want: []Category{CategoryScene, CategoryNode}},
@@ -117,6 +120,17 @@ func TestCategoryToolsUnique(t *testing.T) {
 	}
 	if len(seen) != 42 {
 		t.Errorf("registered %d tools, want 42", len(seen))
+	}
+}
+
+// TestCategoryBudget keeps each category small enough for a subagent to align
+// on: a category is a coherent domain, so it stays at or below the top end of
+// the 5-7 tool budget.
+func TestCategoryBudget(t *testing.T) {
+	for _, category := range AllCategories {
+		if count := len(categoryTools[category]); count > 7 {
+			t.Errorf("category %q has %d tools, want at most 7", category, count)
+		}
 	}
 }
 

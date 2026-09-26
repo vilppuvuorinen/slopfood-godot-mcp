@@ -17,8 +17,11 @@ const (
 	CategoryExport   Category = "export"
 	CategoryScene    Category = "scene"
 	CategoryNode     Category = "node"
+	CategorySignals  Category = "signals"
+	CategoryTilemap  Category = "tilemap"
 	CategoryScript   Category = "script"
 	CategoryAssets   Category = "assets"
+	CategoryMedia    Category = "media"
 )
 
 // AllCategories lists every category in registration order.
@@ -28,8 +31,11 @@ var AllCategories = []Category{
 	CategoryExport,
 	CategoryScene,
 	CategoryNode,
+	CategorySignals,
+	CategoryTilemap,
 	CategoryScript,
 	CategoryAssets,
+	CategoryMedia,
 }
 
 // categoryTools maps each category to the tool constructors it contains. Every
@@ -51,7 +57,11 @@ var categoryTools = map[Category][]func() mcp.Tool{
 	CategoryNode: {
 		addNode, modifySceneNode, removeSceneNode,
 		renameSceneNode, duplicateSceneNode, moveSceneNode,
+	},
+	CategorySignals: {
 		addSceneSignal, removeSceneSignal, readSceneSignals,
+	},
+	CategoryTilemap: {
 		setTilemapCell, eraseTilemapCell, clearTilemap, readTilemap,
 	},
 	CategoryScript: {
@@ -59,8 +69,11 @@ var categoryTools = map[Category][]func() mcp.Tool{
 	},
 	CategoryAssets: {
 		manageResource, readResource, getUID, updateProjectUIDs,
+		manageImport, readImport,
+	},
+	CategoryMedia: {
 		manageAnimation, readAnimation, manageTileset, readTileset,
-		manageTheme, readTheme, manageImport, readImport,
+		manageTheme, readTheme,
 	},
 }
 
