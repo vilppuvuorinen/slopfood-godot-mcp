@@ -172,7 +172,7 @@ func TestReadSceneTool(t *testing.T) {
 
 		// A .tres loads as a Resource, not a PackedScene, so read_scene reports
 		// a controlled failure instead of a degraded raw-text success; a caller
-		// inspects non-scene resources with read_resource.
+		// reads a text .tres directly and binary .res with read_binary_resource.
 		res := callTool(t, session, "read_scene", map[string]any{
 			"scenePath": "thing.tres",
 		})

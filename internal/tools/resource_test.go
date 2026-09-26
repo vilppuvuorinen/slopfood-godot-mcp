@@ -62,8 +62,8 @@ func TestModifyResourceSchema(t *testing.T) {
 }
 
 func TestReadResourceSchema(t *testing.T) {
-	tool := readResource()
-	if tool.Name != "read_resource" {
+	tool := readBinaryResource()
+	if tool.Name != "read_binary_resource" {
 		t.Errorf("name = %q", tool.Name)
 	}
 	if tool.Description != "Read engine-decoded binary .res resource files (text .tres files are read directly)" {
@@ -77,7 +77,7 @@ func TestReadResourceSchema(t *testing.T) {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
 	if _, isMap := props["propertyFilter"].(map[string]any); !isMap {
-		t.Errorf("read_resource must advertise propertyFilter: %v", props["propertyFilter"])
+		t.Errorf("read_binary_resource must advertise propertyFilter: %v", props["propertyFilter"])
 	}
 }
 
@@ -88,7 +88,7 @@ func TestReadResourceForwardsPropertyFilter(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readResource(), root, `{"resourcePath":"resources/mat.res","propertyFilter":["metallic","albedo_*"]}`)
+	result := callToolArgs(t, readBinaryResource(), root, `{"resourcePath":"resources/mat.res","propertyFilter":["metallic","albedo_*"]}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -119,7 +119,7 @@ func TestReadResourceSuccess(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readResource(), root, `{"resourcePath":"resources/mat.res"}`)
+	result := callToolArgs(t, readBinaryResource(), root, `{"resourcePath":"resources/mat.res"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -145,7 +145,7 @@ func TestReadResourceStructured(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readResource(), root, `{"resourcePath":"resources/mat.res"}`)
+	result := callToolArgs(t, readBinaryResource(), root, `{"resourcePath":"resources/mat.res"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -238,11 +238,11 @@ func TestResourceValidation(t *testing.T) {
 		{name: "modify missing params", tool: modifyResource, args: `{}`, want: "resourcePath and properties are required."},
 		{name: "modify missing properties", tool: modifyResource, project: root, args: `{"resourcePath":"mat.tres"}`, want: "resourcePath and properties are required."},
 		{name: "modify empty properties", tool: modifyResource, project: root, args: `{"resourcePath":"mat.tres","properties":{}}`, want: "resourcePath and properties are required."},
-		{name: "read missing resource path", tool: readResource, project: root, args: `{}`, want: "resourcePath is required."},
-		{name: "read text .tres rejected", tool: readResource, project: root, args: `{"resourcePath":"mat.tres"}`, want: "read_resource reads binary .res resources"},
-		{name: "invalid project path", tool: readResource, project: "../escape", args: `{"resourcePath":"mat.res"}`, want: "Invalid path."},
-		{name: "invalid resource path", tool: readResource, project: root, args: `{"resourcePath":"../escape.res"}`, want: "Invalid path."},
-		{name: "not a project", tool: readResource, project: notAProject, args: `{"resourcePath":"mat.res"}`, want: "Not a valid Godot project"},
+		{name: "read missing resource path", tool: readBinaryResource, project: root, args: `{}`, want: "resourcePath is required."},
+		{name: "read text .tres rejected", tool: readBinaryResource, project: root, args: `{"resourcePath":"mat.tres"}`, want: "read_binary_resource reads binary .res resources"},
+		{name: "invalid project path", tool: readBinaryResource, project: "../escape", args: `{"resourcePath":"mat.res"}`, want: "Invalid path."},
+		{name: "invalid resource path", tool: readBinaryResource, project: root, args: `{"resourcePath":"../escape.res"}`, want: "Invalid path."},
+		{name: "not a project", tool: readBinaryResource, project: notAProject, args: `{"resourcePath":"mat.res"}`, want: "Not a valid Godot project"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -262,7 +262,7 @@ func TestResourceScriptFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readResource(), root, `{"resourcePath":"mat.res"}`)
+	result := callToolArgs(t, readBinaryResource(), root, `{"resourcePath":"mat.res"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -279,7 +279,7 @@ func TestResourceSpawnFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, readResource(), root, `{"resourcePath":"mat.res"}`)
+	result := callToolArgs(t, readBinaryResource(), root, `{"resourcePath":"mat.res"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

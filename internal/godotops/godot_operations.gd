@@ -612,14 +612,14 @@ func read_scene(result: Result, params) -> Result:
     # load() succeeds for any resource, so scenePath can point at a non-scene
     # such as a .tres. That has no instantiate() and would otherwise die as a
     # SCRIPT ERROR, so a non-PackedScene is a controlled failure rather than a
-    # degraded raw-text success; read_resource inspects those resources. A null
+    # degraded raw-text success; read_binary_resource inspects those resources. A null
     # load is a parse/IO failure whose engine errors already reach stderr, so no
     # extra stderr line here: it would only duplicate them.
     var scene = load(full_scene_path)
     if scene == null:
         return result.fail()
     if not (scene is PackedScene):
-        result.err("Not a scene file: " + full_scene_path + " (use read_resource for non-scene resources)")
+        result.err("Not a scene file: " + full_scene_path + " (use read_binary_resource for binary resources)")
         return result.fail()
 
     var scene_root = track_temp(scene.instantiate())

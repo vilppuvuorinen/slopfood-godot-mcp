@@ -133,16 +133,16 @@ func TestStructuredContent(t *testing.T) {
 	session := connectProject(t, root)
 	requireGodot(t, session)
 
-	res := callTool(t, session, "get_project_info", map[string]any{})
+	res := callTool(t, session, "validate_project", map[string]any{})
 	if res.IsError {
-		t.Fatalf("get_project_info error: %s", firstText(t, res))
+		t.Fatalf("validate_project error: %s", firstText(t, res))
 	}
 	structured, ok := res.StructuredContent.(map[string]any)
 	if !ok {
 		t.Fatalf("structuredContent type %T", res.StructuredContent)
 	}
-	if _, ok := structured["structure"].(map[string]any); !ok {
-		t.Fatalf("structure type %T", structured["structure"])
+	if _, ok := structured["valid"].(bool); !ok {
+		t.Fatalf("valid type %T", structured["valid"])
 	}
 }
 

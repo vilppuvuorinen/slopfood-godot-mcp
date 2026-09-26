@@ -21,6 +21,17 @@ func makeProject(t *testing.T, dir string) {
 	}
 }
 
+// seedFile writes content to path, creating parent directories as needed.
+func seedFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("mkdir %s: %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil { //nolint:gosec // test fixture.
+		t.Fatalf("write %s: %v", path, err)
+	}
+}
+
 // callToolArgs invokes a tool handler with the bound project and raw JSON
 // arguments and returns the ToolResult, failing on a transport-style error.
 //

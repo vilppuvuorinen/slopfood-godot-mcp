@@ -86,8 +86,8 @@ func registeredToolNames(t *testing.T, categories ...Category) map[string]bool {
 
 func TestRegisterGating(t *testing.T) {
 	projectOnly := registeredToolNames(t, CategoryProject)
-	if !projectOnly["get_project_info"] {
-		t.Error("project category should register get_project_info")
+	if !projectOnly["validate_project"] {
+		t.Error("project category should register validate_project")
 	}
 	if projectOnly["create_scene"] {
 		t.Error("project category should not register create_scene")
@@ -97,12 +97,12 @@ func TestRegisterGating(t *testing.T) {
 	if !sceneOnly["create_scene"] {
 		t.Error("scene category should register create_scene")
 	}
-	if sceneOnly["get_project_info"] {
-		t.Error("scene category should not register get_project_info")
+	if sceneOnly["validate_project"] {
+		t.Error("scene category should not register validate_project")
 	}
 
 	all := registeredToolNames(t, AllCategories...)
-	if !all["get_project_info"] || !all["create_scene"] {
+	if !all["validate_project"] || !all["create_scene"] {
 		t.Errorf("all categories = %v", all)
 	}
 }
@@ -120,8 +120,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 50 {
-		t.Errorf("registered %d tools, want 50", len(seen))
+	if len(seen) != 49 {
+		t.Errorf("registered %d tools, want 49", len(seen))
 	}
 }
 
@@ -130,12 +130,12 @@ func TestCategoryToolsUnique(t *testing.T) {
 // powerful token for token than a declared schema that can drift from what the
 // engine emits. Every other tool must still advertise one.
 var schemaOptionalReads = map[string]bool{
-	"read_animation": true,
-	"read_resource":  true,
-	"read_scene":     true,
-	"read_theme":     true,
-	"read_tilemap":   true,
-	"read_tileset":   true,
+	"read_animation":       true,
+	"read_binary_resource": true,
+	"read_scene":           true,
+	"read_theme":           true,
+	"read_tilemap":         true,
+	"read_tileset":         true,
 }
 
 // TestToolsAdvertiseMetadata verifies every tool carries the metadata modern
@@ -178,16 +178,15 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 // omission fails the test rather than silently falling back to a default.
 func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	readOnly := map[string]bool{
-		"get_godot_version": true,
-		"get_project_info":  true,
-		"read_animation":    true,
-		"read_resource":     true,
-		"read_scene":        true,
-		"read_tilemap":      true,
-		"read_tileset":      true,
-		"read_theme":        true,
-		"validate_project":  true,
-		"validate_scripts":  true,
+		"get_godot_version":    true,
+		"read_animation":       true,
+		"read_binary_resource": true,
+		"read_scene":           true,
+		"read_tilemap":         true,
+		"read_tileset":         true,
+		"read_theme":           true,
+		"validate_project":     true,
+		"validate_scripts":     true,
 	}
 	nonDestructive := map[string]bool{
 		"create_project":   true,
