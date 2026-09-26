@@ -95,7 +95,7 @@ func manageAnimation() mcp.Tool {
 			[]string{"resourcePath", "action"},
 			[]actionVariant{
 				{Action: "create"},
-				{Action: "modify"},
+				{Action: "modify", AnyOf: []string{"length", "loopMode", "step"}},
 				{Action: "add", Required: []string{"trackType"}},
 				{Action: "set", Required: []string{"trackIndex"}},
 				{Action: "remove", Required: []string{"trackIndex"}},
@@ -134,7 +134,11 @@ func handleManageAnimation(ctx context.Context, raw json.RawMessage) (any, error
 		return requiredArgsResult("resourcePath", "action"), nil
 	}
 	switch args.Action {
-	case "create", "modify":
+	case "create":
+	case "modify":
+		if args.Length == nil && args.LoopMode == "" && args.Step == nil {
+			return effectfulFieldsResult("modify", "length", "loopMode", "step"), nil
+		}
 	case "add":
 		if args.TrackType == "" {
 			return mcp.ErrorResult("trackType is required for the add action."), nil

@@ -146,6 +146,7 @@ func TestManageThemeValidation(t *testing.T) {
 		{name: "missing params", tool: manageTheme, args: `{}`, want: "resourcePath and action are required."},
 		{name: "missing action", tool: manageTheme, project: root, args: `{"resourcePath":"themes/main.tres"}`, want: "resourcePath and action are required."},
 		{name: "missing resource path on read", tool: readTheme, project: root, args: `{}`, want: "resourcePath is required."},
+		{name: "modify without defaults", tool: manageTheme, project: root, args: `{"resourcePath":"themes/main.tres","action":"modify"}`, want: "The modify action requires at least one of: defaultFont, defaultFontSize, defaultBaseScale."},
 		{name: "removeType without theme type", tool: manageTheme, project: root, args: `{"resourcePath":"themes/main.tres","action":"removeType"}`, want: "themeType is required for the removeType action."},
 		{name: "setTypeVariation without base type", tool: manageTheme, project: root, args: `{"resourcePath":"themes/main.tres","action":"setTypeVariation","themeType":"Custom"}`, want: "baseType is required for the setTypeVariation action."},
 		{name: "setItem without value", tool: manageTheme, project: root, args: `{"resourcePath":"themes/main.tres","action":"setItem","themeType":"Label","itemType":"color","itemName":"font_color"}`, want: "value is required for the setItem action."},

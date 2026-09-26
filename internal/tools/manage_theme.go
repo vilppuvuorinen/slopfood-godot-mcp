@@ -55,7 +55,7 @@ func manageTheme() mcp.Tool {
 			[]string{"resourcePath", "action"},
 			[]actionVariant{
 				{Action: "create"},
-				{Action: "modify"},
+				{Action: "modify", AnyOf: []string{"defaultFont", "defaultFontSize", "defaultBaseScale"}},
 				{Action: "removeType", Required: []string{"themeType"}},
 				{Action: "setTypeVariation", Required: []string{"themeType", "baseType"}},
 				{Action: "clearTypeVariation", Required: []string{"themeType"}},
@@ -126,8 +126,12 @@ func validateThemeAction(args manageThemeArgs) (mcp.ToolResult, bool) {
 		return mcp.ErrorResult(field + " is required for the " + args.Action + " action."), false
 	}
 	switch args.Action {
-	case "create", "modify":
+	case "create":
 		return mcp.ToolResult{}, true
+	case "modify":
+		if args.DefaultFont == nil && args.DefaultFontSize == nil && args.DefaultBaseScale == nil {
+			return effectfulFieldsResult("modify", "defaultFont", "defaultFontSize", "defaultBaseScale"), false
+		}
 	case "removeType", "clearTypeVariation":
 		if args.ThemeType == "" {
 			return missing("themeType")

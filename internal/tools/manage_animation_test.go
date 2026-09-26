@@ -170,6 +170,7 @@ func TestManageAnimationValidation(t *testing.T) {
 		{name: "missing params", tool: manageAnimation, args: `{}`, want: "resourcePath and action are required."},
 		{name: "missing action", tool: manageAnimation, project: root, args: `{"resourcePath":"anim.tres"}`, want: "resourcePath and action are required."},
 		{name: "missing resource path on read", tool: readAnimation, project: root, args: `{}`, want: "resourcePath is required."},
+		{name: "modify without properties", tool: manageAnimation, project: root, args: `{"resourcePath":"anim.tres","action":"modify"}`, want: "The modify action requires at least one of: length, loopMode, step."},
 		{name: "add without track type", tool: manageAnimation, project: root, args: `{"resourcePath":"anim.tres","action":"add"}`, want: "trackType is required for the add action."},
 		{name: "set without track index", tool: manageAnimation, project: root, args: `{"resourcePath":"anim.tres","action":"set"}`, want: "trackIndex is required for the set action."},
 		{name: "remove without track index", tool: manageAnimation, project: root, args: `{"resourcePath":"anim.tres","action":"remove"}`, want: "trackIndex is required for the remove action."},

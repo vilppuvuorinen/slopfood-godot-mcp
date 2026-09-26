@@ -35,7 +35,7 @@ func manageResource() mcp.Tool {
 			[]string{"resourcePath", "action"},
 			[]actionVariant{
 				{Action: "create", Required: []string{"resourceType"}},
-				{Action: "modify"},
+				{Action: "modify", Required: []string{"properties"}},
 			},
 		),
 		OutputSchema: statusOutputSchema(map[string]any{
@@ -67,6 +67,9 @@ func handleManageResource(ctx context.Context, raw json.RawMessage) (any, error)
 	}
 	if args.Action == "create" && args.ResourceType == "" {
 		return mcp.ErrorResult("resourceType is required for the create action."), nil
+	}
+	if args.Action == "modify" && len(args.Properties) == 0 {
+		return mcp.ErrorResult("properties is required for the modify action.", "Provide at least one property to set"), nil
 	}
 	if !validPath(project) || !validPath(args.ResourcePath) {
 		return invalidPathResult(), nil

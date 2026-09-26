@@ -159,6 +159,7 @@ func TestManageTilesetValidation(t *testing.T) {
 	}{
 		{name: "missing params", tool: manageTileset, args: `{}`, want: "resourcePath and action are required."},
 		{name: "missing resource path on read", tool: readTileset, project: root, args: `{}`, want: "resourcePath is required."},
+		{name: "modify without properties", tool: manageTileset, project: root, args: `{"resourcePath":"set.tres","action":"modify"}`, want: "The modify action requires at least one of: tileSize, tileShape, tileLayout, tileOffsetAxis, uvClipping."},
 		{name: "addSource without sourceType", tool: manageTileset, project: root, args: `{"resourcePath":"set.tres","action":"addSource"}`, want: "sourceType is required for the addSource action."},
 		{name: "removeSource without sourceId", tool: manageTileset, project: root, args: `{"resourcePath":"set.tres","action":"removeSource"}`, want: "sourceId is required for the removeSource action."},
 		{name: "addTile without sourceId", tool: manageTileset, project: root, args: `{"resourcePath":"set.tres","action":"addTile"}`, want: "sourceId is required for the addTile action."},

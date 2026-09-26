@@ -196,6 +196,7 @@ func TestManageResourceValidation(t *testing.T) {
 		{name: "missing action", tool: manageResource, project: root, args: `{"resourcePath":"mat.tres"}`, want: "resourcePath and action are required."},
 		{name: "missing resource path", tool: readResource, project: root, args: `{}`, want: "resourcePath is required."},
 		{name: "create without resource type", tool: manageResource, project: root, args: `{"resourcePath":"mat.tres","action":"create"}`, want: "resourceType is required for the create action."},
+		{name: "modify without properties", tool: manageResource, project: root, args: `{"resourcePath":"mat.tres","action":"modify"}`, want: "properties is required for the modify action."},
 		{name: "invalid project path", tool: readResource, project: "../escape", args: `{"resourcePath":"mat.tres"}`, want: "Invalid path."},
 		{name: "invalid resource path", tool: readResource, project: root, args: `{"resourcePath":"../escape.tres"}`, want: "Invalid path."},
 		{name: "not a project", tool: readResource, project: notAProject, args: `{"resourcePath":"mat.tres"}`, want: "Not a valid Godot project"},

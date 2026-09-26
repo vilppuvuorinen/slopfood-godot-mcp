@@ -284,11 +284,12 @@ func TestActionInputSchemaBuildsVariants(t *testing.T) {
 			"action": map[string]any{"type": "string", "enum": []string{"list", "add"}},
 			"path":   map[string]any{"type": "string"},
 			"name":   map[string]any{"type": "string"},
+			"value":  map[string]any{"type": "string"},
 		},
 		[]string{"path"},
 		[]actionVariant{
 			{Action: "list"},
-			{Action: "add", Required: []string{"name"}},
+			{Action: "add", Required: []string{"name"}, AnyOf: []string{"value"}},
 		},
 	)
 
@@ -322,21 +323,32 @@ func TestActionInputSchemaBuildsVariants(t *testing.T) {
 	if !hasRequired(add, "path", "name") {
 		t.Errorf("add required = %v, want path and name", add["required"])
 	}
+	addAnyOf, ok := add["anyOf"].([]any)
+	if !ok || len(addAnyOf) != 1 {
+		t.Fatalf("add anyOf = %#v, want one branch", add["anyOf"])
+	}
+	valueBranch, _ := addAnyOf[0].(map[string]any)
+	if !hasRequired(valueBranch, "value") {
+		t.Errorf("add anyOf branch = %v, want value", addAnyOf[0])
+	}
 }
 
 // TestActionToolsAdvertiseVariants verifies every action-routed tool constrains
 // each action's required fields with a discriminated oneOf, so the schema
-// reveals the per-action contract instead of only the common fields.
+// reveals the per-action contract instead of only the common fields. anyOf
+// lists the effectful fields an action must name at least one of, so a modify
+// cannot be advertised as a no-op.
 func TestActionToolsAdvertiseVariants(t *testing.T) {
 	want := map[string]struct {
 		common  []string
 		actions map[string][]string
+		anyOf   map[string][]string
 	}{
 		"manage_resource": {
 			common: []string{"resourcePath", "action"},
 			actions: map[string][]string{
 				"create": {"resourceType"},
-				"modify": {},
+				"modify": {"properties"},
 			},
 		},
 		"manage_input_map": {
@@ -362,6 +374,9 @@ func TestActionToolsAdvertiseVariants(t *testing.T) {
 				"set":    {"trackIndex"},
 				"remove": {"trackIndex"},
 			},
+			anyOf: map[string][]string{
+				"modify": {"length", "loopMode", "step"},
+			},
 		},
 		"manage_tileset": {
 			common: []string{"resourcePath", "action"},
@@ -376,6 +391,9 @@ func TestActionToolsAdvertiseVariants(t *testing.T) {
 				"removeAlternative": {"sourceId", "atlasCoords", "alternativeId"},
 				"setTileData":       {"sourceId", "atlasCoords"},
 			},
+			anyOf: map[string][]string{
+				"modify": {"tileSize", "tileShape", "tileLayout", "tileOffsetAxis", "uvClipping"},
+			},
 		},
 		"manage_theme": {
 			common: []string{"resourcePath", "action"},
@@ -387,6 +405,9 @@ func TestActionToolsAdvertiseVariants(t *testing.T) {
 				"clearTypeVariation": {"themeType"},
 				"setItem":            {"themeType", "itemType", "itemName", "value"},
 				"clearItem":          {"themeType", "itemType", "itemName"},
+			},
+			anyOf: map[string][]string{
+				"modify": {"defaultFont", "defaultFontSize", "defaultBaseScale"},
 			},
 		},
 	}
@@ -432,6 +453,22 @@ func TestActionToolsAdvertiseVariants(t *testing.T) {
 				expected := append(append([]string{}, spec.common...), extras...)
 				if strings.Join(required, ",") != strings.Join(expected, ",") {
 					t.Errorf("tool %q action %q required = %v, want %v", tool.Name, action, required, expected)
+				}
+
+				fields, wantAnyOf := spec.anyOf[action]
+				branchAnyOf, hasAnyOf := b["anyOf"].([]any)
+				switch {
+				case !wantAnyOf && hasAnyOf:
+					t.Errorf("tool %q action %q has an unexpected anyOf: %v", tool.Name, action, b["anyOf"])
+				case wantAnyOf && (!hasAnyOf || len(branchAnyOf) != len(fields)):
+					t.Errorf("tool %q action %q anyOf = %v, want %v", tool.Name, action, b["anyOf"], fields)
+				case wantAnyOf:
+					for i, field := range fields {
+						branch, _ := branchAnyOf[i].(map[string]any)
+						if !hasRequired(branch, field) {
+							t.Errorf("tool %q action %q anyOf branch %d = %v, want %q", tool.Name, action, i, branchAnyOf[i], field)
+						}
+					}
 				}
 			}
 		}

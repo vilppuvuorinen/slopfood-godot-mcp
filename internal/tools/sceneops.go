@@ -132,21 +132,27 @@ func godotValueSchema(description string) map[string]any {
 }
 
 // propertiesSchema is the input schema shared by every tool that takes a map
-// of property name to godotValue.
+// of property name to godotValue. It requires at least one entry, since an
+// empty map applies nothing and a tool whose only effect is a property map
+// would otherwise accept a no-op call.
 func propertiesSchema(description string) map[string]any {
 	return map[string]any{
 		"type":                 "object",
 		"description":          description,
+		"minProperties":        1,
 		"additionalProperties": godotValueSchema("A value in the tool value contract"),
 	}
 }
 
 // actionVariant is one branch of a discriminated action input schema: the
-// action it pins and the fields that action requires on top of the common
-// required fields.
+// action it pins, the fields that action requires on top of the common required
+// fields, and optionally fields of which it needs at least one. AnyOf names the
+// effectful fields an action can be driven by, so a branch that would otherwise
+// accept a payload-less call instead requires one of them.
 type actionVariant struct {
 	Action   string
 	Required []string
+	AnyOf    []string
 }
 
 // actionInputSchema builds the object input schema for a tool routed by an
@@ -155,8 +161,9 @@ type actionVariant struct {
 // The returned schema adds a discriminated oneOf over variants: each branch
 // pins action with const and requires the common fields plus that action's own
 // fields, so a schema consumer sees what each action needs instead of one flat
-// required list. Exactly one branch matches a well-formed call, while a call
-// missing a per-action field matches none.
+// required list. A variant's AnyOf adds an inner anyOf requiring at least one
+// of its effectful fields. Exactly one branch matches a well-formed call, while
+// a call missing a per-action field matches none.
 func actionInputSchema(properties map[string]any, commonRequired []string, variants []actionVariant) map[string]any {
 	required := make([]string, 0, len(commonRequired)+1)
 	hasAction := false
@@ -182,12 +189,20 @@ func actionInputSchema(properties map[string]any, commonRequired []string, varia
 		branchRequired := make([]string, 0, len(required)+len(variant.Required))
 		branchRequired = append(branchRequired, required...)
 		branchRequired = append(branchRequired, variant.Required...)
-		branches = append(branches, map[string]any{
+		branch := map[string]any{
 			"properties": map[string]any{
 				"action": map[string]any{"const": variant.Action},
 			},
 			"required": branchRequired,
-		})
+		}
+		if len(variant.AnyOf) > 0 {
+			anyOf := make([]any, 0, len(variant.AnyOf))
+			for _, field := range variant.AnyOf {
+				anyOf = append(anyOf, map[string]any{"required": []string{field}})
+			}
+			branch["anyOf"] = anyOf
+		}
+		branches = append(branches, branch)
 	}
 	schema["oneOf"] = branches
 	return schema
@@ -337,6 +352,16 @@ func requiredArgsResult(fields ...string) mcp.ToolResult {
 	return mcp.ErrorResult(
 		joinFieldNames(fields)+" "+verb+" required.",
 		"Provide the missing fields",
+	)
+}
+
+// effectfulFieldsResult is the shared error for an action that carries none of
+// its effectful fields. Without it, a payload-less modify would reload and
+// re-save a resource without changing it, a no-op the schema also rejects.
+func effectfulFieldsResult(action string, fields ...string) mcp.ToolResult {
+	return mcp.ErrorResult(
+		"The "+action+" action requires at least one of: "+strings.Join(fields, ", ")+".",
+		"Provide a value to change",
 	)
 }
 

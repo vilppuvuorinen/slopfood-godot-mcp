@@ -96,7 +96,7 @@ func manageTileset() mcp.Tool {
 			[]string{"resourcePath", "action"},
 			[]actionVariant{
 				{Action: "create"},
-				{Action: "modify"},
+				{Action: "modify", AnyOf: []string{"tileSize", "tileShape", "tileLayout", "tileOffsetAxis", "uvClipping"}},
 				{Action: "addSource", Required: []string{"sourceType"}},
 				{Action: "removeSource", Required: []string{"sourceId"}},
 				{Action: "addTile", Required: []string{"sourceId"}},
@@ -181,8 +181,12 @@ func validateTilesetAction(args manageTilesetArgs) (mcp.ToolResult, bool) {
 		return mcp.ErrorResult(field + " is required for the " + args.Action + " action."), false
 	}
 	switch args.Action {
-	case "create", "modify":
+	case "create":
 		return mcp.ToolResult{}, true
+	case "modify":
+		if args.TileSize == nil && args.TileShape == "" && args.TileLayout == "" && args.TileOffsetAxis == "" && args.UVClipping == nil {
+			return effectfulFieldsResult("modify", "tileSize", "tileShape", "tileLayout", "tileOffsetAxis", "uvClipping"), false
+		}
 	case "addSource":
 		if args.SourceType == "" {
 			return missing("sourceType")
