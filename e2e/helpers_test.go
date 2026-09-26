@@ -206,27 +206,6 @@ func requireNotContains(t *testing.T, s, unwanted string) {
 	}
 }
 
-// requireProjectSettingsRoundTrip reads project.godot back through
-// read_project_settings, which loads the file with the real Godot engine and
-// fails when the engine rejects it. It returns every stored setting grouped by
-// section, with each value in the tool value contract.
-//
-// It asserts nothing itself beyond "Godot parsed the file": the returned map is
-// the typed store's view, which is only reached when the engine loaded
-// project.godot cleanly. Callers must be Godot-gated (requireGodot) because the
-// tool always invokes the engine and fails when it is unavailable.
-func requireProjectSettingsRoundTrip(t *testing.T, session *mcp.ClientSession) map[string]map[string]any {
-	t.Helper()
-	text := requireToolText(t, session, "read_project_settings", map[string]any{})
-	var payload struct {
-		Sections map[string]map[string]any `json:"sections"`
-	}
-	if err := json.Unmarshal([]byte(text), &payload); err != nil {
-		t.Fatalf("unmarshal project settings %q: %v", text, err)
-	}
-	return payload.Sections
-}
-
 // godotMap asserts value is a JSON object and returns it, optionally failing
 // when a required field is missing or the wrong type.
 func godotMap(t *testing.T, value any) map[string]any {
@@ -236,26 +215,6 @@ func godotMap(t *testing.T, value any) map[string]any {
 		t.Fatalf("value = %#v, want an object", value)
 	}
 	return obj
-}
-
-// godotTexts asserts value is an array of GodotText escape-hatch objects and
-// returns their text.
-func godotTexts(t *testing.T, value any) []string {
-	t.Helper()
-	items, ok := value.([]any)
-	if !ok {
-		t.Fatalf("value = %#v, want an array", value)
-	}
-	out := make([]string, 0, len(items))
-	for _, item := range items {
-		obj, ok := item.(map[string]any)
-		if !ok || obj["$type"] != "GodotText" {
-			t.Fatalf("item = %#v, want a GodotText object", item)
-		}
-		text, _ := obj["text"].(string)
-		out = append(out, text)
-	}
-	return out
 }
 
 // toolSchema is the subset of a tool's JSON schema the tests assert against.

@@ -118,8 +118,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 42 {
-		t.Errorf("registered %d tools, want 42", len(seen))
+	if len(seen) != 39 {
+		t.Errorf("registered %d tools, want 39", len(seen))
 	}
 }
 
@@ -173,49 +173,46 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 // omission fails the test rather than silently falling back to a default.
 func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	readOnly := map[string]bool{
-		"get_godot_version":     true,
-		"get_project_info":      true,
-		"get_uid":               true,
-		"read_export_presets":   true,
-		"read_input_map":        true,
-		"read_animation":        true,
-		"read_project_settings": true,
-		"read_plugins":          true,
-		"read_import":           true,
-		"read_resource":         true,
-		"read_scene":            true,
-		"read_scene_signals":    true,
-		"read_tilemap":          true,
-		"read_tileset":          true,
-		"read_theme":            true,
-		"validate_scripts":      true,
+		"get_godot_version":   true,
+		"get_project_info":    true,
+		"get_uid":             true,
+		"read_export_presets": true,
+		"read_animation":      true,
+		"read_plugins":        true,
+		"read_import":         true,
+		"read_resource":       true,
+		"read_scene":          true,
+		"read_scene_signals":  true,
+		"read_tilemap":        true,
+		"read_tileset":        true,
+		"read_theme":          true,
+		"validate_project":    true,
+		"validate_scripts":    true,
 	}
 	nonDestructive := map[string]bool{
 		"create_project":      true,
 		"update_project_uids": true,
 	}
 	idempotent := map[string]bool{
-		"add_scene_signal":        true,
-		"attach_script":           true,
-		"clear_tilemap":           true,
-		"create_project":          true,
-		"create_scene":            true,
-		"erase_tilemap_cell":      true,
-		"export_mesh_library":     true,
-		"export_project":          true,
-		"manage_import":           true,
-		"manage_input_map":        true,
-		"manage_plugins":          true,
-		"manage_resource":         true,
-		"manage_theme":            true,
-		"modify_project_settings": true,
-		"modify_scene_node":       true,
-		"move_scene_node":         true,
-		"remove_scene_node":       true,
-		"remove_scene_signal":     true,
-		"rename_scene_node":       true,
-		"set_tilemap_cell":        true,
-		"update_project_uids":     true,
+		"add_scene_signal":    true,
+		"attach_script":       true,
+		"clear_tilemap":       true,
+		"create_project":      true,
+		"create_scene":        true,
+		"erase_tilemap_cell":  true,
+		"export_mesh_library": true,
+		"export_project":      true,
+		"manage_import":       true,
+		"manage_plugins":      true,
+		"manage_resource":     true,
+		"manage_theme":        true,
+		"modify_scene_node":   true,
+		"move_scene_node":     true,
+		"remove_scene_node":   true,
+		"remove_scene_signal": true,
+		"rename_scene_node":   true,
+		"set_tilemap_cell":    true,
+		"update_project_uids": true,
 	}
 	for _, category := range AllCategories {
 		for _, newTool := range categoryTools[category] {
@@ -401,13 +398,6 @@ func TestActionToolsAdvertiseVariants(t *testing.T) {
 			actions: map[string][]string{
 				"create": {"resourceType"},
 				"modify": {"properties"},
-			},
-		},
-		"manage_input_map": {
-			common: []string{"action"},
-			actions: map[string][]string{
-				"add":    {"actionName"},
-				"remove": {"actionName"},
 			},
 		},
 		"manage_export_presets": {

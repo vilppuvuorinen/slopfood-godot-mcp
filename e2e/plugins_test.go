@@ -67,25 +67,18 @@ func TestManagePluginsTool(t *testing.T) {
 	}
 
 	// The engine must still accept project.godot after the rewrite.
-	sections := requireProjectSettingsRoundTrip(t, session)
-	enabled := godotMap(t, sections["editor_plugins"]["enabled"])
-	if enabled["$type"] != "PackedStringArray" {
-		t.Fatalf("enabled = %v, want a PackedStringArray", enabled)
-	}
-	values, _ := enabled["values"].([]any)
-	if len(values) != 1 || values[0] != "res://addons/demo/plugin.cfg" {
-		t.Errorf("enabled values = %v", values)
-	}
+	content := readFile(t, filepath.Join(root, "project.godot"))
+	requireContains(t, content, "[editor_plugins]", "res://addons/demo/plugin.cfg")
+	requireValidProject(t, session)
 
 	requireToolText(t, session, "manage_plugins", map[string]any{"action": "disable", "plugin": "addons/demo"})
 	payload = readPluginsPayloadE2E(t, session)
 	if payload.Plugins[0].Enabled {
 		t.Errorf("plugin = %+v, want disabled", payload.Plugins[0])
 	}
-	sections = requireProjectSettingsRoundTrip(t, session)
-	if _, ok := sections["editor_plugins"]; ok {
-		t.Errorf("editor_plugins = %v, want the section removed", sections["editor_plugins"])
-	}
+	content = readFile(t, filepath.Join(root, "project.godot"))
+	requireNotContains(t, content, "editor_plugins")
+	requireValidProject(t, session)
 }
 
 // TestManagePluginsErrors covers the validation paths.

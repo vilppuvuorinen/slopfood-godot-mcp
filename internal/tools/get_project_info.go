@@ -102,9 +102,9 @@ func handleGetProjectInfo(ctx context.Context, raw json.RawMessage) (any, error)
 
 // readProjectName returns the project's application/config/name value, falling
 // back to the directory basename when project.godot is unreadable, is not valid
-// ConfigFile syntax, or lacks a name. The value is decoded through the same
-// parser as the settings tools, so escaped quotes and other escapes are read as
-// Godot wrote them rather than as raw source text.
+// ConfigFile syntax, or lacks a name. The value is decoded through the ConfigFile
+// parser, so escaped quotes and other escapes are read as Godot wrote them
+// rather than as raw source text.
 func readProjectName(projectPath, projectFile string) string {
 	name := filepath.Base(projectPath)
 	data, err := os.ReadFile(projectFile)

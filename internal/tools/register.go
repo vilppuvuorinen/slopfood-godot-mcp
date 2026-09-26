@@ -42,10 +42,9 @@ var AllCategories = []Category{
 // tool belongs to exactly one category.
 var categoryTools = map[Category][]func() mcp.Tool{
 	CategoryProject: {
-		getGodotVersion, getProjectInfo, createProject,
+		getGodotVersion, getProjectInfo, createProject, validateProject,
 	},
 	CategorySettings: {
-		readProjectSettings, modifyProjectSettings, manageInputMap, readInputMap,
 		managePlugins, readPlugins,
 	},
 	CategoryExport: {

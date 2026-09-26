@@ -302,13 +302,9 @@ func TestSuccessResultsMatchOutputSchema(t *testing.T) {
 		setup func(t *testing.T) string
 	}{
 		{name: "create_project", tool: createProject, args: `{"projectName":"Demo"}`, setup: func(t *testing.T) string { t.Helper(); return t.TempDir() }},
-		{name: "modify_project_settings", tool: modifyProjectSettings, args: `{"section":"application","key":"config/name","value":"Demo"}`, setup: project},
 		{name: "read_export_presets", tool: readExportPresets, args: `{}`, setup: project},
 		{name: "manage_export_presets add", tool: manageExportPresets, args: `{"action":"add","name":"Linux","platform":"Linux"}`, setup: project},
 		{name: "manage_export_presets remove", tool: manageExportPresets, args: `{"action":"remove","name":"Linux"}`, setup: projectWithPreset},
-		{name: "read_input_map", tool: readInputMap, args: `{}`, setup: project},
-		{name: "manage_input_map add", tool: manageInputMap, args: `{"action":"add","actionName":"jump","key":"Space"}`, setup: project},
-		{name: "manage_input_map remove", tool: manageInputMap, args: `{"action":"remove","actionName":"jump"}`, setup: project},
 		{name: "read_plugins", tool: readPlugins, args: `{}`, setup: projectWithPlugin},
 		{name: "manage_plugins enable", tool: managePlugins, args: `{"action":"enable","plugin":"addons/demo/plugin.cfg"}`, setup: projectWithPlugin},
 		{name: "manage_plugins disable", tool: managePlugins, args: `{"action":"disable","plugin":"addons/demo/plugin.cfg"}`, setup: projectWithPlugin},

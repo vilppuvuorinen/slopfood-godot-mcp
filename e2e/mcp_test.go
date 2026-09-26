@@ -7,6 +7,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -152,7 +153,7 @@ func TestStructuredContent(t *testing.T) {
 // TestMutationToolMetadata asserts a mutation tool advertises an output schema
 // and non-read-only annotations.
 func TestMutationToolMetadata(t *testing.T) {
-	tool := findTool(t, connect(t), "modify_project_settings")
+	tool := findTool(t, connect(t), "manage_plugins")
 	if tool.OutputSchema == nil {
 		t.Error("outputSchema missing")
 	}
@@ -164,23 +165,22 @@ func TestMutationToolMetadata(t *testing.T) {
 // TestMutationStructuredContent asserts a mutation tool returns
 // structuredContent alongside its text block.
 func TestMutationStructuredContent(t *testing.T) {
-	root := t.TempDir()
-	seedProject(t, root)
+	root := newProject(t)
+	writeE2EFile(t, filepath.Join(root, "addons", "demo", "plugin.cfg"), "[plugin]\n\nname=\"Demo\"\n")
 	session := connectProject(t, root)
 
-	res := callTool(t, session, "modify_project_settings", map[string]any{
-		"section": "application",
-		"key":     "config/name",
-		"value":   "Demo",
+	res := callTool(t, session, "manage_plugins", map[string]any{
+		"action": "enable",
+		"plugin": "addons/demo/plugin.cfg",
 	})
 	if res.IsError {
-		t.Fatalf("modify_project_settings error: %s", firstText(t, res))
+		t.Fatalf("manage_plugins error: %s", firstText(t, res))
 	}
 	structured, ok := res.StructuredContent.(map[string]any)
 	if !ok {
 		t.Fatalf("structuredContent type %T", res.StructuredContent)
 	}
-	if structured["key"] != "config/name" {
-		t.Errorf("key = %v", structured["key"])
+	if structured["plugin"] != "addons/demo/plugin.cfg" {
+		t.Errorf("plugin = %v", structured["plugin"])
 	}
 }

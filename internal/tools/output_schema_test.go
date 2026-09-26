@@ -141,23 +141,6 @@ func TestReadOutputSchemaPinsPayload(t *testing.T) {
 	}
 }
 
-// TestReadInputMapAdvertisesActionMap pins the free-form payload case: the list
-// result is keyed by input action name, so the top level of read_input_map's
-// output schema describes that map, requires nothing, and advertises no error
-// branch.
-func TestReadInputMapAdvertisesActionMap(t *testing.T) {
-	tool := readInputMap()
-	if _, ok := tool.OutputSchema["additionalProperties"]; !ok {
-		t.Errorf("read_input_map output schema must describe the action-name map: %#v", tool.OutputSchema)
-	}
-	if _, present := tool.OutputSchema["required"]; present {
-		t.Errorf("read_input_map requires %v, but its payload is free-form", tool.OutputSchema["required"])
-	}
-	if _, present := tool.OutputSchema["anyOf"]; present {
-		t.Errorf("read_input_map advertises schema branches: %#v", tool.OutputSchema["anyOf"])
-	}
-}
-
 // TestPayloadOutputSchemaPinsShape verifies a bare payload schema declares its
 // fields and requires every one, while still omitting the status envelope, so
 // a read or list result is described as precisely as a mutation's envelope.

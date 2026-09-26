@@ -146,9 +146,8 @@ func EncodePropertyName(s string) string {
 // (core/io/config_file.cpp), which escapes only ']'. A backslash is written
 // literally, and the parser treats the character after any backslash as escaped,
 // so a name ending in a backslash produces a tag whose closing bracket never
-// terminates; Godot itself cannot round-trip such a name. Callers that accept
-// arbitrary names must reject that case rather than try to escape it (see
-// encodeSettingSection).
+// terminates; Godot itself cannot round-trip such a name. A caller that accepts
+// arbitrary section names must reject that case rather than try to escape it.
 func EscapeSectionName(s string) string {
 	return strings.ReplaceAll(s, "]", `\]`)
 }
