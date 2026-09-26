@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"reflect"
-	"strings"
 	"testing"
 )
 
@@ -167,28 +166,21 @@ func TestReadSceneTool(t *testing.T) {
 		requirePrefix(t, firstText(t, res), "Failed to read scene:")
 	})
 
-	t.Run("non-scene resource returns raw text", func(t *testing.T) {
+	t.Run("non-scene resource is an error", func(t *testing.T) {
 		root, session := seedScene(t, "scenes/main.tscn", "Node2D")
 		writeE2EFile(t, filepath.Join(root, "thing.tres"), resourceTres)
 
-		// A .tres loads as a Resource, not a PackedScene, so read_scene falls
-		// back to returning the file's raw text instead of instantiating it.
+		// A .tres loads as a Resource, not a PackedScene, so read_scene reports
+		// a controlled failure instead of a degraded raw-text success; a caller
+		// inspects non-scene resources with read_resource.
 		res := callTool(t, session, "read_scene", map[string]any{
 			"scenePath": "thing.tres",
 		})
-		if res.IsError {
-			t.Fatalf("read_scene: unexpected error: %s", firstText(t, res))
+		if !res.IsError {
+			t.Fatal("expected an error for a non-scene resource")
 		}
-		var payload struct {
-			Reason string `json:"reason"`
-			Raw    string `json:"raw"`
-		}
-		if err := json.Unmarshal([]byte(firstText(t, res)), &payload); err != nil {
-			t.Fatalf("unmarshal %q: %v", firstText(t, res), err)
-		}
-		if payload.Reason == "" || !strings.Contains(payload.Raw, "StandardMaterial3D") {
-			t.Errorf("fallback payload = %+v", payload)
-		}
+		requirePrefix(t, firstText(t, res), "Failed to read scene:")
+		requireContains(t, firstText(t, res), "Not a scene file")
 	})
 }
 

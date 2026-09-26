@@ -39,16 +39,13 @@ func readScene() mcp.Tool {
 	}
 }
 
-// readSceneOutputSchema describes every read_scene result: a readable scene
-// yields a node tree (the sceneNode shape), a scene the engine cannot
-// instantiate yields its raw text so the caller can still inspect it, and an
-// error yields the shared error envelope. children recurses through
-// $defs/sceneNode, so any depth of tree is described, and readOutputSchema
-// advertises the error branch alongside the two success shapes.
+// readSceneOutputSchema describes a successful read_scene result: the node
+// tree. children recurses through $defs/sceneNode, so any depth of tree is
+// described, and readOutputSchema advertises the error branch alongside it. A
+// scene the engine cannot read is an error result rather than a second,
+// degraded success shape, so the declared payload is always a node tree.
 func readSceneOutputSchema() map[string]any {
 	properties := sceneNodeProperties()
-	properties["reason"] = map[string]any{"type": "string"}
-	properties["raw"] = map[string]any{"type": "string"}
 	// baseScenePath is emitted on the returned root of an inherited scene, not
 	// on every nested node, so it is added here rather than in sceneNodeProperties.
 	properties["baseScenePath"] = map[string]any{
@@ -58,15 +55,8 @@ func readSceneOutputSchema() map[string]any {
 	return readOutputSchema(map[string]any{
 		"type":       "object",
 		"properties": properties,
-		// A readable scene yields a node tree, while a scene the engine
-		// cannot instantiate yields its raw text so the caller can still
-		// inspect it. The two shapes are mutually exclusive, so oneOf states
-		// that a payload carrying both is invalid rather than valid twice.
-		"oneOf": []any{
-			map[string]any{"required": []string{"name", "type"}},
-			map[string]any{"required": []string{"reason", "raw"}},
-		},
-		"$defs": map[string]any{"sceneNode": sceneNodeSchema()},
+		"required":   []string{"name", "type"},
+		"$defs":      map[string]any{"sceneNode": sceneNodeSchema()},
 	})
 }
 
@@ -159,26 +149,21 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 		), nil
 	}
 
+	// A run that yielded no valid node tree is a failure, not a second success
+	// shape: a non-error result always carries the declared node tree, so a
+	// caller branches only on isError. The raw engine output is kept in the
+	// message so the cause is still inspectable.
 	if payload, ok := markerJSON(stdout); ok {
 		if json.Valid([]byte(payload)) {
 			return mcp.JSONResult(payload), nil
 		}
-		return readSceneRawResult("read_scene returned invalid JSON", payload, stderr), nil
+		return mcp.ErrorResult(
+			"Failed to read scene: read_scene returned invalid JSON: "+payload,
+			headlessSolutions...,
+		), nil
 	}
-	return readSceneRawResult("read_scene returned no structured output", stdout, stderr), nil
-}
-
-// readSceneRawResult reports a read_scene run whose output did not yield a node
-// tree: the raw engine output plus a reason. It fills the reason/raw branch of
-// readSceneOutputSchema, so a caller that advertised an output schema always
-// receives structuredContent instead of a bare text result.
-func readSceneRawResult(reason, raw, stderrText string) mcp.ToolResult {
-	text := "Scene read output:\n" + raw
-	if stderrText != "" {
-		text += "\nErrors:\n" + stderrText
-	}
-	return mcp.StructuredResult(text, map[string]any{
-		"reason": reason,
-		"raw":    raw,
-	})
+	return mcp.ErrorResult(
+		"Failed to read scene: read_scene returned no structured output: "+stdout,
+		headlessSolutions...,
+	), nil
 }

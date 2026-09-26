@@ -615,37 +615,31 @@ func get_uid(result: Result, params) -> Result:
         result.err("File does not exist at: " + file_path)
         result.err("Absolute file path that doesn't exist: " + absolute_path)
         return result.fail()
-    
-    # Check if the UID file exists
+
+    # A missing sidecar has no UID to return, so it is a controlled failure
+    # carrying the recovery step rather than a degraded success with no uid.
+    # The sidecar is checked before opening it, so the engine logs no open
+    # error for the expected missing case.
     var uid_path = file_path + ".uid"
-    var uid_check = FileAccess.file_exists(uid_path)
+    if not FileAccess.file_exists(uid_path):
+        result.err("No UID sidecar for " + project_relative(file_path) + ". Use update_project_uids to scan the project and generate UIDs.")
+        return result.fail()
     var f = FileAccess.open(uid_path, FileAccess.READ)
-    
-    if f:
-        # Read the UID content
-        var uid_content = f.get_as_text()
-        f.close()
-        # Return the UID content
-        var payload = {
-            "file": project_relative(file_path),
-            "absolutePath": absolute_path,
-            "uid": uid_content.strip_edges(),
-            "uidExists": true
-        }
-        result.out(JSON_START)
-        result.out(JSON.stringify(payload))
-        result.out(JSON_END)
-    else:
-        # UID file doesn't exist
-        var payload = {
-            "file": project_relative(file_path),
-            "absolutePath": absolute_path,
-            "uidExists": false,
-            "message": "UID file does not exist for this file. Use update_project_uids to scan the project and generate UIDs."
-        }
-        result.out(JSON_START)
-        result.out(JSON.stringify(payload))
-        result.out(JSON_END)
+    if not f:
+        result.err("Failed to open UID sidecar: " + uid_path)
+        return result.fail()
+
+    # Read the UID content
+    var uid_content = f.get_as_text()
+    f.close()
+    var payload = {
+        "file": project_relative(file_path),
+        "absolutePath": absolute_path,
+        "uid": uid_content.strip_edges()
+    }
+    result.out(JSON_START)
+    result.out(JSON.stringify(payload))
+    result.out(JSON_END)
     return result
 
 # Read a scene file as a JSON node tree
@@ -666,19 +660,15 @@ func read_scene(result: Result, params) -> Result:
 
     # load() succeeds for any resource, so scenePath can point at a non-scene
     # such as a .tres. That has no instantiate() and would otherwise die as a
-    # SCRIPT ERROR, so anything that is not a PackedScene takes the raw-text
-    # fallback. A null load is a parse/IO failure whose engine errors already
-    # reach stderr, so no extra stderr line here: it would only duplicate them.
+    # SCRIPT ERROR, so a non-PackedScene is a controlled failure rather than a
+    # degraded raw-text success; read_resource inspects those resources. A null
+    # load is a parse/IO failure whose engine errors already reach stderr, so no
+    # extra stderr line here: it would only duplicate them.
     var scene = load(full_scene_path)
-    if scene == null or not (scene is PackedScene):
-        var f = FileAccess.open(full_scene_path, FileAccess.READ)
-        if f:
-            var raw_content = f.get_as_text()
-            f.close()
-            result.out(JSON_START)
-            result.out(JSON.stringify({"reason": "Failed to instantiate scene, returning raw text", "raw": raw_content}))
-            result.out(JSON_END)
-            return result
+    if scene == null:
+        return result.fail()
+    if not (scene is PackedScene):
+        result.err("Not a scene file: " + full_scene_path + " (use read_resource for non-scene resources)")
         return result.fail()
 
     var scene_root = track_temp(scene.instantiate())

@@ -26,17 +26,15 @@ func getUID() mcp.Tool {
 			},
 			"required": []string{"filePath"},
 		},
-		OutputSchema: readOutputSchema(map[string]any{
-			"type": "object",
-			"properties": map[string]any{
-				"file":         map[string]any{"type": "string", "description": "Path to the file, relative to the bound project"},
-				"absolutePath": map[string]any{"type": "string", "description": "Absolute host filesystem path to the file"},
-				"uid":          map[string]any{"type": "string"},
-				"uidExists":    map[string]any{"type": "boolean", "description": "Whether a .uid sidecar exists for the file; not whether the file itself exists"},
-				"message":      map[string]any{"type": "string"},
-			},
-			"required": []string{"file", "absolutePath", "uidExists"},
-		}),
+		// A file without a .uid sidecar has no UID to return, so it is an error
+		// result rather than a second success shape with no uid. The declared
+		// payload therefore always carries the UID, and a caller branches only
+		// on isError.
+		OutputSchema: readOutputSchema(payloadOutputSchema(map[string]any{
+			"file":         map[string]any{"type": "string", "description": "Path to the file, relative to the bound project"},
+			"absolutePath": map[string]any{"type": "string", "description": "Absolute host filesystem path to the file"},
+			"uid":          map[string]any{"type": "string"},
+		})),
 		Handler: handleGetUID,
 	}
 }
@@ -107,15 +105,14 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 		), nil
 	}
 
+	// A run that yielded no structured payload cannot supply the declared UID,
+	// so it is a failure rather than a degraded success with no uid. The raw
+	// engine output is kept in the message so the cause is still inspectable.
 	if payload, ok := markerJSON(stdout); ok {
 		return mcp.JSONResult(payload), nil
 	}
-
-	message := "No structured UID output for " + args.FilePath
-	return mcp.StructuredResult(message, map[string]any{
-		"file":         args.FilePath,
-		"absolutePath": fileFull,
-		"uidExists":    false,
-		"message":      message,
-	}), nil
+	return mcp.ErrorResult(
+		"Failed to get UID: get_uid returned no structured output: "+stdout,
+		headlessSolutions...,
+	), nil
 }

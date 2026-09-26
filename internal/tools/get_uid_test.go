@@ -38,7 +38,7 @@ func TestGetUIDSchema(t *testing.T) {
 }
 
 func TestGetUIDSuccess(t *testing.T) {
-	fake := fakeGodotOps(t, fakeUIDVersion+"\nprintf '<<<GO_DOT_MCP_JSON_START>>>\n{\"file\":\"res://player.gd\",\"uid\":\"uid://abc\",\"uidExists\":true}\n<<<GO_DOT_MCP_JSON_END>>>\n'")
+	fake := fakeGodotOps(t, fakeUIDVersion+"\nprintf '<<<GO_DOT_MCP_JSON_START>>>\n{\"file\":\"player.gd\",\"absolutePath\":\"/x/player.gd\",\"uid\":\"uid://abc\"}\n<<<GO_DOT_MCP_JSON_END>>>\n'")
 	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)
@@ -55,15 +55,15 @@ func TestGetUIDSuccess(t *testing.T) {
 	if !strings.Contains(text, `"uid": "uid://abc"`) {
 		t.Errorf("text = %q, want it to contain pretty uid field", text)
 	}
-	if !strings.Contains(text, `"uidExists": true`) {
-		t.Errorf("text = %q, want it to contain pretty uidExists field", text)
-	}
 	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
 		t.Errorf("text still contains markers: %q", text)
 	}
 }
 
-func TestGetUIDNoMarkersStructured(t *testing.T) {
+// TestGetUIDNoMarkersIsError covers a run that yields no structured output: the
+// declared payload always carries a uid, so a missing payload is a failure
+// rather than a second success shape with no uid.
+func TestGetUIDNoMarkersIsError(t *testing.T) {
 	fake := fakeGodotOps(t, fakeUIDVersion+"\necho 'Getting UID for file: res://player.gd'")
 	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
@@ -71,24 +71,12 @@ func TestGetUIDNoMarkersStructured(t *testing.T) {
 	seedFile(t, filepath.Join(root, "player.gd"), "script")
 
 	result := callToolArgs(t, getUID(), root, `{"filePath":"player.gd"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
 	}
-	structured, ok := result.StructuredContent.(map[string]any)
-	if !ok {
-		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
-	}
-	if structured["file"] != "player.gd" {
-		t.Errorf("file = %v, want player.gd", structured["file"])
-	}
-	if structured["absolutePath"] != filepath.Join(root, "player.gd") {
-		t.Errorf("absolutePath = %v", structured["absolutePath"])
-	}
-	if structured["uidExists"] != false {
-		t.Errorf("uidExists = %v, want false", structured["uidExists"])
-	}
-	if _, ok := structured["uid"]; ok {
-		t.Errorf("uid = %v, want it absent when no structured output was emitted", structured["uid"])
+	text := result.Content[0].Text
+	if !strings.HasPrefix(text, "Failed to get UID: ") || !strings.Contains(text, "no structured output") {
+		t.Errorf("message = %q, want the failure prefix and the missing-output reason", text)
 	}
 }
 

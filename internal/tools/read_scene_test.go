@@ -45,8 +45,11 @@ func TestReadSceneForwardsScopeOptions(t *testing.T) {
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
 	result := callToolArgs(t, readScene(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","depth":1}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
+	// The echo has no JSON markers, so the run is reported as an error; the
+	// error message still carries the echoed command, which is what proves the
+	// options reached the operations script.
+	if !result.IsError {
+		t.Fatalf("expected the markerless echo to fail: %+v", result.Content)
 	}
 	text := result.Content[0].Text
 	for _, want := range []string{`"scenePath":"scenes/main.tscn"`, `"nodePath":"root/Player"`, `"depth":1`} {
@@ -147,57 +150,46 @@ func TestReadScenePreservesNestedPropertyValues(t *testing.T) {
 	}
 }
 
-func TestReadSceneRawWhenNoMarkers(t *testing.T) {
+// TestReadSceneNoMarkersIsError covers a run that yields no structured output:
+// a non-error result must always carry the declared node tree, so the fallback
+// is reported as an error instead of a degraded success shape.
+func TestReadSceneNoMarkersIsError(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "plain output"`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
 	result := callToolArgs(t, readScene(), root, `{"scenePath":"main.tscn"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
 	}
-	if !strings.Contains(result.Content[0].Text, "Scene read output:\nplain output") {
-		t.Errorf("text = %q", result.Content[0].Text)
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to read scene: ") {
+		t.Errorf("message = %q", result.Content[0].Text)
 	}
-	structured, ok := result.StructuredContent.(map[string]any)
-	if !ok {
-		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
-	}
-	if got := strings.TrimSpace(structured["raw"].(string)); got != "plain output" {
-		t.Errorf("raw = %q, want plain output", got)
-	}
-	if _, ok := structured["reason"].(string); !ok {
-		t.Errorf("reason = %v, want a string", structured["reason"])
+	if !strings.Contains(result.Content[0].Text, "plain output") {
+		t.Errorf("message = %q, want the raw engine output for inspection", result.Content[0].Text)
 	}
 }
 
-func TestReadSceneRawWhenMarkersInvalid(t *testing.T) {
+// TestReadSceneInvalidJSONIsError covers a run whose markers hold invalid JSON:
+// like the markerless case, it is a failure rather than the raw-text success it
+// once was.
+func TestReadSceneInvalidJSONIsError(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GO_DOT_MCP_JSON_START>>>\nnot-json\n<<<GO_DOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
 	result := callToolArgs(t, readScene(), root, `{"scenePath":"main.tscn"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
 	}
 	text := result.Content[0].Text
-	if !strings.Contains(text, "not-json") {
-		t.Errorf("text = %q, want the raw invalid JSON payload", text)
+	if !strings.HasPrefix(text, "Failed to read scene: ") || !strings.Contains(text, "not-json") {
+		t.Errorf("message = %q, want the failure prefix and the invalid payload", text)
 	}
 	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
-		t.Errorf("text still contains markers: %q", text)
-	}
-	structured, ok := result.StructuredContent.(map[string]any)
-	if !ok {
-		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
-	}
-	if structured["raw"] != "not-json" {
-		t.Errorf("raw = %v, want not-json", structured["raw"])
-	}
-	if _, ok := structured["reason"].(string); !ok {
-		t.Errorf("reason = %v, want a string", structured["reason"])
+		t.Errorf("message still contains markers: %q", text)
 	}
 }
 

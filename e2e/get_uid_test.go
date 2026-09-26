@@ -31,13 +31,17 @@ func TestGetUIDTool(t *testing.T) {
 		requireContains(t, text, `"uid": "uid://e2etestuid"`, `"file": "player.gd"`, `"absolutePath":`)
 	})
 
-	t.Run("reports a missing UID sidecar", func(t *testing.T) {
+	t.Run("missing UID sidecar is an error", func(t *testing.T) {
 		writeE2EFile(t, filepath.Join(root, "orphan.gd"), "extends Node\n")
 
-		text := requireToolText(t, session, "get_uid", map[string]any{
+		res := callTool(t, session, "get_uid", map[string]any{
 			"filePath": "orphan.gd",
 		})
-		requireContains(t, text, `"uidExists": false`)
+		if !res.IsError {
+			t.Fatal("expected an error for a file without a UID sidecar")
+		}
+		requirePrefix(t, firstText(t, res), "Failed to get UID:")
+		requireContains(t, firstText(t, res), "update_project_uids")
 	})
 }
 
