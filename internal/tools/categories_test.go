@@ -100,7 +100,7 @@ func TestRegisterGating(t *testing.T) {
 	}
 
 	all := registeredToolNames(t, AllCategories...)
-	if !all["get_project_info"] || !all["create_scene"] || !all["get_uid"] {
+	if !all["get_project_info"] || !all["create_scene"] {
 		t.Errorf("all categories = %v", all)
 	}
 }
@@ -118,8 +118,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 37 {
-		t.Errorf("registered %d tools, want 37", len(seen))
+	if len(seen) != 36 {
+		t.Errorf("registered %d tools, want 36", len(seen))
 	}
 }
 
@@ -189,7 +189,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	readOnly := map[string]bool{
 		"get_godot_version":   true,
 		"get_project_info":    true,
-		"get_uid":             true,
 		"read_export_presets": true,
 		"read_animation":      true,
 		"read_plugins":        true,

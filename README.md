@@ -31,9 +31,8 @@ project.
 
 The bound project's absolute location is the one deliberate exception: it is
 reported by `get_project_info.path` and by the `projectPath` field of the
-status envelope, so a caller can tell which project is in scope. `get_uid`
-also returns an `absolutePath` for the queried file, named for exactly what it
-holds. Every other path-valued result field is project-relative.
+status envelope, so a caller can tell which project is in scope. Every other
+path-valued result field is project-relative.
 
 ## Tools and `--enable` categories
 

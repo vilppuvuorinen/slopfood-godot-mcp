@@ -143,8 +143,6 @@ func _init():
             result = manage_scene_signals(result, params)
         "attach_script":
             result = attach_script(result, params)
-        "get_uid":
-            result = get_uid(result, params)
         "manage_resource":
             result = manage_resource(result, params)
         "manage_animation":
@@ -594,53 +592,6 @@ func _mesh_preview_texture(mesh) -> Texture2D:
         if material is BaseMaterial3D and material.albedo_texture:
             return material.albedo_texture
     return null
-
-# Get UID for a specific file
-func get_uid(result: Result, params) -> Result:
-    if not params.has("resourcePath"):
-        result.err("Resource path is required")
-        return result.fail()
-    
-    # Ensure the file path starts with res:// for Godot's resource system
-    var file_path = params.resourcePath
-    if not file_path.begins_with("res://"):
-        file_path = "res://" + file_path
-    
-    result.out("Getting UID for file: " + file_path)
-    # Get the absolute path for reference
-    var absolute_path = ProjectSettings.globalize_path(file_path)
-    # Ensure the file exists
-    var file_check = FileAccess.file_exists(file_path)
-    if not file_check:
-        result.err("File does not exist at: " + file_path)
-        result.err("Absolute file path that doesn't exist: " + absolute_path)
-        return result.fail()
-
-    # A missing sidecar has no UID to return, so it is a controlled failure
-    # carrying the recovery step rather than a degraded success with no uid.
-    # The sidecar is checked before opening it, so the engine logs no open
-    # error for the expected missing case.
-    var uid_path = file_path + ".uid"
-    if not FileAccess.file_exists(uid_path):
-        result.err("No UID sidecar for " + project_relative(file_path) + ". Use reimport_project to scan the project and generate UIDs.")
-        return result.fail()
-    var f = FileAccess.open(uid_path, FileAccess.READ)
-    if not f:
-        result.err("Failed to open UID sidecar: " + uid_path)
-        return result.fail()
-
-    # Read the UID content
-    var uid_content = f.get_as_text()
-    f.close()
-    var payload = {
-        "file": project_relative(file_path),
-        "absolutePath": absolute_path,
-        "uid": uid_content.strip_edges()
-    }
-    result.out(JSON_START)
-    result.out(JSON.stringify(payload))
-    result.out(JSON_END)
-    return result
 
 # Read a scene file as a JSON node tree
 func read_scene(result: Result, params) -> Result:
