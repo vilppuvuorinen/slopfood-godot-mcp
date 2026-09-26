@@ -29,7 +29,7 @@ func readTilemap() mcp.Tool {
 			},
 			"required": []string{"scenePath", "nodePath"},
 		},
-		OutputSchema: readOutputSchema(tilemapPayloadSchema()),
+		OutputSchema: tilemapPayloadSchema(),
 		Handler:      handleReadTilemap,
 	}
 }

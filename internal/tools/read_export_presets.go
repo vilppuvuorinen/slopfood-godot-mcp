@@ -18,7 +18,7 @@ func readExportPresets() mcp.Tool {
 			"type":       "object",
 			"properties": map[string]any{},
 		},
-		OutputSchema: readOutputSchema(payloadOutputSchema(map[string]any{
+		OutputSchema: payloadOutputSchema(map[string]any{
 			"presets": map[string]any{
 				"type": "array",
 				"items": map[string]any{
@@ -29,7 +29,7 @@ func readExportPresets() mcp.Tool {
 					},
 				},
 			},
-		})),
+		}),
 		Handler: handleReadExportPresets,
 	}
 }

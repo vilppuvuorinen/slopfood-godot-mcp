@@ -25,7 +25,7 @@ func readAnimation() mcp.Tool {
 			},
 			"required": []string{"resourcePath"},
 		},
-		OutputSchema: readOutputSchema(animationPayloadSchema()),
+		OutputSchema: animationPayloadSchema(),
 		Handler:      handleReadAnimation,
 	}
 }

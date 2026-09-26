@@ -25,7 +25,7 @@ func readTileset() mcp.Tool {
 			},
 			"required": []string{"resourcePath"},
 		},
-		OutputSchema: readOutputSchema(tilesetPayloadSchema()),
+		OutputSchema: tilesetPayloadSchema(),
 		Handler:      handleReadTileset,
 	}
 }

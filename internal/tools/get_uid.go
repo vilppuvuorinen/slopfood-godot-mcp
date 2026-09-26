@@ -30,11 +30,11 @@ func getUID() mcp.Tool {
 		// result rather than a second success shape with no uid. The declared
 		// payload therefore always carries the UID, and a caller branches only
 		// on isError.
-		OutputSchema: readOutputSchema(payloadOutputSchema(map[string]any{
+		OutputSchema: payloadOutputSchema(map[string]any{
 			"file":         map[string]any{"type": "string", "description": "Path to the file, relative to the bound project"},
 			"absolutePath": map[string]any{"type": "string", "description": "Absolute host filesystem path to the file"},
 			"uid":          map[string]any{"type": "string"},
-		})),
+		}),
 		Handler: handleGetUID,
 	}
 }

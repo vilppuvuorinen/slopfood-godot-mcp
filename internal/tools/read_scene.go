@@ -41,9 +41,9 @@ func readScene() mcp.Tool {
 
 // readSceneOutputSchema describes a successful read_scene result: the node
 // tree. children recurses through $defs/sceneNode, so any depth of tree is
-// described, and readOutputSchema advertises the error branch alongside it. A
-// scene the engine cannot read is an error result rather than a second,
-// degraded success shape, so the declared payload is always a node tree.
+// described, and the required fields sit at the top level. A scene the engine
+// cannot read is an error result rather than a second, degraded success shape,
+// so the declared payload is always a node tree.
 func readSceneOutputSchema() map[string]any {
 	properties := sceneNodeProperties()
 	// baseScenePath is emitted on the returned root of an inherited scene, not
@@ -52,12 +52,12 @@ func readSceneOutputSchema() map[string]any {
 		"type":        "string",
 		"description": "Project-relative path of the base scene when this scene inherits from one; only the returned root of an inherited scene carries it",
 	}
-	return readOutputSchema(map[string]any{
+	return map[string]any{
 		"type":       "object",
 		"properties": properties,
 		"required":   []string{"name", "type"},
 		"$defs":      map[string]any{"sceneNode": sceneNodeSchema()},
-	})
+	}
 }
 
 // sceneNodeSchema describes one node in read_scene's tree. children refers back

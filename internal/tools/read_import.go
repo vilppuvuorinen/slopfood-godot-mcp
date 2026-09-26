@@ -32,7 +32,7 @@ func readImport() mcp.Tool {
 			},
 			"required": []string{"resourcePath"},
 		},
-		OutputSchema: readOutputSchema(payloadOutputSchema(map[string]any{
+		OutputSchema: payloadOutputSchema(map[string]any{
 			"sourcePath": map[string]any{"type": "string", "description": "Imported resource path, relative to the bound project"},
 			"importPath": map[string]any{"type": "string", "description": "Metadata path, relative to the bound project"},
 			"importer":   map[string]any{"type": "string", "description": "Importer name from [remap], or an empty string"},
@@ -47,7 +47,7 @@ func readImport() mcp.Tool {
 				"description":          "Import parameters from [params], with values in the tool value contract",
 				"additionalProperties": godotValueSchema("An import parameter value"),
 			},
-		})),
+		}),
 		Handler: handleReadImport,
 	}
 }

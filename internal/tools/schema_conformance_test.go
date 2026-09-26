@@ -245,17 +245,20 @@ func TestSchemaValidatorRejectsViolations(t *testing.T) {
 	}
 }
 
-// TestErrorResultMatchesEveryOutputSchema proves the shared error envelope
-// validates against every tool's declared outputSchema. callTool turns a
-// handler failure into this envelope, so a read tool that only describes its
-// success payload would otherwise return structuredContent its own schema
-// rejects. The invariant holds for mutation tools too, whose status envelope
-// already accepts it.
-func TestErrorResultMatchesEveryOutputSchema(t *testing.T) {
+// TestErrorResultMatchesStatusOutputSchema proves the shared error envelope
+// validates against every tool that declares it. A mutation advertises the
+// success/message envelope at the top level, so a client that eagerly validates
+// structuredContent finds the required fields on a failure. A read declares its
+// success payload alone; a read failure is signalled by isError and its envelope
+// is not part of that contract, so it is not checked here.
+func TestErrorResultMatchesStatusOutputSchema(t *testing.T) {
 	envelope := jsonValue(t, mcp.ErrorResult("boom", "try again").StructuredContent)
 	for _, category := range AllCategories {
 		for _, newTool := range categoryTools[category] {
 			tool := newTool()
+			if !hasRequired(tool.OutputSchema, "success", "message") {
+				continue
+			}
 			if msg := schemaViolation(tool.OutputSchema, tool.OutputSchema, envelope, tool.Name); msg != "" {
 				t.Errorf("tool %q rejects its own error envelope: %s", tool.Name, msg)
 			}

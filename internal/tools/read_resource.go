@@ -30,7 +30,7 @@ func readResource() mcp.Tool {
 			},
 			"required": []string{"resourcePath"},
 		},
-		OutputSchema: readOutputSchema(payloadOutputSchema(map[string]any{
+		OutputSchema: payloadOutputSchema(map[string]any{
 			"type": map[string]any{"type": "string"},
 			"path": map[string]any{"type": "string", "description": "Resource path, relative to the bound project"},
 			"properties": map[string]any{
@@ -38,7 +38,7 @@ func readResource() mcp.Tool {
 				"description":          "Resource properties in the tool value contract",
 				"additionalProperties": godotValueSchema("A resource property value in the tool value contract"),
 			},
-		})),
+		}),
 		Handler: handleReadResource,
 	}
 }

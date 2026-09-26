@@ -25,7 +25,7 @@ func readSceneSignals() mcp.Tool {
 			},
 			"required": []string{"scenePath"},
 		},
-		OutputSchema: readOutputSchema(payloadOutputSchema(map[string]any{
+		OutputSchema: payloadOutputSchema(map[string]any{
 			"connections": map[string]any{
 				"type": "array",
 				"items": map[string]any{
@@ -38,7 +38,7 @@ func readSceneSignals() mcp.Tool {
 					},
 				},
 			},
-		})),
+		}),
 		Handler: handleReadSceneSignals,
 	}
 }

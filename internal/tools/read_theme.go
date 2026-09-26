@@ -25,7 +25,7 @@ func readTheme() mcp.Tool {
 			},
 			"required": []string{"resourcePath"},
 		},
-		OutputSchema: readOutputSchema(themePayloadSchema()),
+		OutputSchema: themePayloadSchema(),
 		Handler:      handleReadTheme,
 	}
 }

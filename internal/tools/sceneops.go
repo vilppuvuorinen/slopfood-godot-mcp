@@ -220,11 +220,11 @@ func statusOutputSchema(properties map[string]any) map[string]any {
 	}
 }
 
-// payloadOutputSchema returns the object output schema for an action that
-// returns its payload directly, without the status envelope. Its properties
-// are exactly the fields the payload carries, and every declared field is
-// required, so a read or list result pins its shape instead of leaving it
-// unconstrained. A free-form payload has no named properties and so requires
+// payloadOutputSchema returns the object output schema for a read or list tool
+// that returns its payload directly, without the status envelope. Its
+// properties are exactly the fields the payload carries, and every declared
+// field is required, so a read or list result pins its shape instead of leaving
+// it unconstrained. A free-form payload has no named properties and so requires
 // nothing.
 func payloadOutputSchema(properties map[string]any) map[string]any {
 	schema := map[string]any{
@@ -240,67 +240,6 @@ func payloadOutputSchema(properties map[string]any) map[string]any {
 		schema["required"] = required
 	}
 	return schema
-}
-
-// errorOutputSchema describes the structuredContent ErrorResult emits: the
-// success/message envelope with success false, plus the possible solutions when
-// one is offered. It is advertised as an alternative branch on a read tool's
-// output schema, so the envelope an error carries validates against the schema
-// the tool declares just as a mutation's status envelope already does. Without
-// it, every error from a payload-only tool would violate that tool's own
-// outputSchema, which describes only the success shape.
-func errorOutputSchema() map[string]any {
-	return map[string]any{
-		"type": "object",
-		"properties": map[string]any{
-			"success": map[string]any{"const": false},
-			"message": map[string]any{"type": "string", "description": envelopeMessageContract},
-			"solutions": map[string]any{
-				"type":        "array",
-				"items":       map[string]any{"type": "string"},
-				"description": "Recovery hints for the failure; only an error result carries solutions.",
-			},
-		},
-		"required": []string{"success", "message"},
-	}
-}
-
-// readOutputSchema returns the object output schema for a tool whose structured
-// result is either its success payload or, on failure, the error envelope
-// ErrorResult emits. The top-level properties describe the payload alone, so a
-// read never advertises the envelope's success/message fields it does not
-// return; the anyOf branch keeps the envelope an advertised shape rather than
-// an undeclared one. A free-form payload declares its entries through
-// additionalProperties rather than named properties; that whole-object shape is
-// hoisted to the top level too, so a client reading only the top level still
-// sees it. A payload's $defs are hoisted so its $refs stay resolvable from the
-// document root.
-func readOutputSchema(payloadSchema map[string]any) map[string]any {
-	schema := map[string]any{
-		"type":       "object",
-		"properties": payloadProperties(payloadSchema),
-		"anyOf": []any{
-			errorOutputSchema(),
-			payloadSchema,
-		},
-	}
-	if extra, ok := payloadSchema["additionalProperties"]; ok {
-		schema["additionalProperties"] = extra
-	}
-	if defs, ok := payloadSchema["$defs"]; ok {
-		schema["$defs"] = defs
-	}
-	return schema
-}
-
-// payloadProperties returns the named properties of a payload object schema, or
-// an empty map for a free-form schema that only declares additionalProperties.
-func payloadProperties(schema map[string]any) map[string]any {
-	properties, _ := schema["properties"].(map[string]any)
-	if properties == nil {
-		return map[string]any{}
-	}
-	return properties
 }
 
 // envelopeMessageContract is the one description of the status envelope's

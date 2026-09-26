@@ -17,11 +17,11 @@ func readInputMap() mcp.Tool {
 			"type":       "object",
 			"properties": map[string]any{},
 		},
-		OutputSchema: readOutputSchema(map[string]any{
+		OutputSchema: map[string]any{
 			"type":                 "object",
 			"description":          "Input actions by name, with values in the tool value contract",
 			"additionalProperties": godotValueSchema("A value in the tool value contract"),
-		}),
+		},
 		Handler: handleReadInputMap,
 	}
 }

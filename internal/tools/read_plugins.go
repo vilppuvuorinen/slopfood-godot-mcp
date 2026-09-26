@@ -22,7 +22,7 @@ func readPlugins() mcp.Tool {
 			"type":       "object",
 			"properties": map[string]any{},
 		},
-		OutputSchema: readOutputSchema(payloadOutputSchema(map[string]any{
+		OutputSchema: payloadOutputSchema(map[string]any{
 			"pluginCount": map[string]any{"type": "integer", "description": "Number of installed or orphaned plugins reported"},
 			"plugins": map[string]any{
 				"type":        "array",
@@ -42,7 +42,7 @@ func readPlugins() mcp.Tool {
 					"required": []string{"path", "name", "description", "author", "version", "script", "enabled", "missing"},
 				},
 			},
-		})),
+		}),
 		Handler: handleReadPlugins,
 	}
 }

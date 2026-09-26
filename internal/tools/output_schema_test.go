@@ -88,24 +88,6 @@ func TestStatusOutputSchemaRequiresEnvelope(t *testing.T) {
 	}
 }
 
-// TestErrorOutputSchemaReservesSolutions verifies solutions is advertised on
-// the error envelope alone, described as an error-only field, so a client
-// learns it accompanies failures rather than appearing in every result.
-func TestErrorOutputSchemaReservesSolutions(t *testing.T) {
-	schema := errorOutputSchema()
-	props, ok := schema["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("properties = %T", schema["properties"])
-	}
-	solutions, ok := props["solutions"].(map[string]any)
-	if !ok {
-		t.Fatalf("error schema must advertise solutions: %#v", props)
-	}
-	if description, _ := solutions["description"].(string); description == "" {
-		t.Error("solutions must be described as error-only")
-	}
-}
-
 // TestMutationErrorCarriesStatusEnvelope verifies a failing mutation returns the
 // success/message envelope its outputSchema requires, so a client validating
 // structuredContent finds the required fields instead of an absent body. Errors
@@ -132,67 +114,47 @@ func TestMutationErrorCarriesStatusEnvelope(t *testing.T) {
 	}
 }
 
-// TestReadOutputSchemaCarriesFreeFormPayload verifies a read tool's free-form
-// payload carries its additionalProperties shape to the top level, so a client
-// that reads only the top level still learns the list result is a name-to-value
-// map rather than an unconstrained object, and the error envelope stays an
-// accepted alternative through anyOf.
-func TestReadOutputSchemaCarriesFreeFormPayload(t *testing.T) {
-	schema := readOutputSchema(map[string]any{
-		"type":                 "object",
-		"additionalProperties": godotValueSchema("A value in the tool value contract"),
-	})
-	if _, ok := schema["additionalProperties"]; !ok {
-		t.Fatalf("read output schema = %#v, want the payload's additionalProperties", schema)
+// TestReadOutputSchemaPinsPayload verifies a read tool's output schema is its
+// success payload alone: the payload's required fields sit at the top level, so
+// a client that ignores schema branches still sees the contract, and no error
+// envelope is advertised because a failure is signalled by isError rather than
+// by a second, non-error shape.
+func TestReadOutputSchemaPinsPayload(t *testing.T) {
+	tool := readScene()
+	if !hasRequired(tool.OutputSchema, "name", "type") {
+		t.Fatalf("read_scene required = %v, want name and type at the top level", tool.OutputSchema["required"])
 	}
-	branches, ok := schema["anyOf"].([]any)
-	if !ok || len(branches) != 2 {
-		t.Fatalf("anyOf = %#v, want the error and payload branches", schema["anyOf"])
+	if _, present := tool.OutputSchema["anyOf"]; present {
+		t.Errorf("read_scene advertises schema branches: %#v", tool.OutputSchema["anyOf"])
 	}
-	if !hasRequired(asSchema(branches[0]), "success", "message") {
-		t.Errorf("error branch = %#v, want the envelope", branches[0])
+	props, ok := tool.OutputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T", tool.OutputSchema["properties"])
+	}
+	for _, key := range []string{"success", "message", "solutions"} {
+		if _, present := props[key]; present {
+			t.Errorf("read_scene advertises %q, which the payload never returns", key)
+		}
+	}
+	if _, ok := tool.OutputSchema["$defs"]; !ok {
+		t.Error("read_scene must keep its $defs at the top level for $ref resolution")
 	}
 }
 
-// TestReadInputMapAdvertisesActionMap pins the free-form payload case to the
-// tool that has it: the list result is keyed by input action name, so the top
-// level of its output schema must describe that map.
+// TestReadInputMapAdvertisesActionMap pins the free-form payload case: the list
+// result is keyed by input action name, so the top level of read_input_map's
+// output schema describes that map, requires nothing, and advertises no error
+// branch.
 func TestReadInputMapAdvertisesActionMap(t *testing.T) {
 	tool := readInputMap()
 	if _, ok := tool.OutputSchema["additionalProperties"]; !ok {
 		t.Errorf("read_input_map output schema must describe the action-name map: %#v", tool.OutputSchema)
 	}
-}
-
-// TestReadOutputSchemaOmitsEnvelopeFromTopLevel verifies a read tool's
-// top-level properties describe only its payload. The error envelope stays an
-// accepted shape through the anyOf branch, so a successful read never
-// advertises success/message fields it does not return while a failure still
-// validates.
-func TestReadOutputSchemaOmitsEnvelopeFromTopLevel(t *testing.T) {
-	schema := readOutputSchema(map[string]any{
-		"type":       "object",
-		"properties": map[string]any{"version": map[string]any{"type": "string"}},
-		"required":   []string{"version"},
-	})
-	props, ok := schema["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("properties = %T", schema["properties"])
+	if _, present := tool.OutputSchema["required"]; present {
+		t.Errorf("read_input_map requires %v, but its payload is free-form", tool.OutputSchema["required"])
 	}
-	for _, key := range []string{"success", "message", "solutions"} {
-		if _, present := props[key]; present {
-			t.Errorf("top-level properties advertise %q, which the payload never returns", key)
-		}
-	}
-	if _, present := props["version"]; !present {
-		t.Error("top-level properties dropped the payload field version")
-	}
-	branches, ok := schema["anyOf"].([]any)
-	if !ok || len(branches) != 2 {
-		t.Fatalf("anyOf = %#v, want the error and payload branches", schema["anyOf"])
-	}
-	if !hasRequired(asSchema(branches[0]), "success", "message") {
-		t.Errorf("error branch = %#v, want the envelope", branches[0])
+	if _, present := tool.OutputSchema["anyOf"]; present {
+		t.Errorf("read_input_map advertises schema branches: %#v", tool.OutputSchema["anyOf"])
 	}
 }
 

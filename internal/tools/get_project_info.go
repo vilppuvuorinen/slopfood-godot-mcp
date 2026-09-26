@@ -27,7 +27,7 @@ func getProjectInfo() mcp.Tool {
 			"properties": map[string]any{},
 			"required":   []string{},
 		},
-		OutputSchema: readOutputSchema(map[string]any{
+		OutputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"name":         map[string]any{"type": "string"},
@@ -45,7 +45,7 @@ func getProjectInfo() mcp.Tool {
 				},
 			},
 			"required": []string{"name", "path", "godotVersion", "structure"},
-		}),
+		},
 		Handler: handleGetProjectInfo,
 	}
 }
