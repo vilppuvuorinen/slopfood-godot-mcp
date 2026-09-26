@@ -101,9 +101,8 @@ func TestInheritedSceneEditsRejected(t *testing.T) {
 			"scenePath": "scenes/derived.tscn",
 			"nodePath":  "root/Icon",
 		}},
-		{"manage_scene_structure", map[string]any{
+		{"rename_scene_node", map[string]any{
 			"scenePath": "scenes/derived.tscn",
-			"action":    "rename",
 			"nodePath":  "root/Icon",
 			"newName":   "Renamed",
 		}},

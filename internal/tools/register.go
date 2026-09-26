@@ -50,8 +50,9 @@ var categoryTools = map[Category][]func() mcp.Tool{
 	},
 	CategoryNode: {
 		addNode, modifySceneNode, removeSceneNode,
-		manageSceneStructure, manageSceneSignals, readSceneSignals,
-		manageTilemap, readTilemap,
+		renameSceneNode, duplicateSceneNode, moveSceneNode,
+		addSceneSignal, removeSceneSignal, readSceneSignals,
+		setTilemapCell, eraseTilemapCell, clearTilemap, readTilemap,
 	},
 	CategoryScript: {
 		attachScript, validateScripts,
