@@ -113,8 +113,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 27 {
-		t.Errorf("registered %d tools, want 27", len(seen))
+	if len(seen) != 31 {
+		t.Errorf("registered %d tools, want 31", len(seen))
 	}
 }
 
@@ -157,6 +157,8 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"read_resource":         true,
 		"read_scene":            true,
 		"read_scene_signals":    true,
+		"read_tilemap":          true,
+		"read_tileset":          true,
 		"validate_scripts":      true,
 	}
 	additive := map[string]bool{
@@ -371,6 +373,28 @@ func TestActionToolsAdvertiseVariants(t *testing.T) {
 				"add":    {"trackType"},
 				"set":    {"trackIndex"},
 				"remove": {"trackIndex"},
+			},
+		},
+		"manage_tileset": {
+			common: []string{"resourcePath", "action"},
+			actions: map[string][]string{
+				"create":            {},
+				"modify":            {},
+				"addSource":         {"sourceType"},
+				"removeSource":      {"sourceId"},
+				"addTile":           {"sourceId"},
+				"removeTile":        {"sourceId"},
+				"addAlternative":    {"sourceId", "atlasCoords"},
+				"removeAlternative": {"sourceId", "atlasCoords", "alternativeId"},
+				"setTileData":       {"sourceId", "atlasCoords"},
+			},
+		},
+		"manage_tilemap": {
+			common: []string{"scenePath", "nodePath", "action"},
+			actions: map[string][]string{
+				"setCell":   {"coords", "sourceId", "atlasCoords"},
+				"eraseCell": {"coords"},
+				"clear":     {},
 			},
 		},
 	}

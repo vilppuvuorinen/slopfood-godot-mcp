@@ -78,6 +78,10 @@ func _init():
             manage_resource(params)
         "manage_animation":
             manage_animation(params)
+        "manage_tileset":
+            manage_tileset(params)
+        "manage_tilemap":
+            manage_tilemap(params)
         "validate_project":
             validate_project(params)
         _:
@@ -1794,17 +1798,17 @@ func _insert_animation_key(animation, track_index, type_id, time, key) -> bool:
             return false
         animation.track_insert_key(track_index, time, decoded, _animation_number_default(key.get("transition", 1.0), "transition"))
     elif type_id == Animation.TYPE_POSITION_3D:
-        var position = _require_animation_type(value, TYPE_VECTOR3, "a position key value")
+        var position = _require_tagged_type(value, TYPE_VECTOR3, "a position key value")
         if _decode_error != "":
             return false
         animation.position_track_insert_key(track_index, time, position)
     elif type_id == Animation.TYPE_ROTATION_3D:
-        var rotation = _require_animation_type(value, TYPE_QUATERNION, "a rotation key value")
+        var rotation = _require_tagged_type(value, TYPE_QUATERNION, "a rotation key value")
         if _decode_error != "":
             return false
         animation.rotation_track_insert_key(track_index, time, rotation)
     elif type_id == Animation.TYPE_SCALE_3D:
-        var scale = _require_animation_type(value, TYPE_VECTOR3, "a scale key value")
+        var scale = _require_tagged_type(value, TYPE_VECTOR3, "a scale key value")
         if _decode_error != "":
             return false
         animation.scale_track_insert_key(track_index, time, scale)
@@ -1856,7 +1860,7 @@ func _decode_method_key(value):
     return {"method": StringName(value["method"]), "args": args}
 
 # Decode a value that must be a tagged object of the given Variant type.
-func _require_animation_type(value, type_id, label):
+func _require_tagged_type(value, type_id, label):
     if not (value is Dictionary) or not value.has("$type"):
         _decode_error = "expected a tagged {\"$type\": ...} value for " + label
         return null
@@ -1872,7 +1876,7 @@ func _require_animation_type(value, type_id, label):
 func _animation_vector2_or_zero(value) -> Vector2:
     if value == null:
         return Vector2.ZERO
-    var decoded = _require_animation_type(value, TYPE_VECTOR2, "a bezier handle")
+    var decoded = _require_tagged_type(value, TYPE_VECTOR2, "a bezier handle")
     if _decode_error != "":
         return Vector2.ZERO
     return decoded
@@ -1974,6 +1978,576 @@ func _animation_key_to_json(animation, index, type_id, key_index) -> Dictionary:
     else:
         key["value"] = _variant_to_json(animation.track_get_key_value(index, key_index))
     return key
+
+# A TileSet's sources, tiles, and per-tile data are not storage properties:
+# they live behind add_source/create_tile/get_tile_data. A TileMapLayer's cell
+# grid is likewise an opaque tile_map_data blob. Neither the generic
+# manage_resource codec nor manage_scene_node's property codec can reach them,
+# so these operations are the dedicated authoring paths, mirroring
+# manage_animation for tracks.
+
+const TILESET_SHAPES = {
+    "square": TileSet.TILE_SHAPE_SQUARE,
+    "isometric": TileSet.TILE_SHAPE_ISOMETRIC,
+    "half_offset_square": TileSet.TILE_SHAPE_HALF_OFFSET_SQUARE,
+    "hexagon": TileSet.TILE_SHAPE_HEXAGON,
+}
+
+const TILESET_LAYOUTS = {
+    "stacked": TileSet.TILE_LAYOUT_STACKED,
+    "stacked_offset": TileSet.TILE_LAYOUT_STACKED_OFFSET,
+    "stairs_right": TileSet.TILE_LAYOUT_STAIRS_RIGHT,
+    "stairs_down": TileSet.TILE_LAYOUT_STAIRS_DOWN,
+    "diamond_right": TileSet.TILE_LAYOUT_DIAMOND_RIGHT,
+    "diamond_down": TileSet.TILE_LAYOUT_DIAMOND_DOWN,
+}
+
+const TILESET_OFFSET_AXES = {
+    "horizontal": TileSet.TILE_OFFSET_AXIS_HORIZONTAL,
+    "vertical": TileSet.TILE_OFFSET_AXIS_VERTICAL,
+}
+
+# Read/create/modify a TileSet resource, its sources, and its tiles.
+func manage_tileset(params):
+    var resource_path = params.get("resourcePath", "")
+    var action = params.get("action", "read")
+    var full_path = resource_path
+    if not full_path.begins_with("res://"):
+        full_path = "res://" + full_path
+
+    if action == "read":
+        _read_tileset(full_path)
+        return
+
+    if action == "create":
+        var created = TileSet.new()
+        if not _apply_tileset_properties(created, params):
+            printerr("Invalid tileset property: " + _decode_error)
+            quit(1)
+            return
+        if not _save_resource(created, full_path):
+            return
+        print("TileSet created: " + full_path)
+        return
+
+    var tile_set = _load_tileset(full_path)
+    if tile_set == null:
+        return
+
+    match action:
+        "modify":
+            if not _apply_tileset_properties(tile_set, params):
+                printerr("Invalid tileset property: " + _decode_error)
+                quit(1)
+                return
+        "addSource":
+            if not _add_tileset_source(tile_set, params):
+                printerr("Invalid tileset source: " + _decode_error)
+                quit(1)
+                return
+        "removeSource":
+            if not _remove_tileset_source(tile_set, params):
+                printerr("Invalid tileset source: " + _decode_error)
+                quit(1)
+                return
+        "addTile":
+            if not _add_tileset_tile(tile_set, params):
+                printerr("Invalid tileset tile: " + _decode_error)
+                quit(1)
+                return
+        "removeTile":
+            if not _remove_tileset_tile(tile_set, params):
+                printerr("Invalid tileset tile: " + _decode_error)
+                quit(1)
+                return
+        "addAlternative":
+            if not _add_tile_alternative(tile_set, params):
+                printerr("Invalid tile alternative: " + _decode_error)
+                quit(1)
+                return
+        "removeAlternative":
+            if not _remove_tile_alternative(tile_set, params):
+                printerr("Invalid tile alternative: " + _decode_error)
+                quit(1)
+                return
+        "setTileData":
+            if not _set_tile_data(tile_set, params):
+                printerr("Invalid tile data: " + _decode_error)
+                quit(1)
+                return
+        _:
+            printerr("Unknown manage_tileset action: " + action)
+            quit(1)
+            return
+
+    if not _save_resource(tile_set, full_path):
+        return
+    print("TileSet " + action + " succeeded: " + full_path)
+
+# Load a TileSet with the shared not-found and type checks. Returns null after
+# signalling failure, because quit() does not stop the current call.
+func _load_tileset(full_path):
+    if not ResourceLoader.exists(full_path):
+        printerr("TileSet resource not found: " + full_path)
+        quit(1)
+        return null
+    var resource = ResourceLoader.load(full_path)
+    if resource == null:
+        printerr("Failed to load tileset: " + full_path)
+        quit(1)
+        return null
+    if not (resource is TileSet):
+        printerr("Not a TileSet resource: " + full_path)
+        quit(1)
+        return null
+    return resource
+
+# Apply the tileset-level properties tileSize, tileShape, tileLayout,
+# tileOffsetAxis, and uvClipping when present.
+func _apply_tileset_properties(tile_set, params) -> bool:
+    if params.has("tileSize"):
+        var size = _require_tagged_type(params["tileSize"], TYPE_VECTOR2I, "tileSize")
+        if _decode_error != "":
+            return false
+        tile_set.tile_size = size
+    if params.has("tileShape"):
+        var shape = str(params["tileShape"])
+        if not TILESET_SHAPES.has(shape):
+            _decode_error = "unknown tileShape: " + shape
+            return false
+        tile_set.tile_shape = TILESET_SHAPES[shape]
+    if params.has("tileLayout"):
+        var layout = str(params["tileLayout"])
+        if not TILESET_LAYOUTS.has(layout):
+            _decode_error = "unknown tileLayout: " + layout
+            return false
+        tile_set.tile_layout = TILESET_LAYOUTS[layout]
+    if params.has("tileOffsetAxis"):
+        var axis = str(params["tileOffsetAxis"])
+        if not TILESET_OFFSET_AXES.has(axis):
+            _decode_error = "unknown tileOffsetAxis: " + axis
+            return false
+        tile_set.tile_offset_axis = TILESET_OFFSET_AXES[axis]
+    if params.has("uvClipping"):
+        tile_set.uv_clipping = bool(params["uvClipping"])
+    return true
+
+# Add an atlas or scenes-collection source to the tileset. An optional sourceId
+# overrides the engine-assigned id; the chosen id is printed for the caller.
+func _add_tileset_source(tile_set, params) -> bool:
+    var source_type = str(params.get("sourceType", ""))
+    var source = null
+    if source_type == "atlas":
+        source = TileSetAtlasSource.new()
+        if params.has("texture"):
+            var texture_value = params["texture"]
+            if texture_value is String and not texture_value.begins_with("res://") and not texture_value.begins_with("user://"):
+                texture_value = "res://" + texture_value
+            var texture = _decode_object(texture_value)
+            if _decode_error != "":
+                return false
+            if not (texture is Texture2D):
+                _decode_error = "texture must be a Texture2D resource"
+                return false
+            source.texture = texture
+        if params.has("margins"):
+            var margins = _require_tagged_type(params["margins"], TYPE_VECTOR2I, "margins")
+            if _decode_error != "":
+                return false
+            source.margins = margins
+        if params.has("separation"):
+            var separation = _require_tagged_type(params["separation"], TYPE_VECTOR2I, "separation")
+            if _decode_error != "":
+                return false
+            source.separation = separation
+        if params.has("textureRegionSize"):
+            var region = _require_tagged_type(params["textureRegionSize"], TYPE_VECTOR2I, "textureRegionSize")
+            if _decode_error != "":
+                return false
+            source.texture_region_size = region
+        if params.has("useTexturePadding"):
+            source.use_texture_padding = bool(params["useTexturePadding"])
+    elif source_type == "scenes":
+        source = TileSetScenesCollectionSource.new()
+    else:
+        _decode_error = "sourceType must be atlas or scenes"
+        return false
+    var override_id = -1
+    if params.has("sourceId"):
+        override_id = int(params["sourceId"])
+    var source_id = tile_set.add_source(source, override_id)
+    print("TileSet source added: " + str(source_id))
+    return true
+
+# Remove the source selected by sourceId.
+func _remove_tileset_source(tile_set, params) -> bool:
+    var source_id = _require_source_id(tile_set, params)
+    if _decode_error != "":
+        return false
+    tile_set.remove_source(source_id)
+    return true
+
+# Resolve and check the caller's sourceId against the tileset.
+func _require_source_id(tile_set, params) -> int:
+    if not params.has("sourceId"):
+        _decode_error = "sourceId is required"
+        return -1
+    var source_id = int(params["sourceId"])
+    if not tile_set.has_source(source_id):
+        _decode_error = "unknown sourceId: " + str(source_id)
+        return -1
+    return source_id
+
+# Resolve a sourceId and require it to name an atlas source.
+func _require_atlas_source(tile_set, params):
+    var source_id = _require_source_id(tile_set, params)
+    if _decode_error != "":
+        return null
+    var source = tile_set.get_source(source_id)
+    if not (source is TileSetAtlasSource):
+        _decode_error = "source " + str(source_id) + " is not an atlas source"
+        return null
+    return source
+
+# Add a tile. An atlas source takes atlasCoords (and optional sizeInAtlas); a
+# scenes-collection source takes the scenePath of the PackedScene to place.
+func _add_tileset_tile(tile_set, params) -> bool:
+    var source_id = _require_source_id(tile_set, params)
+    if _decode_error != "":
+        return false
+    var source = tile_set.get_source(source_id)
+    if source is TileSetAtlasSource:
+        var coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
+        if _decode_error != "":
+            return false
+        if source.has_tile(coords):
+            _decode_error = "a tile already exists at " + str(coords)
+            return false
+        var size = Vector2i.ONE
+        if params.has("sizeInAtlas"):
+            size = _require_tagged_type(params["sizeInAtlas"], TYPE_VECTOR2I, "sizeInAtlas")
+            if _decode_error != "":
+                return false
+        source.create_tile(coords, size)
+        return true
+    if source is TileSetScenesCollectionSource:
+        var scene_path = str(params.get("scenePath", ""))
+        if scene_path.is_empty():
+            _decode_error = "scenePath is required to add a scene tile"
+            return false
+        if not scene_path.begins_with("res://"):
+            scene_path = "res://" + scene_path
+        var packed = load(scene_path)
+        if not (packed is PackedScene):
+            _decode_error = "scenePath must name a PackedScene: " + scene_path
+            return false
+        var override_id = -1
+        if params.has("sceneTileId"):
+            override_id = int(params["sceneTileId"])
+        var tile_id = source.create_scene_tile(packed, override_id)
+        if params.has("displayPlaceholder"):
+            source.set_scene_tile_display_placeholder(tile_id, bool(params["displayPlaceholder"]))
+        return true
+    _decode_error = "source " + str(source_id) + " has no tiles"
+    return false
+
+# Remove a tile. An atlas source is addressed by atlasCoords, a scenes-collection
+# source by sceneTileId.
+func _remove_tileset_tile(tile_set, params) -> bool:
+    var source_id = _require_source_id(tile_set, params)
+    if _decode_error != "":
+        return false
+    var source = tile_set.get_source(source_id)
+    if source is TileSetAtlasSource:
+        var coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
+        if _decode_error != "":
+            return false
+        if not source.has_tile(coords):
+            _decode_error = "no tile at " + str(coords)
+            return false
+        source.remove_tile(coords)
+        return true
+    if source is TileSetScenesCollectionSource:
+        if not params.has("sceneTileId"):
+            _decode_error = "sceneTileId is required to remove a scene tile"
+            return false
+        var tile_id = int(params["sceneTileId"])
+        if not source.has_scene_tile_id(tile_id):
+            _decode_error = "unknown sceneTileId: " + str(tile_id)
+            return false
+        source.remove_scene_tile(tile_id)
+        return true
+    _decode_error = "source " + str(source_id) + " has no tiles"
+    return false
+
+# Add an alternative tile to the atlas tile at atlasCoords.
+func _add_tile_alternative(tile_set, params) -> bool:
+    var atlas = _require_atlas_source(tile_set, params)
+    if _decode_error != "":
+        return false
+    var coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
+    if _decode_error != "":
+        return false
+    if not atlas.has_tile(coords):
+        _decode_error = "no tile at " + str(coords)
+        return false
+    var override_id = -1
+    if params.has("alternativeId"):
+        override_id = int(params["alternativeId"])
+    var alternative_id = atlas.create_alternative_tile(coords, override_id)
+    print("Tile alternative added: " + str(alternative_id))
+    return true
+
+# Remove the alternative tile selected by alternativeId.
+func _remove_tile_alternative(tile_set, params) -> bool:
+    var atlas = _require_atlas_source(tile_set, params)
+    if _decode_error != "":
+        return false
+    var coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
+    if _decode_error != "":
+        return false
+    if not params.has("alternativeId"):
+        _decode_error = "alternativeId is required"
+        return false
+    atlas.remove_alternative_tile(coords, int(params["alternativeId"]))
+    return true
+
+# Apply caller-supplied properties to the TileData of the tile at atlasCoords.
+# Alt 0 is the tile's base data; pass alternativeId to target another one.
+func _set_tile_data(tile_set, params) -> bool:
+    var atlas = _require_atlas_source(tile_set, params)
+    if _decode_error != "":
+        return false
+    var coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
+    if _decode_error != "":
+        return false
+    if not atlas.has_tile(coords):
+        _decode_error = "no tile at " + str(coords)
+        return false
+    var alternative_id = 0
+    if params.has("alternativeId"):
+        alternative_id = int(params["alternativeId"])
+    var tile_data = atlas.get_tile_data(coords, alternative_id)
+    if tile_data == null:
+        _decode_error = "no tile data for alternative " + str(alternative_id) + " at " + str(coords)
+        return false
+    if params.has("properties"):
+        if not _apply_properties(tile_data, params["properties"]):
+            return false
+    return true
+
+# Emit a TileSet as a JSON payload: the tileset-level settings and one object
+# per source. An atlas source lists its tiles and each tile's alternatives.
+func _read_tileset(full_path):
+    var tile_set = _load_tileset(full_path)
+    if tile_set == null:
+        return
+    var sources = []
+    for index in range(tile_set.get_source_count()):
+        sources.append(_tileset_source_to_json(tile_set, tile_set.get_source_id(index)))
+    var result = {
+        "path": project_relative(full_path),
+        "tileSize": _variant_to_json(tile_set.tile_size),
+        "tileShape": _enum_name(TILESET_SHAPES, tile_set.tile_shape),
+        "tileLayout": _enum_name(TILESET_LAYOUTS, tile_set.tile_layout),
+        "tileOffsetAxis": _enum_name(TILESET_OFFSET_AXES, tile_set.tile_offset_axis),
+        "uvClipping": tile_set.uv_clipping,
+        "sources": sources,
+    }
+    print(JSON_START)
+    print(JSON.stringify(result))
+    print(JSON_END)
+
+func _tileset_source_to_json(tile_set, source_id) -> Dictionary:
+    var source = tile_set.get_source(source_id)
+    if source is TileSetAtlasSource:
+        return _atlas_source_to_json(source_id, source)
+    if source is TileSetScenesCollectionSource:
+        return _scenes_source_to_json(source_id, source)
+    return {"id": source_id, "type": "unknown", "tiles": []}
+
+func _atlas_source_to_json(source_id, source) -> Dictionary:
+    var tiles = []
+    for tile_index in range(source.get_tiles_count()):
+        var coords = source.get_tile_id(tile_index)
+        var alternatives = []
+        for alt_index in range(source.get_alternative_tiles_count(coords)):
+            var alternative_id = source.get_alternative_tile_id(coords, alt_index)
+            alternatives.append({
+                "id": alternative_id,
+                "data": _variant_to_json(_tile_data_properties(source.get_tile_data(coords, alternative_id))),
+            })
+        tiles.append({
+            "atlasCoords": _variant_to_json(coords),
+            "sizeInAtlas": _variant_to_json(source.get_tile_size_in_atlas(coords)),
+            "alternatives": alternatives,
+        })
+    return {
+        "id": source_id,
+        "type": "atlas",
+        "texture": _source_resource_path(source.texture),
+        "margins": _variant_to_json(source.margins),
+        "separation": _variant_to_json(source.separation),
+        "textureRegionSize": _variant_to_json(source.texture_region_size),
+        "useTexturePadding": source.use_texture_padding,
+        "tiles": tiles,
+    }
+
+func _scenes_source_to_json(source_id, source) -> Dictionary:
+    var tiles = []
+    for index in range(source.get_scene_tiles_count()):
+        var tile_id = source.get_scene_tile_id(index)
+        tiles.append({
+            "sceneTileId": tile_id,
+            "scene": _source_resource_path(source.get_scene_tile_scene(tile_id)),
+            "displayPlaceholder": source.get_scene_tile_display_placeholder(tile_id),
+        })
+    return {"id": source_id, "type": "scenes", "tiles": tiles}
+
+# The storage properties of a TileData, in the tool value contract.
+func _tile_data_properties(tile_data) -> Dictionary:
+    var props = {}
+    if tile_data == null:
+        return props
+    for prop in tile_data.get_property_list():
+        if prop["usage"] & PROPERTY_USAGE_STORAGE:
+            props[prop["name"]] = tile_data.get(prop["name"])
+    return props
+
+# The project-relative path of a resource, or "" when it has none.
+func _source_resource_path(resource) -> String:
+    if resource == null or resource.resource_path == "":
+        return ""
+    return project_relative(resource.resource_path)
+
+# The tool value contract name for an engine enum value.
+func _enum_name(mapping, value) -> String:
+    for name in mapping:
+        if mapping[name] == value:
+            return name
+    return "unknown"
+
+# Read or edit the cells of a TileMapLayer node in a scene. Cells are not
+# properties (the layer stores them in an opaque tile_map_data blob), so a
+# scene or property codec cannot reach them.
+func manage_tilemap(params):
+    var scene_path = params.get("scenePath", "")
+    var action = params.get("action", "read")
+    var node_path = str(params.get("nodePath", ""))
+    var full_path = scene_path
+    if not full_path.begins_with("res://"):
+        full_path = "res://" + full_path
+
+    if not FileAccess.file_exists(full_path):
+        printerr("Scene file does not exist at: " + full_path)
+        quit(1)
+        return
+    var scene = load(full_path)
+    if not (scene is PackedScene):
+        printerr("Failed to load scene: " + full_path)
+        quit(1)
+        return
+    var scene_root = track_temp(scene.instantiate())
+    var target = _resolve_scene_node(scene_root, node_path)
+    if target == null:
+        printerr("Node not found: " + node_path)
+        quit(1)
+        return
+    if not (target is TileMapLayer):
+        printerr("Node is not a TileMapLayer: " + node_path)
+        quit(1)
+        return
+
+    if action == "read":
+        _read_tilemap_node(target, full_path, node_path)
+        return
+
+    match action:
+        "setCell":
+            if not _set_tilemap_cell(target, params):
+                printerr("Invalid tilemap cell: " + _decode_error)
+                quit(1)
+                return
+        "eraseCell":
+            var coords = _require_tagged_type(params.get("coords"), TYPE_VECTOR2I, "coords")
+            if _decode_error != "":
+                printerr("Invalid tilemap cell: " + _decode_error)
+                quit(1)
+                return
+            target.erase_cell(coords)
+        "clear":
+            target.clear()
+        _:
+            printerr("Unknown manage_tilemap action: " + action)
+            quit(1)
+            return
+
+    var packed_scene = PackedScene.new()
+    var result = packed_scene.pack(scene_root)
+    if result != OK:
+        printerr("Failed to pack scene after tilemap edit: " + str(result))
+        quit(1)
+        return
+    var save_error = ResourceSaver.save(packed_scene, full_path)
+    if save_error != OK:
+        printerr("Failed to save tilemap scene: " + str(save_error))
+        quit(1)
+        return
+    print("TileMap " + action + " succeeded: " + full_path)
+
+# Place one cell, checking that the node has a tileset that owns sourceId.
+func _set_tilemap_cell(target, params) -> bool:
+    var coords = _require_tagged_type(params.get("coords"), TYPE_VECTOR2I, "coords")
+    if _decode_error != "":
+        return false
+    var atlas_coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
+    if _decode_error != "":
+        return false
+    if not params.has("sourceId"):
+        _decode_error = "sourceId is required"
+        return false
+    var source_id = int(params["sourceId"])
+    if target.tile_set == null:
+        _decode_error = "the node has no tileSet"
+        return false
+    if not target.tile_set.has_source(source_id):
+        _decode_error = "unknown sourceId: " + str(source_id)
+        return false
+    var alternative_id = 0
+    if params.has("alternativeTile"):
+        alternative_id = int(params["alternativeTile"])
+    target.set_cell(coords, source_id, atlas_coords, alternative_id)
+    return true
+
+# Emit a TileMapLayer's tileset path and used cells, sorted for stable output.
+func _read_tilemap_node(target, full_path, node_path):
+    var cells = []
+    for coords in target.get_used_cells():
+        cells.append({
+            "coords": _variant_to_json(coords),
+            "sourceId": target.get_cell_source_id(coords),
+            "atlasCoords": _variant_to_json(target.get_cell_atlas_coords(coords)),
+            "alternativeTile": target.get_cell_alternative_tile(coords),
+            "flippedH": target.is_cell_flipped_h(coords),
+            "flippedV": target.is_cell_flipped_v(coords),
+            "transposed": target.is_cell_transposed(coords),
+        })
+    cells.sort_custom(func(a, b):
+        if a["coords"]["x"] != b["coords"]["x"]:
+            return a["coords"]["x"] < b["coords"]["x"]
+        return a["coords"]["y"] < b["coords"]["y"])
+    var tile_set_path = ""
+    if target.tile_set != null:
+        tile_set_path = _source_resource_path(target.tile_set)
+    var result = {
+        "scenePath": project_relative(full_path),
+        "nodePath": node_path,
+        "tileSet": tile_set_path,
+        "usedCells": cells,
+    }
+    print(JSON_START)
+    print(JSON.stringify(result))
+    print(JSON_END)
 
 # Validate that Godot itself loaded project.godot cleanly. ProjectSettings
 # parses project.godot during engine startup, before _init runs; when the file
