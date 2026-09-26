@@ -21,7 +21,7 @@ func TestAddSceneSignalTool(t *testing.T) {
 	t.Run("adds a connection", func(t *testing.T) {
 		_, session := seedScene(t, "scenes/signals.tscn", "Button")
 
-		empty := requireToolText(t, session, "read_scene_signals", map[string]any{
+		empty := requireToolText(t, session, "read_scene", map[string]any{
 			"scenePath": "scenes/signals.tscn",
 		})
 		requireContains(t, empty, `"connections"`)
@@ -33,7 +33,7 @@ func TestAddSceneSignalTool(t *testing.T) {
 			"targetPath": "root",
 			"method":     "on_pressed",
 		})
-		text := requireToolText(t, session, "read_scene_signals", map[string]any{
+		text := requireToolText(t, session, "read_scene", map[string]any{
 			"scenePath": "scenes/signals.tscn",
 		})
 		var decoded struct {

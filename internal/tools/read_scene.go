@@ -13,7 +13,7 @@ func readScene() mcp.Tool {
 	return mcp.Tool{
 		Name:        "read_scene",
 		Title:       "Read Scene",
-		Description: "Read scene file as JSON node tree (headless)",
+		Description: "Read scene file as JSON node tree, including signal connections (headless)",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",

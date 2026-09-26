@@ -658,6 +658,11 @@ func read_scene(result: Result, params) -> Result:
     if not base_scene_path.is_empty():
         tree_data["baseScenePath"] = base_scene_path
 
+    # Surface the scene's own [connection] lines alongside the tree so a caller
+    # does not need a separate read just to list signal connections. Inherited
+    # connections live in the base scene and are not repeated here.
+    tree_data["connections"] = _scene_connections(FileAccess.get_file_as_string(full_scene_path))
+
     result.out(JSON_START)
     result.out(JSON.stringify(tree_data))
     result.out(JSON_END)
@@ -1295,7 +1300,7 @@ func remove_node(result: Result, params) -> Result:
 # List/add/remove signal connections in a scene file
 func manage_scene_signals(result: Result, params) -> Result:
     var scene_path = params.get("scenePath", "")
-    var action = params.get("action", "list")
+    var action = params.get("action", "")
     var full_path = scene_path
     if not full_path.begins_with("res://"):
         full_path = "res://" + full_path
@@ -1306,21 +1311,7 @@ func manage_scene_signals(result: Result, params) -> Result:
 
     var content = FileAccess.get_file_as_string(full_path)
 
-    if action == "list":
-        var connections = []
-        var lines = content.split("\n")
-        for line in lines:
-            if line.begins_with("[connection"):
-                connections.append({
-                    "signal": _connection_field(line, "signal"),
-                    "from": _connection_field(line, "from"),
-                    "to": _connection_field(line, "to"),
-                    "method": _connection_field(line, "method"),
-                })
-        result.out(JSON_START)
-        result.out(JSON.stringify({"connections": connections}))
-        result.out(JSON_END)
-    elif action == "add":
+    if action == "add":
         var signal_name = params.get("signalName", "")
         var source_path = params.get("sourcePath", "")
         var target_path = params.get("targetPath", "")
@@ -1428,6 +1419,20 @@ func _connection_field(line, field_name):
     if end == -1:
         return ""
     return line.substr(start, end - start)
+
+# Parse the scene's own [connection] lines out of its text. Shared by read_scene
+# so a reader gets connections with the tree they belong to.
+func _scene_connections(content):
+    var connections = []
+    for line in content.split("\n"):
+        if line.begins_with("[connection"):
+            connections.append({
+                "signal": _connection_field(line, "signal"),
+                "from": _connection_field(line, "from"),
+                "to": _connection_field(line, "to"),
+                "method": _connection_field(line, "method"),
+            })
+    return connections
 
 # Rename/duplicate/move nodes within a scene file
 func manage_scene_structure(result: Result, params) -> Result:

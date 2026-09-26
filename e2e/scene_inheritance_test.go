@@ -125,11 +125,11 @@ func TestInheritedSceneEditsRejected(t *testing.T) {
 		t.Errorf("derived scene changed:\nbefore:\n%s\nafter:\n%s", before, got)
 	}
 
-	// Connection reading is text-based and stays available on an inherited
-	// scene, so it is not caught by the guard.
-	requireToolText(t, session, "read_scene_signals", map[string]any{
+	// Reading an inherited scene stays available: it instantiates the base
+	// subtree and reports its own connections, so it is not caught by the guard.
+	requireContains(t, requireToolText(t, session, "read_scene", map[string]any{
 		"scenePath": "scenes/derived.tscn",
-	})
+	}), `"connections"`)
 }
 
 // TestCreateSceneInheritanceErrors covers baseScenePath validation.

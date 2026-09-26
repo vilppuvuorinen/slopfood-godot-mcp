@@ -13,7 +13,7 @@ func TestReadSceneSchema(t *testing.T) {
 	if tool.Name != "read_scene" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Read scene file as JSON node tree (headless)" {
+	if tool.Description != "Read scene file as JSON node tree, including signal connections (headless)" {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)

@@ -20,7 +20,7 @@ type sceneNode struct {
 // TestReadSceneSchema ports the reference's tool-definition expectations for
 // read_scene over the real stdio surface.
 func TestReadSceneSchema(t *testing.T) {
-	schema := requireSchema(t, "read_scene", "Read scene file as JSON node tree (headless)")
+	schema := requireSchema(t, "read_scene", "Read scene file as JSON node tree, including signal connections (headless)")
 	schema.requireRequired(t, "scenePath")
 	schema.requireStringProps(t, "scenePath", "nodePath")
 	schema.requireType(t, "depth", "integer")
