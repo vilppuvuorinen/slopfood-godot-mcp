@@ -144,68 +144,15 @@ func propertiesSchema(description string) map[string]any {
 	}
 }
 
-// actionVariant is one branch of a discriminated action input schema: the
-// action it pins, the fields that action requires on top of the common required
-// fields, and optionally fields of which it needs at least one. AnyOf names the
-// effectful fields an action can be driven by, so a branch that would otherwise
-// accept a payload-less call instead requires one of them.
-type actionVariant struct {
-	Action   string
-	Required []string
-	AnyOf    []string
-}
-
-// actionInputSchema builds the object input schema for a tool routed by an
-// "action" property. properties lists every accepted argument (including
-// action with its enum) and commonRequired are the fields every action needs.
-// The returned schema adds a discriminated oneOf over variants: each branch
-// pins action with const and requires the common fields plus that action's own
-// fields, so a schema consumer sees what each action needs instead of one flat
-// required list. A variant's AnyOf adds an inner anyOf requiring at least one
-// of its effectful fields. Exactly one branch matches a well-formed call, while
-// a call missing a per-action field matches none.
-func actionInputSchema(properties map[string]any, commonRequired []string, variants []actionVariant) map[string]any {
-	required := make([]string, 0, len(commonRequired)+1)
-	hasAction := false
-	for _, field := range commonRequired {
-		if field == "action" {
-			hasAction = true
-		}
-		required = append(required, field)
+// withResourcePath adds the shared resourcePath property to a resource tool's
+// properties map. Resource tools are bound to a project, so the path is always
+// relative to that project.
+func withResourcePath(properties map[string]any) map[string]any {
+	properties["resourcePath"] = map[string]any{
+		"type":        "string",
+		"description": "Resource file path (relative to project)",
 	}
-	if !hasAction {
-		required = append([]string{"action"}, required...)
-	}
-	schema := map[string]any{
-		"type":       "object",
-		"properties": properties,
-		"required":   required,
-	}
-	if len(variants) == 0 {
-		return schema
-	}
-	branches := make([]any, 0, len(variants))
-	for _, variant := range variants {
-		branchRequired := make([]string, 0, len(required)+len(variant.Required))
-		branchRequired = append(branchRequired, required...)
-		branchRequired = append(branchRequired, variant.Required...)
-		branch := map[string]any{
-			"properties": map[string]any{
-				"action": map[string]any{"const": variant.Action},
-			},
-			"required": branchRequired,
-		}
-		if len(variant.AnyOf) > 0 {
-			anyOf := make([]any, 0, len(variant.AnyOf))
-			for _, field := range variant.AnyOf {
-				anyOf = append(anyOf, map[string]any{"required": []string{field}})
-			}
-			branch["anyOf"] = anyOf
-		}
-		branches = append(branches, branch)
-	}
-	schema["oneOf"] = branches
-	return schema
+	return properties
 }
 
 // statusOutputSchema returns the object output schema shared by the mutation
@@ -294,12 +241,13 @@ func requiredArgsResult(fields ...string) mcp.ToolResult {
 	)
 }
 
-// effectfulFieldsResult is the shared error for an action that carries none of
-// its effectful fields. Without it, a payload-less modify would reload and
-// re-save a resource without changing it, a no-op the schema also rejects.
-func effectfulFieldsResult(action string, fields ...string) mcp.ToolResult {
+// requiredOneOfResult is the shared error for a tool that carries none of the
+// fields that would give it an effect. Without it, a payload-less modify would
+// reload and re-save a resource without changing it, a no-op the schema also
+// rejects.
+func requiredOneOfResult(tool string, fields ...string) mcp.ToolResult {
 	return mcp.ErrorResult(
-		"The "+action+" action requires at least one of: "+strings.Join(fields, ", ")+".",
+		"The "+tool+" tool requires at least one of: "+strings.Join(fields, ", ")+".",
 		"Provide a value to change",
 	)
 }

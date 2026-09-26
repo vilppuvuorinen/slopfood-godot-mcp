@@ -20,7 +20,9 @@ const (
 	CategoryTilemap Category = "tilemap"
 	CategoryScript  Category = "script"
 	CategoryAssets  Category = "assets"
-	CategoryMedia   Category = "media"
+	CategoryAnim    Category = "animation"
+	CategoryTileset Category = "tileset"
+	CategoryTheme   Category = "theme"
 )
 
 // AllCategories lists every category in registration order.
@@ -33,7 +35,9 @@ var AllCategories = []Category{
 	CategoryTilemap,
 	CategoryScript,
 	CategoryAssets,
-	CategoryMedia,
+	CategoryAnim,
+	CategoryTileset,
+	CategoryTheme,
 }
 
 // categoryTools maps each category to the tool constructors it contains. Every
@@ -62,11 +66,20 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		attachScript, validateScripts,
 	},
 	CategoryAssets: {
-		manageResource, readResource, reimportProject,
+		createResource, modifyResource, readResource, reimportProject,
 	},
-	CategoryMedia: {
-		manageAnimation, readAnimation, manageTileset, readTileset,
-		manageTheme, readTheme,
+	CategoryAnim: {
+		createAnimation, modifyAnimation, addAnimationTrack, setAnimationTrack,
+		removeAnimationTrack, readAnimation,
+	},
+	CategoryTileset: {
+		createTileset, modifyTileset, addTilesetSource, removeTilesetSource,
+		addTilesetTile, removeTilesetTile, addTilesetAlternative,
+		removeTilesetAlternative, setTilesetTileData, readTileset,
+	},
+	CategoryTheme: {
+		createTheme, modifyTheme, removeThemeType, setThemeTypeVariation,
+		clearThemeTypeVariation, setThemeItem, clearThemeItem, readTheme,
 	},
 }
 

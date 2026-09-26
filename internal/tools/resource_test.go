@@ -9,23 +9,22 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-func TestManageResourceSchema(t *testing.T) {
-	tool := manageResource()
-	if tool.Name != "manage_resource" {
+func TestCreateResourceSchema(t *testing.T) {
+	tool := createResource()
+	if tool.Name != "create_resource" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Create or modify .tres/.res resource files" {
+	if tool.Description != "Create a .tres/.res resource file" {
 		t.Errorf("description = %q", tool.Description)
 	}
-	required, ok := tool.InputSchema["required"].([]string)
-	if !ok || strings.Join(required, ",") != "resourcePath,action" {
+	if !hasRequired(tool.InputSchema, "resourcePath", "resourceType") {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
 	if !ok {
 		t.Fatalf("properties = %T", tool.InputSchema["properties"])
 	}
-	for _, key := range []string{"resourcePath", "action", "resourceType"} {
+	for _, key := range []string{"resourcePath", "resourceType"} {
 		prop, propOK := props[key].(map[string]any)
 		if !propOK || prop["type"] != "string" {
 			t.Errorf("property %q = %v, want string", key, props[key])
@@ -33,16 +32,58 @@ func TestManageResourceSchema(t *testing.T) {
 	}
 	properties, ok := props["properties"].(map[string]any)
 	if !ok || properties["type"] != "object" {
-		t.Errorf("properties property = %v", props["properties"])
-	}
-	if _, isMap := props["propertyFilter"].(map[string]any); isMap {
-		t.Errorf("manage_resource must not advertise the read-only propertyFilter: %v", props["propertyFilter"])
+		t.Errorf("properties property = %v, want object", props["properties"])
 	}
 }
 
-// TestManageResourceReadForwardsPropertyFilter proves a read's propertyFilter
-// reaches the operations script.
-func TestManageResourceReadForwardsPropertyFilter(t *testing.T) {
+func TestModifyResourceSchema(t *testing.T) {
+	tool := modifyResource()
+	if tool.Name != "modify_resource" {
+		t.Errorf("name = %q", tool.Name)
+	}
+	if tool.Description != "Set properties on a .tres/.res resource file" {
+		t.Errorf("description = %q", tool.Description)
+	}
+	if !hasRequired(tool.InputSchema, "resourcePath", "properties") {
+		t.Errorf("required = %v", tool.InputSchema["required"])
+	}
+	props, ok := tool.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T", tool.InputSchema["properties"])
+	}
+	prop, propOK := props["resourcePath"].(map[string]any)
+	if !propOK || prop["type"] != "string" {
+		t.Errorf("resourcePath = %v, want string", props["resourcePath"])
+	}
+	properties, ok := props["properties"].(map[string]any)
+	if !ok || properties["type"] != "object" {
+		t.Errorf("properties property = %v, want object", props["properties"])
+	}
+}
+
+func TestReadResourceSchema(t *testing.T) {
+	tool := readResource()
+	if tool.Name != "read_resource" {
+		t.Errorf("name = %q", tool.Name)
+	}
+	if tool.Description != "Read engine-decoded binary .res resource files (text .tres files are read directly)" {
+		t.Errorf("description = %q", tool.Description)
+	}
+	if !hasRequired(tool.InputSchema, "resourcePath") {
+		t.Errorf("required = %v", tool.InputSchema["required"])
+	}
+	props, ok := tool.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T", tool.InputSchema["properties"])
+	}
+	if _, isMap := props["propertyFilter"].(map[string]any); !isMap {
+		t.Errorf("read_resource must advertise propertyFilter: %v", props["propertyFilter"])
+	}
+}
+
+// TestReadResourceForwardsPropertyFilter proves a read's propertyFilter reaches
+// the operations script.
+func TestReadResourceForwardsPropertyFilter(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
 	root := t.TempDir()
 	makeProject(t, root)
@@ -57,14 +98,14 @@ func TestManageResourceReadForwardsPropertyFilter(t *testing.T) {
 	}
 }
 
-// TestManageResourceFilterIgnoredForMutation proves propertyFilter is a read
+// TestModifyResourceFilterIgnoredForMutation proves propertyFilter is a read
 // option: create and modify must not forward it.
-func TestManageResourceFilterIgnoredForMutation(t *testing.T) {
+func TestModifyResourceFilterIgnoredForMutation(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"resources/mat.tres","action":"modify","propertyFilter":["metallic"],"properties":{"metallic":0.5}}`)
+	result := callToolArgs(t, modifyResource(), root, `{"resourcePath":"resources/mat.tres","propertyFilter":["metallic"],"properties":{"metallic":0.5}}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -73,7 +114,7 @@ func TestManageResourceFilterIgnoredForMutation(t *testing.T) {
 	}
 }
 
-func TestManageResourceReadSuccess(t *testing.T) {
+func TestReadResourceSuccess(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
 	root := t.TempDir()
 	makeProject(t, root)
@@ -99,7 +140,7 @@ func TestManageResourceReadSuccess(t *testing.T) {
 	}
 }
 
-func TestManageResourceReadStructured(t *testing.T) {
+func TestReadResourceStructured(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"type":"StandardMaterial3D","path":"resources/mat.res"}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
@@ -122,29 +163,12 @@ func TestManageResourceReadStructured(t *testing.T) {
 	}
 }
 
-func TestManageResourceModifySuccess(t *testing.T) {
+func TestCreateResourceForwardsFields(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"resources/mat.tres","action":"modify","properties":{"metallic":0.9}}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	text := result.Content[0].Text
-	for _, want := range []string{`"action":"modify"`, `"properties":{"metallic":0.9}`} {
-		if !strings.Contains(text, want) {
-			t.Errorf("text = %q, want it to contain %q", text, want)
-		}
-	}
-}
-
-func TestManageResourceCreateSuccess(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"materials/red.tres","action":"create","resourceType":"StandardMaterial3D"}`)
+	result := callToolArgs(t, createResource(), root, `{"resourcePath":"materials/red.tres","resourceType":"StandardMaterial3D"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -165,12 +189,12 @@ func TestManageResourceCreateSuccess(t *testing.T) {
 	}
 }
 
-func TestManageResourceCreateProperties(t *testing.T) {
+func TestCreateResourceForwardsProperties(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, manageResource(), root, `{"resourcePath":"materials/red.tres","action":"create","resourceType":"StandardMaterial3D","properties":{"albedo_color":{"r":1,"g":0,"b":0,"a":1}}}`)
+	result := callToolArgs(t, createResource(), root, `{"resourcePath":"materials/red.tres","resourceType":"StandardMaterial3D","properties":{"albedo_color":{"r":1,"g":0,"b":0,"a":1}}}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -180,7 +204,24 @@ func TestManageResourceCreateProperties(t *testing.T) {
 	}
 }
 
-func TestManageResourceValidation(t *testing.T) {
+func TestModifyResourceForwardsProperties(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, modifyResource(), root, `{"resourcePath":"resources/mat.tres","properties":{"metallic":0.9}}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	for _, want := range []string{`"action":"modify"`, `"properties":{"metallic":0.9}`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text = %q, want it to contain %q", text, want)
+		}
+	}
+}
+
+func TestResourceValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 	notAProject := t.TempDir()
@@ -192,15 +233,16 @@ func TestManageResourceValidation(t *testing.T) {
 		args    string
 		want    string
 	}{
-		{name: "missing params", tool: manageResource, args: `{}`, want: "resourcePath and action are required."},
-		{name: "missing action", tool: manageResource, project: root, args: `{"resourcePath":"mat.tres"}`, want: "resourcePath and action are required."},
-		{name: "missing resource path", tool: readResource, project: root, args: `{}`, want: "resourcePath is required."},
-		{name: "create without resource type", tool: manageResource, project: root, args: `{"resourcePath":"mat.tres","action":"create"}`, want: "resourceType is required for the create action."},
-		{name: "modify without properties", tool: manageResource, project: root, args: `{"resourcePath":"mat.tres","action":"modify"}`, want: "properties is required for the modify action."},
-		{name: "text .tres rejected", tool: readResource, project: root, args: `{"resourcePath":"mat.tres"}`, want: "read_resource reads binary .res resources"},
-		{name: "invalid project path", tool: readResource, project: "../escape", args: `{"resourcePath":"mat.tres"}`, want: "Invalid path."},
-		{name: "invalid resource path", tool: readResource, project: root, args: `{"resourcePath":"../escape.tres"}`, want: "Invalid path."},
-		{name: "not a project", tool: readResource, project: notAProject, args: `{"resourcePath":"mat.tres"}`, want: "Not a valid Godot project"},
+		{name: "create missing params", tool: createResource, args: `{}`, want: "resourcePath and resourceType are required."},
+		{name: "create missing resource type", tool: createResource, project: root, args: `{"resourcePath":"mat.tres"}`, want: "resourcePath and resourceType are required."},
+		{name: "modify missing params", tool: modifyResource, args: `{}`, want: "resourcePath and properties are required."},
+		{name: "modify missing properties", tool: modifyResource, project: root, args: `{"resourcePath":"mat.tres"}`, want: "resourcePath and properties are required."},
+		{name: "modify empty properties", tool: modifyResource, project: root, args: `{"resourcePath":"mat.tres","properties":{}}`, want: "resourcePath and properties are required."},
+		{name: "read missing resource path", tool: readResource, project: root, args: `{}`, want: "resourcePath is required."},
+		{name: "read text .tres rejected", tool: readResource, project: root, args: `{"resourcePath":"mat.tres"}`, want: "read_resource reads binary .res resources"},
+		{name: "invalid project path", tool: readResource, project: "../escape", args: `{"resourcePath":"mat.res"}`, want: "Invalid path."},
+		{name: "invalid resource path", tool: readResource, project: root, args: `{"resourcePath":"../escape.res"}`, want: "Invalid path."},
+		{name: "not a project", tool: readResource, project: notAProject, args: `{"resourcePath":"mat.res"}`, want: "Not a valid Godot project"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -215,7 +257,7 @@ func TestManageResourceValidation(t *testing.T) {
 	}
 }
 
-func TestManageResourceScriptFailure(t *testing.T) {
+func TestResourceScriptFailure(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo 'Failed to load resource: boom' >&2; exit 1`))
 	root := t.TempDir()
 	makeProject(t, root)
@@ -232,7 +274,7 @@ func TestManageResourceScriptFailure(t *testing.T) {
 	}
 }
 
-func TestManageResourceSpawnFailure(t *testing.T) {
+func TestResourceSpawnFailure(t *testing.T) {
 	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
 	root := t.TempDir()
 	makeProject(t, root)

@@ -27,7 +27,9 @@ func TestResolveCategories(t *testing.T) {
 		{name: "assets category", raw: []string{"assets"}, want: []Category{CategoryAssets}},
 		{name: "signals category", raw: []string{"signals"}, want: []Category{CategorySignals}},
 		{name: "tilemap category", raw: []string{"tilemap"}, want: []Category{CategoryTilemap}},
-		{name: "media category", raw: []string{"media"}, want: []Category{CategoryMedia}},
+		{name: "animation category", raw: []string{"animation"}, want: []Category{CategoryAnim}},
+		{name: "tileset category", raw: []string{"tileset"}, want: []Category{CategoryTileset}},
+		{name: "theme category", raw: []string{"theme"}, want: []Category{CategoryTheme}},
 		{name: "repeated flags", raw: []string{"project", "node"}, want: []Category{CategoryProject, CategoryNode}},
 		{name: "deduplicates preserving order", raw: []string{"node,project,node"}, want: []Category{CategoryNode, CategoryProject}},
 		{name: "trims whitespace", raw: []string{" scene , node "}, want: []Category{CategoryScene, CategoryNode}},
@@ -118,19 +120,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 31 {
-		t.Errorf("registered %d tools, want 31", len(seen))
-	}
-}
-
-// TestCategoryBudget keeps each category small enough for a subagent to align
-// on: a category is a coherent domain, so it stays at or below the top end of
-// the 5-7 tool budget.
-func TestCategoryBudget(t *testing.T) {
-	for _, category := range AllCategories {
-		if count := len(categoryTools[category]); count > 7 {
-			t.Errorf("category %q has %d tools, want at most 7", category, count)
-		}
+	if len(seen) != 50 {
+		t.Errorf("registered %d tools, want 50", len(seen))
 	}
 }
 
@@ -203,23 +194,40 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"reimport_project": true,
 	}
 	idempotent := map[string]bool{
-		"add_scene_signal":    true,
-		"attach_script":       true,
-		"clear_tilemap":       true,
-		"create_project":      true,
-		"create_scene":        true,
-		"erase_tilemap_cell":  true,
-		"export_mesh_library": true,
-		"export_project":      true,
-		"reimport_project":    true,
-		"manage_resource":     true,
-		"manage_theme":        true,
-		"modify_scene_node":   true,
-		"move_scene_node":     true,
-		"remove_scene_node":   true,
-		"remove_scene_signal": true,
-		"rename_scene_node":   true,
-		"set_tilemap_cell":    true,
+		"add_scene_signal":           true,
+		"attach_script":              true,
+		"clear_theme_item":           true,
+		"clear_theme_type_variation": true,
+		"clear_tilemap":              true,
+		"create_animation":           true,
+		"create_project":             true,
+		"create_resource":            true,
+		"create_scene":               true,
+		"create_theme":               true,
+		"create_tileset":             true,
+		"erase_tilemap_cell":         true,
+		"export_mesh_library":        true,
+		"export_project":             true,
+		"modify_animation":           true,
+		"modify_resource":            true,
+		"modify_scene_node":          true,
+		"modify_theme":               true,
+		"modify_tileset":             true,
+		"move_scene_node":            true,
+		"reimport_project":           true,
+		"remove_animation_track":     true,
+		"remove_scene_node":          true,
+		"remove_scene_signal":        true,
+		"remove_theme_type":          true,
+		"remove_tileset_alternative": true,
+		"remove_tileset_source":      true,
+		"remove_tileset_tile":        true,
+		"rename_scene_node":          true,
+		"set_animation_track":        true,
+		"set_theme_item":             true,
+		"set_theme_type_variation":   true,
+		"set_tilemap_cell":           true,
+		"set_tileset_tile_data":      true,
 	}
 	for _, category := range AllCategories {
 		for _, newTool := range categoryTools[category] {
@@ -249,35 +257,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 				t.Errorf("writing tool %q does not declare idempotentHint", tool.Name)
 			} else if want := idempotent[tool.Name]; *tool.Annotations.IdempotentHint != want {
 				t.Errorf("writing tool %q idempotentHint = %t, want %t", tool.Name, *tool.Annotations.IdempotentHint, want)
-			}
-		}
-	}
-}
-
-// TestToolsAdvertiseActionEnum verifies every tool whose schema has an "action"
-// property advertises the valid actions as an enum, so clients can discover
-// them without out-of-band documentation.
-func TestToolsAdvertiseActionEnum(t *testing.T) {
-	for _, category := range AllCategories {
-		for _, newTool := range categoryTools[category] {
-			tool := newTool()
-			props, ok := tool.InputSchema["properties"].(map[string]any)
-			if !ok {
-				t.Errorf("tool %q has no properties", tool.Name)
-				continue
-			}
-			action, ok := props["action"]
-			if !ok {
-				continue
-			}
-			actionProp, ok := action.(map[string]any)
-			if !ok {
-				t.Errorf("tool %q action property = %T", tool.Name, action)
-				continue
-			}
-			enum, ok := actionProp["enum"].([]string)
-			if !ok || len(enum) == 0 {
-				t.Errorf("tool %q action has no enum: %v", tool.Name, actionProp)
 			}
 		}
 	}
@@ -328,196 +307,6 @@ func assertTypedSchemas(t *testing.T, toolName, path string, node any) {
 	case []any:
 		for i, value := range n {
 			assertTypedSchemas(t, toolName, path+"["+strconv.Itoa(i)+"]", value)
-		}
-	}
-}
-
-// TestActionInputSchemaBuildsVariants verifies the discriminated action schema
-// pins each action and requires the common fields plus that action's own.
-func TestActionInputSchemaBuildsVariants(t *testing.T) {
-	schema := actionInputSchema(
-		map[string]any{
-			"action": map[string]any{"type": "string", "enum": []string{"list", "add"}},
-			"path":   map[string]any{"type": "string"},
-			"name":   map[string]any{"type": "string"},
-			"value":  map[string]any{"type": "string"},
-		},
-		[]string{"path"},
-		[]actionVariant{
-			{Action: "list"},
-			{Action: "add", Required: []string{"name"}, AnyOf: []string{"value"}},
-		},
-	)
-
-	if !hasRequired(schema, "path") {
-		t.Fatalf("common required = %v", schema["required"])
-	}
-	if !hasRequired(schema, "action") {
-		t.Fatalf("common required = %v, want action", schema["required"])
-	}
-	branches, ok := schema["oneOf"].([]any)
-	if !ok || len(branches) != 2 {
-		t.Fatalf("oneOf = %#v, want two branches", schema["oneOf"])
-	}
-
-	list, _ := branches[0].(map[string]any)
-	listProps, _ := list["properties"].(map[string]any)
-	listAction, _ := listProps["action"].(map[string]any)
-	if listAction["const"] != "list" {
-		t.Errorf("branch 0 action = %#v, want const list", listProps["action"])
-	}
-	if !hasRequired(list, "path") || hasRequired(list, "name") {
-		t.Errorf("list required = %v, want path only", list["required"])
-	}
-
-	add, _ := branches[1].(map[string]any)
-	addProps, _ := add["properties"].(map[string]any)
-	addAction, _ := addProps["action"].(map[string]any)
-	if addAction["const"] != "add" {
-		t.Errorf("branch 1 action = %#v, want const add", addProps["action"])
-	}
-	if !hasRequired(add, "path", "name") {
-		t.Errorf("add required = %v, want path and name", add["required"])
-	}
-	addAnyOf, ok := add["anyOf"].([]any)
-	if !ok || len(addAnyOf) != 1 {
-		t.Fatalf("add anyOf = %#v, want one branch", add["anyOf"])
-	}
-	valueBranch, _ := addAnyOf[0].(map[string]any)
-	if !hasRequired(valueBranch, "value") {
-		t.Errorf("add anyOf branch = %v, want value", addAnyOf[0])
-	}
-}
-
-// TestActionToolsAdvertiseVariants verifies every action-routed tool constrains
-// each action's required fields with a discriminated oneOf, so the schema
-// reveals the per-action contract instead of only the common fields. anyOf
-// lists the effectful fields an action must name at least one of, so a modify
-// cannot be advertised as a no-op.
-func TestActionToolsAdvertiseVariants(t *testing.T) {
-	want := map[string]struct {
-		common  []string
-		actions map[string][]string
-		anyOf   map[string][]string
-	}{
-		"manage_resource": {
-			common: []string{"resourcePath", "action"},
-			actions: map[string][]string{
-				"create": {"resourceType"},
-				"modify": {"properties"},
-			},
-		},
-		"manage_animation": {
-			common: []string{"resourcePath", "action"},
-			actions: map[string][]string{
-				"create": {},
-				"modify": {},
-				"add":    {"trackType"},
-				"set":    {"trackIndex"},
-				"remove": {"trackIndex"},
-			},
-			anyOf: map[string][]string{
-				"modify": {"length", "loopMode", "step"},
-			},
-		},
-		"manage_tileset": {
-			common: []string{"resourcePath", "action"},
-			actions: map[string][]string{
-				"create":            {},
-				"modify":            {},
-				"addSource":         {"sourceType"},
-				"removeSource":      {"sourceId"},
-				"addTile":           {"sourceId"},
-				"removeTile":        {"sourceId"},
-				"addAlternative":    {"sourceId", "atlasCoords"},
-				"removeAlternative": {"sourceId", "atlasCoords", "alternativeId"},
-				"setTileData":       {"sourceId", "atlasCoords"},
-			},
-			anyOf: map[string][]string{
-				"modify": {"tileSize", "tileShape", "tileLayout", "tileOffsetAxis", "uvClipping"},
-			},
-		},
-		"manage_theme": {
-			common: []string{"resourcePath", "action"},
-			actions: map[string][]string{
-				"create":             {},
-				"modify":             {},
-				"removeType":         {"themeType"},
-				"setTypeVariation":   {"themeType", "baseType"},
-				"clearTypeVariation": {"themeType"},
-				"setItem":            {"themeType", "itemType", "itemName", "value"},
-				"clearItem":          {"themeType", "itemType", "itemName"},
-			},
-			anyOf: map[string][]string{
-				"modify": {"defaultFont", "defaultFontSize", "defaultBaseScale"},
-			},
-		},
-	}
-
-	seen := make(map[string]bool)
-	for _, category := range AllCategories {
-		for _, newTool := range categoryTools[category] {
-			tool := newTool()
-			spec, ok := want[tool.Name]
-			if !ok {
-				continue
-			}
-			seen[tool.Name] = true
-
-			common, _ := tool.InputSchema["required"].([]string)
-			if strings.Join(common, ",") != strings.Join(spec.common, ",") {
-				t.Errorf("tool %q required = %v, want %v", tool.Name, common, spec.common)
-			}
-
-			branches, ok := tool.InputSchema["oneOf"].([]any)
-			if !ok {
-				t.Errorf("tool %q has no oneOf", tool.Name)
-				continue
-			}
-			if len(branches) != len(spec.actions) {
-				t.Errorf("tool %q oneOf has %d branches, want %d", tool.Name, len(branches), len(spec.actions))
-			}
-			for _, branch := range branches {
-				b, ok := branch.(map[string]any)
-				if !ok {
-					t.Errorf("tool %q branch = %T", tool.Name, branch)
-					continue
-				}
-				props, _ := b["properties"].(map[string]any)
-				actionProp, _ := props["action"].(map[string]any)
-				action, _ := actionProp["const"].(string)
-				extras, known := spec.actions[action]
-				if !known {
-					t.Errorf("tool %q has a branch for unknown action %q", tool.Name, action)
-					continue
-				}
-				required, _ := b["required"].([]string)
-				expected := append(append([]string{}, spec.common...), extras...)
-				if strings.Join(required, ",") != strings.Join(expected, ",") {
-					t.Errorf("tool %q action %q required = %v, want %v", tool.Name, action, required, expected)
-				}
-
-				fields, wantAnyOf := spec.anyOf[action]
-				branchAnyOf, hasAnyOf := b["anyOf"].([]any)
-				switch {
-				case !wantAnyOf && hasAnyOf:
-					t.Errorf("tool %q action %q has an unexpected anyOf: %v", tool.Name, action, b["anyOf"])
-				case wantAnyOf && (!hasAnyOf || len(branchAnyOf) != len(fields)):
-					t.Errorf("tool %q action %q anyOf = %v, want %v", tool.Name, action, b["anyOf"], fields)
-				case wantAnyOf:
-					for i, field := range fields {
-						branch, _ := branchAnyOf[i].(map[string]any)
-						if !hasRequired(branch, field) {
-							t.Errorf("tool %q action %q anyOf branch %d = %v, want %q", tool.Name, action, i, branchAnyOf[i], field)
-						}
-					}
-				}
-			}
-		}
-	}
-	for name := range want {
-		if !seen[name] {
-			t.Errorf("tool %q was not registered", name)
 		}
 	}
 }

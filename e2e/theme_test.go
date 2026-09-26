@@ -8,14 +8,64 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestManageThemeSchema pins the action tool's input surface.
-func TestManageThemeSchema(t *testing.T) {
-	schema := requireSchema(t, "manage_theme", "Create or modify Theme resources, their types, variations, and items")
-	schema.requireRequired(t, "resourcePath", "action")
-	schema.requireStringProps(t, "resourcePath", "action", "themeType", "baseType", "itemType", "itemName")
+// TestCreateThemeSchema pins the create tool's input surface.
+func TestCreateThemeSchema(t *testing.T) {
+	schema := requireSchema(t, "create_theme", "Create a Theme resource")
+	schema.requireRequired(t, "resourcePath")
+	schema.requireStringProps(t, "resourcePath")
 	schema.requireType(t, "defaultFontSize", "integer")
 	schema.requireType(t, "defaultBaseScale", "number")
-	schema.requirePropCount(t, 10)
+	schema.requirePropCount(t, 4)
+}
+
+// TestModifyThemeSchema pins the modify tool's input surface.
+func TestModifyThemeSchema(t *testing.T) {
+	schema := requireSchema(t, "modify_theme", "Set a Theme's default font, font size, or base scale")
+	schema.requireRequired(t, "resourcePath")
+	schema.requireStringProps(t, "resourcePath")
+	schema.requireType(t, "defaultFontSize", "integer")
+	schema.requireType(t, "defaultBaseScale", "number")
+	schema.requirePropCount(t, 4)
+}
+
+// TestRemoveThemeTypeSchema pins the remove-type tool's input surface.
+func TestRemoveThemeTypeSchema(t *testing.T) {
+	schema := requireSchema(t, "remove_theme_type", "Remove a type from a Theme")
+	schema.requireRequired(t, "resourcePath", "themeType")
+	schema.requireStringProps(t, "resourcePath", "themeType")
+	schema.requirePropCount(t, 2)
+}
+
+// TestSetThemeTypeVariationSchema pins the set-variation tool's input surface.
+func TestSetThemeTypeVariationSchema(t *testing.T) {
+	schema := requireSchema(t, "set_theme_type_variation", "Set a Theme type variation and its base type")
+	schema.requireRequired(t, "resourcePath", "themeType", "baseType")
+	schema.requireStringProps(t, "resourcePath", "themeType", "baseType")
+	schema.requirePropCount(t, 3)
+}
+
+// TestClearThemeTypeVariationSchema pins the clear-variation tool's input surface.
+func TestClearThemeTypeVariationSchema(t *testing.T) {
+	schema := requireSchema(t, "clear_theme_type_variation", "Clear a Theme type variation")
+	schema.requireRequired(t, "resourcePath", "themeType")
+	schema.requireStringProps(t, "resourcePath", "themeType")
+	schema.requirePropCount(t, 2)
+}
+
+// TestSetThemeItemSchema pins the set-item tool's input surface.
+func TestSetThemeItemSchema(t *testing.T) {
+	schema := requireSchema(t, "set_theme_item", "Set a Theme item on a type")
+	schema.requireRequired(t, "resourcePath", "themeType", "itemType", "itemName", "value")
+	schema.requireStringProps(t, "resourcePath", "themeType", "itemType", "itemName")
+	schema.requirePropCount(t, 5)
+}
+
+// TestClearThemeItemSchema pins the clear-item tool's input surface.
+func TestClearThemeItemSchema(t *testing.T) {
+	schema := requireSchema(t, "clear_theme_item", "Clear a Theme item from a type")
+	schema.requireRequired(t, "resourcePath", "themeType", "itemType", "itemName")
+	schema.requireStringProps(t, "resourcePath", "themeType", "itemType", "itemName")
+	schema.requirePropCount(t, 4)
 }
 
 // TestReadThemeSchema pins the read-only theme tool's input surface.
@@ -67,25 +117,23 @@ func seedThemeResources(t *testing.T, session *mcp.ClientSession) {
 		"themes/icon.tres": "GradientTexture2D",
 		"themes/box.tres":  "StyleBoxFlat",
 	} {
-		requireToolText(t, session, "manage_resource", map[string]any{
+		requireToolText(t, session, "create_resource", map[string]any{
 			"resourcePath": path,
-			"action":       "create",
 			"resourceType": resourceType,
 		})
 	}
 }
 
-// TestManageThemeTool drives the real theme tools against Godot.
-func TestManageThemeTool(t *testing.T) {
+// TestThemeTools drives the real theme tools against Godot.
+func TestThemeTools(t *testing.T) {
 	t.Run("creates a theme with defaults", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
 		seedThemeResources(t, session)
 
-		text := requireToolText(t, session, "manage_theme", map[string]any{
+		text := requireToolText(t, session, "create_theme", map[string]any{
 			"resourcePath":     "themes/main.tres",
-			"action":           "create",
 			"defaultFont":      "themes/font.tres",
 			"defaultFontSize":  16,
 			"defaultBaseScale": 1.5,
@@ -116,9 +164,8 @@ func TestManageThemeTool(t *testing.T) {
 		session := connectProject(t, root)
 		requireGodot(t, session)
 		seedThemeResources(t, session)
-		requireToolText(t, session, "manage_theme", map[string]any{
+		requireToolText(t, session, "create_theme", map[string]any{
 			"resourcePath": "themes/main.tres",
-			"action":       "create",
 		})
 
 		for _, args := range []map[string]any{
@@ -129,8 +176,7 @@ func TestManageThemeTool(t *testing.T) {
 			{"themeType": "Panel", "itemType": "icon", "itemName": "arrow", "value": "themes/icon.tres"},
 		} {
 			args["resourcePath"] = "themes/main.tres"
-			args["action"] = "setItem"
-			requireToolText(t, session, "manage_theme", args)
+			requireToolText(t, session, "set_theme_item", args)
 		}
 
 		payload := readThemePayload(t, session)
@@ -157,9 +203,8 @@ func TestManageThemeTool(t *testing.T) {
 			t.Fatalf("types = %v, want a Panel type", payload.Types)
 		}
 
-		requireToolText(t, session, "manage_theme", map[string]any{
+		requireToolText(t, session, "clear_theme_item", map[string]any{
 			"resourcePath": "themes/main.tres",
-			"action":       "clearItem",
 			"themeType":    "Label",
 			"itemType":     "constant",
 			"itemName":     "outline_size",
@@ -175,14 +220,12 @@ func TestManageThemeTool(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
-		requireToolText(t, session, "manage_theme", map[string]any{
+		requireToolText(t, session, "create_theme", map[string]any{
 			"resourcePath": "themes/main.tres",
-			"action":       "create",
 		})
 
-		requireToolText(t, session, "manage_theme", map[string]any{
+		requireToolText(t, session, "set_theme_type_variation", map[string]any{
 			"resourcePath": "themes/main.tres",
-			"action":       "setTypeVariation",
 			"themeType":    "CustomButton",
 			"baseType":     "Button",
 		})
@@ -192,9 +235,8 @@ func TestManageThemeTool(t *testing.T) {
 			t.Fatalf("types = %v, want CustomButton based on Button", payload.Types)
 		}
 
-		requireToolText(t, session, "manage_theme", map[string]any{
+		requireToolText(t, session, "clear_theme_type_variation", map[string]any{
 			"resourcePath": "themes/main.tres",
-			"action":       "clearTypeVariation",
 			"themeType":    "CustomButton",
 		})
 		payload = readThemePayload(t, session)
@@ -207,22 +249,19 @@ func TestManageThemeTool(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
-		requireToolText(t, session, "manage_theme", map[string]any{
+		requireToolText(t, session, "create_theme", map[string]any{
 			"resourcePath": "themes/main.tres",
-			"action":       "create",
 		})
-		requireToolText(t, session, "manage_theme", map[string]any{
+		requireToolText(t, session, "set_theme_item", map[string]any{
 			"resourcePath": "themes/main.tres",
-			"action":       "setItem",
 			"themeType":    "Label",
 			"itemType":     "constant",
 			"itemName":     "outline_size",
 			"value":        4,
 		})
 
-		requireToolText(t, session, "manage_theme", map[string]any{
+		requireToolText(t, session, "remove_theme_type", map[string]any{
 			"resourcePath": "themes/main.tres",
-			"action":       "removeType",
 			"themeType":    "Label",
 		})
 		payload := readThemePayload(t, session)
@@ -235,14 +274,12 @@ func TestManageThemeTool(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
-		requireToolText(t, session, "manage_theme", map[string]any{
+		requireToolText(t, session, "create_theme", map[string]any{
 			"resourcePath":    "themes/main.tres",
-			"action":          "create",
 			"defaultFontSize": 12,
 		})
-		requireToolText(t, session, "manage_theme", map[string]any{
+		requireToolText(t, session, "modify_theme", map[string]any{
 			"resourcePath":    "themes/main.tres",
-			"action":          "modify",
 			"defaultFontSize": 20,
 		})
 
@@ -253,51 +290,41 @@ func TestManageThemeTool(t *testing.T) {
 	})
 }
 
-// TestManageThemeErrors covers the validation and engine failure paths.
-func TestManageThemeErrors(t *testing.T) {
+// TestThemeErrors covers the validation and engine failure paths.
+func TestThemeErrors(t *testing.T) {
 	t.Run("missing params", func(t *testing.T) {
 		session := connect(t)
-		requireToolError(t, session, "manage_theme", map[string]any{}, "resourcePath and action are required.")
+		requireToolError(t, session, "create_theme", map[string]any{}, "resourcePath is required.")
 	})
 
 	t.Run("setItem without a value", func(t *testing.T) {
 		session := connect(t)
-		requireToolError(t, session, "manage_theme", map[string]any{
+		requireToolError(t, session, "set_theme_item", map[string]any{
 			"resourcePath": "themes/main.tres",
-			"action":       "setItem",
 			"themeType":    "Label",
 			"itemType":     "color",
 			"itemName":     "font_color",
-		}, "value is required for the setItem action.")
+		}, "resourcePath, themeType, itemType, itemName, and value are required.")
 	})
 
-	t.Run("unknown action", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		requireGodot(t, session)
-
-		res := callTool(t, session, "manage_theme", map[string]any{
+	t.Run("setTypeVariation without a base type", func(t *testing.T) {
+		session := connect(t)
+		requireToolError(t, session, "set_theme_type_variation", map[string]any{
 			"resourcePath": "themes/main.tres",
-			"action":       "bogus",
-		})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		requireContains(t, firstText(t, res), "Unknown action: bogus")
+			"themeType":    "CustomButton",
+		}, "resourcePath, themeType, and baseType are required.")
 	})
 
 	t.Run("unknown item type", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
-		requireToolText(t, session, "manage_theme", map[string]any{
+		requireToolText(t, session, "create_theme", map[string]any{
 			"resourcePath": "themes/main.tres",
-			"action":       "create",
 		})
 
-		res := callTool(t, session, "manage_theme", map[string]any{
+		res := callTool(t, session, "set_theme_item", map[string]any{
 			"resourcePath": "themes/main.tres",
-			"action":       "setItem",
 			"themeType":    "Label",
 			"itemType":     "bogus",
 			"itemName":     "font_color",
@@ -326,9 +353,8 @@ func TestManageThemeErrors(t *testing.T) {
 		session := connectProject(t, root)
 		requireGodot(t, session)
 
-		requireToolText(t, session, "manage_resource", map[string]any{
+		requireToolText(t, session, "create_resource", map[string]any{
 			"resourcePath": "resources/mat.tres",
-			"action":       "create",
 			"resourceType": "StandardMaterial3D",
 		})
 		res := callTool(t, session, "read_theme", map[string]any{"resourcePath": "resources/mat.tres"})

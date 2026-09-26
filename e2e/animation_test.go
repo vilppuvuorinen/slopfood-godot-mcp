@@ -8,16 +8,52 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestManageAnimationSchema pins the action tool's input surface.
-func TestManageAnimationSchema(t *testing.T) {
-	schema := requireSchema(t, "manage_animation", "Create or modify Animation resources and their tracks")
-	schema.requireRequired(t, "resourcePath", "action")
-	schema.requireStringProps(t, "resourcePath", "action", "loopMode", "trackType", "trackPath", "interpolation")
-	schema.requireType(t, "trackIndex", "integer")
+// TestCreateAnimationSchema pins the create tool's input surface.
+func TestCreateAnimationSchema(t *testing.T) {
+	schema := requireSchema(t, "create_animation", "Create an Animation resource")
+	schema.requireRequired(t, "resourcePath")
+	schema.requireStringProps(t, "resourcePath", "loopMode")
 	schema.requireType(t, "length", "number")
 	schema.requireType(t, "step", "number")
+	schema.requirePropCount(t, 4)
+}
+
+// TestModifyAnimationSchema pins the modify tool's input surface.
+func TestModifyAnimationSchema(t *testing.T) {
+	schema := requireSchema(t, "modify_animation", "Set an Animation resource's length, loop mode, or step")
+	schema.requireRequired(t, "resourcePath")
+	schema.requireStringProps(t, "resourcePath", "loopMode")
+	schema.requireType(t, "length", "number")
+	schema.requireType(t, "step", "number")
+	schema.requirePropCount(t, 4)
+}
+
+// TestAddAnimationTrackSchema pins the add-track tool's input surface.
+func TestAddAnimationTrackSchema(t *testing.T) {
+	schema := requireSchema(t, "add_animation_track", "Append a track to an Animation resource")
+	schema.requireRequired(t, "resourcePath", "trackType")
+	schema.requireStringProps(t, "resourcePath", "trackType", "trackPath", "interpolation")
 	schema.requireType(t, "keys", "array")
-	schema.requirePropCount(t, 10)
+	schema.requirePropCount(t, 5)
+}
+
+// TestSetAnimationTrackSchema pins the set-track tool's input surface.
+func TestSetAnimationTrackSchema(t *testing.T) {
+	schema := requireSchema(t, "set_animation_track", "Set an existing Animation track's path, interpolation, and keys")
+	schema.requireRequired(t, "resourcePath", "trackIndex")
+	schema.requireStringProps(t, "resourcePath", "trackPath", "interpolation")
+	schema.requireType(t, "trackIndex", "integer")
+	schema.requireType(t, "keys", "array")
+	schema.requirePropCount(t, 5)
+}
+
+// TestRemoveAnimationTrackSchema pins the remove-track tool's input surface.
+func TestRemoveAnimationTrackSchema(t *testing.T) {
+	schema := requireSchema(t, "remove_animation_track", "Remove a track from an Animation resource")
+	schema.requireRequired(t, "resourcePath", "trackIndex")
+	schema.requireStringProps(t, "resourcePath")
+	schema.requireType(t, "trackIndex", "integer")
+	schema.requirePropCount(t, 2)
 }
 
 // TestReadAnimationSchema pins the read-only animation tool's input surface.
@@ -49,26 +85,24 @@ func readAnimationPayload(t *testing.T, session *mcp.ClientSession) testAnimatio
 	return payload
 }
 
-// createTestAnimation seeds anims/walk.tres through manage_animation.
+// createTestAnimation seeds anims/walk.tres through create_animation.
 func createTestAnimation(t *testing.T, session *mcp.ClientSession) {
 	t.Helper()
-	requireToolText(t, session, "manage_animation", map[string]any{
+	requireToolText(t, session, "create_animation", map[string]any{
 		"resourcePath": "anims/walk.tres",
-		"action":       "create",
 		"length":       2,
 	})
 }
 
-// TestManageAnimationTool drives the real animation tools against Godot.
-func TestManageAnimationTool(t *testing.T) {
+// TestAnimationTools drives the real animation tools against Godot.
+func TestAnimationTools(t *testing.T) {
 	t.Run("creates and reads an animation", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
 
-		createText := requireToolText(t, session, "manage_animation", map[string]any{
+		createText := requireToolText(t, session, "create_animation", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "create",
 			"length":       2,
 			"loopMode":     "linear",
 			"step":         0.05,
@@ -92,9 +126,8 @@ func TestManageAnimationTool(t *testing.T) {
 		requireGodot(t, session)
 		createTestAnimation(t, session)
 
-		addText := requireToolText(t, session, "manage_animation", map[string]any{
+		addText := requireToolText(t, session, "add_animation_track", map[string]any{
 			"resourcePath":  "anims/walk.tres",
-			"action":        "add",
 			"trackType":     "value",
 			"trackPath":     "Sprite2D:position",
 			"interpolation": "cubic",
@@ -130,9 +163,8 @@ func TestManageAnimationTool(t *testing.T) {
 		requireGodot(t, session)
 		createTestAnimation(t, session)
 
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "add_animation_track", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "add",
 			"trackType":    "method",
 			"trackPath":    "root",
 			"keys": []any{
@@ -158,9 +190,8 @@ func TestManageAnimationTool(t *testing.T) {
 		requireGodot(t, session)
 		createTestAnimation(t, session)
 
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "add_animation_track", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "add",
 			"trackType":    "value",
 			"trackPath":    "Sprite2D:position",
 			"keys": []any{
@@ -168,9 +199,8 @@ func TestManageAnimationTool(t *testing.T) {
 				map[string]any{"time": 1, "value": map[string]any{"$type": "Vector2", "x": 1, "y": 1}},
 			},
 		})
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "set_animation_track", map[string]any{
 			"resourcePath":  "anims/walk.tres",
-			"action":        "set",
 			"trackIndex":    0,
 			"interpolation": "linear",
 			"keys": []any{
@@ -191,15 +221,13 @@ func TestManageAnimationTool(t *testing.T) {
 		requireGodot(t, session)
 		createTestAnimation(t, session)
 
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "add_animation_track", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "add",
 			"trackType":    "value",
 			"trackPath":    "Sprite2D:position",
 		})
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "remove_animation_track", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "remove",
 			"trackIndex":   0,
 		})
 
@@ -214,14 +242,12 @@ func TestManageAnimationTool(t *testing.T) {
 		session := connectProject(t, root)
 		requireGodot(t, session)
 
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "create_animation", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "create",
 			"length":       1,
 		})
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "modify_animation", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "modify",
 			"loopMode":     "pingpong",
 			"length":       3,
 		})
@@ -238,36 +264,32 @@ func TestManageAnimationTool(t *testing.T) {
 		requireGodot(t, session)
 		createTestAnimation(t, session)
 
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "add_animation_track", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "add",
 			"trackType":    "position_3d",
 			"trackPath":    "root",
 			"keys": []any{
 				map[string]any{"time": 0, "value": map[string]any{"$type": "Vector3", "x": 1, "y": 2, "z": 3}},
 			},
 		})
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "add_animation_track", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "add",
 			"trackType":    "rotation_3d",
 			"trackPath":    "root",
 			"keys": []any{
 				map[string]any{"time": 0, "value": map[string]any{"$type": "Quaternion", "x": 0.5, "y": 0.5, "z": 0.5, "w": 0.5}},
 			},
 		})
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "add_animation_track", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "add",
 			"trackType":    "scale_3d",
 			"trackPath":    "root",
 			"keys": []any{
 				map[string]any{"time": 0, "value": map[string]any{"$type": "Vector3", "x": 2, "y": 3, "z": 4}},
 			},
 		})
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "add_animation_track", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "add",
 			"trackType":    "blend_shape",
 			"trackPath":    "root",
 			"keys": []any{
@@ -309,9 +331,8 @@ func TestManageAnimationTool(t *testing.T) {
 		requireGodot(t, session)
 		createTestAnimation(t, session)
 
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "add_animation_track", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "add",
 			"trackType":    "bezier",
 			"trackPath":    "root",
 			"keys": []any{
@@ -365,23 +386,20 @@ func TestManageAnimationTool(t *testing.T) {
 		// decoded as a StringName; an audio track's value is a resource
 		// reference. Each track carries two keys, one bare and one tagged, so
 		// both decode arms run.
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "add_animation_track", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "add",
 			"trackType":    "animation",
 			"keys": []any{
 				map[string]any{"time": 0, "value": "idle"},
 				map[string]any{"time": 1, "value": map[string]any{"$type": "StringName", "value": "idle"}},
 			},
 		})
-		requireToolText(t, session, "manage_resource", map[string]any{
+		requireToolText(t, session, "create_resource", map[string]any{
 			"resourcePath": "anims/beep.tres",
-			"action":       "create",
 			"resourceType": "AudioStreamWAV",
 		})
-		requireToolText(t, session, "manage_animation", map[string]any{
+		requireToolText(t, session, "add_animation_track", map[string]any{
 			"resourcePath": "anims/walk.tres",
-			"action":       "add",
 			"trackType":    "audio",
 			"keys": []any{
 				map[string]any{"time": 0, "value": "res://anims/beep.tres", "startOffset": 0.1, "endOffset": 0.5},
@@ -442,34 +460,25 @@ func keyValues(t *testing.T, track map[string]any) []any {
 	return out
 }
 
-// TestManageAnimationErrors covers the validation and engine failure paths.
-func TestManageAnimationErrors(t *testing.T) {
+// TestAnimationErrors covers the validation and engine failure paths.
+func TestAnimationErrors(t *testing.T) {
 	t.Run("missing params", func(t *testing.T) {
 		session := connect(t)
-		requireToolError(t, session, "manage_animation", map[string]any{}, "resourcePath and action are required.")
+		requireToolError(t, session, "create_animation", map[string]any{}, "resourcePath is required.")
 	})
 
 	t.Run("add without a track type", func(t *testing.T) {
 		session := connect(t)
-		requireToolError(t, session, "manage_animation", map[string]any{
+		requireToolError(t, session, "add_animation_track", map[string]any{
 			"resourcePath": "anim.tres",
-			"action":       "add",
-		}, "trackType is required for the add action.")
+		}, "resourcePath and trackType are required.")
 	})
 
-	t.Run("unknown action", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		requireGodot(t, session)
-
-		res := callTool(t, session, "manage_animation", map[string]any{
+	t.Run("modify without properties", func(t *testing.T) {
+		session := connect(t)
+		requireToolError(t, session, "modify_animation", map[string]any{
 			"resourcePath": "anim.tres",
-			"action":       "bogus",
-		})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		requireContains(t, firstText(t, res), "Unknown action: bogus")
+		}, "The modify_animation tool requires at least one of: length, loopMode, step.")
 	})
 
 	t.Run("unknown track type", func(t *testing.T) {
@@ -477,16 +486,14 @@ func TestManageAnimationErrors(t *testing.T) {
 		session := connectProject(t, root)
 		requireGodot(t, session)
 
-		res := callTool(t, session, "manage_animation", map[string]any{
+		res := callTool(t, session, "create_animation", map[string]any{
 			"resourcePath": "anim.tres",
-			"action":       "create",
 		})
 		if res.IsError {
 			t.Fatalf("create failed: %s", firstText(t, res))
 		}
-		res = callTool(t, session, "manage_animation", map[string]any{
+		res = callTool(t, session, "add_animation_track", map[string]any{
 			"resourcePath": "anim.tres",
-			"action":       "add",
 			"trackType":    "bogus",
 		})
 		if !res.IsError {
@@ -512,9 +519,8 @@ func TestManageAnimationErrors(t *testing.T) {
 		session := connectProject(t, root)
 		requireGodot(t, session)
 
-		requireToolText(t, session, "manage_resource", map[string]any{
+		requireToolText(t, session, "create_resource", map[string]any{
 			"resourcePath": "resources/mat.tres",
-			"action":       "create",
 			"resourceType": "StandardMaterial3D",
 		})
 		res := callTool(t, session, "read_animation", map[string]any{"resourcePath": "resources/mat.tres"})

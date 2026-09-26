@@ -17,8 +17,10 @@ func TestEnableCategories(t *testing.T) {
 			"add_scene_signal", // signals
 			"set_tilemap_cell", // tilemap
 			"attach_script",    // script
-			"manage_resource",  // assets
-			"read_animation",   // media
+			"create_resource",  // assets
+			"create_animation", // animation
+			"create_tileset",   // tileset
+			"create_theme",     // theme
 		} {
 			findTool(t, session, name)
 		}
@@ -41,6 +43,21 @@ func TestEnableCategories(t *testing.T) {
 		requireToolAbsent(t, session, "create_scene")
 	})
 
+	t.Run("animation, tileset, and theme are independent", func(t *testing.T) {
+		animation := connectCategories(t, "animation")
+		findTool(t, animation, "create_animation")
+		requireToolAbsent(t, animation, "create_tileset")
+		requireToolAbsent(t, animation, "create_theme")
+
+		tileset := connectCategories(t, "tileset")
+		findTool(t, tileset, "create_tileset")
+		requireToolAbsent(t, tileset, "create_animation")
+
+		theme := connectCategories(t, "theme")
+		findTool(t, theme, "create_theme")
+		requireToolAbsent(t, theme, "create_animation")
+	})
+
 	t.Run("all registers every category", func(t *testing.T) {
 		session := connectCategories(t, "all")
 
@@ -53,8 +70,10 @@ func TestEnableCategories(t *testing.T) {
 			"add_scene_signal", // signals
 			"set_tilemap_cell", // tilemap
 			"attach_script",    // script
-			"manage_resource",  // assets
-			"read_animation",   // media
+			"create_resource",  // assets
+			"create_animation", // animation
+			"create_tileset",   // tileset
+			"create_theme",     // theme
 		} {
 			findTool(t, session, name)
 		}

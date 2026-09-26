@@ -54,9 +54,8 @@ func TestSetTilemapCellTool(t *testing.T) {
 		setupTestTileSet(t, session)
 		setupTilemapScene(t, session)
 
-		requireToolText(t, session, "manage_tileset", map[string]any{
+		requireToolText(t, session, "add_tileset_alternative", map[string]any{
 			"resourcePath": "tiles/set.tres",
-			"action":       "addAlternative",
 			"sourceId":     0,
 			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 		})

@@ -22,9 +22,8 @@ metallic = 0.5
 // must be a binary file the engine wrote.
 func seedMaterialRes(t *testing.T, session *mcp.ClientSession) {
 	t.Helper()
-	requireToolText(t, session, "manage_resource", map[string]any{
+	requireToolText(t, session, "create_resource", map[string]any{
 		"resourcePath": "resources/mat.res",
-		"action":       "create",
 		"resourceType": "StandardMaterial3D",
 		"properties": map[string]any{
 			"metallic":     0.5,
@@ -33,14 +32,24 @@ func seedMaterialRes(t *testing.T, session *mcp.ClientSession) {
 	})
 }
 
-// TestManageResourceSchema ports the reference's tool-definition expectations
-// for manage_resource over the real stdio surface.
-func TestManageResourceSchema(t *testing.T) {
-	schema := requireSchema(t, "manage_resource", "Create or modify .tres/.res resource files")
-	schema.requireRequired(t, "resourcePath", "action")
-	schema.requireStringProps(t, "resourcePath", "action", "resourceType")
+// TestCreateResourceSchema ports the tool-definition expectations for
+// create_resource over the real stdio surface.
+func TestCreateResourceSchema(t *testing.T) {
+	schema := requireSchema(t, "create_resource", "Create a .tres/.res resource file")
+	schema.requireRequired(t, "resourcePath", "resourceType")
+	schema.requireStringProps(t, "resourcePath", "resourceType")
 	schema.requireType(t, "properties", "object")
-	schema.requirePropCount(t, 4)
+	schema.requirePropCount(t, 3)
+}
+
+// TestModifyResourceSchema ports the tool-definition expectations for
+// modify_resource over the real stdio surface.
+func TestModifyResourceSchema(t *testing.T) {
+	schema := requireSchema(t, "modify_resource", "Set properties on a .tres/.res resource file")
+	schema.requireRequired(t, "resourcePath", "properties")
+	schema.requireStringProps(t, "resourcePath")
+	schema.requireType(t, "properties", "object")
+	schema.requirePropCount(t, 2)
 }
 
 // TestReadResourceSchema ports the read-only resource tool's expectations.
@@ -52,8 +61,8 @@ func TestReadResourceSchema(t *testing.T) {
 	schema.requirePropCount(t, 2)
 }
 
-// TestManageResourceTool drives the real manage_resource tool against Godot.
-func TestManageResourceTool(t *testing.T) {
+// TestResourceTools drives the real resource tools against Godot.
+func TestResourceTools(t *testing.T) {
 	t.Run("reads a resource", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
@@ -127,9 +136,8 @@ func TestManageResourceTool(t *testing.T) {
 		requireGodot(t, session)
 		seedMaterialRes(t, session)
 
-		modifyText := requireToolText(t, session, "manage_resource", map[string]any{
+		modifyText := requireToolText(t, session, "modify_resource", map[string]any{
 			"resourcePath": "resources/mat.res",
-			"action":       "modify",
 			"properties":   map[string]any{"metallic": 0.75},
 		})
 		requirePrefix(t, modifyText, "manage_resource succeeded.")
@@ -145,9 +153,8 @@ func TestManageResourceTool(t *testing.T) {
 		session := connectProject(t, root)
 		requireGodot(t, session)
 
-		createText := requireToolText(t, session, "manage_resource", map[string]any{
+		createText := requireToolText(t, session, "create_resource", map[string]any{
 			"resourcePath": "materials/red.res",
-			"action":       "create",
 			"resourceType": "StandardMaterial3D",
 			"properties": map[string]any{
 				"albedo_color": map[string]any{"$type": "Color", "r": 1, "g": 0, "b": 0, "a": 1},
@@ -176,16 +183,15 @@ func TestManageResourceTool(t *testing.T) {
 	})
 }
 
-// TestManageResourceTheme covers the Theme codec folded into manage_resource:
+// TestResourceTheme covers the Theme codec handled by the resource tools:
 // create/read/modify with the theme item type inference intact.
-func TestManageResourceTheme(t *testing.T) {
+func TestResourceTheme(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
 	requireGodot(t, session)
 
-	createText := requireToolText(t, session, "manage_resource", map[string]any{
+	createText := requireToolText(t, session, "create_resource", map[string]any{
 		"resourcePath": "themes/main.res",
-		"action":       "create",
 		"resourceType": "Theme",
 		"properties":   map[string]any{"default_font_size": 16},
 	})
@@ -197,9 +203,8 @@ func TestManageResourceTheme(t *testing.T) {
 	requireContains(t, readText, `"type": "Theme"`, `"properties"`, `"default_font_size": 16`)
 	requireNotContains(t, readText, "THEME_JSON_START")
 
-	modifyText := requireToolText(t, session, "manage_resource", map[string]any{
+	modifyText := requireToolText(t, session, "modify_resource", map[string]any{
 		"resourcePath": "themes/main.res",
-		"action":       "modify",
 		"properties":   map[string]any{"default_font_size": 20},
 	})
 	requirePrefix(t, modifyText, "manage_resource succeeded.")
@@ -210,24 +215,22 @@ func TestManageResourceTheme(t *testing.T) {
 	requireContains(t, reReadText, `"type": "Theme"`, `"default_font_size": 20`)
 }
 
-// TestManageResourceThemeConvertsTypes covers theme properties whose JSON
-// values need conversion: a color sent as a component dictionary, a font size,
-// and a Theme item that references another resource by path. The saved .tres is
-// inspected so a silently-ignored or mis-typed value fails the test.
-func TestManageResourceThemeConvertsTypes(t *testing.T) {
+// TestResourceThemeConvertsTypes covers theme properties whose JSON values need
+// conversion: a color sent as a component dictionary, a font size, and a Theme
+// item that references another resource by path. The saved .tres is inspected so
+// a silently-ignored or mis-typed value fails the test.
+func TestResourceThemeConvertsTypes(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
 	requireGodot(t, session)
 
-	requireToolText(t, session, "manage_resource", map[string]any{
+	requireToolText(t, session, "create_resource", map[string]any{
 		"resourcePath": "themes/panel_box.res",
-		"action":       "create",
 		"resourceType": "StyleBoxFlat",
 	})
 
-	createText := requireToolText(t, session, "manage_resource", map[string]any{
+	createText := requireToolText(t, session, "create_resource", map[string]any{
 		"resourcePath": "themes/main.res",
-		"action":       "create",
 		"resourceType": "Theme",
 		"properties": map[string]any{
 			"Label/colors/font_color":    map[string]any{"$type": "Color", "r": 1, "g": 0, "b": 0, "a": 1},
@@ -259,9 +262,8 @@ func TestManageResourceThemeConvertsTypes(t *testing.T) {
 		t.Errorf("panel = %#v, want a reference to panel_box.res", readPayload.Properties["Panel/styles/panel"])
 	}
 
-	modifyText := requireToolText(t, session, "manage_resource", map[string]any{
+	modifyText := requireToolText(t, session, "modify_resource", map[string]any{
 		"resourcePath": "themes/main.res",
-		"action":       "modify",
 		"properties": map[string]any{
 			"Label/colors/font_color": map[string]any{"$type": "Color", "r": 0, "g": 0, "b": 1, "a": 1},
 		},
@@ -283,23 +285,21 @@ func TestManageResourceThemeConvertsTypes(t *testing.T) {
 	}
 }
 
-// TestManageResourceThemeMoreCategories covers the theme item categories whose
-// value type is inferred from the item path rather than an existing property:
+// TestResourceThemeMoreCategories covers the theme item categories whose value
+// type is inferred from the item path rather than an existing property:
 // constants are integers and fonts are object references.
-func TestManageResourceThemeMoreCategories(t *testing.T) {
+func TestResourceThemeMoreCategories(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
 	requireGodot(t, session)
 
-	requireToolText(t, session, "manage_resource", map[string]any{
+	requireToolText(t, session, "create_resource", map[string]any{
 		"resourcePath": "themes/font.res",
-		"action":       "create",
 		"resourceType": "SystemFont",
 	})
 
-	requireToolText(t, session, "manage_resource", map[string]any{
+	requireToolText(t, session, "create_resource", map[string]any{
 		"resourcePath": "themes/categories.res",
-		"action":       "create",
 		"resourceType": "Theme",
 		"properties": map[string]any{
 			"Label/constants/outline_size": 4,
@@ -326,21 +326,25 @@ func TestManageResourceThemeMoreCategories(t *testing.T) {
 	}
 }
 
-// TestManageResourceErrors covers the reference's validation and failure
-// messages.
-func TestManageResourceErrors(t *testing.T) {
+// TestResourceErrors covers the reference's validation and failure messages.
+func TestResourceErrors(t *testing.T) {
 	t.Run("missing params", func(t *testing.T) {
 		session := connect(t)
-		requireToolError(t, session, "manage_resource", map[string]any{}, "resourcePath and action are required.")
+		requireToolError(t, session, "create_resource", map[string]any{}, "resourcePath and resourceType are required.")
 	})
 
 	t.Run("create without resource type", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		requireToolError(t, session, "manage_resource", map[string]any{
+		session := connect(t)
+		requireToolError(t, session, "create_resource", map[string]any{
 			"resourcePath": "materials/red.tres",
-			"action":       "create",
-		}, "resourceType is required for the create action.")
+		}, "resourcePath and resourceType are required.")
+	})
+
+	t.Run("modify without properties", func(t *testing.T) {
+		session := connect(t)
+		requireToolError(t, session, "modify_resource", map[string]any{
+			"resourcePath": "materials/red.tres",
+		}, "resourcePath and properties are required.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
@@ -351,29 +355,13 @@ func TestManageResourceErrors(t *testing.T) {
 		}, "Not a valid Godot project: "+root)
 	})
 
-	t.Run("unknown action", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		requireGodot(t, session)
-
-		res := callTool(t, session, "manage_resource", map[string]any{
-			"resourcePath": "resources/mat.tres",
-			"action":       "bogus",
-		})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		requireContains(t, firstText(t, res), "Unknown manage_resource action: bogus")
-	})
-
 	t.Run("unknown resource type", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireGodot(t, session)
 
-		res := callTool(t, session, "manage_resource", map[string]any{
+		res := callTool(t, session, "create_resource", map[string]any{
 			"resourcePath": "materials/red.tres",
-			"action":       "create",
 			"resourceType": "NotARealResource",
 		})
 		if !res.IsError {
@@ -389,9 +377,8 @@ func TestManageResourceErrors(t *testing.T) {
 
 		// BaseMaterial3D is a registered Resource subclass that Godot
 		// refuses to instantiate directly.
-		res := callTool(t, session, "manage_resource", map[string]any{
+		res := callTool(t, session, "create_resource", map[string]any{
 			"resourcePath": "materials/red.tres",
-			"action":       "create",
 			"resourceType": "BaseMaterial3D",
 		})
 		if !res.IsError {
@@ -406,9 +393,8 @@ func TestManageResourceErrors(t *testing.T) {
 		requireGodot(t, session)
 
 		// Node is instantiable, so the failure is the Resource-subclass guard.
-		res := callTool(t, session, "manage_resource", map[string]any{
+		res := callTool(t, session, "create_resource", map[string]any{
 			"resourcePath": "materials/red.tres",
-			"action":       "create",
 			"resourceType": "Node",
 		})
 		if !res.IsError {
@@ -451,9 +437,8 @@ func TestManageResourceErrors(t *testing.T) {
 		session := connectProject(t, root)
 		requireGodot(t, session)
 
-		res := callTool(t, session, "manage_resource", map[string]any{
+		res := callTool(t, session, "create_resource", map[string]any{
 			"resourcePath": "materials/red.tres",
-			"action":       "create",
 			"resourceType": "StandardMaterial3D",
 			"properties":   map[string]any{"metallic": "not-a-number"},
 		})

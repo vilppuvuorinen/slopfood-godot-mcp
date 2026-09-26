@@ -8,18 +8,93 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestManageTilesetSchema pins the action tool's input surface.
-func TestManageTilesetSchema(t *testing.T) {
-	schema := requireSchema(t, "manage_tileset", "Create or modify TileSet resources and their sources and tiles")
-	schema.requireRequired(t, "resourcePath", "action")
-	schema.requireStringProps(t, "resourcePath", "action", "tileShape", "tileLayout", "tileOffsetAxis", "sourceType", "scenePath")
+// TestCreateTilesetSchema pins the create tool's input surface.
+func TestCreateTilesetSchema(t *testing.T) {
+	schema := requireSchema(t, "create_tileset", "Create a TileSet resource")
+	schema.requireRequired(t, "resourcePath")
+	schema.requireStringProps(t, "resourcePath", "tileShape", "tileLayout", "tileOffsetAxis")
 	schema.requireType(t, "uvClipping", "boolean")
+	schema.requirePropCount(t, 6)
+}
+
+// TestModifyTilesetSchema pins the modify tool's input surface.
+func TestModifyTilesetSchema(t *testing.T) {
+	schema := requireSchema(t, "modify_tileset", "Set a TileSet resource's tile size, shape, layout, and UV clipping")
+	schema.requireRequired(t, "resourcePath")
+	schema.requireStringProps(t, "resourcePath", "tileShape", "tileLayout", "tileOffsetAxis")
+	schema.requireType(t, "uvClipping", "boolean")
+	schema.requirePropCount(t, 6)
+}
+
+// TestAddTilesetSourceSchema pins the add-source tool's input surface.
+func TestAddTilesetSourceSchema(t *testing.T) {
+	schema := requireSchema(t, "add_tileset_source", "Add an atlas or scenes-collection source to a TileSet")
+	schema.requireRequired(t, "resourcePath", "sourceType")
+	schema.requireStringProps(t, "resourcePath", "sourceType")
+	schema.requireType(t, "sourceId", "integer")
 	schema.requireType(t, "useTexturePadding", "boolean")
-	schema.requireType(t, "displayPlaceholder", "boolean")
+	schema.requirePropCount(t, 8)
+}
+
+// TestRemoveTilesetSourceSchema pins the remove-source tool's input surface.
+func TestRemoveTilesetSourceSchema(t *testing.T) {
+	schema := requireSchema(t, "remove_tileset_source", "Remove a source from a TileSet")
+	schema.requireRequired(t, "resourcePath", "sourceId")
+	schema.requireStringProps(t, "resourcePath")
+	schema.requireType(t, "sourceId", "integer")
+	schema.requirePropCount(t, 2)
+}
+
+// TestAddTilesetTileSchema pins the add-tile tool's input surface.
+func TestAddTilesetTileSchema(t *testing.T) {
+	schema := requireSchema(t, "add_tileset_tile", "Add a tile to a TileSet source")
+	schema.requireRequired(t, "resourcePath", "sourceId")
+	schema.requireStringProps(t, "resourcePath", "scenePath")
 	schema.requireType(t, "sourceId", "integer")
 	schema.requireType(t, "sceneTileId", "integer")
+	schema.requireType(t, "displayPlaceholder", "boolean")
+	schema.requirePropCount(t, 7)
+}
+
+// TestRemoveTilesetTileSchema pins the remove-tile tool's input surface.
+func TestRemoveTilesetTileSchema(t *testing.T) {
+	schema := requireSchema(t, "remove_tileset_tile", "Remove a tile from a TileSet source")
+	schema.requireRequired(t, "resourcePath", "sourceId")
+	schema.requireStringProps(t, "resourcePath")
+	schema.requireType(t, "sourceId", "integer")
+	schema.requireType(t, "sceneTileId", "integer")
+	schema.requirePropCount(t, 4)
+}
+
+// TestAddTilesetAlternativeSchema pins the add-alternative tool's input surface.
+func TestAddTilesetAlternativeSchema(t *testing.T) {
+	schema := requireSchema(t, "add_tileset_alternative", "Add an alternative tile to a TileSet atlas tile")
+	schema.requireRequired(t, "resourcePath", "sourceId", "atlasCoords")
+	schema.requireStringProps(t, "resourcePath")
+	schema.requireType(t, "sourceId", "integer")
 	schema.requireType(t, "alternativeId", "integer")
-	schema.requirePropCount(t, 21)
+	schema.requirePropCount(t, 4)
+}
+
+// TestRemoveTilesetAlternativeSchema pins the remove-alternative tool's input surface.
+func TestRemoveTilesetAlternativeSchema(t *testing.T) {
+	schema := requireSchema(t, "remove_tileset_alternative", "Remove an alternative tile from a TileSet atlas tile")
+	schema.requireRequired(t, "resourcePath", "sourceId", "atlasCoords", "alternativeId")
+	schema.requireStringProps(t, "resourcePath")
+	schema.requireType(t, "sourceId", "integer")
+	schema.requireType(t, "alternativeId", "integer")
+	schema.requirePropCount(t, 4)
+}
+
+// TestSetTilesetTileDataSchema pins the set-tile-data tool's input surface.
+func TestSetTilesetTileDataSchema(t *testing.T) {
+	schema := requireSchema(t, "set_tileset_tile_data", "Set properties on a TileSet atlas tile's data")
+	schema.requireRequired(t, "resourcePath", "sourceId", "atlasCoords", "properties")
+	schema.requireStringProps(t, "resourcePath")
+	schema.requireType(t, "sourceId", "integer")
+	schema.requireType(t, "alternativeId", "integer")
+	schema.requireType(t, "properties", "object")
+	schema.requirePropCount(t, 5)
 }
 
 // TestReadTilesetSchema pins the read-only tileset tool's input surface.
@@ -108,29 +183,26 @@ func seedAtlasTexture(t *testing.T, root string) {
 // setupTestTileSet creates tiles/set.tres with atlas source 0 holding one tile.
 func setupTestTileSet(t *testing.T, session *mcp.ClientSession) {
 	t.Helper()
-	requireToolText(t, session, "manage_tileset", map[string]any{
+	requireToolText(t, session, "create_tileset", map[string]any{
 		"resourcePath": "tiles/set.tres",
-		"action":       "create",
 		"tileSize":     map[string]any{"$type": "Vector2i", "x": 16, "y": 16},
 	})
-	requireToolText(t, session, "manage_tileset", map[string]any{
+	requireToolText(t, session, "add_tileset_source", map[string]any{
 		"resourcePath":      "tiles/set.tres",
-		"action":            "addSource",
 		"sourceType":        "atlas",
 		"sourceId":          0,
 		"texture":           "tiles/atlas.tres",
 		"textureRegionSize": map[string]any{"$type": "Vector2i", "x": 16, "y": 16},
 	})
-	requireToolText(t, session, "manage_tileset", map[string]any{
+	requireToolText(t, session, "add_tileset_tile", map[string]any{
 		"resourcePath": "tiles/set.tres",
-		"action":       "addTile",
 		"sourceId":     0,
 		"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 	})
 }
 
-// TestManageTilesetTool drives the real tileset tools against Godot.
-func TestManageTilesetTool(t *testing.T) {
+// TestTilesetTools drives the real tileset tools against Godot.
+func TestTilesetTools(t *testing.T) {
 	t.Run("creates a tileset with an atlas source and tile", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
@@ -163,16 +235,14 @@ func TestManageTilesetTool(t *testing.T) {
 		seedAtlasTexture(t, root)
 		setupTestTileSet(t, session)
 
-		requireToolText(t, session, "manage_tileset", map[string]any{
+		requireToolText(t, session, "set_tileset_tile_data", map[string]any{
 			"resourcePath": "tiles/set.tres",
-			"action":       "setTileData",
 			"sourceId":     0,
 			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 			"properties":   map[string]any{"z_index": 3},
 		})
-		requireToolText(t, session, "manage_tileset", map[string]any{
+		requireToolText(t, session, "add_tileset_alternative", map[string]any{
 			"resourcePath": "tiles/set.tres",
-			"action":       "addAlternative",
 			"sourceId":     0,
 			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 		})
@@ -198,9 +268,8 @@ func TestManageTilesetTool(t *testing.T) {
 		seedAtlasTexture(t, root)
 		setupTestTileSet(t, session)
 
-		requireToolText(t, session, "manage_tileset", map[string]any{
+		requireToolText(t, session, "add_tileset_alternative", map[string]any{
 			"resourcePath": "tiles/set.tres",
-			"action":       "addAlternative",
 			"sourceId":     0,
 			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 		})
@@ -210,9 +279,8 @@ func TestManageTilesetTool(t *testing.T) {
 		}
 		alternativeID := requireExtraAlternative(t, added)
 
-		requireToolText(t, session, "manage_tileset", map[string]any{
+		requireToolText(t, session, "remove_tileset_alternative", map[string]any{
 			"resourcePath":  "tiles/set.tres",
-			"action":        "removeAlternative",
 			"sourceId":      0,
 			"atlasCoords":   map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 			"alternativeId": alternativeID,
@@ -235,15 +303,13 @@ func TestManageTilesetTool(t *testing.T) {
 		setupTestTileSet(t, session)
 		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "props/box.tscn", "rootNodeType": "Node2D"})
 
-		requireToolText(t, session, "manage_tileset", map[string]any{
+		requireToolText(t, session, "add_tileset_source", map[string]any{
 			"resourcePath": "tiles/set.tres",
-			"action":       "addSource",
 			"sourceType":   "scenes",
 			"sourceId":     1,
 		})
-		requireToolText(t, session, "manage_tileset", map[string]any{
+		requireToolText(t, session, "add_tileset_tile", map[string]any{
 			"resourcePath": "tiles/set.tres",
-			"action":       "addTile",
 			"sourceId":     1,
 			"scenePath":    "props/box.tscn",
 		})
@@ -263,9 +329,8 @@ func TestManageTilesetTool(t *testing.T) {
 		}
 
 		// A scenes-collection tile is removed by sceneTileId, not atlasCoords.
-		requireToolText(t, session, "manage_tileset", map[string]any{
+		requireToolText(t, session, "remove_tileset_tile", map[string]any{
 			"resourcePath": "tiles/set.tres",
-			"action":       "removeTile",
 			"sourceId":     1,
 			"sceneTileId":  int(sceneTileID),
 		})
@@ -284,9 +349,8 @@ func TestManageTilesetTool(t *testing.T) {
 		seedAtlasTexture(t, root)
 		setupTestTileSet(t, session)
 
-		requireToolText(t, session, "manage_tileset", map[string]any{
+		requireToolText(t, session, "remove_tileset_tile", map[string]any{
 			"resourcePath": "tiles/set.tres",
-			"action":       "removeTile",
 			"sourceId":     0,
 			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 		})
@@ -296,9 +360,8 @@ func TestManageTilesetTool(t *testing.T) {
 			t.Errorf("tiles = %v, want none after removal", tiles)
 		}
 
-		requireToolText(t, session, "manage_tileset", map[string]any{
+		requireToolText(t, session, "remove_tileset_source", map[string]any{
 			"resourcePath": "tiles/set.tres",
-			"action":       "removeSource",
 			"sourceId":     0,
 		})
 		payload = readTilesetPayload(t, session)
@@ -308,23 +371,19 @@ func TestManageTilesetTool(t *testing.T) {
 	})
 }
 
-// TestManageTilesetErrors covers the validation and engine failure paths.
-func TestManageTilesetErrors(t *testing.T) {
+// TestTilesetErrors covers the validation and engine failure paths.
+func TestTilesetErrors(t *testing.T) {
 	t.Run("missing params", func(t *testing.T) {
 		session := connect(t)
-		requireToolError(t, session, "manage_tileset", map[string]any{}, "resourcePath and action are required.")
+		requireToolError(t, session, "create_tileset", map[string]any{}, "resourcePath is required.")
 	})
 
-	t.Run("unknown action", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		requireGodot(t, session)
-
-		res := callTool(t, session, "manage_tileset", map[string]any{"resourcePath": "set.tres", "action": "bogus"})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		requireContains(t, firstText(t, res), "Unknown action: bogus")
+	t.Run("addAlternative without atlas coords", func(t *testing.T) {
+		session := connect(t)
+		requireToolError(t, session, "add_tileset_alternative", map[string]any{
+			"resourcePath": "tiles/set.tres",
+			"sourceId":     0,
+		}, "resourcePath, sourceId, and atlasCoords are required.")
 	})
 
 	t.Run("unknown source", func(t *testing.T) {
@@ -334,9 +393,8 @@ func TestManageTilesetErrors(t *testing.T) {
 		seedAtlasTexture(t, root)
 		setupTestTileSet(t, session)
 
-		res := callTool(t, session, "manage_tileset", map[string]any{
+		res := callTool(t, session, "add_tileset_tile", map[string]any{
 			"resourcePath": "tiles/set.tres",
-			"action":       "addTile",
 			"sourceId":     9,
 			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 		})
@@ -363,9 +421,8 @@ func TestManageTilesetErrors(t *testing.T) {
 		session := connectProject(t, root)
 		requireGodot(t, session)
 
-		requireToolText(t, session, "manage_resource", map[string]any{
+		requireToolText(t, session, "create_resource", map[string]any{
 			"resourcePath": "resources/mat.tres",
-			"action":       "create",
 			"resourceType": "StandardMaterial3D",
 		})
 		res := callTool(t, session, "read_tileset", map[string]any{"resourcePath": "resources/mat.tres"})
