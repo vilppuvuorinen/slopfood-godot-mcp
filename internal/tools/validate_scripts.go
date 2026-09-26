@@ -22,6 +22,7 @@ func validateScripts() mcp.Tool {
 				"scope": map[string]any{
 					"type":        "string",
 					"enum":        []string{"changed", "all"},
+					"default":     "changed",
 					"description": `"changed" = git-changed .gd (default); "all" = every .gd in project`,
 				},
 				"scriptPaths": map[string]any{

@@ -8,10 +8,10 @@ import (
 // TestGetUIDSchema ports the reference's tool-definition expectations for
 // get_uid over the real stdio surface.
 func TestGetUIDSchema(t *testing.T) {
-	schema := requireSchema(t, "get_uid", "Get the UID for a specific file in a Godot project (for Godot 4.4+)")
-	schema.requireRequired(t, "filePath")
+	schema := requireSchema(t, "get_uid", "Get the UID for a specific file in a Godot project")
+	schema.requireRequired(t, "resourcePath")
 	schema.requirePropCount(t, 1)
-	schema.requireStringProps(t, "filePath")
+	schema.requireStringProps(t, "resourcePath")
 }
 
 // TestGetUIDTool drives the real get_uid tool against Godot for a file with a
@@ -26,7 +26,7 @@ func TestGetUIDTool(t *testing.T) {
 		writeE2EFile(t, filepath.Join(root, "player.gd.uid"), "uid://e2etestuid")
 
 		text := requireToolText(t, session, "get_uid", map[string]any{
-			"filePath": "player.gd",
+			"resourcePath": "player.gd",
 		})
 		requireContains(t, text, `"uid": "uid://e2etestuid"`, `"file": "player.gd"`, `"absolutePath":`)
 	})
@@ -35,7 +35,7 @@ func TestGetUIDTool(t *testing.T) {
 		writeE2EFile(t, filepath.Join(root, "orphan.gd"), "extends Node\n")
 
 		res := callTool(t, session, "get_uid", map[string]any{
-			"filePath": "orphan.gd",
+			"resourcePath": "orphan.gd",
 		})
 		if !res.IsError {
 			t.Fatal("expected an error for a file without a UID sidecar")
@@ -55,7 +55,7 @@ func TestGetUIDVersionGate(t *testing.T) {
 	session := connectProjectWithEnv(t, root, "GODOT_PATH="+path)
 
 	requireToolError(t, session, "get_uid", map[string]any{
-		"filePath": "player.gd",
+		"resourcePath": "player.gd",
 	}, "UIDs are only supported in Godot 4.4 or later. Current version: 4.3.1.stable")
 }
 
@@ -63,14 +63,14 @@ func TestGetUIDVersionGate(t *testing.T) {
 func TestGetUIDErrors(t *testing.T) {
 	t.Run("missing params", func(t *testing.T) {
 		session := connect(t)
-		requireToolError(t, session, "get_uid", map[string]any{}, "filePath is required.")
+		requireToolError(t, session, "get_uid", map[string]any{}, "resourcePath is required.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
 		session := connectProject(t, root)
 		requireToolError(t, session, "get_uid", map[string]any{
-			"filePath": "player.gd",
+			"resourcePath": "player.gd",
 		}, "Not a valid Godot project: "+root)
 	})
 
@@ -78,7 +78,7 @@ func TestGetUIDErrors(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		requireToolError(t, session, "get_uid", map[string]any{
-			"filePath": "player.gd",
+			"resourcePath": "player.gd",
 		}, "File does not exist: player.gd")
 	})
 }

@@ -26,12 +26,13 @@ func updateProjectUIDs() mcp.Tool {
 	return mcp.Tool{
 		Name:        "update_project_uids",
 		Title:       "Update Project UIDs",
-		Description: "Generate missing resource UIDs in a Godot project by scanning it in the editor (for Godot 4.4+)",
+		Description: "Generate missing resource UIDs in a Godot project by scanning it in the editor",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
-			"type":       "object",
-			"properties": map[string]any{},
-			"required":   []string{},
+			"type":        "object",
+			"description": "Requires Godot 4.4 or later, which introduced UID sidecars.",
+			"properties":  map[string]any{},
+			"required":    []string{},
 		},
 		OutputSchema: statusOutputSchema(map[string]any{
 			"projectPath": map[string]any{"type": "string"},

@@ -62,6 +62,11 @@ func TestValidateScriptsSchema(t *testing.T) {
 	if !ok || scope["type"] != "string" {
 		t.Errorf("scope property = %v", props["scope"])
 	}
+	// The default scope is part of the schema, not only the property prose, so
+	// a schema-driven client does not have to parse the description.
+	if scope["default"] != "changed" {
+		t.Errorf("scope default = %v, want changed", scope["default"])
+	}
 	scriptPaths, ok := props["scriptPaths"].(map[string]any)
 	if !ok || scriptPaths["type"] != "array" {
 		t.Errorf("scriptPaths property = %v", props["scriptPaths"])

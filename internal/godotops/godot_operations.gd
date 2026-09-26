@@ -597,12 +597,12 @@ func _mesh_preview_texture(mesh) -> Texture2D:
 
 # Get UID for a specific file
 func get_uid(result: Result, params) -> Result:
-    if not params.has("filePath"):
-        result.err("File path is required")
+    if not params.has("resourcePath"):
+        result.err("Resource path is required")
         return result.fail()
     
     # Ensure the file path starts with res:// for Godot's resource system
-    var file_path = params.filePath
+    var file_path = params.resourcePath
     if not file_path.begins_with("res://"):
         file_path = "res://" + file_path
     

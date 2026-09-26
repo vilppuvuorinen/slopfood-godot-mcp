@@ -9,7 +9,7 @@ import (
 // TestUpdateProjectUIDsSchema ports the reference's tool-definition
 // expectations for update_project_uids over the real stdio surface.
 func TestUpdateProjectUIDsSchema(t *testing.T) {
-	schema := requireSchema(t, "update_project_uids", "Generate missing resource UIDs in a Godot project by scanning it in the editor (for Godot 4.4+)")
+	schema := requireSchema(t, "update_project_uids", "Generate missing resource UIDs in a Godot project by scanning it in the editor")
 	schema.requireRequired(t)
 	schema.requirePropCount(t, 0)
 }

@@ -14,17 +14,18 @@ func getUID() mcp.Tool {
 	return mcp.Tool{
 		Name:        "get_uid",
 		Title:       "Get UID",
-		Description: "Get the UID for a specific file in a Godot project (for Godot 4.4+)",
+		Description: "Get the UID for a specific file in a Godot project",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
-			"type": "object",
+			"type":        "object",
+			"description": "Requires Godot 4.4 or later, which introduced UID sidecars.",
 			"properties": map[string]any{
-				"filePath": map[string]any{
+				"resourcePath": map[string]any{
 					"type":        "string",
-					"description": "Path to the file (relative to project) for which to get the UID",
+					"description": "Resource path (relative to project) for which to get the UID",
 				},
 			},
-			"required": []string{"filePath"},
+			"required": []string{"resourcePath"},
 		},
 		// A file without a .uid sidecar has no UID to return, so it is an error
 		// result rather than a second success shape with no uid. The declared
@@ -40,7 +41,7 @@ func getUID() mcp.Tool {
 }
 
 type getUIDArgs struct {
-	FilePath string `json:"filePath"`
+	ResourcePath string `json:"resourcePath"`
 }
 
 func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
@@ -51,10 +52,10 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 		}
 	}
 	project := projectRoot(ctx)
-	if args.FilePath == "" {
-		return requiredArgsResult("filePath"), nil
+	if args.ResourcePath == "" {
+		return requiredArgsResult("resourcePath"), nil
 	}
-	fileFull, pathOK := confinePath(project, args.FilePath)
+	fileFull, pathOK := confinePath(project, args.ResourcePath)
 	if !validPath(project) || !pathOK {
 		return invalidPathResult(), nil
 	}
@@ -65,7 +66,7 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 
 	if !pathExists(fileFull) {
 		return mcp.ErrorResult(
-			"File does not exist: "+args.FilePath,
+			"File does not exist: "+args.ResourcePath,
 			"Ensure the file path is correct",
 		), nil
 	}
@@ -87,7 +88,7 @@ func handleGetUID(ctx context.Context, raw json.RawMessage) (any, error) {
 		), nil
 	}
 
-	params := map[string]any{"filePath": args.FilePath}
+	params := map[string]any{"resourcePath": args.ResourcePath}
 	stdout, stderr, exitCode, err := runOperation(ctx, project, "get_uid", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.

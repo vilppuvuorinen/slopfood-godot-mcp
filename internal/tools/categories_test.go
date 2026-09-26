@@ -24,6 +24,7 @@ func TestResolveCategories(t *testing.T) {
 		{name: "blank value defaults to all", raw: []string{""}, want: AllCategories},
 		{name: "all expands", raw: []string{"all"}, want: AllCategories},
 		{name: "comma separated", raw: []string{"scene,script"}, want: []Category{CategoryScene, CategoryScript}},
+		{name: "assets category", raw: []string{"assets"}, want: []Category{CategoryAssets}},
 		{name: "repeated flags", raw: []string{"project", "node"}, want: []Category{CategoryProject, CategoryNode}},
 		{name: "deduplicates preserving order", raw: []string{"node,project,node"}, want: []Category{CategoryNode, CategoryProject}},
 		{name: "trims whitespace", raw: []string{" scene , node "}, want: []Category{CategoryScene, CategoryNode}},
@@ -42,7 +43,8 @@ func TestResolveCategories(t *testing.T) {
 }
 
 func TestResolveCategoriesUnknown(t *testing.T) {
-	for _, raw := range [][]string{{"bogus"}, {"all,bogus"}, {"project,nope"}} {
+	// "resources" was renamed to "assets"; it is no longer a valid name.
+	for _, raw := range [][]string{{"bogus"}, {"all,bogus"}, {"project,nope"}, {"resources"}} {
 		if _, err := ResolveCategories(raw); err == nil {
 			t.Errorf("ResolveCategories(%v) = nil error, want an error", raw)
 		}

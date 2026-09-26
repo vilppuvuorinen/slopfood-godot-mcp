@@ -12,13 +12,13 @@ import (
 type Category string
 
 const (
-	CategoryProject   Category = "project"
-	CategorySettings  Category = "settings"
-	CategoryExport    Category = "export"
-	CategoryScene     Category = "scene"
-	CategoryNode      Category = "node"
-	CategoryScript    Category = "script"
-	CategoryResources Category = "resources"
+	CategoryProject  Category = "project"
+	CategorySettings Category = "settings"
+	CategoryExport   Category = "export"
+	CategoryScene    Category = "scene"
+	CategoryNode     Category = "node"
+	CategoryScript   Category = "script"
+	CategoryAssets   Category = "assets"
 )
 
 // AllCategories lists every category in registration order.
@@ -29,7 +29,7 @@ var AllCategories = []Category{
 	CategoryScene,
 	CategoryNode,
 	CategoryScript,
-	CategoryResources,
+	CategoryAssets,
 }
 
 // categoryTools maps each category to the tool constructors it contains. Every
@@ -57,7 +57,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 	CategoryScript: {
 		attachScript, validateScripts,
 	},
-	CategoryResources: {
+	CategoryAssets: {
 		manageResource, readResource, getUID, updateProjectUIDs,
 		manageAnimation, readAnimation, manageTileset, readTileset,
 		manageTheme, readTheme, manageImport, readImport,

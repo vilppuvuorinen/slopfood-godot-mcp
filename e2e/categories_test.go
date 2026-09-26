@@ -15,7 +15,7 @@ func TestEnableCategories(t *testing.T) {
 			"create_scene",          // scene
 			"add_node",              // node
 			"attach_script",         // script
-			"manage_resource",       // resources
+			"manage_resource",       // assets
 		} {
 			findTool(t, session, name)
 		}
@@ -47,7 +47,7 @@ func TestEnableCategories(t *testing.T) {
 			"create_scene",          // scene
 			"add_node",              // node
 			"attach_script",         // script
-			"manage_resource",       // resources
+			"manage_resource",       // assets
 		} {
 			findTool(t, session, name)
 		}

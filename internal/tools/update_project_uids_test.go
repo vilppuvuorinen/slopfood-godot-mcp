@@ -13,8 +13,13 @@ func TestUpdateProjectUIDsSchema(t *testing.T) {
 	if tool.Name != "update_project_uids" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Generate missing resource UIDs in a Godot project by scanning it in the editor (for Godot 4.4+)" {
+	if tool.Description != "Generate missing resource UIDs in a Godot project by scanning it in the editor" {
 		t.Errorf("description = %q", tool.Description)
+	}
+	// The Godot 4.4+ requirement is part of the schema, not only the prose
+	// description, so a schema-driven client can see it.
+	if schema := tool.InputSchema["description"]; !strings.Contains(schema.(string), "4.4") {
+		t.Errorf("input schema description = %v, want the 4.4 requirement", schema)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
 	if !ok || len(required) != 0 {
