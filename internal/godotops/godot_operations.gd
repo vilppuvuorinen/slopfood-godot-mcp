@@ -31,6 +31,29 @@ class Result extends RefCounted:
         ok = false
         return self
 
+# DecodeResult carries the outcome of turning a caller-supplied value into the
+# Variant a property expects. ok is false when the value cannot be decoded,
+# error is the reason, and value is the decoded Variant (or a neutral fallback
+# such as a zero vector, so a composite constructor never receives null). The
+# result travels with the value, so a failure can never be mistaken for a stale
+# one from an earlier decode.
+class DecodeResult extends RefCounted:
+    var ok := true
+    var error := ""
+    var value = null
+
+    static func success(decoded) -> DecodeResult:
+        var result := DecodeResult.new()
+        result.value = decoded
+        return result
+
+    static func failure(message: String, fallback = null) -> DecodeResult:
+        var result := DecodeResult.new()
+        result.ok = false
+        result.error = message
+        result.value = fallback
+        return result
+
 func _init():
     _result = Result.new()
     var args = OS.get_cmdline_args()
@@ -77,10 +100,6 @@ func _init():
         return
 
     log_info("Executing operation: " + operation)
-
-    # Decoding a caller-supplied value is fallible; reset the shared error so a
-    # stale message from a prior decode can never be mistaken for a current one.
-    _decode_error = ""
 
     match operation:
         "create_scene":
@@ -143,12 +162,6 @@ var _result: Result = null
 # in _process before the main loop exits; they are never added to the scene
 # tree, so without this the engine reports ObjectDB/RID leaks at exit.
 var _temp_nodes = []
-
-# _decode_error is set by the value decoder when a caller-supplied value cannot
-# be turned into the Variant a property expects. Handlers check it after
-# applying properties and abort before saving, so a rejected value never leaves
-# a partially-written file behind.
-var _decode_error = ""
 
 # Return the active operation result, creating it when no dispatcher has. The
 # dispatcher creates it up front, so its own log lines survive into the buffers
@@ -432,8 +445,9 @@ func add_node(params) -> Result:
             return op_result.fail()
     new_node.name = params.nodeName
     if params.has("properties"):
-        if not _apply_properties(new_node, params.properties):
-            _result.err("Invalid property value: " + _decode_error)
+        var applied = _apply_properties(new_node, params.properties)
+        if not applied.ok:
+            _result.err("Invalid property value: " + applied.error)
             return op_result.fail()
 
     parent.add_child(new_node)
@@ -903,21 +917,21 @@ func _variant_to_json(value):
 func _godot_text(value):
     return {"$type": "GodotText", "text": var_to_str(value)}
 
-# Set every property, decoding each one first. Returns false and leaves the
-# shared decode error set when a value cannot be decoded, so the caller aborts
-# before writing anything.
-func _apply_properties(target, properties) -> bool:
+# Set every property, decoding each one first. Returns a DecodeResult carrying
+# the failure reason when a value cannot be decoded, so the caller aborts before
+# writing anything.
+func _apply_properties(target, properties) -> DecodeResult:
     for prop_name in properties:
         var decoded = _convert_property_value(target, prop_name, properties[prop_name])
-        if _decode_error != "":
-            return false
-        target.set(prop_name, decoded)
-    return true
+        if not decoded.ok:
+            return decoded
+        target.set(prop_name, decoded.value)
+    return DecodeResult.success(null)
 
 # Convert a caller-supplied value into the type a target property expects. The
 # value must already be in the tool value contract, with a $type tag for any
 # engine-only type; a bare JSON object is a plain Dictionary, never a Vector2.
-func _convert_property_value(target, prop_name, value):
+func _convert_property_value(target, prop_name, value) -> DecodeResult:
     for prop in target.get_property_list():
         if prop["name"] == prop_name:
             return _convert_value_for_type(prop.get("type", 0), value)
@@ -926,47 +940,47 @@ func _convert_property_value(target, prop_name, value):
 # Convert a value to the Godot type identified by a Variant type id. Native
 # JSON scalars are coerced to the property's declared type; engine-only types
 # must arrive as a matching $type object.
-func _convert_value_for_type(type_id, value):
+func _convert_value_for_type(type_id, value) -> DecodeResult:
     if value is Dictionary and value.has("$type"):
         return _decode_typed(value)
     match type_id:
         TYPE_VECTOR2, TYPE_VECTOR2I, TYPE_VECTOR3, TYPE_VECTOR3I, TYPE_VECTOR4, TYPE_VECTOR4I, \
         TYPE_COLOR, TYPE_RECT2, TYPE_RECT2I, TYPE_TRANSFORM2D, TYPE_QUATERNION, \
         TYPE_BASIS, TYPE_TRANSFORM3D, TYPE_AABB, TYPE_PLANE:
-            return _decode_fail("expected a tagged {\"$type\": ...} value for a %s property" % type_string(type_id))
+            return DecodeResult.failure("expected a tagged {\"$type\": ...} value for a %s property" % type_string(type_id))
         TYPE_BOOL:
             if value is bool:
-                return value
-            return _decode_fail("expected a boolean")
+                return DecodeResult.success(value)
+            return DecodeResult.failure("expected a boolean")
         TYPE_INT:
             if value is int or value is float:
-                return int(value)
-            return _decode_fail("expected an integer")
+                return DecodeResult.success(int(value))
+            return DecodeResult.failure("expected an integer")
         TYPE_FLOAT:
             if value is int or value is float:
-                return float(value)
-            return _decode_fail("expected a number")
+                return DecodeResult.success(float(value))
+            return DecodeResult.failure("expected a number")
         TYPE_STRING:
             if value is String:
-                return value
-            return _decode_fail("expected a string")
+                return DecodeResult.success(value)
+            return DecodeResult.failure("expected a string")
         TYPE_STRING_NAME:
             if value is String:
-                return StringName(value)
-            return _decode_fail("expected a string")
+                return DecodeResult.success(StringName(value))
+            return DecodeResult.failure("expected a string")
         TYPE_NODE_PATH:
             if value is String:
-                return NodePath(value)
-            return _decode_fail("expected a string path")
+                return DecodeResult.success(NodePath(value))
+            return DecodeResult.failure("expected a string path")
         TYPE_PACKED_STRING_ARRAY:
             if value is Array:
                 var out = PackedStringArray()
                 for item in value:
                     if not (item is String):
-                        return _decode_fail("expected an array of strings")
+                        return DecodeResult.failure("expected an array of strings")
                     out.append(item)
-                return out
-            return _decode_fail("expected an array of strings")
+                return DecodeResult.success(out)
+            return DecodeResult.failure("expected an array of strings")
         TYPE_OBJECT:
             return _decode_object(value)
     return _decode_value(value)
@@ -975,80 +989,123 @@ func _convert_value_for_type(type_id, value):
 # $type; plain dictionaries and arrays are decoded recursively so tagged values
 # nested inside them still work. An unrecognized $type is an error, never a
 # silent pass-through.
-func _decode_value(value):
+func _decode_value(value) -> DecodeResult:
     if value is Dictionary:
         if value.has("$type"):
             return _decode_typed(value)
         var result = {}
         for key in value:
             var decoded = _decode_value(value[key])
-            if _decode_error != "":
-                return null
-            result[key] = decoded
-        return result
+            if not decoded.ok:
+                return decoded
+            result[key] = decoded.value
+        return DecodeResult.success(result)
     if value is Array:
         var items = []
         for item in value:
             var decoded = _decode_value(item)
-            if _decode_error != "":
-                return null
-            items.append(decoded)
-        return items
-    return value
+            if not decoded.ok:
+                return decoded
+            items.append(decoded.value)
+        return DecodeResult.success(items)
+    return DecodeResult.success(value)
 
 # Decode a tagged value by its $type. Every branch validates its fields and
-# reports through _decode_error; an unlisted tag is rejected.
-func _decode_typed(value):
+# returns a DecodeResult; an unlisted tag is rejected.
+func _decode_typed(value) -> DecodeResult:
     var tag = value.get("$type", "")
     match tag:
         "Vector2":
-            return Vector2(_number_field(value, "x"), _number_field(value, "y"))
+            var x = _number_field(value, "x")
+            var y = _number_field(value, "y")
+            return _decoded(Vector2(x.value, y.value), [x, y])
         "Vector2i":
-            return Vector2i(int(_number_field(value, "x")), int(_number_field(value, "y")))
+            var x = _number_field(value, "x")
+            var y = _number_field(value, "y")
+            return _decoded(Vector2i(int(x.value), int(y.value)), [x, y])
         "Vector3":
-            return Vector3(_number_field(value, "x"), _number_field(value, "y"), _number_field(value, "z"))
+            var x = _number_field(value, "x")
+            var y = _number_field(value, "y")
+            var z = _number_field(value, "z")
+            return _decoded(Vector3(x.value, y.value, z.value), [x, y, z])
         "Vector3i":
-            return Vector3i(int(_number_field(value, "x")), int(_number_field(value, "y")), int(_number_field(value, "z")))
+            var x = _number_field(value, "x")
+            var y = _number_field(value, "y")
+            var z = _number_field(value, "z")
+            return _decoded(Vector3i(int(x.value), int(y.value), int(z.value)), [x, y, z])
         "Vector4":
-            return Vector4(_number_field(value, "x"), _number_field(value, "y"), _number_field(value, "z"), _number_field(value, "w"))
+            var x = _number_field(value, "x")
+            var y = _number_field(value, "y")
+            var z = _number_field(value, "z")
+            var w = _number_field(value, "w")
+            return _decoded(Vector4(x.value, y.value, z.value, w.value), [x, y, z, w])
         "Vector4i":
-            return Vector4i(int(_number_field(value, "x")), int(_number_field(value, "y")), int(_number_field(value, "z")), int(_number_field(value, "w")))
+            var x = _number_field(value, "x")
+            var y = _number_field(value, "y")
+            var z = _number_field(value, "z")
+            var w = _number_field(value, "w")
+            return _decoded(Vector4i(int(x.value), int(y.value), int(z.value), int(w.value)), [x, y, z, w])
         "Color":
-            return Color(_number_field(value, "r"), _number_field(value, "g"), _number_field(value, "b"), _number_field_or(value, "a", 1.0))
+            var r = _number_field(value, "r")
+            var g = _number_field(value, "g")
+            var b = _number_field(value, "b")
+            var a = _number_field_or(value, "a", 1.0)
+            return _decoded(Color(r.value, g.value, b.value, a.value), [r, g, b, a])
         "Rect2":
-            return Rect2(_vector_field(value, "position", TYPE_VECTOR2), _vector_field(value, "size", TYPE_VECTOR2))
+            var position = _vector_field(value, "position", TYPE_VECTOR2)
+            var size = _vector_field(value, "size", TYPE_VECTOR2)
+            return _decoded(Rect2(position.value, size.value), [position, size])
         "Rect2i":
-            return Rect2i(_vector_field(value, "position", TYPE_VECTOR2I), _vector_field(value, "size", TYPE_VECTOR2I))
+            var position = _vector_field(value, "position", TYPE_VECTOR2I)
+            var size = _vector_field(value, "size", TYPE_VECTOR2I)
+            return _decoded(Rect2i(position.value, size.value), [position, size])
         "Transform2D":
-            return Transform2D(_vector_field(value, "x", TYPE_VECTOR2), _vector_field(value, "y", TYPE_VECTOR2), _vector_field(value, "origin", TYPE_VECTOR2))
+            var x = _vector_field(value, "x", TYPE_VECTOR2)
+            var y = _vector_field(value, "y", TYPE_VECTOR2)
+            var origin = _vector_field(value, "origin", TYPE_VECTOR2)
+            return _decoded(Transform2D(x.value, y.value, origin.value), [x, y, origin])
         "Quaternion":
-            return Quaternion(_number_field(value, "x"), _number_field(value, "y"), _number_field(value, "z"), _number_field_or(value, "w", 1.0))
+            var x = _number_field(value, "x")
+            var y = _number_field(value, "y")
+            var z = _number_field(value, "z")
+            var w = _number_field_or(value, "w", 1.0)
+            return _decoded(Quaternion(x.value, y.value, z.value, w.value), [x, y, z, w])
         "Basis":
-            return Basis(_vector_field(value, "x", TYPE_VECTOR3), _vector_field(value, "y", TYPE_VECTOR3), _vector_field(value, "z", TYPE_VECTOR3))
+            var x = _vector_field(value, "x", TYPE_VECTOR3)
+            var y = _vector_field(value, "y", TYPE_VECTOR3)
+            var z = _vector_field(value, "z", TYPE_VECTOR3)
+            return _decoded(Basis(x.value, y.value, z.value), [x, y, z])
         "Transform3D":
             var basis = _typed_field(value, "basis", "Basis")
             var origin = _vector_field(value, "origin", TYPE_VECTOR3)
-            if _decode_error != "":
-                return null
-            return Transform3D(basis, origin)
+            var failure = _last_failure([basis, origin])
+            if failure != null:
+                return failure
+            return DecodeResult.success(Transform3D(basis.value, origin.value))
         "AABB":
-            return AABB(_vector_field(value, "position", TYPE_VECTOR3), _vector_field(value, "size", TYPE_VECTOR3))
+            var position = _vector_field(value, "position", TYPE_VECTOR3)
+            var size = _vector_field(value, "size", TYPE_VECTOR3)
+            return _decoded(AABB(position.value, size.value), [position, size])
         "Plane":
-            return Plane(_vector_field(value, "normal", TYPE_VECTOR3), _number_field(value, "d"))
+            var normal = _vector_field(value, "normal", TYPE_VECTOR3)
+            var d = _number_field(value, "d")
+            return _decoded(Plane(normal.value, d.value), [normal, d])
         "NodePath":
-            return NodePath(_string_field(value, "path"))
+            var path = _string_field(value, "path")
+            return _decoded(NodePath(path.value), [path])
         "StringName":
-            return StringName(_string_field(value, "value"))
+            var name = _string_field(value, "value")
+            return _decoded(StringName(name.value), [name])
         "PackedStringArray":
             var raw = value.get("values", null)
             if not (raw is Array):
-                return _decode_fail("$type PackedStringArray needs a \"values\" array")
+                return DecodeResult.failure("$type PackedStringArray needs a \"values\" array")
             var out = PackedStringArray()
             for item in raw:
                 if not (item is String):
-                    return _decode_fail("PackedStringArray values must be strings")
+                    return DecodeResult.failure("PackedStringArray values must be strings")
                 out.append(item)
-            return out
+            return DecodeResult.success(out)
         "Resource":
             return _decode_resource(value)
         "GodotText":
@@ -1056,42 +1113,58 @@ func _decode_typed(value):
             # escape-hatch value; a type var_to_str cannot rebuild (an Object)
             # falls back to the literal text.
             var text = _string_field(value, "text")
-            if _decode_error != "":
-                return null
-            var parsed = str_to_var(text)
+            if not text.ok:
+                return text
+            var parsed = str_to_var(text.value)
             if parsed != null:
-                return parsed
-            return text
+                return DecodeResult.success(parsed)
+            return DecodeResult.success(text.value)
         "Dictionary":
             var inner = value.get("value", null)
             if inner is Dictionary:
                 return _decode_value(inner)
-            return _decode_fail("$type Dictionary needs a \"value\" object")
-    return _decode_fail("unknown $type: " + str(tag))
+            return DecodeResult.failure("$type Dictionary needs a \"value\" object")
+    return DecodeResult.failure("unknown $type: " + str(tag))
+
+# Carry a constructed composite value once every field decoded, or report the
+# last field failure. Evaluating every field before returning mirrors the old
+# shared-error behavior, where a later failure overwrote an earlier one, and the
+# neutral fallback each field carries keeps null out of the constructor.
+func _decoded(decoded, results) -> DecodeResult:
+    var failure = _last_failure(results)
+    if failure != null:
+        return failure
+    return DecodeResult.success(decoded)
+
+# The last failing DecodeResult in results, or null when every result succeeded.
+func _last_failure(results):
+    var failure = null
+    for result in results:
+        if not result.ok:
+            failure = result
+    return failure
 
 # Decode a nested tagged value, requiring the given tag.
-func _typed_field(value, field, tag):
+func _typed_field(value, field, tag) -> DecodeResult:
     var inner = value.get(field, null)
     if inner is Dictionary and inner.get("$type", "") == tag:
         return _decode_typed(inner)
-    return _decode_fail("field \"" + field + "\" must be a {\"$type\": \"" + tag + "\"} value")
+    return DecodeResult.failure("field \"" + field + "\" must be a {\"$type\": \"" + tag + "\"} value")
 
 # Decode a nested Vector field, requiring and converting the given type. On
 # failure it reports and returns that type's zero vector, so a composite
 # constructor is never handed null (which the engine logs as a separate
 # SCRIPT ERROR before the caller's decode error).
-func _vector_field(value, field, type_id):
+func _vector_field(value, field, type_id) -> DecodeResult:
     var inner = value.get(field, null)
     if inner is Dictionary and inner.has("$type"):
         var decoded = _decode_typed(inner)
-        if _decode_error != "":
-            return _zero_vector(type_id)
-        if typeof(decoded) == type_id:
-            return decoded
-        _decode_error = "field \"" + field + "\" has the wrong vector type"
-        return _zero_vector(type_id)
-    _decode_error = "field \"" + field + "\" must be a tagged vector value"
-    return _zero_vector(type_id)
+        if not decoded.ok:
+            return DecodeResult.failure(decoded.error, _zero_vector(type_id))
+        if typeof(decoded.value) == type_id:
+            return DecodeResult.success(decoded.value)
+        return DecodeResult.failure("field \"" + field + "\" has the wrong vector type", _zero_vector(type_id))
+    return DecodeResult.failure("field \"" + field + "\" must be a tagged vector value", _zero_vector(type_id))
 
 # The zero value for a Vector Variant type id, returned by _vector_field when
 # a field cannot be decoded.
@@ -1113,55 +1186,48 @@ func _zero_vector(type_id):
 
 # Decode an object-typed value. A bare res:// or user:// string is sugar for a
 # Resource reference; a tagged Resource or GodotText also decodes.
-func _decode_object(value):
+func _decode_object(value) -> DecodeResult:
     if value is String:
         if value.begins_with("res://") or value.begins_with("user://"):
             return _decode_resource_path(value)
-        return _decode_fail("expected a res:// path or a tagged value for an object property")
+        return DecodeResult.failure("expected a res:// path or a tagged value for an object property")
     return _decode_value(value)
 
-func _decode_resource(value):
+func _decode_resource(value) -> DecodeResult:
     var path = value.get("path", null)
     if not (path is String):
-        return _decode_fail("$type Resource needs a \"path\" string")
+        return DecodeResult.failure("$type Resource needs a \"path\" string")
     return _decode_resource_path(path)
 
-func _decode_resource_path(path):
+func _decode_resource_path(path) -> DecodeResult:
     if ResourceLoader.exists(path):
         var res = load(path)
         if res != null:
-            return res
-    return _decode_fail("failed to load resource: " + path)
+            return DecodeResult.success(res)
+    return DecodeResult.failure("failed to load resource: " + path)
 
-# Field readers. Each reports through _decode_error and returns a zero value on
-# failure; the caller's error check discards that zero value.
-func _number_field(value, field) -> float:
+# Field readers. Each returns a DecodeResult whose value is a neutral fallback
+# (0.0 or "") on failure, so a composite constructor never receives null; the
+# caller propagates the failure before using the value.
+func _number_field(value, field) -> DecodeResult:
     var raw = value.get(field, null)
     if raw is int or raw is float:
-        return float(raw)
-    _decode_error = "expected a number for \"" + field + "\" in " + _tag_label(value)
-    return 0.0
+        return DecodeResult.success(float(raw))
+    return DecodeResult.failure("expected a number for \"" + field + "\" in " + _tag_label(value), 0.0)
 
-func _number_field_or(value, field, fallback) -> float:
+func _number_field_or(value, field, fallback) -> DecodeResult:
     if not value.has(field):
-        return fallback
+        return DecodeResult.success(fallback)
     return _number_field(value, field)
 
-func _string_field(value, field) -> String:
+func _string_field(value, field) -> DecodeResult:
     var raw = value.get(field, null)
     if raw is String:
-        return raw
-    _decode_error = "expected a string for \"" + field + "\" in " + _tag_label(value)
-    return ""
+        return DecodeResult.success(raw)
+    return DecodeResult.failure("expected a string for \"" + field + "\" in " + _tag_label(value), "")
 
 func _tag_label(value) -> String:
     return "$type " + str(value.get("$type", "value"))
-
-# _decode_fail records a decode error and returns null; handlers check
-# _decode_error and abort before saving.
-func _decode_fail(message):
-    _decode_error = message
-    return null
 
 # Modify a node's properties in a scene file
 func modify_node(params) -> Result:
@@ -1202,8 +1268,9 @@ func modify_node(params) -> Result:
         return op_result.fail()
 
     # Set properties with type conversion
-    if not _apply_properties(target, params.properties):
-        _result.err("Invalid property value: " + _decode_error)
+    var applied = _apply_properties(target, params.properties)
+    if not applied.ok:
+        _result.err("Invalid property value: " + applied.error)
         return op_result.fail()
 
     # Repack and save
@@ -1627,8 +1694,9 @@ func manage_resource(params) -> Result:
             _result.err("Type " + resource_type + " is not a Resource subclass")
             return op_result.fail()
 
-        if not _apply_resource_properties(resource, params.get("properties", {})):
-            _result.err("Invalid property value: " + _decode_error)
+        var applied_create = _apply_resource_properties(resource, params.get("properties", {}))
+        if not applied_create.ok:
+            _result.err("Invalid property value: " + applied_create.error)
             return op_result.fail()
 
         if not _save_resource(resource, full_path):
@@ -1657,8 +1725,9 @@ func manage_resource(params) -> Result:
         var resource = _load_resource(full_path)
         if resource == null:
             return op_result
-        if not _apply_resource_properties(resource, params.get("properties", {})):
-            _result.err("Invalid property value: " + _decode_error)
+        var applied_modify = _apply_resource_properties(resource, params.get("properties", {}))
+        if not applied_modify.ok:
+            _result.err("Invalid property value: " + applied_modify.error)
             return op_result.fail()
         if not _save_resource(resource, full_path):
             return op_result
@@ -1715,7 +1784,7 @@ func _save_resource(resource, full_path) -> bool:
 # Apply a caller's properties to a resource. Theme items need their value type
 # inferred from the item path, so Themes go through the theme codec; every other
 # resource uses the plain property decoder.
-func _apply_resource_properties(resource, properties) -> bool:
+func _apply_resource_properties(resource, properties) -> DecodeResult:
     if resource is Theme:
         return _apply_theme_properties(resource, properties)
     return _apply_properties(resource, properties)
@@ -1724,17 +1793,17 @@ func _apply_resource_properties(resource, properties) -> bool:
 # Apply a caller's properties map to a Theme with type conversion. Theme items
 # are keyed by composite names such as "Label/colors/font_color", so the value
 # type is derived from the matching property entry when the item already exists
-# and from the key's category when this call creates it. Returns false and
-# leaves the decode error set when a value cannot be decoded.
-func _apply_theme_properties(theme, properties) -> bool:
+# and from the key's category when this call creates it. Returns a DecodeResult
+# carrying the failure reason when a value cannot be decoded.
+func _apply_theme_properties(theme, properties) -> DecodeResult:
     for key in properties:
         var decoded = _convert_theme_property(theme, key, properties[key])
-        if _decode_error != "":
-            return false
-        theme.set(key, decoded)
-    return true
+        if not decoded.ok:
+            return decoded
+        theme.set(key, decoded.value)
+    return DecodeResult.success(null)
 
-func _convert_theme_property(theme, key, value):
+func _convert_theme_property(theme, key, value) -> DecodeResult:
     var type_id = -1
     for prop in theme.get_property_list():
         if prop["name"] == key:
@@ -1751,7 +1820,7 @@ func _convert_theme_property(theme, key, value):
                 "fonts", "icons", "styles":
                     type_id = TYPE_OBJECT
     if type_id == -1:
-        return value
+        return DecodeResult.success(value)
     return _convert_value_for_type(type_id, value)
 
 # Track type, loop mode, and interpolation names as they appear in the tool
@@ -1797,8 +1866,9 @@ func manage_animation(params) -> Result:
 
     if action == "create":
         var created = Animation.new()
-        if not _apply_animation_properties(created, params):
-            _result.err("Invalid animation property: " + _decode_error)
+        var created_properties = _apply_animation_properties(created, params)
+        if not created_properties.ok:
+            _result.err("Invalid animation property: " + created_properties.error)
             return op_result.fail()
         if not _save_resource(created, full_path):
             return op_result
@@ -1810,20 +1880,24 @@ func manage_animation(params) -> Result:
         return op_result
 
     if action == "modify":
-        if not _apply_animation_properties(animation, params):
-            _result.err("Invalid animation property: " + _decode_error)
+        var modified = _apply_animation_properties(animation, params)
+        if not modified.ok:
+            _result.err("Invalid animation property: " + modified.error)
             return op_result.fail()
     elif action == "add":
-        if not _add_animation_track(animation, params):
-            _result.err("Invalid animation track: " + _decode_error)
+        var added = _add_animation_track(animation, params)
+        if not added.ok:
+            _result.err("Invalid animation track: " + added.error)
             return op_result.fail()
     elif action == "set":
-        if not _set_animation_track(animation, params):
-            _result.err("Invalid animation track: " + _decode_error)
+        var set_track = _set_animation_track(animation, params)
+        if not set_track.ok:
+            _result.err("Invalid animation track: " + set_track.error)
             return op_result.fail()
     elif action == "remove":
-        if not _remove_animation_track(animation, params):
-            _result.err("Invalid animation track: " + _decode_error)
+        var removed = _remove_animation_track(animation, params)
+        if not removed.ok:
+            _result.err("Invalid animation track: " + removed.error)
             return op_result.fail()
     else:
         _result.err("Unknown manage_animation action: " + action)
@@ -1853,55 +1927,50 @@ func _load_animation(full_path):
     return resource
 
 # Apply the animation-level properties length, loopMode, and step when present.
-func _apply_animation_properties(animation, params) -> bool:
+func _apply_animation_properties(animation, params) -> DecodeResult:
     if params.has("length"):
         var length = params["length"]
         if not (length is int or length is float):
-            _decode_error = "length must be a number"
-            return false
+            return DecodeResult.failure("length must be a number")
         animation.length = float(length)
     if params.has("loopMode"):
         var mode = str(params["loopMode"])
         if not ANIMATION_LOOP_MODES.has(mode):
-            _decode_error = "unknown loopMode: " + mode
-            return false
+            return DecodeResult.failure("unknown loopMode: " + mode)
         animation.loop_mode = ANIMATION_LOOP_MODES[mode]
     if params.has("step"):
         var step = params["step"]
         if not (step is int or step is float):
-            _decode_error = "step must be a number"
-            return false
+            return DecodeResult.failure("step must be a number")
         animation.step = float(step)
-    return true
+    return DecodeResult.success(null)
 
 # Append a track built from the caller's trackType, trackPath, interpolation,
 # and keys.
-func _add_animation_track(animation, params) -> bool:
+func _add_animation_track(animation, params) -> DecodeResult:
     var type_id = _track_type_id(params.get("trackType", ""))
     if type_id == -1:
-        _decode_error = "unknown trackType: " + str(params.get("trackType", ""))
-        return false
+        return DecodeResult.failure("unknown trackType: " + str(params.get("trackType", "")))
     var track_index = animation.add_track(type_id)
     return _configure_animation_track(animation, track_index, params)
 
 # Update an existing track selected by trackIndex.
-func _set_animation_track(animation, params) -> bool:
+func _set_animation_track(animation, params) -> DecodeResult:
     var track_index = _track_index(animation, params)
-    if track_index < 0:
-        return false
-    return _configure_animation_track(animation, track_index, params)
+    if not track_index.ok:
+        return track_index
+    return _configure_animation_track(animation, track_index.value, params)
 
 # Configure a track's path, interpolation, loop wrap, enabled flag, and keys.
 # A keys list replaces the track's existing keys wholesale, so set is
 # deterministic rather than appending to whatever was there.
-func _configure_animation_track(animation, track_index, params) -> bool:
+func _configure_animation_track(animation, track_index, params) -> DecodeResult:
     if params.has("trackPath"):
         animation.track_set_path(track_index, NodePath(str(params["trackPath"])))
     if params.has("interpolation"):
         var name = str(params["interpolation"])
         if not ANIMATION_INTERPOLATIONS.has(name):
-            _decode_error = "unknown interpolation: " + name
-            return false
+            return DecodeResult.failure("unknown interpolation: " + name)
         animation.track_set_interpolation_type(track_index, ANIMATION_INTERPOLATIONS[name])
     if params.has("loopWrap"):
         animation.track_set_interpolation_loop_wrap(track_index, bool(params["loopWrap"]))
@@ -1909,173 +1978,173 @@ func _configure_animation_track(animation, track_index, params) -> bool:
         animation.track_set_enabled(track_index, bool(params["enabled"]))
     if params.has("keys"):
         return _insert_animation_keys(animation, track_index, params["keys"])
-    return true
+    return DecodeResult.success(null)
 
 # Remove the track selected by trackIndex.
-func _remove_animation_track(animation, params) -> bool:
+func _remove_animation_track(animation, params) -> DecodeResult:
     var track_index = _track_index(animation, params)
-    if track_index < 0:
-        return false
-    animation.remove_track(track_index)
-    return true
+    if not track_index.ok:
+        return track_index
+    animation.remove_track(track_index.value)
+    return DecodeResult.success(null)
 
 # Resolve and bounds-check the caller's trackIndex.
-func _track_index(animation, params) -> int:
+func _track_index(animation, params) -> DecodeResult:
     if not params.has("trackIndex"):
-        _decode_error = "trackIndex is required"
-        return -1
+        return DecodeResult.failure("trackIndex is required", -1)
     var track_index = int(params["trackIndex"])
     if track_index < 0 or track_index >= animation.get_track_count():
-        _decode_error = "trackIndex out of range: " + str(track_index)
-        return -1
-    return track_index
+        return DecodeResult.failure("trackIndex out of range: " + str(track_index), -1)
+    return DecodeResult.success(track_index)
 
 # Replace a track's keys with the caller's list, then insert each one.
-func _insert_animation_keys(animation, track_index, keys) -> bool:
+func _insert_animation_keys(animation, track_index, keys) -> DecodeResult:
     if not (keys is Array):
-        _decode_error = "keys must be an array"
-        return false
+        return DecodeResult.failure("keys must be an array")
     var type_id = animation.track_get_type(track_index)
     while animation.track_get_key_count(track_index) > 0:
         animation.track_remove_key(track_index, 0)
     for key in keys:
         if not (key is Dictionary) or not key.has("time"):
-            _decode_error = "each key needs a \"time\" number"
-            return false
+            return DecodeResult.failure("each key needs a \"time\" number")
         var time = key["time"]
         if not (time is int or time is float):
-            _decode_error = "each key needs a \"time\" number"
-            return false
-        if not _insert_animation_key(animation, track_index, type_id, float(time), key):
-            return false
-    return true
+            return DecodeResult.failure("each key needs a \"time\" number")
+        var inserted = _insert_animation_key(animation, track_index, type_id, float(time), key)
+        if not inserted.ok:
+            return inserted
+    return DecodeResult.success(null)
 
 # Insert one key, decoding its value for the track's type. Value tracks take a
 # value in the tool value contract, 3D tracks take the matching tagged vector,
 # method tracks take {method, args}, and bezier tracks take a number plus
 # optional inHandle/outHandle offsets.
-func _insert_animation_key(animation, track_index, type_id, time, key) -> bool:
+func _insert_animation_key(animation, track_index, type_id, time, key) -> DecodeResult:
     var value = key.get("value", null)
     if type_id == Animation.TYPE_VALUE:
         var decoded = _decode_value(value)
-        if _decode_error != "":
-            return false
-        animation.track_insert_key(track_index, time, decoded, _animation_number_default(key.get("transition", 1.0), "transition"))
+        if not decoded.ok:
+            return decoded
+        var transition = _animation_number_default(key.get("transition", 1.0), "transition")
+        animation.track_insert_key(track_index, time, decoded.value, transition.value)
+        if not transition.ok:
+            return transition
     elif type_id == Animation.TYPE_POSITION_3D:
         var position = _require_tagged_type(value, TYPE_VECTOR3, "a position key value")
-        if _decode_error != "":
-            return false
-        animation.position_track_insert_key(track_index, time, position)
+        if not position.ok:
+            return position
+        animation.position_track_insert_key(track_index, time, position.value)
     elif type_id == Animation.TYPE_ROTATION_3D:
         var rotation = _require_tagged_type(value, TYPE_QUATERNION, "a rotation key value")
-        if _decode_error != "":
-            return false
-        animation.rotation_track_insert_key(track_index, time, rotation)
+        if not rotation.ok:
+            return rotation
+        animation.rotation_track_insert_key(track_index, time, rotation.value)
     elif type_id == Animation.TYPE_SCALE_3D:
         var scale = _require_tagged_type(value, TYPE_VECTOR3, "a scale key value")
-        if _decode_error != "":
-            return false
-        animation.scale_track_insert_key(track_index, time, scale)
+        if not scale.ok:
+            return scale
+        animation.scale_track_insert_key(track_index, time, scale.value)
     elif type_id == Animation.TYPE_BLEND_SHAPE:
-        animation.blend_shape_track_insert_key(track_index, time, _animation_number(value, "a blend shape key value"))
+        var blend_shape = _animation_number(value, "a blend shape key value")
+        animation.blend_shape_track_insert_key(track_index, time, blend_shape.value)
+        if not blend_shape.ok:
+            return blend_shape
     elif type_id == Animation.TYPE_METHOD:
-        animation.track_insert_key(track_index, time, _decode_method_key(value))
+        var method_key = _decode_method_key(value)
+        animation.track_insert_key(track_index, time, method_key.value)
+        if not method_key.ok:
+            return method_key
     elif type_id == Animation.TYPE_BEZIER:
         var bezier_value = _animation_number(value, "a bezier key value")
-        if _decode_error != "":
-            return false
+        if not bezier_value.ok:
+            return bezier_value
         var in_handle = _animation_vector2_or_zero(key.get("inHandle", null))
-        if _decode_error != "":
-            return false
+        if not in_handle.ok:
+            return in_handle
         var out_handle = _animation_vector2_or_zero(key.get("outHandle", null))
-        if _decode_error != "":
-            return false
-        animation.bezier_track_insert_key(track_index, time, bezier_value, in_handle, out_handle)
+        if not out_handle.ok:
+            return out_handle
+        animation.bezier_track_insert_key(track_index, time, bezier_value.value, in_handle.value, out_handle.value)
     elif type_id == Animation.TYPE_AUDIO:
         var stream = _animation_resource_value(value)
-        if _decode_error != "":
-            return false
-        animation.audio_track_insert_key(track_index, time, stream, _animation_number_default(key.get("startOffset", 0.0), "startOffset"), _animation_number_default(key.get("endOffset", 0.0), "endOffset"))
+        if not stream.ok:
+            return stream
+        var start_offset = _animation_number_default(key.get("startOffset", 0.0), "startOffset")
+        var end_offset = _animation_number_default(key.get("endOffset", 0.0), "endOffset")
+        animation.audio_track_insert_key(track_index, time, stream.value, start_offset.value, end_offset.value)
+        if not end_offset.ok:
+            return end_offset
+        if not start_offset.ok:
+            return start_offset
     elif type_id == Animation.TYPE_ANIMATION:
         var nested = _animation_string_name(value)
-        if _decode_error != "":
-            return false
-        animation.animation_track_insert_key(track_index, time, nested)
+        if not nested.ok:
+            return nested
+        animation.animation_track_insert_key(track_index, time, nested.value)
     else:
-        _decode_error = "unsupported track type"
-        return false
-    return _decode_error == ""
+        return DecodeResult.failure("unsupported track type")
+    return DecodeResult.success(null)
 
 # Decode a method-track key value, an object with a "method" string and an
 # optional "args" array.
-func _decode_method_key(value):
+func _decode_method_key(value) -> DecodeResult:
     if not (value is Dictionary) or not (value.get("method", null) is String):
-        _decode_error = "a method key value must be an object with a \"method\" string"
-        return null
+        return DecodeResult.failure("a method key value must be an object with a \"method\" string")
     var args = []
     if value.has("args"):
         var decoded = _decode_value(value["args"])
-        if _decode_error != "":
-            return null
-        if not (decoded is Array):
-            _decode_error = "a method key's \"args\" must be an array"
-            return null
-        args = decoded
-    return {"method": StringName(value["method"]), "args": args}
+        if not decoded.ok:
+            return decoded
+        if not (decoded.value is Array):
+            return DecodeResult.failure("a method key's \"args\" must be an array")
+        args = decoded.value
+    return DecodeResult.success({"method": StringName(value["method"]), "args": args})
 
 # Decode a value that must be a tagged object of the given Variant type.
-func _require_tagged_type(value, type_id, label):
+func _require_tagged_type(value, type_id, label) -> DecodeResult:
     if not (value is Dictionary) or not value.has("$type"):
-        _decode_error = "expected a tagged {\"$type\": ...} value for " + label
-        return null
+        return DecodeResult.failure("expected a tagged {\"$type\": ...} value for " + label)
     var decoded = _decode_typed(value)
-    if _decode_error != "":
-        return null
-    if typeof(decoded) != type_id:
-        _decode_error = label + " must be a " + type_string(type_id)
-        return null
+    if not decoded.ok:
+        return decoded
+    if typeof(decoded.value) != type_id:
+        return DecodeResult.failure(label + " must be a " + type_string(type_id))
     return decoded
 
 # Decode a Vector2 handle, defaulting to zero when the caller omits it.
-func _animation_vector2_or_zero(value) -> Vector2:
+func _animation_vector2_or_zero(value) -> DecodeResult:
     if value == null:
-        return Vector2.ZERO
-    var decoded = _require_tagged_type(value, TYPE_VECTOR2, "a bezier handle")
-    if _decode_error != "":
-        return Vector2.ZERO
-    return decoded
+        return DecodeResult.success(Vector2.ZERO)
+    return _require_tagged_type(value, TYPE_VECTOR2, "a bezier handle")
 
-# Read a number, reporting through the shared decode error.
-func _animation_number(value, label) -> float:
+# Read a number, reporting a decode failure when it is not numeric.
+func _animation_number(value, label) -> DecodeResult:
     if value is int or value is float:
-        return float(value)
-    _decode_error = label + " must be a number"
-    return 0.0
+        return DecodeResult.success(float(value))
+    return DecodeResult.failure(label + " must be a number", 0.0)
 
 # Read a number that has a default when the caller omits the field.
-func _animation_number_default(value, label) -> float:
+func _animation_number_default(value, label) -> DecodeResult:
     return _animation_number(value, label)
 
 # Decode a resource reference for an audio track value: a res:// path or a
 # tagged Resource.
-func _animation_resource_value(value):
+func _animation_resource_value(value) -> DecodeResult:
     if value is String:
         return _decode_resource_path(value)
     if value is Dictionary and value.has("$type"):
         return _decode_typed(value)
-    _decode_error = "expected a res:// path or tagged Resource for this track's value"
-    return null
+    return DecodeResult.failure("expected a res:// path or tagged Resource for this track's value")
 
 # Decode an animation-track value: the name of the animation to play, as a bare
 # string or a tagged StringName. Unlike an audio track, the engine stores a
 # StringName here, not a Resource.
-func _animation_string_name(value):
+func _animation_string_name(value) -> DecodeResult:
     if value is String:
-        return StringName(value)
+        return DecodeResult.success(StringName(value))
     if value is Dictionary and value.get("$type", "") == "StringName":
         return _decode_typed(value)
-    _decode_error = "expected an animation name string or tagged StringName for this track's value"
-    return null
+    return DecodeResult.failure("expected an animation name string or tagged StringName for this track's value")
 
 func _track_type_id(name) -> int:
     if ANIMATION_TRACK_TYPES.has(name):
@@ -2197,8 +2266,9 @@ func manage_tileset(params) -> Result:
 
     if action == "create":
         var created = TileSet.new()
-        if not _apply_tileset_properties(created, params):
-            _result.err("Invalid tileset property: " + _decode_error)
+        var created_properties = _apply_tileset_properties(created, params)
+        if not created_properties.ok:
+            _result.err("Invalid tileset property: " + created_properties.error)
             return op_result.fail()
         if not _save_resource(created, full_path):
             return op_result
@@ -2211,36 +2281,44 @@ func manage_tileset(params) -> Result:
 
     match action:
         "modify":
-            if not _apply_tileset_properties(tile_set, params):
-                _result.err("Invalid tileset property: " + _decode_error)
+            var modified = _apply_tileset_properties(tile_set, params)
+            if not modified.ok:
+                _result.err("Invalid tileset property: " + modified.error)
                 return op_result.fail()
         "addSource":
-            if not _add_tileset_source(tile_set, params):
-                _result.err("Invalid tileset source: " + _decode_error)
+            var added_source = _add_tileset_source(tile_set, params)
+            if not added_source.ok:
+                _result.err("Invalid tileset source: " + added_source.error)
                 return op_result.fail()
         "removeSource":
-            if not _remove_tileset_source(tile_set, params):
-                _result.err("Invalid tileset source: " + _decode_error)
+            var removed_source = _remove_tileset_source(tile_set, params)
+            if not removed_source.ok:
+                _result.err("Invalid tileset source: " + removed_source.error)
                 return op_result.fail()
         "addTile":
-            if not _add_tileset_tile(tile_set, params):
-                _result.err("Invalid tileset tile: " + _decode_error)
+            var added_tile = _add_tileset_tile(tile_set, params)
+            if not added_tile.ok:
+                _result.err("Invalid tileset tile: " + added_tile.error)
                 return op_result.fail()
         "removeTile":
-            if not _remove_tileset_tile(tile_set, params):
-                _result.err("Invalid tileset tile: " + _decode_error)
+            var removed_tile = _remove_tileset_tile(tile_set, params)
+            if not removed_tile.ok:
+                _result.err("Invalid tileset tile: " + removed_tile.error)
                 return op_result.fail()
         "addAlternative":
-            if not _add_tile_alternative(tile_set, params):
-                _result.err("Invalid tile alternative: " + _decode_error)
+            var added_alternative = _add_tile_alternative(tile_set, params)
+            if not added_alternative.ok:
+                _result.err("Invalid tile alternative: " + added_alternative.error)
                 return op_result.fail()
         "removeAlternative":
-            if not _remove_tile_alternative(tile_set, params):
-                _result.err("Invalid tile alternative: " + _decode_error)
+            var removed_alternative = _remove_tile_alternative(tile_set, params)
+            if not removed_alternative.ok:
+                _result.err("Invalid tile alternative: " + removed_alternative.error)
                 return op_result.fail()
         "setTileData":
-            if not _set_tile_data(tile_set, params):
-                _result.err("Invalid tile data: " + _decode_error)
+            var set_data = _set_tile_data(tile_set, params)
+            if not set_data.ok:
+                _result.err("Invalid tile data: " + set_data.error)
                 return op_result.fail()
         _:
             _result.err("Unknown manage_tileset action: " + action)
@@ -2271,37 +2349,34 @@ func _load_tileset(full_path):
 
 # Apply the tileset-level properties tileSize, tileShape, tileLayout,
 # tileOffsetAxis, and uvClipping when present.
-func _apply_tileset_properties(tile_set, params) -> bool:
+func _apply_tileset_properties(tile_set, params) -> DecodeResult:
     if params.has("tileSize"):
         var size = _require_tagged_type(params["tileSize"], TYPE_VECTOR2I, "tileSize")
-        if _decode_error != "":
-            return false
-        tile_set.tile_size = size
+        if not size.ok:
+            return size
+        tile_set.tile_size = size.value
     if params.has("tileShape"):
         var shape = str(params["tileShape"])
         if not TILESET_SHAPES.has(shape):
-            _decode_error = "unknown tileShape: " + shape
-            return false
+            return DecodeResult.failure("unknown tileShape: " + shape)
         tile_set.tile_shape = TILESET_SHAPES[shape]
     if params.has("tileLayout"):
         var layout = str(params["tileLayout"])
         if not TILESET_LAYOUTS.has(layout):
-            _decode_error = "unknown tileLayout: " + layout
-            return false
+            return DecodeResult.failure("unknown tileLayout: " + layout)
         tile_set.tile_layout = TILESET_LAYOUTS[layout]
     if params.has("tileOffsetAxis"):
         var axis = str(params["tileOffsetAxis"])
         if not TILESET_OFFSET_AXES.has(axis):
-            _decode_error = "unknown tileOffsetAxis: " + axis
-            return false
+            return DecodeResult.failure("unknown tileOffsetAxis: " + axis)
         tile_set.tile_offset_axis = TILESET_OFFSET_AXES[axis]
     if params.has("uvClipping"):
         tile_set.uv_clipping = bool(params["uvClipping"])
-    return true
+    return DecodeResult.success(null)
 
 # Add an atlas or scenes-collection source to the tileset. An optional sourceId
 # overrides the engine-assigned id; the chosen id is printed for the caller.
-func _add_tileset_source(tile_set, params) -> bool:
+func _add_tileset_source(tile_set, params) -> DecodeResult:
     var source_type = str(params.get("sourceType", ""))
     var source = null
     if source_type == "atlas":
@@ -2311,197 +2386,182 @@ func _add_tileset_source(tile_set, params) -> bool:
             if texture_value is String and not texture_value.begins_with("res://") and not texture_value.begins_with("user://"):
                 texture_value = "res://" + texture_value
             var texture = _decode_object(texture_value)
-            if _decode_error != "":
-                return false
-            if not (texture is Texture2D):
-                _decode_error = "texture must be a Texture2D resource"
-                return false
-            source.texture = texture
+            if not texture.ok:
+                return texture
+            if not (texture.value is Texture2D):
+                return DecodeResult.failure("texture must be a Texture2D resource")
+            source.texture = texture.value
         if params.has("margins"):
             var margins = _require_tagged_type(params["margins"], TYPE_VECTOR2I, "margins")
-            if _decode_error != "":
-                return false
-            source.margins = margins
+            if not margins.ok:
+                return margins
+            source.margins = margins.value
         if params.has("separation"):
             var separation = _require_tagged_type(params["separation"], TYPE_VECTOR2I, "separation")
-            if _decode_error != "":
-                return false
-            source.separation = separation
+            if not separation.ok:
+                return separation
+            source.separation = separation.value
         if params.has("textureRegionSize"):
             var region = _require_tagged_type(params["textureRegionSize"], TYPE_VECTOR2I, "textureRegionSize")
-            if _decode_error != "":
-                return false
-            source.texture_region_size = region
+            if not region.ok:
+                return region
+            source.texture_region_size = region.value
         if params.has("useTexturePadding"):
             source.use_texture_padding = bool(params["useTexturePadding"])
     elif source_type == "scenes":
         source = TileSetScenesCollectionSource.new()
     else:
-        _decode_error = "sourceType must be atlas or scenes"
-        return false
+        return DecodeResult.failure("sourceType must be atlas or scenes")
     var override_id = -1
     if params.has("sourceId"):
         override_id = int(params["sourceId"])
     var source_id = tile_set.add_source(source, override_id)
     _result.out("TileSet source added: " + str(source_id))
-    return true
+    return DecodeResult.success(null)
 
 # Remove the source selected by sourceId.
-func _remove_tileset_source(tile_set, params) -> bool:
+func _remove_tileset_source(tile_set, params) -> DecodeResult:
     var source_id = _require_source_id(tile_set, params)
-    if _decode_error != "":
-        return false
-    tile_set.remove_source(source_id)
-    return true
+    if not source_id.ok:
+        return source_id
+    tile_set.remove_source(source_id.value)
+    return DecodeResult.success(null)
 
 # Resolve and check the caller's sourceId against the tileset.
-func _require_source_id(tile_set, params) -> int:
+func _require_source_id(tile_set, params) -> DecodeResult:
     if not params.has("sourceId"):
-        _decode_error = "sourceId is required"
-        return -1
+        return DecodeResult.failure("sourceId is required", -1)
     var source_id = int(params["sourceId"])
     if not tile_set.has_source(source_id):
-        _decode_error = "unknown sourceId: " + str(source_id)
-        return -1
-    return source_id
+        return DecodeResult.failure("unknown sourceId: " + str(source_id), -1)
+    return DecodeResult.success(source_id)
 
 # Resolve a sourceId and require it to name an atlas source.
-func _require_atlas_source(tile_set, params):
+func _require_atlas_source(tile_set, params) -> DecodeResult:
     var source_id = _require_source_id(tile_set, params)
-    if _decode_error != "":
-        return null
-    var source = tile_set.get_source(source_id)
+    if not source_id.ok:
+        return source_id
+    var source = tile_set.get_source(source_id.value)
     if not (source is TileSetAtlasSource):
-        _decode_error = "source " + str(source_id) + " is not an atlas source"
-        return null
-    return source
+        return DecodeResult.failure("source " + str(source_id.value) + " is not an atlas source")
+    return DecodeResult.success(source)
 
 # Add a tile. An atlas source takes atlasCoords (and optional sizeInAtlas); a
 # scenes-collection source takes the scenePath of the PackedScene to place.
-func _add_tileset_tile(tile_set, params) -> bool:
+func _add_tileset_tile(tile_set, params) -> DecodeResult:
     var source_id = _require_source_id(tile_set, params)
-    if _decode_error != "":
-        return false
-    var source = tile_set.get_source(source_id)
+    if not source_id.ok:
+        return source_id
+    var source = tile_set.get_source(source_id.value)
     if source is TileSetAtlasSource:
         var coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
-        if _decode_error != "":
-            return false
-        if source.has_tile(coords):
-            _decode_error = "a tile already exists at " + str(coords)
-            return false
+        if not coords.ok:
+            return coords
+        if source.has_tile(coords.value):
+            return DecodeResult.failure("a tile already exists at " + str(coords.value))
         var size = Vector2i.ONE
         if params.has("sizeInAtlas"):
-            size = _require_tagged_type(params["sizeInAtlas"], TYPE_VECTOR2I, "sizeInAtlas")
-            if _decode_error != "":
-                return false
-        source.create_tile(coords, size)
-        return true
+            var size_result = _require_tagged_type(params["sizeInAtlas"], TYPE_VECTOR2I, "sizeInAtlas")
+            if not size_result.ok:
+                return size_result
+            size = size_result.value
+        source.create_tile(coords.value, size)
+        return DecodeResult.success(null)
     if source is TileSetScenesCollectionSource:
         var scene_path = str(params.get("scenePath", ""))
         if scene_path.is_empty():
-            _decode_error = "scenePath is required to add a scene tile"
-            return false
+            return DecodeResult.failure("scenePath is required to add a scene tile")
         if not scene_path.begins_with("res://"):
             scene_path = "res://" + scene_path
         var packed = load(scene_path)
         if not (packed is PackedScene):
-            _decode_error = "scenePath must name a PackedScene: " + scene_path
-            return false
+            return DecodeResult.failure("scenePath must name a PackedScene: " + scene_path)
         var override_id = -1
         if params.has("sceneTileId"):
             override_id = int(params["sceneTileId"])
         var tile_id = source.create_scene_tile(packed, override_id)
         if params.has("displayPlaceholder"):
             source.set_scene_tile_display_placeholder(tile_id, bool(params["displayPlaceholder"]))
-        return true
-    _decode_error = "source " + str(source_id) + " has no tiles"
-    return false
+        return DecodeResult.success(null)
+    return DecodeResult.failure("source " + str(source_id.value) + " has no tiles")
 
 # Remove a tile. An atlas source is addressed by atlasCoords, a scenes-collection
 # source by sceneTileId.
-func _remove_tileset_tile(tile_set, params) -> bool:
+func _remove_tileset_tile(tile_set, params) -> DecodeResult:
     var source_id = _require_source_id(tile_set, params)
-    if _decode_error != "":
-        return false
-    var source = tile_set.get_source(source_id)
+    if not source_id.ok:
+        return source_id
+    var source = tile_set.get_source(source_id.value)
     if source is TileSetAtlasSource:
         var coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
-        if _decode_error != "":
-            return false
-        if not source.has_tile(coords):
-            _decode_error = "no tile at " + str(coords)
-            return false
-        source.remove_tile(coords)
-        return true
+        if not coords.ok:
+            return coords
+        if not source.has_tile(coords.value):
+            return DecodeResult.failure("no tile at " + str(coords.value))
+        source.remove_tile(coords.value)
+        return DecodeResult.success(null)
     if source is TileSetScenesCollectionSource:
         if not params.has("sceneTileId"):
-            _decode_error = "sceneTileId is required to remove a scene tile"
-            return false
+            return DecodeResult.failure("sceneTileId is required to remove a scene tile")
         var tile_id = int(params["sceneTileId"])
         if not source.has_scene_tile_id(tile_id):
-            _decode_error = "unknown sceneTileId: " + str(tile_id)
-            return false
+            return DecodeResult.failure("unknown sceneTileId: " + str(tile_id))
         source.remove_scene_tile(tile_id)
-        return true
-    _decode_error = "source " + str(source_id) + " has no tiles"
-    return false
+        return DecodeResult.success(null)
+    return DecodeResult.failure("source " + str(source_id.value) + " has no tiles")
 
 # Add an alternative tile to the atlas tile at atlasCoords.
-func _add_tile_alternative(tile_set, params) -> bool:
+func _add_tile_alternative(tile_set, params) -> DecodeResult:
     var atlas = _require_atlas_source(tile_set, params)
-    if _decode_error != "":
-        return false
+    if not atlas.ok:
+        return atlas
     var coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
-    if _decode_error != "":
-        return false
-    if not atlas.has_tile(coords):
-        _decode_error = "no tile at " + str(coords)
-        return false
+    if not coords.ok:
+        return coords
+    if not atlas.value.has_tile(coords.value):
+        return DecodeResult.failure("no tile at " + str(coords.value))
     var override_id = -1
     if params.has("alternativeId"):
         override_id = int(params["alternativeId"])
-    var alternative_id = atlas.create_alternative_tile(coords, override_id)
+    var alternative_id = atlas.value.create_alternative_tile(coords.value, override_id)
     _result.out("Tile alternative added: " + str(alternative_id))
-    return true
+    return DecodeResult.success(null)
 
 # Remove the alternative tile selected by alternativeId.
-func _remove_tile_alternative(tile_set, params) -> bool:
+func _remove_tile_alternative(tile_set, params) -> DecodeResult:
     var atlas = _require_atlas_source(tile_set, params)
-    if _decode_error != "":
-        return false
+    if not atlas.ok:
+        return atlas
     var coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
-    if _decode_error != "":
-        return false
+    if not coords.ok:
+        return coords
     if not params.has("alternativeId"):
-        _decode_error = "alternativeId is required"
-        return false
-    atlas.remove_alternative_tile(coords, int(params["alternativeId"]))
-    return true
+        return DecodeResult.failure("alternativeId is required")
+    atlas.value.remove_alternative_tile(coords.value, int(params["alternativeId"]))
+    return DecodeResult.success(null)
 
 # Apply caller-supplied properties to the TileData of the tile at atlasCoords.
 # Alt 0 is the tile's base data; pass alternativeId to target another one.
-func _set_tile_data(tile_set, params) -> bool:
+func _set_tile_data(tile_set, params) -> DecodeResult:
     var atlas = _require_atlas_source(tile_set, params)
-    if _decode_error != "":
-        return false
+    if not atlas.ok:
+        return atlas
     var coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
-    if _decode_error != "":
-        return false
-    if not atlas.has_tile(coords):
-        _decode_error = "no tile at " + str(coords)
-        return false
+    if not coords.ok:
+        return coords
+    if not atlas.value.has_tile(coords.value):
+        return DecodeResult.failure("no tile at " + str(coords.value))
     var alternative_id = 0
     if params.has("alternativeId"):
         alternative_id = int(params["alternativeId"])
-    var tile_data = atlas.get_tile_data(coords, alternative_id)
+    var tile_data = atlas.value.get_tile_data(coords.value, alternative_id)
     if tile_data == null:
-        _decode_error = "no tile data for alternative " + str(alternative_id) + " at " + str(coords)
-        return false
+        return DecodeResult.failure("no tile data for alternative " + str(alternative_id) + " at " + str(coords.value))
     if params.has("properties"):
-        if not _apply_properties(tile_data, params["properties"]):
-            return false
-    return true
+        var applied = _apply_properties(tile_data, params["properties"])
+        if not applied.ok:
+            return applied
+    return DecodeResult.success(null)
 
 # Emit a TileSet as a JSON payload: the tileset-level settings and one object
 # per source. An atlas source lists its tiles and each tile's alternatives.
@@ -2624,8 +2684,9 @@ func manage_theme(params) -> Result:
 
     if action == "create":
         var created = Theme.new()
-        if not _apply_theme_defaults(created, params):
-            _result.err("Invalid theme property: " + _decode_error)
+        var created_defaults = _apply_theme_defaults(created, params)
+        if not created_defaults.ok:
+            _result.err("Invalid theme property: " + created_defaults.error)
             return op_result.fail()
         if not _save_resource(created, full_path):
             return op_result
@@ -2638,8 +2699,9 @@ func manage_theme(params) -> Result:
 
     match action:
         "modify":
-            if not _apply_theme_defaults(theme, params):
-                _result.err("Invalid theme property: " + _decode_error)
+            var modified = _apply_theme_defaults(theme, params)
+            if not modified.ok:
+                _result.err("Invalid theme property: " + modified.error)
                 return op_result.fail()
         "removeType":
             theme.remove_type(StringName(str(params.get("themeType", ""))))
@@ -2648,12 +2710,14 @@ func manage_theme(params) -> Result:
         "clearTypeVariation":
             theme.clear_type_variation(StringName(str(params.get("themeType", ""))))
         "setItem":
-            if not _set_theme_item(theme, params):
-                _result.err("Invalid theme item: " + _decode_error)
+            var set_item = _set_theme_item(theme, params)
+            if not set_item.ok:
+                _result.err("Invalid theme item: " + set_item.error)
                 return op_result.fail()
         "clearItem":
-            if not _clear_theme_item(theme, params):
-                _result.err("Invalid theme item: " + _decode_error)
+            var clear_item = _clear_theme_item(theme, params)
+            if not clear_item.ok:
+                _result.err("Invalid theme item: " + clear_item.error)
                 return op_result.fail()
         _:
             _result.err("Unknown manage_theme action: " + action)
@@ -2684,57 +2748,52 @@ func _load_theme(full_path):
 
 # Apply the theme-level defaults defaultFont, defaultFontSize, and
 # defaultBaseScale when present.
-func _apply_theme_defaults(theme, params) -> bool:
+func _apply_theme_defaults(theme, params) -> DecodeResult:
     if params.has("defaultFont"):
         var value = params["defaultFont"]
         if value is String and not value.begins_with("res://") and not value.begins_with("user://"):
             value = "res://" + value
         var font = _decode_object(value)
-        if _decode_error != "":
-            return false
-        if not (font is Font):
-            _decode_error = "defaultFont must be a Font resource"
-            return false
-        theme.default_font = font
+        if not font.ok:
+            return font
+        if not (font.value is Font):
+            return DecodeResult.failure("defaultFont must be a Font resource")
+        theme.default_font = font.value
     if params.has("defaultFontSize"):
         var size = params["defaultFontSize"]
         if not (size is int or size is float):
-            _decode_error = "defaultFontSize must be a number"
-            return false
+            return DecodeResult.failure("defaultFontSize must be a number")
         theme.default_font_size = int(size)
     if params.has("defaultBaseScale"):
         var scale = params["defaultBaseScale"]
         if not (scale is int or scale is float):
-            _decode_error = "defaultBaseScale must be a number"
-            return false
+            return DecodeResult.failure("defaultBaseScale must be a number")
         theme.default_base_scale = float(scale)
-    return true
+    return DecodeResult.success(null)
 
 # Set one theme item, converting the value to the item category's engine type.
-func _set_theme_item(theme, params) -> bool:
+func _set_theme_item(theme, params) -> DecodeResult:
     var type_id = _theme_item_type_id(params.get("itemType", ""))
     if type_id == -1:
-        _decode_error = "unknown itemType: " + str(params.get("itemType", ""))
-        return false
+        return DecodeResult.failure("unknown itemType: " + str(params.get("itemType", "")))
     var value = _convert_theme_item_value(type_id, params.get("value", null))
-    if _decode_error != "":
-        return false
-    theme.set_theme_item(type_id, StringName(str(params.get("itemName", ""))), StringName(str(params.get("themeType", ""))), value)
-    return true
+    if not value.ok:
+        return value
+    theme.set_theme_item(type_id, StringName(str(params.get("itemName", ""))), StringName(str(params.get("themeType", ""))), value.value)
+    return DecodeResult.success(null)
 
 # Remove one theme item from a type.
-func _clear_theme_item(theme, params) -> bool:
+func _clear_theme_item(theme, params) -> DecodeResult:
     var type_id = _theme_item_type_id(params.get("itemType", ""))
     if type_id == -1:
-        _decode_error = "unknown itemType: " + str(params.get("itemType", ""))
-        return false
+        return DecodeResult.failure("unknown itemType: " + str(params.get("itemType", "")))
     theme.clear_theme_item(type_id, StringName(str(params.get("itemName", ""))), StringName(str(params.get("themeType", ""))))
-    return true
+    return DecodeResult.success(null)
 
 # Convert a caller's value to the engine type its item category requires: a
 # tagged Color, an integer for constant/fontSize, or a resource for
 # font/icon/stylebox.
-func _convert_theme_item_value(type_id, value):
+func _convert_theme_item_value(type_id, value) -> DecodeResult:
     match type_id:
         Theme.DATA_TYPE_COLOR:
             return _require_tagged_type(value, TYPE_COLOR, "a color item value")
@@ -2744,8 +2803,7 @@ func _convert_theme_item_value(type_id, value):
             if value is String and not value.begins_with("res://") and not value.begins_with("user://"):
                 value = "res://" + value
             return _convert_value_for_type(TYPE_OBJECT, value)
-    _decode_error = "unsupported item type"
-    return null
+    return DecodeResult.failure("unsupported item type")
 
 func _theme_item_type_id(name) -> int:
     if THEME_ITEM_TYPES.has(name):
@@ -2824,15 +2882,16 @@ func manage_tilemap(params) -> Result:
 
     match action:
         "setCell":
-            if not _set_tilemap_cell(target, params):
-                _result.err("Invalid tilemap cell: " + _decode_error)
+            var set_cell = _set_tilemap_cell(target, params)
+            if not set_cell.ok:
+                _result.err("Invalid tilemap cell: " + set_cell.error)
                 return op_result.fail()
         "eraseCell":
             var coords = _require_tagged_type(params.get("coords"), TYPE_VECTOR2I, "coords")
-            if _decode_error != "":
-                _result.err("Invalid tilemap cell: " + _decode_error)
+            if not coords.ok:
+                _result.err("Invalid tilemap cell: " + coords.error)
                 return op_result.fail()
-            target.erase_cell(coords)
+            target.erase_cell(coords.value)
         "clear":
             target.clear()
         _:
@@ -2852,28 +2911,25 @@ func manage_tilemap(params) -> Result:
     return op_result
 
 # Place one cell, checking that the node has a tileset that owns sourceId.
-func _set_tilemap_cell(target, params) -> bool:
+func _set_tilemap_cell(target, params) -> DecodeResult:
     var coords = _require_tagged_type(params.get("coords"), TYPE_VECTOR2I, "coords")
-    if _decode_error != "":
-        return false
+    if not coords.ok:
+        return coords
     var atlas_coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
-    if _decode_error != "":
-        return false
+    if not atlas_coords.ok:
+        return atlas_coords
     if not params.has("sourceId"):
-        _decode_error = "sourceId is required"
-        return false
+        return DecodeResult.failure("sourceId is required")
     var source_id = int(params["sourceId"])
     if target.tile_set == null:
-        _decode_error = "the node has no tileSet"
-        return false
+        return DecodeResult.failure("the node has no tileSet")
     if not target.tile_set.has_source(source_id):
-        _decode_error = "unknown sourceId: " + str(source_id)
-        return false
+        return DecodeResult.failure("unknown sourceId: " + str(source_id))
     var alternative_id = 0
     if params.has("alternativeTile"):
         alternative_id = int(params["alternativeTile"])
-    target.set_cell(coords, source_id, atlas_coords, alternative_id)
-    return true
+    target.set_cell(coords.value, source_id, atlas_coords.value, alternative_id)
+    return DecodeResult.success(null)
 
 # Emit a TileMapLayer's tileset path and used cells, sorted for stable output.
 func _read_tilemap_node(target, full_path, node_path):
