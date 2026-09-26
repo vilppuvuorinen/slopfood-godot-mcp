@@ -40,6 +40,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 	},
 	CategorySettings: {
 		readProjectSettings, modifyProjectSettings, manageInputMap, readInputMap,
+		managePlugins, readPlugins,
 	},
 	CategoryExport: {
 		manageExportPresets, readExportPresets, exportProject,
@@ -58,7 +59,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 	CategoryResources: {
 		manageResource, readResource, getUID, updateProjectUIDs,
 		manageAnimation, readAnimation, manageTileset, readTileset,
-		manageTheme, readTheme,
+		manageTheme, readTheme, manageImport, readImport,
 	},
 }
 

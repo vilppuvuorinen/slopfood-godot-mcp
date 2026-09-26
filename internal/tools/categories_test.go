@@ -113,8 +113,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 33 {
-		t.Errorf("registered %d tools, want 33", len(seen))
+	if len(seen) != 37 {
+		t.Errorf("registered %d tools, want 37", len(seen))
 	}
 }
 
@@ -154,6 +154,8 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"read_input_map":        true,
 		"read_animation":        true,
 		"read_project_settings": true,
+		"read_plugins":          true,
+		"read_import":           true,
 		"read_resource":         true,
 		"read_scene":            true,
 		"read_scene_signals":    true,
