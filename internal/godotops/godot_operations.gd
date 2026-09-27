@@ -129,6 +129,7 @@ func _init():
 # can call it per request without the process exiting between them.
 func dispatch(operation, params) -> Result:
     var result := Result.new()
+    _temp_nodes.clear()
 
     log_info(result, "Operation: " + operation)
     log_info(result, "Executing operation: " + operation)
@@ -168,12 +169,12 @@ func dispatch(operation, params) -> Result:
             log_error(result, "Unknown operation: " + operation)
             result.ok = false
 
+    _free_temp_nodes()
     return result
 
 # Print the buffers a handler produced to their standard streams and end the
 # main loop with the status it reported. SceneTree.quit() does not stop the
-# current call, so quit() is the last thing _init does; the main loop then
-# ticks _process once (freeing tracked temp nodes) before it exits.
+# current call, so quit() is the last thing _init does.
 func _finish(result: Result):
     var stdout := result.stdout
     if not stdout.is_empty():
@@ -183,21 +184,25 @@ func _finish(result: Result):
         printerr(stderr.substr(0, stderr.length() - 1))
     quit(0 if result.ok else 1)
 
-# Temporary nodes instantiated by handlers are tracked in _temp_nodes and freed
-# in _process before the main loop exits; they are never added to the scene
-# tree, so without this the engine reports ObjectDB/RID leaks at exit.
+# Temporary nodes instantiated by handlers are tracked in _temp_nodes. dispatch
+# owns this list: it clears it before invoking a handler and frees every entry
+# after the handler returns, success or failure. The nodes are never added to
+# the scene tree, so without this the engine reports ObjectDB/RID leaks at exit.
+# Cleanup is deterministic and does not depend on the SceneTree ticking
+# _process, which a daemon loop blocked on stdin would never do.
 var _temp_nodes = []
 
 func track_temp(node):
     _temp_nodes.append(node)
     return node
 
-func _process(_delta):
+# Free every node tracked since the current dispatch began and clear the list.
+# is_instance_valid guards against a handler that already freed a node itself.
+func _free_temp_nodes():
     for node in _temp_nodes:
         if is_instance_valid(node):
             node.free()
     _temp_nodes.clear()
-    return true
 
 # Logging functions
 func log_info(result: Result, message):
