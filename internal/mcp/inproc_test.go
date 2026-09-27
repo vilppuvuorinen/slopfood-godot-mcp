@@ -170,6 +170,61 @@ func TestInProcListenerDefaultPeerIsSelf(t *testing.T) {
 	}
 }
 
+// TestInProcEndpointDialBeforeListenFails asserts a dial that arrives before
+// the daemon opened the endpoint fails, which is what drives the client's
+// connect-or-spawn path.
+func TestInProcEndpointDialBeforeListenFails(t *testing.T) {
+	e := NewInProcEndpoint()
+
+	var dial DialFunc = e.Dial
+	if _, err := dial("inproc"); !errors.Is(err, errInProcNotStarted) {
+		t.Fatalf("dial err = %v, want %v", err, errInProcNotStarted)
+	}
+}
+
+// TestInProcEndpointListenDialAccept asserts the endpoint's Listen and Dial
+// halves meet on one listener, the in-process rendezvous.
+func TestInProcEndpointListenDialAccept(t *testing.T) {
+	e := NewInProcEndpoint()
+
+	var listen ListenFunc = e.Listen
+	l, err := listen("inproc")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer l.Close()
+
+	var dial DialFunc = e.Dial
+	client, err := dial("inproc")
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer client.Close()
+
+	server, err := l.Accept()
+	if err != nil {
+		t.Fatalf("accept: %v", err)
+	}
+	defer server.Close()
+
+	// net.Pipe is a rendezvous, so the read must run while the write blocks.
+	read := make(chan string, 1)
+	go func() {
+		buf := make([]byte, len("ping"))
+		if _, err := io.ReadFull(server, buf); err != nil {
+			read <- "read error: " + err.Error()
+			return
+		}
+		read <- string(buf)
+	}()
+	if _, err := io.WriteString(client, "ping"); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if got := <-read; got != "ping" {
+		t.Errorf("read %q, want ping", got)
+	}
+}
+
 // TestListenInProcFillsListenSeam asserts the in-process backend is usable
 // through the transport-agnostic seam the daemon core will take.
 func TestListenInProcFillsListenSeam(t *testing.T) {

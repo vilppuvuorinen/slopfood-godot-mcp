@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -22,6 +23,10 @@ var version = "dev"
 // projectEnv is the environment variable naming the project to bind when
 // --project is not passed.
 const projectEnv = "GODOT_PROJECT"
+
+// daemonSubcommand selects the daemon role. The default role is the thin stdio
+// client the MCP host spawns; the daemon role owns the server and the queue.
+const daemonSubcommand = "daemon"
 
 // operationQueueDepth bounds how many engine operations may wait behind the
 // one the worker is running. The queue is the single serialization point for
@@ -68,82 +73,185 @@ func (e *enableValues) Set(value string) error {
 	return nil
 }
 
+// options holds the flag values both roles share. The client and daemon speak
+// the same project and category flags, because they are two halves of one
+// server: the client spawns the daemon with the flags it was given.
+type options struct {
+	showVersion bool
+	logLevel    string
+	project     string
+	enable      enableValues
+}
+
+func newFlags(name string) (*flag.FlagSet, *options) {
+	opts := &options{}
+	fs := flag.NewFlagSet(name, flag.ContinueOnError)
+	fs.BoolVar(&opts.showVersion, "version", false, "print version and exit")
+	fs.StringVar(&opts.logLevel, "log-level", "info", "log level (debug, info, warn, error)")
+	fs.StringVar(&opts.project, "project", "", "Godot project directory to bind to (default: $"+projectEnv+", then the working directory)")
+	fs.Var(&opts.enable, "enable", "tool categories to enable (repeatable, comma-separated; default \"all\"; any name replaces the default)")
+	return fs, opts
+}
+
 func main() {
-	if err := run(); err != nil {
+	if err := run(os.Args[1:], os.Stdin, os.Stdout, os.Stderr); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
-	var (
-		showVersion = flag.Bool("version", false, "print version and exit")
-		logLevel    = flag.String("log-level", "info", "log level (debug, info, warn, error)")
-		project     = flag.String("project", "", "Godot project directory to bind to (default: $"+projectEnv+", then the working directory)")
-		enable      enableValues
-	)
-	flag.Var(&enable, "enable", "tool categories to enable (repeatable, comma-separated; default \"all\"; any name replaces the default)")
-	flag.Parse()
-
-	if *showVersion {
-		fmt.Println(version)
-		return nil
+// run dispatches the binary's two roles. The default is the thin stdio client
+// the MCP host spawns; the daemon role is reached through the daemon
+// subcommand, which the client will re-exec as a detached child in a later
+// phase.
+func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	if len(args) > 0 && args[0] == daemonSubcommand {
+		return runDaemon(args[1:], stdout, stderr)
 	}
+	return runClient(args, stdin, stdout, stderr)
+}
 
-	root, err := resolveProject(*project)
+// role is the state both entrypoints build the same way: the bound project, the
+// resolved categories, the logger, and the signal-scoped context.
+type role struct {
+	root       string
+	categories []tools.Category
+	logger     *slog.Logger
+	ctx        context.Context
+	stop       context.CancelFunc
+}
+
+func setupRole(opts *options, stderr io.Writer) (*role, error) {
+	root, err := resolveProject(opts.project)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	categories, err := tools.ResolveCategories(enable)
+	categories, err := tools.ResolveCategories(opts.enable)
 	if err != nil {
-		return fmt.Errorf("resolve categories: %w", err)
+		return nil, fmt.Errorf("resolve categories: %w", err)
 	}
-
-	var level slog.Level
-	if err := level.UnmarshalText([]byte(*logLevel)); err != nil {
-		return fmt.Errorf("invalid log level %q: %w", *logLevel, err)
+	logger, err := newLogger(opts.logLevel, stderr)
+	if err != nil {
+		return nil, err
 	}
-	logger := slog.New(slog.NewJSONHandler(os.Stderr, &slog.HandlerOptions{Level: level}))
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+	return &role{root: root, categories: categories, logger: logger, ctx: ctx, stop: stop}, nil
+}
 
+func newLogger(logLevel string, stderr io.Writer) (*slog.Logger, error) {
+	var level slog.Level
+	if err := level.UnmarshalText([]byte(logLevel)); err != nil {
+		return nil, fmt.Errorf("invalid log level %q: %w", logLevel, err)
+	}
+	return slog.New(slog.NewJSONHandler(stderr, &slog.HandlerOptions{Level: level})), nil
+}
+
+// newServer builds the MCP server bound to the role's project, with the
+// resolved categories registered and the instructions that advertise the
+// binding.
+func (r *role) newServer() *mcp.Server {
 	srv := mcp.NewServer(mcp.ServerInfo{
 		Name:    "slopfood-godot-mcp",
 		Version: version,
-	}, logger)
+	}, r.logger)
 	srv.Instructions = fmt.Sprintf(
 		"Drives the Godot editor headlessly to inspect and modify the Godot project at %s. "+
 			"This server instance is bound to that project for its whole lifetime: every tool takes "+
 			"paths relative to it, and no tool accepts or changes the project directory. Read-only "+
 			"tools are safe to call freely; tools that write files may overwrite existing content.",
-		root)
+		r.root)
+	tools.Register(srv, r.root, r.categories...)
+	return srv
+}
 
-	// One queue serializes every engine-touching call. Today a single stdio
-	// connection already serializes itself, so this changes no observable
-	// behavior; it moves the serialization point next to the engine so it
-	// survives the many connections the IPC daemon will add.
-	queue := mcp.NewQueue(operationQueueDepth, operationQueueTimeout)
+// runClient is the thin client role. It is what the MCP host spawns: it binds
+// the project, starts the daemon in this process (the in-process transport
+// stands in for the socket until Phase 3), dials it, and pumps stdio.
+func runClient(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
+	fs, opts := newFlags("slopfood-godot-mcp")
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("parse flags: %w", err)
+	}
+	if opts.showVersion {
+		fmt.Fprintln(stdout, version)
+		return nil
+	}
+	role, err := setupRole(opts, stderr)
+	if err != nil {
+		return err
+	}
+	defer role.stop()
 
-	// The daemon owns the server, the queue, and every connection it serves.
-	// Today the only connection is stdio, served below through ServeConnection;
-	// the accept loop and its socket listener arrive with the later IPC daemon
-	// phases, so the in-process listener is the transport for now.
-	daemon := mcp.NewDaemon(srv, queue, mcp.ListenInProc, root)
+	// The in-process endpoint is the temporary rendezvous in place of the
+	// socket: the daemon listens on it and the client dials it. Because spawn
+	// creates the listener, the client's first dial fails and exercises the
+	// same connect-or-spawn path a real transport will take.
+	endpoint := mcp.NewInProcEndpoint()
+	daemon := mcp.NewDaemon(
+		role.newServer(),
+		mcp.NewQueue(operationQueueDepth, operationQueueTimeout),
+		endpoint.Listen,
+		role.root,
+	)
 	defer func() {
 		if cerr := daemon.Close(); cerr != nil {
-			logger.Warn("daemon close", "error", cerr)
+			role.logger.Warn("daemon close", "error", cerr)
 		}
 	}()
 
-	logger.Info("bound project", "project", root)
-	tools.Register(srv, root, categories...)
+	role.logger.Info("bound project", "project", role.root)
 
-	// Stdio is one connection to the daemon core, not a special case: the core
-	// runs the same Serve loop on it as it will on an accepted socket.
-	if err := daemon.ServeConnection(ctx, mcp.NewStdioConn(os.Stdin, os.Stdout)); err != nil && !errors.Is(err, context.Canceled) {
-		return fmt.Errorf("serve: %w", err)
+	spawn := func(spawnCtx context.Context) error {
+		go func() {
+			if serveErr := daemon.Serve(spawnCtx); serveErr != nil && !errors.Is(serveErr, context.Canceled) {
+				role.logger.Error("daemon serve ended", "error", serveErr)
+			}
+		}()
+		return nil
+	}
+	client := mcp.NewClient(endpoint.Dial, spawn, role.root, role.logger)
+
+	if err := client.Run(role.ctx, stdin, stdout); err != nil && !errors.Is(err, context.Canceled) {
+		return fmt.Errorf("client: %w", err)
+	}
+	return nil
+}
+
+// runDaemon is the daemon role: it owns the server, the queue, and the accepted
+// connections, and serves until a signal. With the in-process transport it has
+// no cross-process rendezvous yet, so it is the shape, not the deployment,
+// until the Unix-socket backend lands.
+func runDaemon(args []string, stdout, stderr io.Writer) error {
+	fs, opts := newFlags(daemonSubcommand)
+	if err := fs.Parse(args); err != nil {
+		return fmt.Errorf("parse flags: %w", err)
+	}
+	if opts.showVersion {
+		fmt.Fprintln(stdout, version)
+		return nil
+	}
+	role, err := setupRole(opts, stderr)
+	if err != nil {
+		return err
+	}
+	defer role.stop()
+
+	endpoint := mcp.NewInProcEndpoint()
+	daemon := mcp.NewDaemon(
+		role.newServer(),
+		mcp.NewQueue(operationQueueDepth, operationQueueTimeout),
+		endpoint.Listen,
+		role.root,
+	)
+	defer func() {
+		if cerr := daemon.Close(); cerr != nil {
+			role.logger.Warn("daemon close", "error", cerr)
+		}
+	}()
+
+	role.logger.Info("daemon listening", "project", role.root)
+	if err := daemon.Serve(role.ctx); err != nil && !errors.Is(err, context.Canceled) {
+		return fmt.Errorf("daemon serve: %w", err)
 	}
 	return nil
 }

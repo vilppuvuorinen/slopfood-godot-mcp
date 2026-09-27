@@ -40,3 +40,10 @@ type Listener interface {
 // backend returns one over a pair of connected streams, and a Windows backend
 // would return one over a named pipe. The address is opaque to the core.
 type ListenFunc func(addr string) (Listener, error)
+
+// DialFunc opens a client connection to a transport address. It is the client
+// half of the ListenFunc seam: the Unix backend returns one over
+// net.Dial("unix", addr), the in-process backend returns one over a listener's
+// Dial, and a Windows backend would return one over a named pipe. The address
+// is opaque to the caller, and an error means no daemon is listening yet.
+type DialFunc func(addr string) (io.ReadWriteCloser, error)

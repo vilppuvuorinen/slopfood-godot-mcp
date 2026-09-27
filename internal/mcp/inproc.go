@@ -12,6 +12,12 @@ import (
 // accepts or dials connections.
 var errInProcClosed = errors.New("in-process listener closed")
 
+// errInProcNotStarted reports that a dial was attempted before the in-process
+// listener existed. It is the in-process stand-in for "connection refused", and
+// it is what makes the client's connect-or-spawn path run before the daemon has
+// opened the endpoint.
+var errInProcNotStarted = errors.New("in-process endpoint not started")
+
 // inProcBacklog bounds how many dialed-but-not-yet-accepted connections the
 // in-process listener holds, standing in for the small pending-connection queue
 // a real listening socket keeps.
@@ -121,6 +127,46 @@ func currentPeerIdentity() PeerIdentity {
 		userID = uint32(uid) //nolint:gosec // guarded non-negative above.
 	}
 	return PeerIdentity{UserID: userID, ProcessID: os.Getpid()}
+}
+
+// InProcEndpoint is the in-process transport as one pair of seams: a ListenFunc
+// for the daemon and a DialFunc for the client that share a single listener
+// value, the rendezvous standing in for a socket path. The listener is created
+// on the daemon's first Listen, so a client dial that arrives first fails with
+// errInProcNotStarted and drives the spawn path. It exists so the client and
+// daemon can be built as separate roles in one process before the Unix-socket
+// backend splits them across two.
+type InProcEndpoint struct {
+	mu       sync.Mutex
+	listener *InProcListener
+}
+
+// NewInProcEndpoint returns an endpoint with no listener yet; the daemon's
+// Listen creates it.
+func NewInProcEndpoint() *InProcEndpoint { return &InProcEndpoint{} }
+
+// Listen returns the endpoint's one listener, creating it on first use. It
+// matches ListenFunc, so the daemon core takes it exactly as it will take the
+// Unix backend later.
+func (e *InProcEndpoint) Listen(_ string) (Listener, error) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if e.listener == nil {
+		e.listener = NewInProcListener()
+	}
+	return e.listener, nil
+}
+
+// Dial connects to the endpoint's listener, failing with errInProcNotStarted
+// until Listen has created it. It matches DialFunc.
+func (e *InProcEndpoint) Dial(_ string) (io.ReadWriteCloser, error) {
+	e.mu.Lock()
+	listener := e.listener
+	e.mu.Unlock()
+	if listener == nil {
+		return nil, errInProcNotStarted
+	}
+	return listener.Dial()
 }
 
 var (
