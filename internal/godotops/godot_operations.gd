@@ -699,7 +699,6 @@ func read_scene(result: Result, params) -> Result:
     result.out(JSON.stringify(tree_data))
     result.out(JSON_END)
 
-    scene_root.queue_free()
     return result
 
 # Return the project-relative path of the PackedScene a scene file inherits
@@ -1311,7 +1310,11 @@ func remove_node(result: Result, params) -> Result:
 
     var removed_name = target.name
     target.get_parent().remove_child(target)
-    target.queue_free()
+    # The node is detached from the tracked root, so dispatch's per-dispatch
+    # cleanup cannot reach it through scene_root; track it explicitly rather
+    # than relying on queue_free, which needs a SceneTree tick a daemon loop
+    # blocked on stdin would never run.
+    track_temp(target)
 
     # Repack and save
     var packed_scene = PackedScene.new()
