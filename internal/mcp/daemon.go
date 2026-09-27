@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 )
 
 // errDaemonClosed reports that the daemon has been closed and no longer starts
@@ -21,16 +22,31 @@ var errDaemonClosed = errors.New("daemon closed")
 // in-process backend drives it today and the Unix-socket backend fills the same
 // seam later. The stdio path is one connection to the core via ServeConnection,
 // not a special case.
+//
+// The daemon also owns its lifetime: a context canceled by Shutdown, by the
+// idle grace timer once the last connection leaves, or by Close, which Serve
+// observes to stop accepting.
 type Daemon struct {
 	server *Server
 	queue  *Queue
 	listen ListenFunc
 	addr   string
 
+	// lifeCtx is canceled when the daemon should stop serving, whether from
+	// Shutdown, an expired idle grace period, or Close. Done exposes it so a
+	// process owner can return as soon as the daemon goes down.
+	lifeCtx    context.Context
+	lifeCancel context.CancelFunc
+
 	mu       sync.Mutex
 	listener Listener
 	conns    map[Connection]struct{}
 	closed   bool
+	// idleTimeout, when positive, is how long the daemon may sit with no
+	// active connections before it shuts itself down; idleTimer holds the
+	// pending countdown while it is idle. Both are guarded by mu.
+	idleTimeout time.Duration
+	idleTimer   *time.Timer
 
 	// loopWG tracks the accept loop so Close can wait for it to stop before
 	// declaring the daemon down; connWG tracks per-connection serve loops so
@@ -48,21 +64,54 @@ type Daemon struct {
 // Unix backend later resolves its socket path from it.
 func NewDaemon(server *Server, queue *Queue, listen ListenFunc, addr string) *Daemon {
 	server.SetQueue(queue)
+	lifeCtx, lifeCancel := context.WithCancel(context.Background())
 	return &Daemon{
-		server: server,
-		queue:  queue,
-		listen: listen,
-		addr:   addr,
-		conns:  make(map[Connection]struct{}),
+		server:     server,
+		queue:      queue,
+		listen:     listen,
+		addr:       addr,
+		lifeCtx:    lifeCtx,
+		lifeCancel: lifeCancel,
+		conns:      make(map[Connection]struct{}),
 	}
 }
+
+// SetIdleTimeout sets how long the daemon may sit with no active connections
+// before it shuts itself down, as if Shutdown had been called. A non-positive
+// timeout disables idle exit, which is the default. It must be called before
+// Serve, which arms the countdown.
+func (d *Daemon) SetIdleTimeout(timeout time.Duration) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.idleTimeout = timeout
+}
+
+// ActiveConnections reports how many client connections the daemon is serving
+// right now. It is the idle-accounting figure: at zero the grace timer arms,
+// and any tracked connection disarms it.
+func (d *Daemon) ActiveConnections() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return len(d.conns)
+}
+
+// Shutdown cancels the daemon's lifetime context, which stops Serve the same
+// way a canceled caller context does: the listener closes, a pending Accept
+// unblocks, and Serve returns nil. It is the hook a later phase wires to a
+// signal. It does not close active connections or the queue; Close does that.
+// It is safe to call more than once.
+func (d *Daemon) Shutdown() { d.lifeCancel() }
+
+// Done returns a channel closed once the daemon is shutting down, whether from
+// Shutdown, an expired idle grace period, or Close.
+func (d *Daemon) Done() <-chan struct{} { return d.lifeCtx.Done() }
 
 // Serve opens the listener and accepts connections until the daemon closes,
 // the context is canceled, or accepting fails. Each accepted connection is
 // served on its own goroutine, so a slow client cannot stall the accept loop;
 // all of them share the daemon's one Server and Queue. Serve returns nil after
-// a clean Close, the context error when ctx is canceled first, and a listen or
-// accept error otherwise.
+// a clean Close, Shutdown, or idle exit, the context error when ctx is canceled
+// first, and a listen or accept error otherwise.
 func (d *Daemon) Serve(ctx context.Context) error {
 	l, err := d.listen(d.addr)
 	if err != nil {
@@ -77,6 +126,10 @@ func (d *Daemon) Serve(ctx context.Context) error {
 	}
 	d.listener = l
 	d.loopWG.Add(1)
+	// A daemon that no client ever reaches still has zero active connections,
+	// so the idle countdown starts here too, not only on the way down from a
+	// served connection.
+	d.armIdleLocked()
 	d.mu.Unlock()
 	defer d.loopWG.Done()
 
@@ -87,10 +140,16 @@ func (d *Daemon) Serve(ctx context.Context) error {
 	stop := context.AfterFunc(ctx, func() { _ = l.Close() })
 	defer stop()
 
+	// The lifetime context is the second way to stop accepting: Shutdown and an
+	// expired idle grace period cancel it, and it closes the listener exactly
+	// as a canceled caller context does.
+	stopLife := context.AfterFunc(d.lifeCtx, func() { _ = l.Close() })
+	defer stopLife()
+
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			if d.isClosed() {
+			if d.isClosed() || d.lifeCtx.Err() != nil {
 				return nil
 			}
 			if ctxErr := ctx.Err(); ctxErr != nil {
@@ -130,6 +189,10 @@ func (d *Daemon) Close() error {
 		return nil
 	}
 	d.closed = true
+	// Closing is a shutdown: cancel the lifetime context so anything selecting
+	// on Done wakes, and drop any pending idle countdown.
+	d.lifeCancel()
+	d.disarmIdleLocked()
 	listener := d.listener
 	conns := make([]Connection, 0, len(d.conns))
 	for conn := range d.conns {
@@ -184,15 +247,54 @@ func (d *Daemon) track(conn Connection) bool {
 	}
 	d.conns[conn] = struct{}{}
 	d.connWG.Add(1)
+	// An attached peer keeps the daemon alive, so an arriving connection stops
+	// any pending idle countdown.
+	d.disarmIdleLocked()
 	return true
 }
 
-// untrack removes conn from the active set and releases its connWG slot.
+// untrack removes conn from the active set and releases its connWG slot. The
+// transition to zero active connections is what arms the idle countdown.
 func (d *Daemon) untrack(conn Connection) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	delete(d.conns, conn)
 	d.connWG.Done()
+	d.armIdleLocked()
+}
+
+// armIdleLocked starts the idle countdown when the daemon is serving, has no
+// active connections, and an idle timeout is set. It is a no-op when a
+// countdown is already pending or the daemon is on its way down, so it can be
+// called on every transition to zero. The caller must hold d.mu.
+func (d *Daemon) armIdleLocked() {
+	if d.idleTimeout <= 0 || d.closed || d.lifeCtx.Err() != nil || len(d.conns) > 0 || d.idleTimer != nil {
+		return
+	}
+	d.idleTimer = time.AfterFunc(d.idleTimeout, d.idleExpired)
+}
+
+// disarmIdleLocked stops a pending idle countdown, if any. The caller must hold
+// d.mu.
+func (d *Daemon) disarmIdleLocked() {
+	if d.idleTimer != nil {
+		d.idleTimer.Stop()
+		d.idleTimer = nil
+	}
+}
+
+// idleExpired is the grace timer callback. It re-checks the active count under
+// the lock, because a connection may have arrived between the timer firing and
+// this running, and cancels the lifetime context only when the daemon is still
+// idle.
+func (d *Daemon) idleExpired() {
+	d.mu.Lock()
+	d.idleTimer = nil
+	idle := !d.closed && d.lifeCtx.Err() == nil && len(d.conns) == 0
+	d.mu.Unlock()
+	if idle {
+		d.lifeCancel()
+	}
 }
 
 func (d *Daemon) isClosed() bool {

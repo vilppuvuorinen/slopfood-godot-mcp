@@ -227,6 +227,162 @@ func TestDaemonServeStopsOnContextCancel(t *testing.T) {
 	}
 }
 
+// awaitCondition polls cond until it holds or a deadline passes, for the
+// asynchronous transitions the accept loop and grace timer make.
+func awaitCondition(t *testing.T, cond func() bool, what string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", what)
+}
+
+// roundTripPing writes a request and reads its response, proving the daemon
+// accepted and is serving the connection.
+func roundTripPing(t *testing.T, client io.ReadWriteCloser) {
+	t.Helper()
+	if _, err := io.WriteString(client, `{"jsonrpc":"2.0","id":1,"method":"ping"}`+"\n"); err != nil {
+		t.Fatalf("write request: %v", err)
+	}
+	if _, err := bufio.NewReader(client).ReadString('\n'); err != nil {
+		t.Fatalf("read response: %v", err)
+	}
+}
+
+// TestDaemonActiveConnections asserts the daemon accounts for peers: a served
+// connection is counted until it leaves, which is the figure the idle timer
+// watches.
+func TestDaemonActiveConnections(t *testing.T) {
+	l := NewInProcListener()
+	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	done := make(chan error, 1)
+	go func() { done <- d.Serve(context.Background()) }()
+
+	client, err := l.Dial()
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	roundTripPing(t, client)
+	if got := d.ActiveConnections(); got != 1 {
+		t.Errorf("ActiveConnections = %d while connected, want 1", got)
+	}
+
+	_ = client.Close()
+	awaitCondition(t, func() bool { return d.ActiveConnections() == 0 }, "the connection to be released")
+	stopDaemon(t, d, done)
+}
+
+// TestDaemonIdleExit asserts a daemon that never gets a connection shuts itself
+// down after the grace period, the same exit a leftover spawned daemon needs.
+func TestDaemonIdleExit(t *testing.T) {
+	l := NewInProcListener()
+	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	d.SetIdleTimeout(10 * time.Millisecond)
+	done := make(chan error, 1)
+	go func() { done <- d.Serve(context.Background()) }()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Serve: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not return after the idle grace period")
+	}
+	select {
+	case <-d.Done():
+	default:
+		t.Error("Done is not closed after idle exit")
+	}
+	if err := d.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
+// TestDaemonConnectionDisarmsIdleTimer asserts an attached peer keeps the
+// daemon alive: while a connection is held past the grace period nothing
+// happens, and once it leaves the countdown resumes.
+func TestDaemonConnectionDisarmsIdleTimer(t *testing.T) {
+	l := NewInProcListener()
+	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	d.SetIdleTimeout(80 * time.Millisecond)
+	done := make(chan error, 1)
+	go func() { done <- d.Serve(context.Background()) }()
+
+	client, err := l.Dial()
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	roundTripPing(t, client)
+	awaitCondition(t, func() bool { return d.ActiveConnections() == 1 }, "the connection to be tracked")
+
+	select {
+	case err := <-done:
+		t.Fatalf("Serve returned while a connection was active: %v", err)
+	case <-time.After(240 * time.Millisecond):
+	}
+
+	_ = client.Close()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Serve: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not return after the last connection left")
+	}
+	if err := d.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
+// TestDaemonIdleDisabledByDefault asserts a daemon with no configured idle
+// timeout stays up, so the default behavior is unchanged.
+func TestDaemonIdleDisabledByDefault(t *testing.T) {
+	l := NewInProcListener()
+	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	done := make(chan error, 1)
+	go func() { done <- d.Serve(context.Background()) }()
+
+	select {
+	case err := <-done:
+		t.Fatalf("Serve returned without an idle timeout: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+	stopDaemon(t, d, done)
+}
+
+// TestDaemonShutdownStopsServe asserts the shutdown hook stops the accept loop
+// through the lifetime context, without waiting for Close.
+func TestDaemonShutdownStopsServe(t *testing.T) {
+	l := NewInProcListener()
+	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	done := make(chan error, 1)
+	go func() { done <- d.Serve(context.Background()) }()
+
+	d.Shutdown()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Serve: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Serve did not return after Shutdown")
+	}
+	select {
+	case <-d.Done():
+	default:
+		t.Error("Done is not closed after Shutdown")
+	}
+	if err := d.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
 func TestStdioConnAdaptsStreams(t *testing.T) {
 	var out bytes.Buffer
 	conn := NewStdioConn(strings.NewReader("hello"), &out)
