@@ -134,40 +134,54 @@ func dispatch(operation, params) -> Result:
     log_info(result, "Operation: " + operation)
     log_info(result, "Executing operation: " + operation)
 
+    # A handler returns the Result it was handed (or result.fail(...)). If a
+    # handler hits an unhandled engine error, GDScript stops it and returns
+    # null to the dispatcher, which must not propagate that null: the driver
+    # dereferences the Result to flush the streams and decide the exit status.
+    var handler_result = null
     match operation:
         "create_scene":
-            result = create_scene(result, params)
+            handler_result = create_scene(result, params)
         "add_node":
-            result = add_node(result, params)
+            handler_result = add_node(result, params)
         "export_mesh_library":
-            result = export_mesh_library(result, params)
+            handler_result = export_mesh_library(result, params)
         "read_scene":
-            result = read_scene(result, params)
+            handler_result = read_scene(result, params)
         "modify_node":
-            result = modify_node(result, params)
+            handler_result = modify_node(result, params)
         "remove_node":
-            result = remove_node(result, params)
+            handler_result = remove_node(result, params)
         "manage_scene_structure":
-            result = manage_scene_structure(result, params)
+            handler_result = manage_scene_structure(result, params)
         "manage_scene_signals":
-            result = manage_scene_signals(result, params)
+            handler_result = manage_scene_signals(result, params)
         "attach_script":
-            result = attach_script(result, params)
+            handler_result = attach_script(result, params)
         "manage_resource":
-            result = manage_resource(result, params)
+            handler_result = manage_resource(result, params)
         "manage_animation":
-            result = manage_animation(result, params)
+            handler_result = manage_animation(result, params)
         "manage_tileset":
-            result = manage_tileset(result, params)
+            handler_result = manage_tileset(result, params)
         "manage_theme":
-            result = manage_theme(result, params)
+            handler_result = manage_theme(result, params)
         "manage_tilemap":
-            result = manage_tilemap(result, params)
+            handler_result = manage_tilemap(result, params)
         "validate_project":
-            result = validate_project(result, params)
+            handler_result = validate_project(result, params)
         _:
             log_error(result, "Unknown operation: " + operation)
             result.ok = false
+            handler_result = result
+
+    # A null or wrong-typed return is a handler that aborted on an unhandled
+    # engine error; report it as this operation's failure instead of returning
+    # a value the driver cannot dereference.
+    if not (handler_result is Result):
+        result.fail("operation failed with an unhandled engine error: " + operation)
+    else:
+        result = handler_result
 
     _free_temp_nodes()
     return result
@@ -187,6 +201,12 @@ func flush(result: Result):
 # quit() does not stop the current call, so quit() is the last thing _init does.
 # The one-shot driver calls this; a daemon reserves quit for its own exit path.
 func _finish(result: Result):
+    if result == null:
+        # Defensive: dispatch recovers a handler abort, so this only triggers
+        # before dispatch runs. Quitting nonzero beats dereferencing null here,
+        # which would skip quit() and leave a one-shot engine spinning.
+        quit(1)
+        return
     flush(result)
     quit(0 if result.ok else 1)
 
