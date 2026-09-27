@@ -23,6 +23,7 @@ const defaultGodotMinor = "4.7"
 // the expected minor line comes from GODOT_MINOR (CI sets it per matrix entry)
 // and defaults to the server's local build.
 func TestGetGodotVersionTool(t *testing.T) {
+	t.Parallel()
 	session := connect(t)
 	findTool(t, session, "get_godot_version")
 
@@ -62,6 +63,7 @@ func godotVersion(t *testing.T, path string) string {
 // TestProtocolVersionNegotiationEchoesSupported pins a supported protocol
 // version and asserts the server echoes it back.
 func TestProtocolVersionNegotiationEchoesSupported(t *testing.T) {
+	t.Parallel()
 	session := connectWithProtocolVersion(t, "2025-06-18")
 	if got := session.InitializeResult().ProtocolVersion; got != "2025-06-18" {
 		t.Errorf("protocolVersion = %q, want 2025-06-18", got)
@@ -72,6 +74,7 @@ func TestProtocolVersionNegotiationEchoesSupported(t *testing.T) {
 // probes server/discover first. The server implements it and advertises
 // 2026-07-28, so the session negotiates the stateless revision.
 func TestProtocolVersionNegotiationModern(t *testing.T) {
+	t.Parallel()
 	session := connectWithProtocolVersion(t, "2026-07-28")
 	if got := session.InitializeResult().ProtocolVersion; got != "2026-07-28" {
 		t.Errorf("protocolVersion = %q, want 2026-07-28", got)
@@ -82,6 +85,7 @@ func TestProtocolVersionNegotiationModern(t *testing.T) {
 // future stateless revision. server/discover rejects it with the supported
 // list, and the client retries at 2026-07-28.
 func TestProtocolVersionNegotiationUnknownModern(t *testing.T) {
+	t.Parallel()
 	session := connectWithProtocolVersion(t, "2099-01-01")
 	if got := session.InitializeResult().ProtocolVersion; got != "2026-07-28" {
 		t.Errorf("protocolVersion = %q, want 2026-07-28", got)
@@ -92,6 +96,7 @@ func TestProtocolVersionNegotiationUnknownModern(t *testing.T) {
 // version. Discovery is skipped, and the legacy initialize handshake offers the
 // newest legacy revision, never a stateless one.
 func TestProtocolVersionNegotiationLegacyFallback(t *testing.T) {
+	t.Parallel()
 	session := connectWithProtocolVersion(t, "1999-01-01")
 	if got := session.InitializeResult().ProtocolVersion; got != "2025-11-25" {
 		t.Errorf("protocolVersion = %q, want 2025-11-25", got)
@@ -101,6 +106,7 @@ func TestProtocolVersionNegotiationLegacyFallback(t *testing.T) {
 // TestInitializeInstructions asserts the server advertises usage instructions
 // naming the project it is bound to.
 func TestInitializeInstructions(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	session := connectProject(t, root)
 	instructions := session.InitializeResult().Instructions
@@ -113,6 +119,7 @@ func TestInitializeInstructions(t *testing.T) {
 // TestToolMetadata asserts a listed tool carries a title, annotations, and an
 // output schema.
 func TestToolMetadata(t *testing.T) {
+	t.Parallel()
 	tool := findTool(t, connect(t), "get_godot_version")
 	if tool.Title != "Get Godot Version" {
 		t.Errorf("title = %q", tool.Title)
@@ -128,6 +135,7 @@ func TestToolMetadata(t *testing.T) {
 // TestStructuredContent asserts a read-only tool returns structuredContent
 // alongside its text block.
 func TestStructuredContent(t *testing.T) {
+	t.Parallel()
 	root := t.TempDir()
 	seedProject(t, root)
 	session := connectProject(t, root)
@@ -148,6 +156,7 @@ func TestStructuredContent(t *testing.T) {
 // TestMutationToolMetadata asserts a mutation tool advertises an output schema
 // and non-read-only annotations.
 func TestMutationToolMetadata(t *testing.T) {
+	t.Parallel()
 	tool := findTool(t, connect(t), "create_scene")
 	if tool.OutputSchema == nil {
 		t.Error("outputSchema missing")
@@ -160,6 +169,7 @@ func TestMutationToolMetadata(t *testing.T) {
 // TestMutationStructuredContent asserts a mutation tool returns
 // structuredContent alongside its text block.
 func TestMutationStructuredContent(t *testing.T) {
+	t.Parallel()
 	root := newProject(t)
 	session := connectProject(t, root)
 

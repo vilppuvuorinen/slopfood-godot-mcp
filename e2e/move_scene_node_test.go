@@ -7,6 +7,7 @@ import (
 
 // TestMoveSceneNodeSchema pins the tool's input surface.
 func TestMoveSceneNodeSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "move_scene_node", "Move a node to a new parent in a .tscn scene")
 	schema.requireRequired(t, "scenePath", "nodePath", "newParentPath")
 	schema.requireStringProps(t, "scenePath", "nodePath", "newParentPath")
@@ -15,6 +16,7 @@ func TestMoveSceneNodeSchema(t *testing.T) {
 
 // TestMoveSceneNodeTool drives the real move_scene_node tool against Godot.
 func TestMoveSceneNodeTool(t *testing.T) {
+	t.Parallel()
 	root, session := seedScene(t, "scenes/move.tscn", "Node2D")
 	for _, name := range []string{"Player", "World"} {
 		requireToolText(t, session, "add_node", map[string]any{
@@ -36,6 +38,7 @@ func TestMoveSceneNodeTool(t *testing.T) {
 
 // TestMoveSceneNodeErrors covers validation and engine failure messages.
 func TestMoveSceneNodeErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "move_scene_node", map[string]any{},

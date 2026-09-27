@@ -7,6 +7,7 @@ import (
 
 // TestRenameSceneNodeSchema pins the tool's input surface.
 func TestRenameSceneNodeSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "rename_scene_node", "Rename a node in a .tscn scene")
 	schema.requireRequired(t, "scenePath", "nodePath", "newName")
 	schema.requireStringProps(t, "scenePath", "nodePath", "newName")
@@ -15,6 +16,7 @@ func TestRenameSceneNodeSchema(t *testing.T) {
 
 // TestRenameSceneNodeTool drives the real rename_scene_node tool against Godot.
 func TestRenameSceneNodeTool(t *testing.T) {
+	t.Parallel()
 	root, session := seedScene(t, "scenes/rename.tscn", "Node2D")
 	requireToolText(t, session, "add_node", map[string]any{
 		"scenePath": "scenes/rename.tscn",
@@ -34,6 +36,7 @@ func TestRenameSceneNodeTool(t *testing.T) {
 
 // TestRenameSceneNodeErrors covers validation and engine failure messages.
 func TestRenameSceneNodeErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "rename_scene_node", map[string]any{},

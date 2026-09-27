@@ -10,6 +10,7 @@ import (
 
 // TestCreateTilesetSchema pins the create tool's input surface.
 func TestCreateTilesetSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "create_tileset", "Create a TileSet resource")
 	schema.requireRequired(t, "resourcePath")
 	schema.requireStringProps(t, "resourcePath", "tileShape", "tileLayout", "tileOffsetAxis")
@@ -19,6 +20,7 @@ func TestCreateTilesetSchema(t *testing.T) {
 
 // TestModifyTilesetSchema pins the modify tool's input surface.
 func TestModifyTilesetSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "modify_tileset", "Set a TileSet resource's tile size, shape, layout, and UV clipping")
 	schema.requireRequired(t, "resourcePath")
 	schema.requireStringProps(t, "resourcePath", "tileShape", "tileLayout", "tileOffsetAxis")
@@ -28,6 +30,7 @@ func TestModifyTilesetSchema(t *testing.T) {
 
 // TestAddTilesetSourceSchema pins the add-source tool's input surface.
 func TestAddTilesetSourceSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "add_tileset_source", "Add an atlas or scenes-collection source to a TileSet")
 	schema.requireRequired(t, "resourcePath", "sourceType")
 	schema.requireStringProps(t, "resourcePath", "sourceType")
@@ -38,6 +41,7 @@ func TestAddTilesetSourceSchema(t *testing.T) {
 
 // TestRemoveTilesetSourceSchema pins the remove-source tool's input surface.
 func TestRemoveTilesetSourceSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "remove_tileset_source", "Remove a source from a TileSet")
 	schema.requireRequired(t, "resourcePath", "sourceId")
 	schema.requireStringProps(t, "resourcePath")
@@ -47,6 +51,7 @@ func TestRemoveTilesetSourceSchema(t *testing.T) {
 
 // TestAddTilesetTileSchema pins the add-tile tool's input surface.
 func TestAddTilesetTileSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "add_tileset_tile", "Add a tile to a TileSet source")
 	schema.requireRequired(t, "resourcePath", "sourceId")
 	schema.requireStringProps(t, "resourcePath", "scenePath")
@@ -58,6 +63,7 @@ func TestAddTilesetTileSchema(t *testing.T) {
 
 // TestRemoveTilesetTileSchema pins the remove-tile tool's input surface.
 func TestRemoveTilesetTileSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "remove_tileset_tile", "Remove a tile from a TileSet source")
 	schema.requireRequired(t, "resourcePath", "sourceId")
 	schema.requireStringProps(t, "resourcePath")
@@ -68,6 +74,7 @@ func TestRemoveTilesetTileSchema(t *testing.T) {
 
 // TestAddTilesetAlternativeSchema pins the add-alternative tool's input surface.
 func TestAddTilesetAlternativeSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "add_tileset_alternative", "Add an alternative tile to a TileSet atlas tile")
 	schema.requireRequired(t, "resourcePath", "sourceId", "atlasCoords")
 	schema.requireStringProps(t, "resourcePath")
@@ -78,6 +85,7 @@ func TestAddTilesetAlternativeSchema(t *testing.T) {
 
 // TestRemoveTilesetAlternativeSchema pins the remove-alternative tool's input surface.
 func TestRemoveTilesetAlternativeSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "remove_tileset_alternative", "Remove an alternative tile from a TileSet atlas tile")
 	schema.requireRequired(t, "resourcePath", "sourceId", "atlasCoords", "alternativeId")
 	schema.requireStringProps(t, "resourcePath")
@@ -88,6 +96,7 @@ func TestRemoveTilesetAlternativeSchema(t *testing.T) {
 
 // TestSetTilesetTileDataSchema pins the set-tile-data tool's input surface.
 func TestSetTilesetTileDataSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "set_tileset_tile_data", "Set properties on a TileSet atlas tile's data")
 	schema.requireRequired(t, "resourcePath", "sourceId", "atlasCoords", "properties")
 	schema.requireStringProps(t, "resourcePath")
@@ -99,6 +108,7 @@ func TestSetTilesetTileDataSchema(t *testing.T) {
 
 // TestReadTilesetSchema pins the read-only tileset tool's input surface.
 func TestReadTilesetSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "read_tileset", "Read TileSet resources and their sources and tiles")
 	schema.requireRequired(t, "resourcePath")
 	schema.requireStringProps(t, "resourcePath")
@@ -107,6 +117,7 @@ func TestReadTilesetSchema(t *testing.T) {
 
 // TestReadTilemapSchema pins the read-only tilemap tool's input surface.
 func TestReadTilemapSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "read_tilemap", "Read the cells of a TileMapLayer node in a scene")
 	schema.requireRequired(t, "scenePath", "nodePath")
 	schema.requireStringProps(t, "scenePath", "nodePath")
@@ -203,6 +214,7 @@ func setupTestTileSet(t *testing.T, session *mcp.ClientSession) {
 
 // TestTilesetTools drives the real tileset tools against Godot.
 func TestTilesetTools(t *testing.T) {
+	t.Parallel()
 	t.Run("creates a tileset with an atlas source and tile", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
@@ -368,6 +380,7 @@ func TestTilesetTools(t *testing.T) {
 
 // TestTilesetErrors covers the validation and engine failure paths.
 func TestTilesetErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		session := connect(t)
 		requireToolError(t, session, "create_tileset", map[string]any{}, "resourcePath is required.")
@@ -466,6 +479,7 @@ func setupTilemapScene(t *testing.T, session *mcp.ClientSession) {
 
 // TestReadTilemapErrors covers the read tool's engine failure paths.
 func TestReadTilemapErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing node", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)

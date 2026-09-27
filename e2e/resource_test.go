@@ -35,6 +35,7 @@ func seedMaterialRes(t *testing.T, session *mcp.ClientSession) {
 // TestCreateResourceSchema ports the tool-definition expectations for
 // create_resource over the real stdio surface.
 func TestCreateResourceSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "create_resource", "Create a .tres/.res resource file")
 	schema.requireRequired(t, "resourcePath", "resourceType")
 	schema.requireStringProps(t, "resourcePath", "resourceType")
@@ -45,6 +46,7 @@ func TestCreateResourceSchema(t *testing.T) {
 // TestModifyResourceSchema ports the tool-definition expectations for
 // modify_resource over the real stdio surface.
 func TestModifyResourceSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "modify_resource", "Set properties on a .tres/.res resource file")
 	schema.requireRequired(t, "resourcePath", "properties")
 	schema.requireStringProps(t, "resourcePath")
@@ -54,6 +56,7 @@ func TestModifyResourceSchema(t *testing.T) {
 
 // TestReadResourceSchema ports the read-only resource tool's expectations.
 func TestReadResourceSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "read_binary_resource", "Read engine-decoded binary .res resource files (text .tres files are read directly)")
 	schema.requireRequired(t, "resourcePath")
 	schema.requireStringProps(t, "resourcePath")
@@ -63,6 +66,7 @@ func TestReadResourceSchema(t *testing.T) {
 
 // TestResourceTools drives the real resource tools against Godot.
 func TestResourceTools(t *testing.T) {
+	t.Parallel()
 	t.Run("reads a resource", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
@@ -180,6 +184,7 @@ func TestResourceTools(t *testing.T) {
 // TestResourceTheme covers the Theme codec handled by the resource tools:
 // create/read/modify with the theme item type inference intact.
 func TestResourceTheme(t *testing.T) {
+	t.Parallel()
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -213,6 +218,7 @@ func TestResourceTheme(t *testing.T) {
 // item that references another resource by path. The saved .tres is inspected so
 // a silently-ignored or mis-typed value fails the test.
 func TestResourceThemeConvertsTypes(t *testing.T) {
+	t.Parallel()
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -281,6 +287,7 @@ func TestResourceThemeConvertsTypes(t *testing.T) {
 // type is inferred from the item path rather than an existing property:
 // constants are integers and fonts are object references.
 func TestResourceThemeMoreCategories(t *testing.T) {
+	t.Parallel()
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -319,6 +326,7 @@ func TestResourceThemeMoreCategories(t *testing.T) {
 
 // TestResourceErrors covers the reference's validation and failure messages.
 func TestResourceErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		session := connect(t)
 		requireToolError(t, session, "create_resource", map[string]any{}, "resourcePath and resourceType are required.")

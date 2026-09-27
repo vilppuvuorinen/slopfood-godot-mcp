@@ -8,6 +8,7 @@ import (
 // TestAddNodeSchema ports the reference's tool-definition expectations for
 // add_node over the real stdio surface.
 func TestAddNodeSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "add_node", "Add a built-in node or a scene instance to an existing scene (rewrites the .tscn file)")
 	schema.requireRequired(t, "scenePath", "nodeName")
 	schema.requireProps(t, "scenePath", "parentNodePath", "nodeType", "instancePath", "nodeName", "properties")
@@ -16,6 +17,7 @@ func TestAddNodeSchema(t *testing.T) {
 
 // TestAddNodeTool drives the real add_node tool against Godot.
 func TestAddNodeTool(t *testing.T) {
+	t.Parallel()
 	t.Run("adds a node", func(t *testing.T) {
 		root, session := seedScene(t, "scenes/main.tscn")
 
@@ -54,6 +56,7 @@ func TestAddNodeTool(t *testing.T) {
 
 // TestAddNodeErrors covers the reference's validation and failure messages.
 func TestAddNodeErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)

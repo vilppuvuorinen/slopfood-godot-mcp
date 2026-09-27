@@ -9,6 +9,7 @@ import (
 
 // TestReimportProjectSchema pins the project-wide scan tool's input surface.
 func TestReimportProjectSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "reimport_project", "Reimport a Godot project by scanning it in the editor, generating .import sidecars and missing resource UIDs")
 	schema.requireRequired(t)
 	schema.requirePropCount(t, 0)
@@ -19,6 +20,7 @@ func TestReimportProjectSchema(t *testing.T) {
 // sidecar for an un-UID'd script, and it leaves existing UIDs (a scene's own
 // header uid and an ext_resource uid) untouched.
 func TestReimportProjectTool(t *testing.T) {
+	t.Parallel()
 	root, session := seedScene(t, "scenes/main.tscn")
 
 	// An un-UID'd script that the scan must give a sidecar.
@@ -56,6 +58,7 @@ func TestReimportProjectTool(t *testing.T) {
 // the import surface is built around: the agent edits the .import sidecar text
 // directly, then runs reimport_project once to make the edit take effect.
 func TestReimportProjectAppliesSidecarEdit(t *testing.T) {
+	t.Parallel()
 	root := newProject(t)
 	writeE2EFile(t, filepath.Join(root, "icon.svg"), `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/></svg>`)
 	session := connectProject(t, root)
@@ -95,6 +98,7 @@ func setImportParam(sidecar, key, value string) string {
 
 // TestReimportProjectErrors covers the reference's validation messages.
 func TestReimportProjectErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
 		session := connectProject(t, root)

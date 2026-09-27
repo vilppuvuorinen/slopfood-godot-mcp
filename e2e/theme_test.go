@@ -10,6 +10,7 @@ import (
 
 // TestCreateThemeSchema pins the create tool's input surface.
 func TestCreateThemeSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "create_theme", "Create a Theme resource")
 	schema.requireRequired(t, "resourcePath")
 	schema.requireStringProps(t, "resourcePath")
@@ -20,6 +21,7 @@ func TestCreateThemeSchema(t *testing.T) {
 
 // TestModifyThemeSchema pins the modify tool's input surface.
 func TestModifyThemeSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "modify_theme", "Set a Theme's default font, font size, or base scale")
 	schema.requireRequired(t, "resourcePath")
 	schema.requireStringProps(t, "resourcePath")
@@ -30,6 +32,7 @@ func TestModifyThemeSchema(t *testing.T) {
 
 // TestRemoveThemeTypeSchema pins the remove-type tool's input surface.
 func TestRemoveThemeTypeSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "remove_theme_type", "Remove a type from a Theme")
 	schema.requireRequired(t, "resourcePath", "themeType")
 	schema.requireStringProps(t, "resourcePath", "themeType")
@@ -38,6 +41,7 @@ func TestRemoveThemeTypeSchema(t *testing.T) {
 
 // TestSetThemeTypeVariationSchema pins the set-variation tool's input surface.
 func TestSetThemeTypeVariationSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "set_theme_type_variation", "Set a Theme type variation and its base type")
 	schema.requireRequired(t, "resourcePath", "themeType", "baseType")
 	schema.requireStringProps(t, "resourcePath", "themeType", "baseType")
@@ -46,6 +50,7 @@ func TestSetThemeTypeVariationSchema(t *testing.T) {
 
 // TestClearThemeTypeVariationSchema pins the clear-variation tool's input surface.
 func TestClearThemeTypeVariationSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "clear_theme_type_variation", "Clear a Theme type variation")
 	schema.requireRequired(t, "resourcePath", "themeType")
 	schema.requireStringProps(t, "resourcePath", "themeType")
@@ -54,6 +59,7 @@ func TestClearThemeTypeVariationSchema(t *testing.T) {
 
 // TestSetThemeItemSchema pins the set-item tool's input surface.
 func TestSetThemeItemSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "set_theme_item", "Set a Theme item on a type")
 	schema.requireRequired(t, "resourcePath", "themeType", "itemType", "itemName", "value")
 	schema.requireStringProps(t, "resourcePath", "themeType", "itemType", "itemName")
@@ -62,6 +68,7 @@ func TestSetThemeItemSchema(t *testing.T) {
 
 // TestClearThemeItemSchema pins the clear-item tool's input surface.
 func TestClearThemeItemSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "clear_theme_item", "Clear a Theme item from a type")
 	schema.requireRequired(t, "resourcePath", "themeType", "itemType", "itemName")
 	schema.requireStringProps(t, "resourcePath", "themeType", "itemType", "itemName")
@@ -70,6 +77,7 @@ func TestClearThemeItemSchema(t *testing.T) {
 
 // TestReadThemeSchema pins the read-only theme tool's input surface.
 func TestReadThemeSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "read_theme", "Read Theme resources, their types, variations, and items")
 	schema.requireRequired(t, "resourcePath")
 	schema.requireStringProps(t, "resourcePath")
@@ -126,6 +134,7 @@ func seedThemeResources(t *testing.T, session *mcp.ClientSession) {
 
 // TestThemeTools drives the real theme tools against Godot.
 func TestThemeTools(t *testing.T) {
+	t.Parallel()
 	t.Run("creates a theme with defaults", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
@@ -287,6 +296,7 @@ func TestThemeTools(t *testing.T) {
 
 // TestThemeErrors covers the validation and engine failure paths.
 func TestThemeErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		session := connect(t)
 		requireToolError(t, session, "create_theme", map[string]any{}, "resourcePath is required.")

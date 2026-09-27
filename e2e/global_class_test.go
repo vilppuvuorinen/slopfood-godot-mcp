@@ -13,6 +13,7 @@ import (
 // reimport_project) must run after the script is written and before
 // add_node names the class.
 func TestAddNodeFromGlobalClass(t *testing.T) {
+	t.Parallel()
 	root := newProject(t)
 	session := connectProject(t, root)
 

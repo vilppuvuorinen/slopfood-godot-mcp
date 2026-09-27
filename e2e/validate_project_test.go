@@ -15,6 +15,7 @@ type validateProjectPayload struct {
 
 // TestValidateProjectSchema pins the tool's input and output surface.
 func TestValidateProjectSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "validate_project", "Load project.godot with the Godot engine and report whether it parsed")
 	schema.requireRequired(t)
 	schema.requirePropCount(t, 0)
@@ -22,6 +23,7 @@ func TestValidateProjectSchema(t *testing.T) {
 
 // TestValidateProjectTool drives the tool through the real engine.
 func TestValidateProjectTool(t *testing.T) {
+	t.Parallel()
 	t.Run("valid project", func(t *testing.T) {
 		root := t.TempDir()
 		writeE2EFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[application]\n\nconfig/name=\"Demo\"\n")

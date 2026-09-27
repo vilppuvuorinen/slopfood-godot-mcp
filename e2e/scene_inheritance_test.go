@@ -47,6 +47,7 @@ func seedInheritedScene(t *testing.T, derivedPath string) (string, *mcp.ClientSe
 // TestSceneInheritanceTool drives create_scene with baseScenePath and read_scene
 // over the resulting inherited scene.
 func TestSceneInheritanceTool(t *testing.T) {
+	t.Parallel()
 	root, session := seedInheritedScene(t, "scenes/derived.tscn")
 
 	derived := readFile(t, filepath.Join(root, "scenes", "derived.tscn"))
@@ -76,6 +77,7 @@ func TestSceneInheritanceTool(t *testing.T) {
 // TestInheritedSceneEditsRejected proves every repacking scene mutator refuses
 // an inherited scene instead of silently flattening the base into it.
 func TestInheritedSceneEditsRejected(t *testing.T) {
+	t.Parallel()
 	root, session := seedInheritedScene(t, "scenes/derived.tscn")
 	derivedFull := filepath.Join(root, "scenes", "derived.tscn")
 	before := readFile(t, derivedFull)
@@ -133,6 +135,7 @@ func TestInheritedSceneEditsRejected(t *testing.T) {
 
 // TestCreateSceneInheritanceErrors covers baseScenePath validation.
 func TestCreateSceneInheritanceErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("both root sources", func(t *testing.T) {
 		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "create_scene", map[string]any{

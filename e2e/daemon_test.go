@@ -23,6 +23,7 @@ func daemonProjectArgs(project string, extra ...string) []string {
 // Exactly one must win the lock; the rest connect to it. Closing the sessions
 // lets the daemon idle out.
 func TestDaemonSimultaneousSpawnsYieldOneDaemon(t *testing.T) {
+	t.Parallel()
 	project := newProject(t)
 	runtimeDir := newRuntimeDir(t)
 
@@ -73,6 +74,7 @@ func TestDaemonSimultaneousSpawnsYieldOneDaemon(t *testing.T) {
 // leaving its socket and lock file behind, then starts a new client that must
 // reclaim the stale path and serve normally.
 func TestDaemonStaleSocketReclaimed(t *testing.T) {
+	t.Parallel()
 	project := newProject(t)
 	runtimeDir := newRuntimeDir(t)
 
@@ -114,6 +116,7 @@ func TestDaemonStaleSocketReclaimed(t *testing.T) {
 // period once the last client leaves, and that a new client respawns one on the
 // same path.
 func TestDaemonIdleExitAndRespawn(t *testing.T) {
+	t.Parallel()
 	project := newProject(t)
 	runtimeDir := newRuntimeDir(t)
 
@@ -142,6 +145,7 @@ func TestDaemonIdleExitAndRespawn(t *testing.T) {
 // the filesystem gate that keeps another user out alongside the daemon's peer
 // UID check.
 func TestDaemonSocketPermissions(t *testing.T) {
+	t.Parallel()
 	project := newProject(t)
 	runtimeDir := newRuntimeDir(t)
 
@@ -176,6 +180,7 @@ func TestDaemonSocketPermissions(t *testing.T) {
 // independent daemons would each load the original scene and the second save
 // would clobber the first.
 func TestDaemonConcurrentMutationsNoLostUpdate(t *testing.T) {
+	t.Parallel()
 	project := newProject(t)
 	runtimeDir := newRuntimeDir(t)
 

@@ -130,7 +130,7 @@ jobs:
           GODOT_MINOR: ${{ matrix.minor }}
         run: |
           go mod download
-          go test -race -covermode=atomic ./...
+          go test -race -parallel 4 -covermode=atomic ./...
 
   release:
     # Gated on the dispatch input: pushes never release. It runs after every

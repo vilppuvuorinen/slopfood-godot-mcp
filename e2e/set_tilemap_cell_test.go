@@ -4,6 +4,7 @@ import "testing"
 
 // TestSetTilemapCellSchema pins the tool's input surface.
 func TestSetTilemapCellSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "set_tilemap_cell", "Place a tile on a TileMapLayer node in a scene")
 	schema.requireRequired(t, "scenePath", "nodePath", "coords", "sourceId", "atlasCoords")
 	schema.requireStringProps(t, "scenePath", "nodePath")
@@ -14,6 +15,7 @@ func TestSetTilemapCellSchema(t *testing.T) {
 
 // TestSetTilemapCellTool drives the real set_tilemap_cell tool against Godot.
 func TestSetTilemapCellTool(t *testing.T) {
+	t.Parallel()
 	t.Run("places and reads cells", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
@@ -80,6 +82,7 @@ func TestSetTilemapCellTool(t *testing.T) {
 
 // TestSetTilemapCellErrors covers validation and engine failure messages.
 func TestSetTilemapCellErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		session := connect(t)
 		requireToolError(t, session, "set_tilemap_cell", map[string]any{},

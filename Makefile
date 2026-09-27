@@ -36,15 +36,25 @@ test:
 godot:
 	scripts/download-godot.py install
 
+# E2E_PARALLEL caps how many e2e tests drive the engine at once via go test
+# -parallel. Each running test owns a project and a daemon that runs one Godot
+# process at a time, and a headless Godot costs hundreds of megabytes of RSS, so
+# the cap trades wall time for a bounded peak. Raise it on a host with more
+# memory to spare.
+E2E_PARALLEL ?= 4
+
 # e2e drives a pre-built server binary with the official MCP SDK client. It is
 # a standalone black-box module, so the SDK never enters the server's module
 # graph. The binary is built first and handed to the tests via GODOT_MCP_BIN.
+# Tests run in parallel, bounded by go test -parallel (E2E_PARALLEL); each test
+# uses its own temp project and runtime dir, so the only shared resource to
+# bound is the engine.
 #
 # The e2e module has no non-test code, so -covermode here measures nothing; the
 # server is a child process. Use e2e-cover for real coverage of the server.
 .PHONY: e2e
 e2e: build
-	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GODOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)' $(GO) test $(GOFLAGS) -count=1 ./...
+	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GODOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)' $(GO) test $(GOFLAGS) -parallel $(E2E_PARALLEL) -count=1 ./...
 
 # e2e-cover is e2e with a coverage-instrumented server binary. Building with
 # -cover and pointing every spawned server at a shared GOCOVERDIR makes each
@@ -57,6 +67,10 @@ e2e: build
 # them; every spawned engine appends each script's hits to its own trace
 # (GDCOVER_FILE and GDCOVER_VALIDATE_FILE). Those traces become two LCOV reports
 # afterwards, so one engine run yields three profiles.
+#
+# Unlike e2e this runs with -parallel 1: the hit traces are keyed per script,
+# not per process, so two engines appending at once race on the same file and
+# silently drop hits. Serialize until the traces are keyed per process.
 COVERDIR ?= $(CURDIR)/coverage-e2e
 E2E_COVERPROFILE := coverage-e2e.out
 GDCOVERDIR ?= $(CURDIR)/coverage-gdscript
@@ -70,7 +84,7 @@ e2e-cover:
 	rm -rf '$(COVERDIR)' '$(GDCOVERDIR)' $(E2E_COVERPROFILE) $(GDCOVER_PROFILE) $(GDCOVER_VALIDATE_PROFILE)
 	mkdir -p '$(COVERDIR)' '$(GDCOVERDIR)'
 	$(GO) build $(GOFLAGS) -cover -tags gdcover -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY)-cover $(CMD)
-	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GODOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)-cover' GOCOVERDIR='$(COVERDIR)' GDCOVER_FILE='$(GDCOVER_HITS)' GDCOVER_VALIDATE_FILE='$(GDCOVER_VALIDATE_HITS)' $(GO) test $(GOFLAGS) -count=1 ./...
+	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GODOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)-cover' GOCOVERDIR='$(COVERDIR)' GDCOVER_FILE='$(GDCOVER_HITS)' GDCOVER_VALIDATE_FILE='$(GDCOVER_VALIDATE_HITS)' $(GO) test $(GOFLAGS) -parallel 1 -count=1 ./...
 	$(GO) tool covdata textfmt -i='$(COVERDIR)' -o=$(E2E_COVERPROFILE)
 	@$(GO) tool cover -func=$(E2E_COVERPROFILE) | tail -1
 	$(GO) run ./cmd/gdcover lcov -source internal/godotops/godot_operations.gd -hits '$(GDCOVER_HITS)' -out $(GDCOVER_PROFILE)
@@ -123,7 +137,7 @@ help:
 	@printf '  run      run the server (ARGS=...)\n'
 	@printf '  test     run tests with coverage\n'
 	@printf '  godot    download pinned Godot builds (GODOT_TEMPLATES=1 adds export templates)\n'
-	@printf '  e2e      build, then run the SDK-backed black-box tests\n'
+	@printf '  e2e      build, then run the SDK-backed black-box tests in parallel (E2E_PARALLEL=%s)\n' '$(E2E_PARALLEL)'
 	@printf '  e2e-cover  e2e coverage: Go to %s, GDScript bridge to %s and %s\n' '$(E2E_COVERPROFILE)' '$(GDCOVER_PROFILE)' '$(GDCOVER_VALIDATE_PROFILE)'
 	@printf '  fmt/vet/lint/check  code quality\n'
 	@printf '  clean    remove build artifacts\n'

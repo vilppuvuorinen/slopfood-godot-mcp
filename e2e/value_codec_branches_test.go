@@ -57,6 +57,7 @@ func readRootProperties(t *testing.T, session *mcp.ClientSession) map[string]any
 // through an untyped Dictionary, so _convert_value_for_type's String,
 // StringName, NodePath and PackedStringArray arms are otherwise never reached.
 func TestValueCodecScalarCoercion(t *testing.T) {
+	t.Parallel()
 	_, session := seedValueCodecScene(t)
 
 	requireToolText(t, session, "modify_scene_node", map[string]any{
@@ -88,6 +89,7 @@ func TestValueCodecScalarCoercion(t *testing.T) {
 // read payload can emit decodes back to the same plain object. The failure side
 // of this branch is already pinned; this is the success side.
 func TestValueCodecDictionaryTag(t *testing.T) {
+	t.Parallel()
 	_, session := seedValueCodecScene(t)
 
 	requireToolText(t, session, "modify_scene_node", map[string]any{
@@ -112,6 +114,7 @@ func TestValueCodecDictionaryTag(t *testing.T) {
 // cannot rebuild falls back to the literal text, so an engine-only value still
 // round-trips as data instead of failing the write.
 func TestValueCodecGodotTextFallback(t *testing.T) {
+	t.Parallel()
 	_, session := seedValueCodecScene(t)
 
 	requireToolText(t, session, "modify_scene_node", map[string]any{
@@ -135,6 +138,7 @@ func TestValueCodecGodotTextFallback(t *testing.T) {
 // that has a defined default: a Color without "a" and a Quaternion without "w"
 // must decode with the missing component set to 1.
 func TestValueCodecOptionalFieldsDefault(t *testing.T) {
+	t.Parallel()
 	_, session := seedValueCodecScene(t)
 
 	requireToolText(t, session, "modify_scene_node", map[string]any{
@@ -163,6 +167,7 @@ func TestValueCodecOptionalFieldsDefault(t *testing.T) {
 // fallback _vector_field uses to keep an invalid component out of a composite
 // constructor. Every case must fail before writing, leaving the scene intact.
 func TestValueCodecTypeFailures(t *testing.T) {
+	t.Parallel()
 	root, session := seedValueCodecScene(t)
 	before := readFile(t, filepath.Join(root, "scenes", "codec.tscn"))
 

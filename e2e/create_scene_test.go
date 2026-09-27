@@ -8,6 +8,7 @@ import (
 // TestCreateSceneSchema ports the reference's tool-definition expectations for
 // create_scene over the real stdio surface.
 func TestCreateSceneSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "create_scene", "Create a new Godot scene file")
 	schema.requireRequired(t, "scenePath")
 	schema.requireStringProps(t, "scenePath", "rootNodeType")
@@ -16,6 +17,7 @@ func TestCreateSceneSchema(t *testing.T) {
 // TestCreateSceneTool drives the real create_scene tool against Godot,
 // exercising the default and custom root node types.
 func TestCreateSceneTool(t *testing.T) {
+	t.Parallel()
 	t.Run("defaults to Node2D", func(t *testing.T) {
 		root, _ := seedScene(t, "scenes/main.tscn")
 		scene := readFile(t, filepath.Join(root, "scenes", "main.tscn"))
@@ -38,6 +40,7 @@ func TestCreateSceneTool(t *testing.T) {
 
 // TestCreateSceneErrors covers the reference's validation and failure messages.
 func TestCreateSceneErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing paths", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
@@ -93,6 +96,7 @@ func TestCreateSceneErrors(t *testing.T) {
 // asserts the reference's generic failure message and solutions. It uses its
 // own session so the shared environment is untouched.
 func TestCreateSceneFailsWithoutGodot(t *testing.T) {
+	t.Parallel()
 	root := newProject(t)
 	session := connectProjectWithEnv(t, root, "GODOT_PATH="+filepath.Join(t.TempDir(), "missing-godot"))
 

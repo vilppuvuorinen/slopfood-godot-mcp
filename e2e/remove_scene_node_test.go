@@ -8,6 +8,7 @@ import (
 // TestRemoveSceneNodeSchema ports the reference's tool-definition expectations
 // for remove_scene_node over the real stdio surface.
 func TestRemoveSceneNodeSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "remove_scene_node", "Remove a node from a scene file (headless)")
 	schema.requireRequired(t, "scenePath", "nodePath")
 	schema.requireStringProps(t, "scenePath", "nodePath")
@@ -17,6 +18,7 @@ func TestRemoveSceneNodeSchema(t *testing.T) {
 // TestRemoveSceneNodeTool drives the real remove_scene_node tool against Godot
 // and checks the saved scene no longer references the removed node.
 func TestRemoveSceneNodeTool(t *testing.T) {
+	t.Parallel()
 	root, session := seedScene(t, "scenes/main.tscn", "Node2D")
 
 	requireToolText(t, session, "add_node", map[string]any{
@@ -36,6 +38,7 @@ func TestRemoveSceneNodeTool(t *testing.T) {
 // TestRemoveSceneNodeRoot verifies the operations script refuses to remove the
 // scene root and that the refusal surfaces as a failed tool result.
 func TestRemoveSceneNodeRoot(t *testing.T) {
+	t.Parallel()
 	_, session := seedScene(t, "scenes/main.tscn", "Node2D")
 
 	res := callTool(t, session, "remove_scene_node", map[string]any{
@@ -50,6 +53,7 @@ func TestRemoveSceneNodeRoot(t *testing.T) {
 
 // TestRemoveSceneNodeErrors covers the reference's validation and failure messages.
 func TestRemoveSceneNodeErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing paths", func(t *testing.T) {
 		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "remove_scene_node", map[string]any{}, "scenePath and nodePath are required.")

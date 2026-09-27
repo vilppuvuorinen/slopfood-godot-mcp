@@ -4,6 +4,7 @@ import "testing"
 
 // TestEraseTilemapCellSchema pins the tool's input surface.
 func TestEraseTilemapCellSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "erase_tilemap_cell", "Erase a tile from a TileMapLayer node in a scene")
 	schema.requireRequired(t, "scenePath", "nodePath", "coords")
 	schema.requireStringProps(t, "scenePath", "nodePath")
@@ -13,6 +14,7 @@ func TestEraseTilemapCellSchema(t *testing.T) {
 // TestEraseTilemapCellTool drives the real erase_tilemap_cell tool against
 // Godot.
 func TestEraseTilemapCellTool(t *testing.T) {
+	t.Parallel()
 	root := newProject(t)
 	session := connectProject(t, root)
 	seedAtlasTexture(t, root)
@@ -40,6 +42,7 @@ func TestEraseTilemapCellTool(t *testing.T) {
 
 // TestEraseTilemapCellErrors covers validation messages.
 func TestEraseTilemapCellErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		session := connect(t)
 		requireToolError(t, session, "erase_tilemap_cell", map[string]any{},

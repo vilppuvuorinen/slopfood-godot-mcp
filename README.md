@@ -114,8 +114,15 @@ To run the e2e suite by hand, build first and set both variables (an absolute,
 ```
 make build
 cd e2e
-XDG_DATA_HOME="$(cd .. && pwd)/.godot" GODOT_MCP_BIN="$(cd .. && pwd)/bin/slopfood-godot-mcp" go test ./...
+XDG_DATA_HOME="$(cd .. && pwd)/.godot" GODOT_MCP_BIN="$(cd .. && pwd)/bin/slopfood-godot-mcp" go test -parallel 4 ./...
 ```
+
+Tests run in parallel, bounded by `go test -parallel` (default 4 via
+`E2E_PARALLEL` for `make e2e`). Each test uses its own temp project and runtime
+directory; the bound exists because a headless Godot process costs hundreds of
+megabytes of RSS, so raise it only if the host has memory to spare. `make
+e2e-cover` runs with `-parallel 1` while the GDScript hit traces are keyed per
+script rather than per process.
 
 CI runs on `main` and manual dispatch only. Every run does the `make check`
 surface, then tests against the latest Godot builds rather than a pinned

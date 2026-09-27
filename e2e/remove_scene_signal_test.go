@@ -7,6 +7,7 @@ import (
 
 // TestRemoveSceneSignalSchema pins the tool's input surface.
 func TestRemoveSceneSignalSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "remove_scene_signal", "Remove a signal connection from a .tscn scene")
 	schema.requireRequired(t, "scenePath", "signalName", "sourcePath", "targetPath")
 	schema.requireStringProps(t, "scenePath", "signalName", "sourcePath", "targetPath", "method")
@@ -16,6 +17,7 @@ func TestRemoveSceneSignalSchema(t *testing.T) {
 // TestRemoveSceneSignalTool drives the real remove_scene_signal tool against
 // Godot.
 func TestRemoveSceneSignalTool(t *testing.T) {
+	t.Parallel()
 	t.Run("adds then removes a connection", func(t *testing.T) {
 		root, session := seedScene(t, "scenes/connections.tscn", "Button")
 		requireToolText(t, session, "add_scene_signal", map[string]any{
@@ -110,6 +112,7 @@ func TestRemoveSceneSignalTool(t *testing.T) {
 
 // TestRemoveSceneSignalErrors covers the tool's validation messages.
 func TestRemoveSceneSignalErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "remove_scene_signal", map[string]any{},

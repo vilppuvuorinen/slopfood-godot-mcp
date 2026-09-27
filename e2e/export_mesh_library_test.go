@@ -47,6 +47,7 @@ size = Vector3(1, 1, 1)
 // TestExportMeshLibrarySchema ports the reference's tool-definition
 // expectations for export_mesh_library over the real stdio surface.
 func TestExportMeshLibrarySchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "export_mesh_library", "Export a scene as a MeshLibrary resource")
 	schema.requireRequired(t, "scenePath", "outputPath")
 	schema.requireType(t, "meshItemNames", "array")
@@ -79,6 +80,7 @@ func seedMeshScene(t *testing.T) (string, *mcp.ClientSession) {
 // TestExportMeshLibraryTool drives the real export_mesh_library tool against
 // Godot, including the optional meshItemNames filter.
 func TestExportMeshLibraryTool(t *testing.T) {
+	t.Parallel()
 	t.Run("exports a mesh library", func(t *testing.T) {
 		root, session := seedMeshScene(t)
 
@@ -135,6 +137,7 @@ func TestExportMeshLibraryTool(t *testing.T) {
 // preview. It exports to a .tres so the serialized library can be checked as
 // text instead of through a resource reader that does not exist.
 func TestExportMeshLibraryCollisionAndPreview(t *testing.T) {
+	t.Parallel()
 	root, session := seedScene(t, "scenes/main.tscn", "Node3D")
 	writeE2EFile(t, filepath.Join(root, "gradient.tres"), gradientTextureResource)
 	writeE2EFile(t, filepath.Join(root, "mat.tres"), texturedMaterialResource)
@@ -176,6 +179,7 @@ func TestExportMeshLibraryCollisionAndPreview(t *testing.T) {
 // descendant of a holder node, and the absence of a preview when the mesh's
 // material carries no albedo texture.
 func TestExportMeshLibraryDescendantAndPreview(t *testing.T) {
+	t.Parallel()
 	t.Run("finds a mesh on a descendant", func(t *testing.T) {
 		root, session := seedScene(t, "scenes/main.tscn", "Node3D")
 		writeE2EFile(t, filepath.Join(root, "box.tres"), boxMeshResource)
@@ -220,6 +224,7 @@ func TestExportMeshLibraryDescendantAndPreview(t *testing.T) {
 
 // TestExportMeshLibraryErrors covers the reference's validation messages.
 func TestExportMeshLibraryErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)

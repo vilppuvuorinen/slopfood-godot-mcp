@@ -18,6 +18,7 @@ type validateScriptsE2EDoc struct {
 // TestValidateScriptsSchema ports the reference's tool-definition expectations
 // for validate_scripts over the real stdio surface.
 func TestValidateScriptsSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "validate_scripts", "Batch-check GDScript files (git-changed by default, or all)")
 	schema.requireRequired(t)
 	schema.requireProps(t, "scope", "scriptPaths")
@@ -29,6 +30,7 @@ func TestValidateScriptsSchema(t *testing.T) {
 // TestValidateScriptsTool drives the real validate_scripts tool against Godot.
 // Each subtest binds a session to its own project.
 func TestValidateScriptsTool(t *testing.T) {
+	t.Parallel()
 	t.Run("explicit scriptPaths", func(t *testing.T) {
 		root := t.TempDir()
 		seedProject(t, root)
@@ -159,6 +161,7 @@ func TestValidateScriptsTool(t *testing.T) {
 
 // TestValidateScriptsErrors covers the reference's validation messages.
 func TestValidateScriptsErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
 		session := connectProject(t, root)

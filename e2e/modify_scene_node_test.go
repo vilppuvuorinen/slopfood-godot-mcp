@@ -8,6 +8,7 @@ import (
 // TestModifySceneNodeSchema ports the reference's tool-definition expectations
 // for modify_scene_node over the real stdio surface.
 func TestModifySceneNodeSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "modify_scene_node", "Modify node properties in a scene file (headless)")
 	schema.requireRequired(t, "scenePath", "nodePath", "properties")
 	schema.requireStringProps(t, "scenePath", "nodePath")
@@ -18,6 +19,7 @@ func TestModifySceneNodeSchema(t *testing.T) {
 // TestModifySceneNodeTool drives the real modify_scene_node tool against Godot
 // and reads the saved scene back from disk.
 func TestModifySceneNodeTool(t *testing.T) {
+	t.Parallel()
 	root, session := seedScene(t, "scenes/main.tscn", "Node2D")
 
 	requireToolText(t, session, "add_node", map[string]any{
@@ -44,6 +46,7 @@ func TestModifySceneNodeTool(t *testing.T) {
 // case must fail with the specific reason and, because _apply_properties
 // refuses before writing, leave the scene file untouched.
 func TestModifySceneNodeDecodeErrors(t *testing.T) {
+	t.Parallel()
 	root, session := seedScene(t, "scenes/errors.tscn", "Node2D")
 	requireToolText(t, session, "add_node", map[string]any{
 		"scenePath": "scenes/errors.tscn",
@@ -190,6 +193,7 @@ func TestModifySceneNodeDecodeErrors(t *testing.T) {
 // TestModifySceneNodeErrors covers the reference's validation and failure
 // messages.
 func TestModifySceneNodeErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing scene", func(t *testing.T) {
 		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "modify_scene_node", map[string]any{

@@ -7,6 +7,7 @@ import (
 
 // TestDuplicateSceneNodeSchema pins the tool's input surface.
 func TestDuplicateSceneNodeSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "duplicate_scene_node", "Duplicate a node within a .tscn scene")
 	schema.requireRequired(t, "scenePath", "nodePath")
 	schema.requireStringProps(t, "scenePath", "nodePath")
@@ -16,6 +17,7 @@ func TestDuplicateSceneNodeSchema(t *testing.T) {
 // TestDuplicateSceneNodeTool drives the real duplicate_scene_node tool against
 // Godot.
 func TestDuplicateSceneNodeTool(t *testing.T) {
+	t.Parallel()
 	t.Run("duplicates a node", func(t *testing.T) {
 		root, session := seedScene(t, "scenes/duplicate.tscn", "Node2D")
 		requireToolText(t, session, "add_node", map[string]any{
@@ -61,6 +63,7 @@ func TestDuplicateSceneNodeTool(t *testing.T) {
 
 // TestDuplicateSceneNodeErrors covers validation and engine failure messages.
 func TestDuplicateSceneNodeErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "duplicate_scene_node", map[string]any{},

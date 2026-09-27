@@ -55,6 +55,7 @@ func loadValueContract(t *testing.T) valueContract {
 // internal/godotconfig/json_test.go, so a tag one decoder gains or loses
 // without the other following fails a test on one side.
 func TestValueContractScriptHalf(t *testing.T) {
+	t.Parallel()
 	contract := loadValueContract(t)
 
 	root, session := seedScene(t, "scenes/contract.tscn", "Node2D")

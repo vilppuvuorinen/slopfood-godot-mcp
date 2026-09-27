@@ -10,6 +10,7 @@ import (
 // TestCreateProjectSchema ports the reference's tool-definitions test: the
 // schema must require projectName and expose the dotnet flag.
 func TestCreateProjectSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "create_project", "Create a new Godot project from scratch")
 	schema.requireRequired(t, "projectName")
 	schema.requireProps(t, "projectName", "dotnet")
@@ -20,6 +21,7 @@ func TestCreateProjectSchema(t *testing.T) {
 // success, existing-project rejection, and validation. The server is bound to
 // the target directory because create_project creates the bound root itself.
 func TestCreateProjectTool(t *testing.T) {
+	t.Parallel()
 	t.Run("creates a project", func(t *testing.T) {
 		dir := filepath.Join(t.TempDir(), "game")
 		session := connectProject(t, dir)
@@ -61,6 +63,7 @@ func TestCreateProjectTool(t *testing.T) {
 // TestCreateProjectDotnetTool covers the .NET branch and, by extension, the
 // reference's dotnet.test.ts helpers (identifier sanitizing, features, csproj).
 func TestCreateProjectDotnetTool(t *testing.T) {
+	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "dotnet")
 	session := connectProject(t, dir)
 
@@ -92,6 +95,7 @@ func TestCreateProjectDotnetTool(t *testing.T) {
 // TestCreateProjectDotnetIdentifiers ports the toDotnetIdentifier table from
 // the reference's dotnet.test.ts through the observable MCP surface.
 func TestCreateProjectDotnetIdentifiers(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		project string

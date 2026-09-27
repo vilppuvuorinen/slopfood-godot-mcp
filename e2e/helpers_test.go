@@ -216,8 +216,12 @@ func daemonPIDs(t *testing.T, project string) []int {
 			continue
 		}
 		command := fields[1:]
-		joined := strings.Join(command, " ")
-		if !slices.Contains(command, "daemon") || !strings.Contains(joined, binary) || !strings.Contains(joined, project) {
+		// project is its own argv token after --project. Match it exactly, not
+		// as a substring: under a parallel run one project's temp path could
+		// otherwise match another's daemon.
+		if !slices.Contains(command, "daemon") || !slices.ContainsFunc(command, func(arg string) bool {
+			return strings.Contains(arg, binary)
+		}) || !slices.Contains(command, project) {
 			continue
 		}
 		pids = append(pids, pid)

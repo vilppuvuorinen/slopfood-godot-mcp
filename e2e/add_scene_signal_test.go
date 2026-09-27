@@ -10,6 +10,7 @@ import (
 
 // TestAddSceneSignalSchema pins the tool's input surface.
 func TestAddSceneSignalSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "add_scene_signal", "Add a signal connection in a .tscn scene")
 	schema.requireRequired(t, "scenePath", "signalName", "sourcePath", "targetPath", "method")
 	schema.requireStringProps(t, "scenePath", "signalName", "sourcePath", "targetPath", "method")
@@ -18,6 +19,7 @@ func TestAddSceneSignalSchema(t *testing.T) {
 
 // TestAddSceneSignalTool drives the real add_scene_signal tool against Godot.
 func TestAddSceneSignalTool(t *testing.T) {
+	t.Parallel()
 	t.Run("adds a connection", func(t *testing.T) {
 		_, session := seedScene(t, "scenes/signals.tscn", "Button")
 
@@ -151,6 +153,7 @@ func TestAddSceneSignalTool(t *testing.T) {
 
 // TestAddSceneSignalErrors covers the tool's validation messages.
 func TestAddSceneSignalErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "add_scene_signal", map[string]any{},

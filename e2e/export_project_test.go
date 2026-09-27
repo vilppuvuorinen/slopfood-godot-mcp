@@ -11,6 +11,7 @@ import (
 // TestExportProjectSchema ports the reference's tool-definition expectations
 // for export_project over the real stdio surface.
 func TestExportProjectSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "export_project", "Export a Godot project using a preset")
 	schema.requireRequired(t, "presetName", "outputPath")
 	schema.requirePropCount(t, 3)
@@ -20,6 +21,7 @@ func TestExportProjectSchema(t *testing.T) {
 
 // TestExportProjectValidation covers the reference's validation messages.
 func TestExportProjectValidation(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
@@ -75,6 +77,7 @@ binary_format/embed_pck=false
 // export templates (scripts/download-godot.py with GODOT_TEMPLATES=1); a missing
 // template fails the suite rather than passing it.
 func TestExportProjectTool(t *testing.T) {
+	t.Parallel()
 	t.Run("release build", func(t *testing.T) {
 		root, session := seedExportProject(t)
 

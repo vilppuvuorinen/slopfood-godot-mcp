@@ -4,6 +4,7 @@ import "testing"
 
 // TestClearTilemapSchema pins the tool's input surface.
 func TestClearTilemapSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "clear_tilemap", "Clear every cell on a TileMapLayer node in a scene")
 	schema.requireRequired(t, "scenePath", "nodePath")
 	schema.requireStringProps(t, "scenePath", "nodePath")
@@ -12,6 +13,7 @@ func TestClearTilemapSchema(t *testing.T) {
 
 // TestClearTilemapTool drives the real clear_tilemap tool against Godot.
 func TestClearTilemapTool(t *testing.T) {
+	t.Parallel()
 	root := newProject(t)
 	session := connectProject(t, root)
 	seedAtlasTexture(t, root)
@@ -40,6 +42,7 @@ func TestClearTilemapTool(t *testing.T) {
 
 // TestClearTilemapErrors covers validation messages.
 func TestClearTilemapErrors(t *testing.T) {
+	t.Parallel()
 	session := connect(t)
 	requireToolError(t, session, "clear_tilemap", map[string]any{
 		"scenePath": "scenes/level.tscn",

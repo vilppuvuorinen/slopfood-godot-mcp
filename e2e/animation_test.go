@@ -10,6 +10,7 @@ import (
 
 // TestCreateAnimationSchema pins the create tool's input surface.
 func TestCreateAnimationSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "create_animation", "Create an Animation resource")
 	schema.requireRequired(t, "resourcePath")
 	schema.requireStringProps(t, "resourcePath", "loopMode")
@@ -20,6 +21,7 @@ func TestCreateAnimationSchema(t *testing.T) {
 
 // TestModifyAnimationSchema pins the modify tool's input surface.
 func TestModifyAnimationSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "modify_animation", "Set an Animation resource's length, loop mode, or step")
 	schema.requireRequired(t, "resourcePath")
 	schema.requireStringProps(t, "resourcePath", "loopMode")
@@ -30,6 +32,7 @@ func TestModifyAnimationSchema(t *testing.T) {
 
 // TestAddAnimationTrackSchema pins the add-track tool's input surface.
 func TestAddAnimationTrackSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "add_animation_track", "Append a track to an Animation resource")
 	schema.requireRequired(t, "resourcePath", "trackType")
 	schema.requireStringProps(t, "resourcePath", "trackType", "trackPath", "interpolation")
@@ -39,6 +42,7 @@ func TestAddAnimationTrackSchema(t *testing.T) {
 
 // TestSetAnimationTrackSchema pins the set-track tool's input surface.
 func TestSetAnimationTrackSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "set_animation_track", "Set an existing Animation track's path, interpolation, and keys")
 	schema.requireRequired(t, "resourcePath", "trackIndex")
 	schema.requireStringProps(t, "resourcePath", "trackPath", "interpolation")
@@ -49,6 +53,7 @@ func TestSetAnimationTrackSchema(t *testing.T) {
 
 // TestRemoveAnimationTrackSchema pins the remove-track tool's input surface.
 func TestRemoveAnimationTrackSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "remove_animation_track", "Remove a track from an Animation resource")
 	schema.requireRequired(t, "resourcePath", "trackIndex")
 	schema.requireStringProps(t, "resourcePath")
@@ -58,6 +63,7 @@ func TestRemoveAnimationTrackSchema(t *testing.T) {
 
 // TestReadAnimationSchema pins the read-only animation tool's input surface.
 func TestReadAnimationSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "read_animation", "Read Animation resources and their tracks")
 	schema.requireRequired(t, "resourcePath")
 	schema.requireStringProps(t, "resourcePath")
@@ -96,6 +102,7 @@ func createTestAnimation(t *testing.T, session *mcp.ClientSession) {
 
 // TestAnimationTools drives the real animation tools against Godot.
 func TestAnimationTools(t *testing.T) {
+	t.Parallel()
 	t.Run("creates and reads an animation", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
@@ -453,6 +460,7 @@ func keyValues(t *testing.T, track map[string]any) []any {
 
 // TestAnimationErrors covers the validation and engine failure paths.
 func TestAnimationErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing params", func(t *testing.T) {
 		session := connect(t)
 		requireToolError(t, session, "create_animation", map[string]any{}, "resourcePath is required.")

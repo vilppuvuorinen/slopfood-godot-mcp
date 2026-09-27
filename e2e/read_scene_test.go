@@ -20,6 +20,7 @@ type sceneNode struct {
 // TestReadSceneSchema ports the reference's tool-definition expectations for
 // read_scene over the real stdio surface.
 func TestReadSceneSchema(t *testing.T) {
+	t.Parallel()
 	schema := requireSchema(t, "read_scene", "Read scene file as JSON node tree, including signal connections (headless)")
 	schema.requireRequired(t, "scenePath")
 	schema.requireStringProps(t, "scenePath", "nodePath")
@@ -30,6 +31,7 @@ func TestReadSceneSchema(t *testing.T) {
 // TestReadSceneTool drives the real read_scene tool against Godot and parses
 // the returned JSON node tree.
 func TestReadSceneTool(t *testing.T) {
+	t.Parallel()
 	t.Run("reads the root node", func(t *testing.T) {
 		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
 
@@ -188,6 +190,7 @@ func TestReadSceneTool(t *testing.T) {
 // whose exported Dictionary property exercises the hybrid value encoding:
 // JSON-native types stay nested, engine-only types stay strings.
 func TestReadSceneNestedProperties(t *testing.T) {
+	t.Parallel()
 	root, session := seedScene(t, "scenes/dict.tscn", "Node2D")
 	writeE2EFile(t, filepath.Join(root, "scripts", "config.gd"),
 		`extends Node2D
@@ -236,6 +239,7 @@ func TestReadSceneNestedProperties(t *testing.T) {
 // hand-written .tscn is used because no tool exposes group membership, and the
 // engine persists groups even when the scene is instantiated outside a tree.
 func TestReadSceneGroups(t *testing.T) {
+	t.Parallel()
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -266,6 +270,7 @@ func TestReadSceneGroups(t *testing.T) {
 
 // TestReadSceneErrors covers the reference's validation and failure messages.
 func TestReadSceneErrors(t *testing.T) {
+	t.Parallel()
 	t.Run("missing paths", func(t *testing.T) {
 		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "read_scene", map[string]any{}, "scenePath is required.")
