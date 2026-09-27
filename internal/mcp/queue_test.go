@@ -9,8 +9,12 @@ import (
 	"time"
 )
 
+// testQueueTimeout is long enough that no test job reaches it by accident;
+// tests that exercise the timeout use their own short value.
+const testQueueTimeout = time.Minute
+
 func TestQueueReturnsJobResult(t *testing.T) {
-	q := NewQueue(4)
+	q := NewQueue(4, testQueueTimeout)
 	defer q.Close()
 
 	value, err := q.Submit(context.Background(), func(context.Context) (any, error) {
@@ -25,7 +29,7 @@ func TestQueueReturnsJobResult(t *testing.T) {
 }
 
 func TestQueuePropagatesJobError(t *testing.T) {
-	q := NewQueue(4)
+	q := NewQueue(4, testQueueTimeout)
 	defer q.Close()
 
 	want := errors.New("boom")
@@ -38,7 +42,7 @@ func TestQueuePropagatesJobError(t *testing.T) {
 }
 
 func TestQueueSerializesJobs(t *testing.T) {
-	q := NewQueue(64)
+	q := NewQueue(64, testQueueTimeout)
 	defer q.Close()
 
 	var active, maxActive int32
@@ -69,7 +73,7 @@ func TestQueueSerializesJobs(t *testing.T) {
 }
 
 func TestQueueConcurrentSubmissions(t *testing.T) {
-	q := NewQueue(64)
+	q := NewQueue(64, testQueueTimeout)
 	defer q.Close()
 
 	const jobs = 100
@@ -96,7 +100,7 @@ func TestQueueConcurrentSubmissions(t *testing.T) {
 }
 
 func TestQueueOverloadReturnsErrQueueFull(t *testing.T) {
-	q := NewQueue(1)
+	q := NewQueue(1, testQueueTimeout)
 	defer q.Close()
 
 	release := make(chan struct{})
@@ -142,7 +146,7 @@ func TestQueueOverloadReturnsErrQueueFull(t *testing.T) {
 }
 
 func TestQueueSubmitRespectsContextCancellation(t *testing.T) {
-	q := NewQueue(4)
+	q := NewQueue(4, testQueueTimeout)
 	defer q.Close()
 
 	release := make(chan struct{})
@@ -179,7 +183,7 @@ func TestQueueSubmitRespectsContextCancellation(t *testing.T) {
 }
 
 func TestQueueCloseRejectsSubmit(t *testing.T) {
-	q := NewQueue(4)
+	q := NewQueue(4, testQueueTimeout)
 	q.Close()
 	q.Close()
 
@@ -191,7 +195,7 @@ func TestQueueCloseRejectsSubmit(t *testing.T) {
 }
 
 func TestQueueCloseDrainsBacklog(t *testing.T) {
-	q := NewQueue(4)
+	q := NewQueue(4, testQueueTimeout)
 
 	var ran int64
 	q.Submit(context.Background(), func(context.Context) (any, error) { //nolint:errcheck // asserted via the counter below.
@@ -202,5 +206,112 @@ func TestQueueCloseDrainsBacklog(t *testing.T) {
 
 	if got := atomic.LoadInt64(&ran); got != 1 {
 		t.Errorf("ran %d jobs, want 1", got)
+	}
+}
+
+func TestQueueTimeoutReleasesSlotForNextJob(t *testing.T) {
+	const timeout = 50 * time.Millisecond
+	q := NewQueue(1, timeout)
+	defer q.Close()
+
+	release := make(chan struct{})
+	hungDone := make(chan struct{})
+	hungErr := make(chan error, 1)
+	go func() {
+		_, err := q.Submit(context.Background(), func(context.Context) (any, error) {
+			defer close(hungDone)
+			<-release
+			return nil, nil
+		})
+		hungErr <- err
+	}()
+
+	if err := <-hungErr; !errors.Is(err, ErrQueueTimeout) {
+		t.Fatalf("err = %v, want ErrQueueTimeout", err)
+	}
+	select {
+	case <-hungDone:
+		t.Fatal("hung job returned before the test released it")
+	default:
+	}
+
+	ran := make(chan struct{})
+	done := make(chan error, 1)
+	go func() {
+		_, err := q.Submit(context.Background(), func(context.Context) (any, error) {
+			close(ran)
+			return nil, nil
+		})
+		done <- err
+	}()
+
+	select {
+	case <-ran:
+	case <-time.After(2 * time.Second):
+		t.Fatal("next job never ran; the timed-out job kept its slot")
+	}
+	if err := <-done; err != nil {
+		t.Fatalf("next job: %v", err)
+	}
+
+	close(release)
+	<-hungDone
+}
+
+func TestQueueTimeoutCancelsJobContext(t *testing.T) {
+	const timeout = 50 * time.Millisecond
+	q := NewQueue(1, timeout)
+	defer q.Close()
+
+	jobCtxErr := make(chan error, 1)
+	if _, err := q.Submit(context.Background(), func(ctx context.Context) (any, error) {
+		<-ctx.Done()
+		jobCtxErr <- ctx.Err()
+		return nil, ctx.Err()
+	}); !errors.Is(err, ErrQueueTimeout) {
+		t.Fatalf("err = %v, want ErrQueueTimeout", err)
+	}
+
+	select {
+	case err := <-jobCtxErr:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("job context error = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("job context was not canceled when the timeout fired")
+	}
+}
+
+func TestQueueCloseWaitsOutHungJob(t *testing.T) {
+	const timeout = 50 * time.Millisecond
+	q := NewQueue(1, timeout)
+
+	started := make(chan struct{})
+	release := make(chan struct{})
+	defer close(release)
+	submitErr := make(chan error, 1)
+	go func() {
+		_, err := q.Submit(context.Background(), func(context.Context) (any, error) {
+			close(started)
+			<-release
+			return nil, nil
+		})
+		submitErr <- err
+	}()
+	<-started
+
+	closed := make(chan struct{})
+	go func() {
+		q.Close()
+		close(closed)
+	}()
+
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("Close blocked on a hung job instead of the timeout")
+	}
+	if err := <-submitErr; !errors.Is(err, ErrQueueTimeout) {
+		t.Fatalf("err = %v, want ErrQueueTimeout", err)
 	}
 }
