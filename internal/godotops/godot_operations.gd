@@ -6,6 +6,7 @@ extends SceneTree
 
 const JSON_START = "<<<GODOT_MCP_JSON_START>>>"
 const JSON_END = "<<<GODOT_MCP_JSON_END>>>"
+const STDERR_END_MARKER = "GODOT_MCP_STDERR_END"
 
 # Bridge contract
 #
@@ -76,12 +77,16 @@ class DecodeResult extends RefCounted:
         return result
 
 func _init():
-    run_one_shot(OS.get_cmdline_args())
+    var args := OS.get_cmdline_args()
+    if args.has("--gd-daemon"):
+        run_daemon()
+    else:
+        run_one_shot(args)
 
 # run_one_shot is the one-shot driver: parse the operation and params JSON from
 # argv, dispatch once, and finish. It is the whole of the one-shot entry point,
-# so _init only has to pick a driver; a daemon driver shares dispatch and emit
-# with it and replaces just this function.
+# so _init only has to pick a driver; run_daemon shares dispatch and emit with
+# it and adds the request loop instead.
 func run_one_shot(args) -> void:
     # The active result is allocated here and threaded through every handler
     # and helper that emits output or reports failure. _finish emits it last.
@@ -128,6 +133,50 @@ func run_one_shot(args) -> void:
 
     result = dispatch(operation, params)
     _finish(result)
+
+# run_daemon is the persistent driver: announce readiness, then read one JSON
+# request per stdin line until EOF, dispatching each and emitting one response
+# frame plus a stderr terminator. It shares dispatch and emit with run_one_shot,
+# and quit() is reserved for the EOF exit so a handler failure only fails its
+# own request.
+func run_daemon() -> void:
+    print(JSON.stringify({"ready": true}))
+
+    while true:
+        var line := OS.read_string_from_stdin()
+        if line.is_empty():
+            break
+
+        var json := JSON.new()
+        if json.parse(line) != OK:
+            printerr(STDERR_END_MARKER + " -1")
+            continue
+
+        var request = json.get_data()
+        if not (request is Dictionary):
+            printerr(STDERR_END_MARKER + " -1")
+            continue
+
+        # JSON decodes every number as a float, so a valid request id arrives as
+        # a float and is narrowed back to the int the protocol specifies.
+        var raw_id = request.get("id", null)
+        var operation = request.get("operation", null)
+        if not (raw_id is float or raw_id is int) or not (operation is String):
+            printerr(STDERR_END_MARKER + " -1")
+            continue
+        var id := int(raw_id)
+
+        # params is already decoded; pass it straight through so dispatch never
+        # sees a re-encoded or double-parsed value.
+        var params = request.get("params", {})
+        if not (params is Dictionary):
+            params = {}
+
+        var result := dispatch(operation, params)
+        emit(result, id)
+        printerr(STDERR_END_MARKER + " " + str(id))
+
+    quit(0)
 
 # Turn an operation name and its already-decoded params into a Result by
 # invoking the matching handler. _init calls it once, after argv and JSON
