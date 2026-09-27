@@ -30,7 +30,7 @@ func Export(ctx context.Context, executable, projectPath, presetName, outputPath
 		presetName,
 		outputPath,
 	}
-	cmd := exec.CommandContext(ctx, executable, args...) //nolint:gosec // executable is operator-controlled via GODOT_PATH.
+	cmd := newCommand(ctx, executable, args...)
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf
@@ -88,7 +88,7 @@ func RunOperation(ctx context.Context, executable, projectPath, scriptPath, oper
 		operation,
 		string(payload),
 	}
-	cmd := exec.CommandContext(ctx, executable, args...) //nolint:gosec // executable is operator-controlled via GODOT_PATH.
+	cmd := newCommand(ctx, executable, args...)
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf

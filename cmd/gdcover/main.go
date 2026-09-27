@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/gdcover"
 )
@@ -68,7 +69,7 @@ func runInstrument(args []string, stdout io.Writer) error {
 func runLCOV(args []string, stdout, stderr io.Writer) error {
 	flags := flag.NewFlagSet("lcov", flag.ContinueOnError)
 	source := flags.String("source", "", "original GDScript file the hits refer to")
-	hitsPath := flags.String("hits", "", "hit trace file written by the instrumented script")
+	hitsPath := flags.String("hits", "", "hit trace file, or a glob of per-process traces, written by the instrumented script")
 	out := flags.String("out", "", "LCOV tracefile to write (default stdout)")
 	label := flags.String("sf", "", "path to record as SF: in the report (default -source)")
 	if err := flags.Parse(args); err != nil {
@@ -113,9 +114,31 @@ func runLCOV(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-// readHits opens a hit trace, treating a missing file as no hits so a run that
-// exercised nothing still produces an empty report.
-func readHits(path string) (map[int]int, error) {
+// readHits merges every hit trace matched by pattern. A literal path with no
+// matches, or a glob that matches nothing, yields no hits so a run that
+// exercised nothing still produces an empty report. The coverage build keys each
+// server's trace by PID, so pattern is normally a glob such as hits.txt.* and
+// one report merges every server's trace.
+func readHits(pattern string) (map[int]int, error) {
+	paths, err := filepath.Glob(pattern)
+	if err != nil {
+		return nil, fmt.Errorf("expand hits pattern %s: %w", pattern, err)
+	}
+	merged := map[int]int{}
+	for _, path := range paths {
+		hits, err := readHitsFile(path)
+		if err != nil {
+			return nil, err
+		}
+		for line, count := range hits {
+			merged[line] += count
+		}
+	}
+	return merged, nil
+}
+
+// readHitsFile opens one hit trace, treating a missing file as no hits.
+func readHitsFile(path string) (map[int]int, error) {
 	file, err := os.Open(path) //nolint:gosec // path is operator-provided.
 	if err != nil {
 		if os.IsNotExist(err) {

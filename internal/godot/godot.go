@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -52,7 +51,7 @@ func Path() string {
 
 // Version runs "<path> --version" and returns the trimmed stdout.
 func Version(ctx context.Context, path string) (string, error) {
-	cmd := exec.CommandContext(ctx, path, "--version") //nolint:gosec // path is operator-controlled via GODOT_PATH.
+	cmd := newCommand(ctx, path, "--version")
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr

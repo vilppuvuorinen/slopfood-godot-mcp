@@ -43,6 +43,12 @@ func writeProject(t *testing.T) string {
 // readHits parses the one-integer-per-line hit file into a set.
 func readHits(t *testing.T, path string) map[int]bool {
 	t.Helper()
+	return readHitsFile(t, path)
+}
+
+// readHitsFile parses one hit file into a set.
+func readHitsFile(t *testing.T, path string) map[int]bool {
+	t.Helper()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read hits: %v", err)
@@ -54,6 +60,24 @@ func readHits(t *testing.T, path string) map[int]bool {
 			t.Fatalf("parse hit %q: %v", field, err)
 		}
 		got[line] = true
+	}
+	return got
+}
+
+// readHitsGlob merges every trace matched by pattern. It lets a test read hits
+// whether the engine wrote the bare GDCOVER_FILE or, under the gdcover build
+// tag, the per-PID path the engine environment hook derives from it.
+func readHitsGlob(t *testing.T, pattern string) map[int]bool {
+	t.Helper()
+	paths, err := filepath.Glob(pattern)
+	if err != nil {
+		t.Fatalf("glob hits: %v", err)
+	}
+	got := map[int]bool{}
+	for _, path := range paths {
+		for line := range readHitsFile(t, path) {
+			got[line] = true
+		}
 	}
 	return got
 }
@@ -106,10 +130,10 @@ func runInstrumented(t *testing.T, engine, src string) map[int]bool {
 }
 
 // TestInstrumentedScriptsAppendAcrossRuns guards the shared hit trace: every
-// engine process the e2e suite spawns writes to the same GDCOVER_FILE, so a
-// later run must add to the earlier run's hits instead of reopening the file in
-// truncating write mode. A regression here silently shrinks the bridge report
-// to whatever the last engine process happened to execute.
+// engine run against one GDCOVER_FILE appends to the same file, so a later run
+// must add to the earlier run's hits instead of reopening the file in truncating
+// write mode. A regression here silently shrinks the bridge report to whatever
+// the last engine process happened to execute.
 func TestInstrumentedScriptsAppendAcrossRuns(t *testing.T) {
 	engine := requireGodot(t)
 	dir := t.TempDir()
@@ -259,7 +283,7 @@ func TestInstrumentedOperationsScriptReportsHits(t *testing.T) {
 		t.Fatalf("validate_project exited %d: %s", exit, stderr)
 	}
 
-	got := readHits(t, hits)
+	got := readHitsGlob(t, hits+"*")
 	for _, marker := range []string{"var args = OS.get_cmdline_args()", `"validate_project":`} {
 		line := lineOf(t, string(original), marker)
 		if !got[line] {

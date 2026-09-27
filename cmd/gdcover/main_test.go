@@ -53,6 +53,28 @@ func TestRunLCOVTreatsMissingHitsAsEmpty(t *testing.T) {
 	}
 }
 
+func TestRunLCOVMergesHitGlob(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "script.gd")
+	if err := os.WriteFile(src, []byte("extends Node\n\nfunc _ready():\n    var x = 1\n"), 0o600); err != nil {
+		t.Fatalf("write source: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "hits.txt.1"), []byte("4\n"), 0o600); err != nil {
+		t.Fatalf("write hits 1: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "hits.txt.2"), []byte("4\n4\n"), 0o600); err != nil {
+		t.Fatalf("write hits 2: %v", err)
+	}
+
+	var stdout, stderr strings.Builder
+	if err := run([]string{"lcov", "-source", src, "-hits", filepath.Join(dir, "hits.txt.*")}, &stdout, &stderr); err != nil {
+		t.Fatalf("run lcov: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "DA:4,3") {
+		t.Errorf("merged report should sum every trace's hits:\n%s", stdout.String())
+	}
+}
+
 func TestRunInstrument(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "script.gd")

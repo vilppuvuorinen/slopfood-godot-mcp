@@ -38,7 +38,9 @@ var userCacheDir = os.UserCacheDir
 // script reads for its hit trace. OperationsHitsEnv is the same for the
 // operations bridge. They are distinct so that one engine run can attribute
 // hits to the script that emitted them; the coverage build bakes each name into
-// its script's prologue and `make e2e-cover` sets both on every spawned server.
+// its script's prologue, `make e2e-cover` sets both on every spawned server,
+// and the server keys each value by its own PID so parallel servers never race
+// on one trace.
 const (
 	OperationsHitsEnv = "GDCOVER_FILE"
 	ValidateHitsEnv   = "GDCOVER_VALIDATE_FILE"

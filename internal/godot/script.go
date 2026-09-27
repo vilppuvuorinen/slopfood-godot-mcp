@@ -47,7 +47,7 @@ func ValidateProject(ctx context.Context, executable, projectPath, scriptPath st
 // failure on stderr while still exiting 0, and vice versa, so callers combine
 // both signals.
 func runScript(ctx context.Context, executable string, args []string) (stdout, stderr string, exitCode int, err error) {
-	cmd := exec.CommandContext(ctx, executable, args...) //nolint:gosec // executable is operator-controlled via GODOT_PATH.
+	cmd := newCommand(ctx, executable, args...)
 	var stdoutBuf, stderrBuf bytes.Buffer
 	cmd.Stdout = &stdoutBuf
 	cmd.Stderr = &stderrBuf

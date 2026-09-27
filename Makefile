@@ -68,15 +68,18 @@ e2e: build
 # (GDCOVER_FILE and GDCOVER_VALIDATE_FILE). Those traces become two LCOV reports
 # afterwards, so one engine run yields three profiles.
 #
-# Unlike e2e this runs with -parallel 1: the hit traces are keyed per script,
-# not per process, so two engines appending at once race on the same file and
-# silently drop hits. Serialize until the traces are keyed per process.
+# The suite still runs in parallel. Each server appends its PID to the hit-trace
+# paths it hands its engines, so every server writes its own trace and concurrent
+# engines never race on one file. gdcover lcov merges the per-server traces by
+# globbing the paths.
 COVERDIR ?= $(CURDIR)/coverage-e2e
 E2E_COVERPROFILE := coverage-e2e.out
 GDCOVERDIR ?= $(CURDIR)/coverage-gdscript
 GDCOVER_HITS := $(GDCOVERDIR)/hits.txt
+GDCOVER_HITS_GLOB := $(GDCOVER_HITS).*
 GDCOVER_PROFILE := coverage-gdscript.info
 GDCOVER_VALIDATE_HITS := $(GDCOVERDIR)/validate-hits.txt
+GDCOVER_VALIDATE_HITS_GLOB := $(GDCOVER_VALIDATE_HITS).*
 GDCOVER_VALIDATE_PROFILE := coverage-validate-gdscript.info
 
 .PHONY: e2e-cover
@@ -84,12 +87,12 @@ e2e-cover:
 	rm -rf '$(COVERDIR)' '$(GDCOVERDIR)' $(E2E_COVERPROFILE) $(GDCOVER_PROFILE) $(GDCOVER_VALIDATE_PROFILE)
 	mkdir -p '$(COVERDIR)' '$(GDCOVERDIR)'
 	$(GO) build $(GOFLAGS) -cover -tags gdcover -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY)-cover $(CMD)
-	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GODOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)-cover' GOCOVERDIR='$(COVERDIR)' GDCOVER_FILE='$(GDCOVER_HITS)' GDCOVER_VALIDATE_FILE='$(GDCOVER_VALIDATE_HITS)' $(GO) test $(GOFLAGS) -parallel 1 -count=1 ./...
+	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GODOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)-cover' GOCOVERDIR='$(COVERDIR)' GDCOVER_FILE='$(GDCOVER_HITS)' GDCOVER_VALIDATE_FILE='$(GDCOVER_VALIDATE_HITS)' $(GO) test $(GOFLAGS) -parallel $(E2E_PARALLEL) -count=1 ./...
 	$(GO) tool covdata textfmt -i='$(COVERDIR)' -o=$(E2E_COVERPROFILE)
 	@$(GO) tool cover -func=$(E2E_COVERPROFILE) | tail -1
-	$(GO) run ./cmd/gdcover lcov -source internal/godotops/godot_operations.gd -hits '$(GDCOVER_HITS)' -out $(GDCOVER_PROFILE)
+	$(GO) run ./cmd/gdcover lcov -source internal/godotops/godot_operations.gd -hits '$(GDCOVER_HITS_GLOB)' -out $(GDCOVER_PROFILE)
 	@printf 'GDScript bridge coverage written to %s\n' '$(GDCOVER_PROFILE)'
-	$(GO) run ./cmd/gdcover lcov -source internal/godotops/validate_script.gd -hits '$(GDCOVER_VALIDATE_HITS)' -out $(GDCOVER_VALIDATE_PROFILE)
+	$(GO) run ./cmd/gdcover lcov -source internal/godotops/validate_script.gd -hits '$(GDCOVER_VALIDATE_HITS_GLOB)' -out $(GDCOVER_VALIDATE_PROFILE)
 	@printf 'GDScript validate-script coverage written to %s\n' '$(GDCOVER_VALIDATE_PROFILE)'
 
 .PHONY: bench
