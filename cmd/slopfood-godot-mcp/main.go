@@ -35,9 +35,12 @@ const daemonSubcommand = "daemon"
 // piling up pending engine spawns.
 const operationQueueDepth = 8
 
-// operationQueueTimeout bounds one engine operation so a hung engine cannot
-// pin the queue's one slot; the job's context is canceled and the caller sees
-// a normal tool error. It is a generous safety valve, not a tight budget.
+// operationQueueTimeout is the queue's kill deadline for one engine operation:
+// a job that outlives it is canceled, which kills its engine through
+// exec.CommandContext, and the queue waits for it to stop before running
+// anything else. It is a generous safety valve for a genuinely hung engine, not
+// a budget; a job that still will not stop quarantines the queue and the daemon
+// shuts down to be restarted.
 const operationQueueTimeout = 10 * time.Minute
 
 // defaultIdleTimeout is how long a daemon may sit with no active connections
@@ -286,12 +289,20 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 		return fmt.Errorf("resolve daemon socket: %w", err)
 	}
 
+	queue := mcp.NewQueue(operationQueueDepth, operationQueueTimeout)
 	daemon := mcp.NewDaemon(
 		role.newServer(),
-		mcp.NewQueue(operationQueueDepth, operationQueueTimeout),
+		queue,
 		mcp.ListenUnix,
 		socketPath,
 	)
+	// A quarantined queue can no longer prove that engine work is serialized,
+	// so the daemon stops serving and the process exits; the host respawns it
+	// on the next request. Continuing would risk two writers on the project.
+	queue.SetOnStuck(func(err error) {
+		role.logger.Error("operation queue stuck; shutting down so the daemon can restart", "error", err)
+		daemon.Shutdown()
+	})
 	daemon.SetIdleTimeout(opts.idleTimeout)
 	defer func() {
 		if cerr := daemon.Close(); cerr != nil {

@@ -13,6 +13,11 @@ import (
 // tests that exercise the timeout use their own short value.
 const testQueueTimeout = time.Minute
 
+// testQueueStopGrace is how long tests allow a canceled job to return before
+// the queue quarantines; it is generous so a cooperative job is never mistaken
+// for a stuck one. Tests that exercise the grace set q.stopGrace directly.
+const testQueueStopGrace = time.Second
+
 func TestQueueReturnsJobResult(t *testing.T) {
 	q := NewQueue(4, testQueueTimeout)
 	defer q.Close()
@@ -211,30 +216,19 @@ func TestQueueCloseDrainsBacklog(t *testing.T) {
 	}
 }
 
-func TestQueueTimeoutReleasesSlotForNextJob(t *testing.T) {
-	const timeout = 50 * time.Millisecond
+func TestQueueTimeoutCancelsThenReleasesSlot(t *testing.T) {
+	const timeout = 20 * time.Millisecond
 	q := NewQueue(1, timeout)
+	q.stopGrace = testQueueStopGrace
 	defer q.Close()
 
-	release := make(chan struct{})
-	hungDone := make(chan struct{})
-	hungErr := make(chan error, 1)
-	go func() {
-		_, err := q.Submit(context.Background(), func(context.Context) (any, error) {
-			defer close(hungDone)
-			<-release
-			return nil, nil
-		})
-		hungErr <- err
-	}()
-
-	if err := <-hungErr; !errors.Is(err, ErrQueueTimeout) {
+	// The job honors its context, so the cancel the timeout sends makes it
+	// return at once and the worker may reuse the slot.
+	if _, err := q.Submit(context.Background(), func(ctx context.Context) (any, error) {
+		<-ctx.Done()
+		return nil, ctx.Err()
+	}); !errors.Is(err, ErrQueueTimeout) {
 		t.Fatalf("err = %v, want ErrQueueTimeout", err)
-	}
-	select {
-	case <-hungDone:
-		t.Fatal("hung job returned before the test released it")
-	default:
 	}
 
 	ran := make(chan struct{})
@@ -250,19 +244,73 @@ func TestQueueTimeoutReleasesSlotForNextJob(t *testing.T) {
 	select {
 	case <-ran:
 	case <-time.After(2 * time.Second):
-		t.Fatal("next job never ran; the timed-out job kept its slot")
+		t.Fatal("next job never ran after the timed-out job stopped")
 	}
 	if err := <-done; err != nil {
 		t.Fatalf("next job: %v", err)
 	}
+}
+
+// TestQueueTimeoutDoesNotOverlapNextJob pins the join: while a job that ignores
+// its context is still running after its timeout, the worker must not start the
+// job queued behind it. Reusing the slot early is the corruption the queue
+// exists to prevent.
+func TestQueueTimeoutDoesNotOverlapNextJob(t *testing.T) {
+	const timeout = 20 * time.Millisecond
+	q := NewQueue(2, timeout)
+	q.stopGrace = time.Minute // keep the grace out of the way
+	defer q.Close()
+
+	var firstStopped, secondStarted atomic.Bool
+	release := make(chan struct{})
+	started := make(chan struct{})
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := q.Submit(context.Background(), func(context.Context) (any, error) {
+			close(started)
+			<-release
+			firstStopped.Store(true)
+			return nil, nil
+		})
+		firstDone <- err
+	}()
+	<-started
+
+	secondDone := make(chan error, 1)
+	go func() {
+		_, err := q.Submit(context.Background(), func(context.Context) (any, error) {
+			if !firstStopped.Load() {
+				t.Error("second job started before the timed-out first job stopped")
+			}
+			secondStarted.Store(true)
+			return nil, nil
+		})
+		secondDone <- err
+	}()
+
+	// Let the timeout fire and cancel the first job. It ignores the cancel, so
+	// the second job must stay queued.
+	time.Sleep(4 * timeout)
+	if secondStarted.Load() {
+		t.Fatal("second job started while the timed-out first job was still running")
+	}
 
 	close(release)
-	<-hungDone
+	if err := <-firstDone; !errors.Is(err, ErrQueueTimeout) {
+		t.Fatalf("first job err = %v, want ErrQueueTimeout", err)
+	}
+	if err := <-secondDone; err != nil {
+		t.Fatalf("second job err = %v", err)
+	}
+	if !secondStarted.Load() {
+		t.Fatal("second job never ran after the first job stopped")
+	}
 }
 
 func TestQueueTimeoutCancelsJobContext(t *testing.T) {
 	const timeout = 50 * time.Millisecond
 	q := NewQueue(1, timeout)
+	q.stopGrace = testQueueStopGrace
 	defer q.Close()
 
 	jobCtxErr := make(chan error, 1)
@@ -284,9 +332,75 @@ func TestQueueTimeoutCancelsJobContext(t *testing.T) {
 	}
 }
 
+// TestQueueQuarantinesWhenJobWillNotStop covers the last rung of the ladder: a
+// job that ignores its context past the stop grace makes the queue refuse all
+// current and future work instead of starting a second writer.
+func TestQueueQuarantinesWhenJobWillNotStop(t *testing.T) {
+	const timeout = 20 * time.Millisecond
+	q := NewQueue(2, timeout)
+	q.stopGrace = 20 * time.Millisecond
+
+	stuckHook := make(chan error, 1)
+	q.SetOnStuck(func(err error) { stuckHook <- err })
+
+	var ranSecond atomic.Bool
+	release := make(chan struct{})
+	defer close(release)
+	started := make(chan struct{})
+
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := q.Submit(context.Background(), func(context.Context) (any, error) {
+			close(started)
+			<-release
+			return nil, nil
+		})
+		firstDone <- err
+	}()
+	<-started
+
+	// Queue a second job behind the first so it is already waiting when the
+	// queue quarantines; it must fail rather than run.
+	secondDone := make(chan error, 1)
+	go func() {
+		_, err := q.Submit(context.Background(), func(context.Context) (any, error) {
+			ranSecond.Store(true)
+			return nil, nil
+		})
+		secondDone <- err
+	}()
+
+	if err := <-firstDone; !errors.Is(err, ErrQueueStuck) {
+		t.Fatalf("first job err = %v, want ErrQueueStuck", err)
+	}
+	if err := <-secondDone; !errors.Is(err, ErrQueueStuck) {
+		t.Fatalf("second job err = %v, want ErrQueueStuck", err)
+	}
+	if ranSecond.Load() {
+		t.Fatal("a queued job ran after the queue was stuck")
+	}
+
+	select {
+	case err := <-stuckHook:
+		if !errors.Is(err, ErrQueueStuck) {
+			t.Fatalf("onStuck err = %v, want ErrQueueStuck", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("onStuck hook never fired")
+	}
+
+	if _, err := q.Submit(context.Background(), func(context.Context) (any, error) {
+		return nil, nil
+	}); !errors.Is(err, ErrQueueStuck) {
+		t.Fatalf("err = %v, want ErrQueueStuck", err)
+	}
+	q.Close()
+}
+
 func TestQueueCloseWaitsOutHungJob(t *testing.T) {
-	const timeout = 50 * time.Millisecond
+	const timeout = 20 * time.Millisecond
 	q := NewQueue(1, timeout)
+	q.stopGrace = 20 * time.Millisecond
 
 	started := make(chan struct{})
 	release := make(chan struct{})
@@ -311,9 +425,9 @@ func TestQueueCloseWaitsOutHungJob(t *testing.T) {
 	select {
 	case <-closed:
 	case <-time.After(2 * time.Second):
-		t.Fatal("Close blocked on a hung job instead of the timeout")
+		t.Fatal("Close blocked on a hung job instead of the timeout and grace")
 	}
-	if err := <-submitErr; !errors.Is(err, ErrQueueTimeout) {
-		t.Fatalf("err = %v, want ErrQueueTimeout", err)
+	if err := <-submitErr; !errors.Is(err, ErrQueueStuck) {
+		t.Fatalf("err = %v, want ErrQueueStuck", err)
 	}
 }
