@@ -50,6 +50,13 @@ jobs:
       - run: go vet ./...
       - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
       - run: go build -trimpath -o bin/slopfood-godot-mcp ./cmd/slopfood-godot-mcp
+      # Cross-compile the runtime for the other release targets. This is a
+      # compile check only; it catches Linux-only code (e.g. syscall.Flock) on
+      # the push that introduces it, rather than at the next release dispatch.
+      - name: Cross-compile
+        run: |
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build ./...
 
   lint:
     runs-on: ubuntu-latest

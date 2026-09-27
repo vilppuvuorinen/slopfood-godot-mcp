@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -18,9 +19,23 @@ const (
 	// DefaultMinor is the Godot minor version used when PathEnv is unset. The
 	// matching build is looked up under the repository-local .godot directory.
 	DefaultMinor = "4.7"
-
-	binaryGlob = "Godot_v*_linux.x86_64"
 )
+
+// engineGlobs returns the glob patterns, relative to a .godot/<minor> directory,
+// that name the official Godot editor for goos. The patterns are OS-specific
+// because official binary names differ and macOS ships an app bundle. Matching
+// another OS's build would resolve to a path that cannot execute, so falling
+// through to "godot" on PATH is preferable.
+func engineGlobs(goos string) []string {
+	switch goos {
+	case "windows":
+		return []string{"Godot_v*_win64.exe", "Godot_v*_win32.exe"}
+	case "darwin":
+		return []string{"Godot.app/Contents/MacOS/Godot", "Godot_v*_macos.*"}
+	default:
+		return []string{"Godot_v*_linux.*"}
+	}
+}
 
 // Path resolves the Godot executable to use. An explicit PathEnv value wins;
 // otherwise the repository-local DefaultMinor build is used, falling back to
@@ -52,7 +67,7 @@ func Version(ctx context.Context, path string) (string, error) {
 }
 
 // findLocal searches upward from the working directory and the executable for
-// a .godot/<DefaultMinor>/Godot_v*_linux.x86_64 build.
+// a .godot/<DefaultMinor> build matching the host OS.
 func findLocal() string {
 	return findIn(searchRoots())
 }
@@ -75,16 +90,33 @@ func findIn(roots []string) string {
 }
 
 func globMinor(dir string) string {
-	matches, err := filepath.Glob(filepath.Join(dir, ".godot", DefaultMinor, binaryGlob))
-	if err != nil {
-		return ""
-	}
-	for _, m := range matches {
-		if info, err := os.Stat(m); err == nil && !info.IsDir() {
-			return m
+	base := filepath.Join(dir, ".godot", DefaultMinor)
+	for _, pattern := range engineGlobs(runtime.GOOS) {
+		matches, err := filepath.Glob(filepath.Join(base, pattern))
+		if err != nil {
+			continue
+		}
+		for _, m := range matches {
+			if executableFile(m) {
+				return m
+			}
 		}
 	}
 	return ""
+}
+
+// executableFile reports whether path is a regular file that can be run: regular
+// everywhere, and carrying an execute bit on non-Windows. Windows file modes are
+// not meaningful, so there a regular file is enough.
+func executableFile(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.Mode().IsRegular() {
+		return false
+	}
+	if runtime.GOOS == "windows" {
+		return true
+	}
+	return info.Mode().Perm()&0o111 != 0
 }
 
 func searchRoots() []string {

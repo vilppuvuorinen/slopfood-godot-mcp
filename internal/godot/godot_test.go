@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -68,6 +69,46 @@ func TestFindInWalksUp(t *testing.T) {
 func TestFindInMissing(t *testing.T) {
 	if got := findIn([]string{t.TempDir()}); got != "" {
 		t.Fatalf("findIn() = %q, want empty", got)
+	}
+}
+
+func TestEngineGlobs(t *testing.T) {
+	tests := []struct {
+		goos string
+		want []string
+	}{
+		{"linux", []string{"Godot_v*_linux.*"}},
+		{"windows", []string{"Godot_v*_win64.exe", "Godot_v*_win32.exe"}},
+		{"darwin", []string{"Godot.app/Contents/MacOS/Godot", "Godot_v*_macos.*"}},
+	}
+	for _, tt := range tests {
+		got := engineGlobs(tt.goos)
+		if len(got) != len(tt.want) {
+			t.Fatalf("engineGlobs(%q) = %q, want %q", tt.goos, got, tt.want)
+		}
+		for i := range got {
+			if got[i] != tt.want[i] {
+				t.Fatalf("engineGlobs(%q) = %q, want %q", tt.goos, got, tt.want)
+			}
+		}
+	}
+}
+
+func TestFindInSkipsNonExecutable(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("execute bits are not meaningful on Windows")
+	}
+	root := t.TempDir()
+	binary := filepath.Join(root, ".godot", "4.7", "Godot_v4.7.2-stable_linux.x86_64")
+	if err := os.MkdirAll(filepath.Dir(binary), 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(binary, []byte("binary"), 0o644); err != nil { //nolint:gosec // deliberately not executable.
+		t.Fatalf("write binary: %v", err)
+	}
+
+	if got := findIn([]string{root}); got != "" {
+		t.Fatalf("findIn() = %q, want empty for a non-executable match", got)
 	}
 }
 
