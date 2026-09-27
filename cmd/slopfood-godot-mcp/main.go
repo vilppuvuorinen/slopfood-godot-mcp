@@ -39,6 +39,11 @@ const operationQueueDepth = 8
 // a normal tool error. It is a generous safety valve, not a tight budget.
 const operationQueueTimeout = 10 * time.Minute
 
+// defaultIdleTimeout is how long a daemon may sit with no active connections
+// before it exits. It is the default for -idle-timeout; zero disables idle
+// exit.
+const defaultIdleTimeout = 5 * time.Minute
+
 // resolveProject determines the Godot project this server instance is bound to.
 // The --project flag wins, then $GODOT_PROJECT, and the working directory is the
 // last-resort fallback. The result is a cleaned absolute path; whether it is a
@@ -75,12 +80,17 @@ func (e *enableValues) Set(value string) error {
 
 // options holds the flag values both roles share. The client and daemon speak
 // the same project and category flags, because they are two halves of one
-// server: the client spawns the daemon with the flags it was given.
+// server: the client spawns the daemon with the flags it was given. The
+// log-file, idle-timeout, and detach flags are daemon-role only; the client
+// ignores them.
 type options struct {
 	showVersion bool
 	logLevel    string
 	project     string
 	enable      enableValues
+	idleTimeout time.Duration
+	logFile     string
+	detach      bool
 }
 
 func newFlags(name string) (*flag.FlagSet, *options) {
@@ -90,6 +100,9 @@ func newFlags(name string) (*flag.FlagSet, *options) {
 	fs.StringVar(&opts.logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 	fs.StringVar(&opts.project, "project", "", "Godot project directory to bind to (default: $"+projectEnv+", then the working directory)")
 	fs.Var(&opts.enable, "enable", "tool categories to enable (repeatable, comma-separated; default \"all\"; any name replaces the default)")
+	fs.DurationVar(&opts.idleTimeout, "idle-timeout", defaultIdleTimeout, "daemon: exit after this long with no clients (0 disables)")
+	fs.StringVar(&opts.logFile, "log-file", "", "daemon: log file (default: a per-project path under the runtime directory)")
+	fs.BoolVar(&opts.detach, "detach", false, "daemon: re-exec as a detached child and exit")
 	return fs, opts
 }
 
@@ -218,9 +231,11 @@ func runClient(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 }
 
 // runDaemon is the daemon role: it owns the server, the queue, and the accepted
-// connections, and serves until a signal. With the in-process transport it has
-// no cross-process rendezvous yet, so it is the shape, not the deployment,
-// until the Unix-socket backend lands.
+// connections, and serves until a signal, an expired idle timeout, or Close.
+// With the in-process transport it has no cross-process rendezvous yet, so it
+// is the shape, not the deployment, until the Unix-socket backend lands. Its
+// slog output goes to the per-project log file rather than stderr, because a
+// detached daemon has no terminal.
 func runDaemon(args []string, stdout, stderr io.Writer) error {
 	fs, opts := newFlags(daemonSubcommand)
 	if err := fs.Parse(args); err != nil {
@@ -230,7 +245,39 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 		fmt.Fprintln(stdout, version)
 		return nil
 	}
-	role, err := setupRole(opts, stderr)
+	if opts.idleTimeout < 0 {
+		return fmt.Errorf("invalid idle timeout %s: must not be negative", opts.idleTimeout)
+	}
+	root, err := resolveProject(opts.project)
+	if err != nil {
+		return err
+	}
+	logPath := opts.logFile
+	if logPath == "" {
+		logPath, err = daemonLogPath(root)
+		if err != nil {
+			return err
+		}
+	}
+	if opts.detach {
+		exe, exeErr := executablePath()
+		if exeErr != nil {
+			return fmt.Errorf("resolve executable: %w", exeErr)
+		}
+		return startDetachedDaemon(exe, root, opts, logPath)
+	}
+
+	logFile, err := openDaemonLog(logPath)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if cerr := logFile.Close(); cerr != nil {
+			fmt.Fprintln(stderr, "error: close log file:", cerr)
+		}
+	}()
+
+	role, err := setupRole(opts, logFile)
 	if err != nil {
 		return err
 	}
@@ -243,15 +290,17 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 		endpoint.Listen,
 		role.root,
 	)
+	daemon.SetIdleTimeout(opts.idleTimeout)
 	defer func() {
 		if cerr := daemon.Close(); cerr != nil {
 			role.logger.Warn("daemon close", "error", cerr)
 		}
 	}()
 
-	role.logger.Info("daemon listening", "project", role.root)
+	role.logger.Info("daemon listening", "project", role.root, "log", logPath)
 	if err := daemon.Serve(role.ctx); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("daemon serve: %w", err)
 	}
+	role.logger.Info("daemon stopped", "project", role.root)
 	return nil
 }
