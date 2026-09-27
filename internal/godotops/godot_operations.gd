@@ -134,49 +134,66 @@ func run_one_shot(args) -> void:
     result = dispatch(operation, params)
     _finish(result)
 
-# run_daemon is the persistent driver: announce readiness, then read one JSON
-# request per stdin line until EOF, dispatching each and emitting one response
-# frame plus a stderr terminator. It shares dispatch and emit with run_one_shot,
-# and quit() is reserved for the EOF exit so a handler failure only fails its
-# own request.
+# run_daemon is the persistent driver: announce readiness, then read request
+# frames until EOF, dispatching each and emitting one response frame plus a
+# stderr terminator. It shares dispatch and emit with run_one_shot, and quit() is
+# reserved for the EOF exit so a handler failure only fails its own request.
+#
+# OS.read_string_from_stdin() caps every read at 1023 bytes, so a frame larger
+# than that arrives split across reads. It also strips the terminating newline,
+# so a short read cannot be told apart from the tail of a long one. The client
+# therefore terminates each frame with a blank line, which reads back as the
+# empty string; an empty read with a buffered frame ends that frame, and an empty
+# read with nothing buffered is EOF. The loop accumulates non-empty reads into
+# `buffer` until then.
 func run_daemon() -> void:
     print(JSON.stringify({"ready": true}))
 
+    var buffer := ""
     while true:
-        var line := OS.read_string_from_stdin()
-        if line.is_empty():
-            break
-
-        var json := JSON.new()
-        if json.parse(line) != OK:
-            printerr(STDERR_END_MARKER + " -1")
-            continue
-
-        var request = json.get_data()
-        if not (request is Dictionary):
-            printerr(STDERR_END_MARKER + " -1")
-            continue
-
-        # JSON decodes every number as a float, so a valid request id arrives as
-        # a float and is narrowed back to the int the protocol specifies.
-        var raw_id = request.get("id", null)
-        var operation = request.get("operation", null)
-        if not (raw_id is float or raw_id is int) or not (operation is String):
-            printerr(STDERR_END_MARKER + " -1")
-            continue
-        var id := int(raw_id)
-
-        # params is already decoded; pass it straight through so dispatch never
-        # sees a re-encoded or double-parsed value.
-        var params = request.get("params", {})
-        if not (params is Dictionary):
-            params = {}
-
-        var result := dispatch(operation, params)
-        emit(result, id)
-        printerr(STDERR_END_MARKER + " " + str(id))
+        var chunk := OS.read_string_from_stdin()
+        if chunk.is_empty():
+            if buffer.is_empty():
+                break
+            handle_daemon_request(buffer)
+            buffer = ""
+        else:
+            buffer += chunk
 
     quit(0)
+
+# handle_daemon_request parses one complete JSON request and dispatches it,
+# emitting the response frame and its stderr terminator. A malformed frame is
+# reported as id -1 so the client can tell it apart from a valid response.
+func handle_daemon_request(line: String) -> void:
+    var json := JSON.new()
+    if json.parse(line) != OK:
+        printerr(STDERR_END_MARKER + " -1")
+        return
+
+    var request = json.get_data()
+    if not (request is Dictionary):
+        printerr(STDERR_END_MARKER + " -1")
+        return
+
+    # JSON decodes every number as a float, so a valid request id arrives as a
+    # float and is narrowed back to the int the protocol specifies.
+    var raw_id = request.get("id", null)
+    var operation = request.get("operation", null)
+    if not (raw_id is float or raw_id is int) or not (operation is String):
+        printerr(STDERR_END_MARKER + " -1")
+        return
+    var id := int(raw_id)
+
+    # params is already decoded; pass it straight through so dispatch never sees
+    # a re-encoded or double-parsed value.
+    var params = request.get("params", {})
+    if not (params is Dictionary):
+        params = {}
+
+    var result := dispatch(operation, params)
+    emit(result, id)
+    printerr(STDERR_END_MARKER + " " + str(id))
 
 # Turn an operation name and its already-decoded params into a Result by
 # invoking the matching handler. _init calls it once, after argv and JSON

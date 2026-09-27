@@ -163,7 +163,12 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 	if err != nil {
 		return "", "", 0, fmt.Errorf("engine session: encode request: %w", err)
 	}
-	line = append(line, '\n')
+	// Terminate the frame with a blank line. The bridge's OS.read_string_from_stdin
+	// caps a read at 1023 bytes and strips the newline, so a frame longer than
+	// that arrives split across reads with no line boundary the driver can see.
+	// The blank line reads back as the empty string, giving the driver an
+	// unambiguous end-of-frame marker.
+	line = append(line, '\n', '\n')
 
 	// The process may have died between the death check above and the write; a
 	// failed write is the same death, so respawn once and retry before treating

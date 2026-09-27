@@ -346,6 +346,46 @@ done
 	}
 }
 
+// TestSessionFrameTerminatedByBlankLine locks the daemon framing protocol: each
+// request is a JSON line followed by a blank line. The bridge's
+// OS.read_string_from_stdin caps a read at 1023 bytes and strips the newline, so
+// the blank line is the only end-of-frame marker it can see; without it a frame
+// longer than one read would be lost.
+func TestSessionFrameTerminatedByBlankLine(t *testing.T) {
+	marker := filepath.Join(t.TempDir(), "terminator")
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "godot")
+	body := `#!/bin/sh
+echo '{"ready":true}'
+IFS= read -r first
+IFS= read -r second
+if [ -z "$second" ]; then
+  echo blank > '` + marker + `'
+else
+  echo nonblank > '` + marker + `'
+fi
+id=$(printf '%s\n' "$first" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
+printf '{"id":%s,"ok":true,"stdout":"out","stderr":""}\n' "$id"
+printf 'GODOT_MCP_STDERR_END %s\n' "$id" >&2
+`
+	if err := os.WriteFile(bin, []byte(body), 0o755); err != nil { //nolint:gosec // test helper needs an executable script.
+		t.Fatalf("write fake: %v", err)
+	}
+	s := NewSession(bin, "/ops.gd")
+	defer s.Close()
+
+	if _, _, _, err := s.Run(context.Background(), t.TempDir(), "op", nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	data, err := os.ReadFile(marker)
+	if err != nil {
+		t.Fatalf("read marker: %v", err)
+	}
+	if got := strings.TrimSpace(string(data)); got != "blank" {
+		t.Errorf("frame terminator = %q, want a blank line after the JSON line", got)
+	}
+}
+
 func TestSessionCloseIdempotentAndFailsRuns(t *testing.T) {
 	f := newSessionFake(t, defaultResponse)
 	s := NewSession(f.bin, "/ops.gd")
