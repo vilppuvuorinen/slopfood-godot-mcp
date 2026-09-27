@@ -12,6 +12,10 @@ import (
 // new work.
 var errDaemonClosed = errors.New("daemon closed")
 
+// errPeerRejected reports that a connection's peer could not be authorized and
+// was therefore not served.
+var errPeerRejected = errors.New("connection rejected by peer authorization")
+
 // Daemon is the core the IPC daemon phases converge on: one value that owns the
 // one Server, the one Queue, and every connection it serves. The accept loop
 // runs each accepted connection on its own goroutine against that shared Server
@@ -167,8 +171,16 @@ func (d *Daemon) Serve(ctx context.Context) error {
 // rather than a special case. The daemon owns the connection once it is
 // accepted here, closing it when the serve loop returns and tracking it so
 // Close stops it. It returns errDaemonClosed, without taking ownership, when
-// the daemon is already down.
+// the daemon is already down, and errPeerRejected when the peer fails
+// authorization.
 func (d *Daemon) ServeConnection(ctx context.Context, conn Connection) error {
+	if d.isClosed() {
+		return errDaemonClosed
+	}
+	if !d.authorize(conn) {
+		_ = conn.Close()
+		return errPeerRejected
+	}
 	if !d.track(conn) {
 		return errDaemonClosed
 	}
@@ -221,8 +233,13 @@ func (d *Daemon) Close() error {
 }
 
 // startConnection registers conn and serves it on a new goroutine. A
-// connection accepted after Close is dropped rather than served.
+// connection accepted after Close, or one whose peer fails authorization, is
+// dropped rather than served.
 func (d *Daemon) startConnection(ctx context.Context, conn Connection) {
+	if !d.authorize(conn) {
+		_ = conn.Close()
+		return
+	}
 	if !d.track(conn) {
 		_ = conn.Close()
 		return
@@ -234,6 +251,28 @@ func (d *Daemon) startConnection(ctx context.Context, conn Connection) {
 			d.server.logger.Debug("connection serve ended", "error", err)
 		}
 	}()
+}
+
+// authorize reports whether conn's peer may be served. The transport may be
+// unable to name the peer, which is only acceptable when the platform reports
+// credentials as unsupported; every other failure, and any UID that differs
+// from this process's, is a rejection. The caller must not track or serve a
+// connection authorize rejects.
+func (d *Daemon) authorize(conn Connection) bool {
+	peer, err := conn.PeerIdentity()
+	if err != nil {
+		if errors.Is(err, errPeerIdentityUnsupported) {
+			d.server.logger.Debug("peer identity unavailable; relying on filesystem permissions")
+			return true
+		}
+		d.server.logger.Warn("rejected connection: cannot identify peer", "error", err)
+		return false
+	}
+	if self := currentPeerIdentity(); peer.UserID != self.UserID {
+		d.server.logger.Warn("rejected connection from another user", "uid", peer.UserID)
+		return false
+	}
+	return true
 }
 
 // track registers conn as active and reserves a connWG slot. It reports false

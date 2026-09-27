@@ -411,3 +411,53 @@ func TestStdioConnAdaptsStreams(t *testing.T) {
 		t.Errorf("peer = %+v, want current process %+v", got, currentPeerIdentity())
 	}
 }
+
+// TestDaemonRejectsUnidentifiedPeer asserts a peer whose transport fails to
+// identify it for any reason other than "unsupported" is closed and never
+// served.
+func TestDaemonRejectsUnidentifiedPeer(t *testing.T) {
+	d := NewDaemon(testServer(), nil, ListenInProc, "")
+	defer func() { _ = d.Close() }()
+
+	conn := &fakeConn{peerErr: errors.New("no credentials")}
+	if err := d.ServeConnection(context.Background(), conn); !errors.Is(err, errPeerRejected) {
+		t.Fatalf("ServeConnection err = %v, want %v", err, errPeerRejected)
+	}
+	if !conn.closed {
+		t.Error("rejected connection was not closed")
+	}
+}
+
+// TestDaemonRejectsDifferentUser asserts a peer from another UID is closed and
+// never served, the defense in depth over the socket's file mode.
+func TestDaemonRejectsDifferentUser(t *testing.T) {
+	d := NewDaemon(testServer(), nil, ListenInProc, "")
+	defer func() { _ = d.Close() }()
+
+	conn := &fakeConn{peer: PeerIdentity{UserID: currentPeerIdentity().UserID + 1}}
+	if err := d.ServeConnection(context.Background(), conn); !errors.Is(err, errPeerRejected) {
+		t.Fatalf("ServeConnection err = %v, want %v", err, errPeerRejected)
+	}
+	if !conn.closed {
+		t.Error("rejected connection was not closed")
+	}
+}
+
+// TestDaemonAllowsUnsupportedPeerIdentity asserts a platform that reports peer
+// credentials as unsupported is allowed through, relying on the transport's
+// filesystem permissions instead.
+func TestDaemonAllowsUnsupportedPeerIdentity(t *testing.T) {
+	conn := &fakeConn{
+		in:      strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n"),
+		peerErr: errPeerIdentityUnsupported,
+	}
+	d := NewDaemon(testServer(), nil, ListenInProc, "")
+	defer func() { _ = d.Close() }()
+
+	if err := d.ServeConnection(context.Background(), conn); err != nil {
+		t.Fatalf("ServeConnection: %v", err)
+	}
+	if !strings.Contains(conn.out.String(), `"tools"`) {
+		t.Errorf("output = %s", conn.out.String())
+	}
+}

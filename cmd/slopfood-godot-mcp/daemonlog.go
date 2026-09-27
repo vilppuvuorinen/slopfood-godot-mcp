@@ -1,32 +1,22 @@
 package main
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/daemonpath"
 )
 
-// daemonLogPath derives the per-project daemon log path. The runtime directory
-// is $XDG_RUNTIME_DIR when set and a per-user cache directory otherwise; the
-// file name is a prefix of the hash of the cleaned project path, so each bound
-// project has exactly one log and no two projects collide. The directory is
-// not created here.
+// daemonLogPath derives the per-project daemon log path from the shared
+// daemonpath resolver, so the log and the socket agree on the runtime
+// directory and the project hash.
 func daemonLogPath(root string) (string, error) {
-	runtimeDir := os.Getenv("XDG_RUNTIME_DIR")
-	if runtimeDir != "" {
-		runtimeDir = filepath.Join(runtimeDir, "slopfood-godot-mcp")
-	} else {
-		cacheDir, err := os.UserCacheDir()
-		if err != nil {
-			return "", fmt.Errorf("resolve user cache directory: %w", err)
-		}
-		runtimeDir = filepath.Join(cacheDir, "slopfood-godot-mcp")
+	path, err := daemonpath.LogPath(root)
+	if err != nil {
+		return "", fmt.Errorf("resolve daemon log path: %w", err)
 	}
-	sum := sha256.Sum256([]byte(filepath.Clean(root)))
-	name := hex.EncodeToString(sum[:8]) + ".log"
-	return filepath.Join(runtimeDir, name), nil
+	return path, nil
 }
 
 // openDaemonLog creates the log's parent directory if needed and opens the log

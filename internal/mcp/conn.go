@@ -1,6 +1,17 @@
 package mcp
 
-import "io"
+import (
+	"errors"
+	"io"
+)
+
+// errPeerIdentityUnsupported reports that a transport cannot ask its kernel for
+// peer credentials on this platform. The daemon treats it as "rely on the
+// filesystem permissions that gate the transport" rather than as a failed
+// authorization; any other PeerIdentity error is a rejection. It is defined
+// here rather than in a platform file because the daemon core references it
+// wherever the package builds, and only the non-Linux Unix backend returns it.
+var errPeerIdentityUnsupported = errors.New("peer credentials unsupported on this platform")
 
 // PeerIdentity is the kernel-reported identity of the process on the far end of
 // a Connection. Each platform fills it from whatever the kernel exposes:
@@ -22,7 +33,9 @@ type Connection interface {
 	io.ReadWriteCloser
 	// PeerIdentity returns the kernel-reported identity of the process on the
 	// other end. An error means the transport cannot identify the peer, which
-	// the daemon treats as a failed authorization.
+	// the daemon treats as a failed authorization, unless the platform reports
+	// credentials as unsupported (errPeerIdentityUnsupported), in which case the
+	// daemon falls back to the filesystem permissions that gate the transport.
 	PeerIdentity() (PeerIdentity, error)
 }
 

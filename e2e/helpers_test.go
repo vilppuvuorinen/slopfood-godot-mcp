@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -45,6 +46,36 @@ func connectCategories(t *testing.T, categories string) *mcp.ClientSession {
 	return connectSession(t, nil, "--enable", categories)
 }
 
+// sessionEnv returns the child environment and argument list for one e2e
+// session. Each session gets a private XDG_RUNTIME_DIR, so sessions with
+// different --enable values cannot share a reused per-project daemon and a
+// stale daemon from a previous run cannot be picked up. It also appends a short
+// idle timeout, so the daemon a session spawns exits soon after the session
+// closes. The caller's args and env slices are not mutated.
+//
+// The runtime directory is a short-prefixed MkdirTemp under the system temp
+// dir rather than t.TempDir: a Unix socket path is capped near 108 bytes, and
+// t.TempDir embeds the (often long) test name, which can push the derived
+// socket path over the limit and make the daemon fail to bind.
+func sessionEnv(t *testing.T, env, args []string) ([]string, []string) {
+	t.Helper()
+	runtimeDir, err := os.MkdirTemp("", "slopfood-rt-")
+	if err != nil {
+		t.Fatalf("create runtime dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
+
+	childEnv := slices.DeleteFunc(slices.Clone(os.Environ()), func(entry string) bool {
+		return strings.HasPrefix(entry, "XDG_RUNTIME_DIR=")
+	})
+	childEnv = append(childEnv, env...)
+	childEnv = append(childEnv, "XDG_RUNTIME_DIR="+runtimeDir)
+
+	childArgs := slices.Clone(args)
+	childArgs = append(childArgs, "--idle-timeout", "2s")
+	return childEnv, childArgs
+}
+
 // connectSession starts the server binary with extra environment entries and
 // command-line arguments and returns a connected MCP client session.
 func connectSession(t *testing.T, env []string, args ...string) *mcp.ClientSession {
@@ -55,8 +86,9 @@ func connectSession(t *testing.T, env []string, args ...string) *mcp.ClientSessi
 		t.Fatalf("%s is not set; build the server and point it at the binary", binaryEnv)
 	}
 
-	cmd := exec.CommandContext(context.Background(), binary, args...) //nolint:gosec // the binary path is supplied by the test harness.
-	cmd.Env = append(os.Environ(), env...)
+	cmdEnv, cmdArgs := sessionEnv(t, env, args)
+	cmd := exec.CommandContext(context.Background(), binary, cmdArgs...) //nolint:gosec // the binary path is supplied by the test harness.
+	cmd.Env = cmdEnv
 	client := mcp.NewClient(&mcp.Implementation{Name: "slopfood-godot-mcp-e2e", Version: "0.0.1"}, nil)
 	session, err := client.Connect(context.Background(), &mcp.CommandTransport{Command: cmd}, nil)
 	if err != nil {
@@ -80,8 +112,9 @@ func connectWithProtocolVersion(t *testing.T, protocolVersion string) *mcp.Clien
 		t.Fatalf("%s is not set; build the server and point it at the binary", binaryEnv)
 	}
 
-	cmd := exec.CommandContext(context.Background(), binary, "--enable", "all") //nolint:gosec // the binary path is supplied by the test harness.
-	cmd.Env = os.Environ()
+	cmdEnv, cmdArgs := sessionEnv(t, nil, []string{"--enable", "all"})
+	cmd := exec.CommandContext(context.Background(), binary, cmdArgs...) //nolint:gosec // the binary path is supplied by the test harness.
+	cmd.Env = cmdEnv
 	client := mcp.NewClient(&mcp.Implementation{Name: "slopfood-godot-mcp-e2e", Version: "0.0.1"}, nil)
 	session, err := client.Connect(context.Background(), &mcp.CommandTransport{Command: cmd}, &mcp.ClientSessionOptions{ProtocolVersion: protocolVersion})
 	if err != nil {

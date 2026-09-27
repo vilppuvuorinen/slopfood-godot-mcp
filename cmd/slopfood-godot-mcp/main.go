@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/daemonpath"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/tools"
 )
@@ -178,8 +179,9 @@ func (r *role) newServer() *mcp.Server {
 }
 
 // runClient is the thin client role. It is what the MCP host spawns: it binds
-// the project, starts the daemon in this process (the in-process transport
-// stands in for the socket until Phase 3), dials it, and pumps stdio.
+// the project, derives the project's socket path, and either dials the daemon
+// already listening there or re-execs itself detached to spawn one, then pumps
+// stdio to and from the socket.
 func runClient(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	fs, opts := newFlags("slopfood-godot-mcp")
 	if err := fs.Parse(args); err != nil {
@@ -195,34 +197,30 @@ func runClient(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 	defer role.stop()
 
-	// The in-process endpoint is the temporary rendezvous in place of the
-	// socket: the daemon listens on it and the client dials it. Because spawn
-	// creates the listener, the client's first dial fails and exercises the
-	// same connect-or-spawn path a real transport will take.
-	endpoint := mcp.NewInProcEndpoint()
-	daemon := mcp.NewDaemon(
-		role.newServer(),
-		mcp.NewQueue(operationQueueDepth, operationQueueTimeout),
-		endpoint.Listen,
-		role.root,
-	)
-	defer func() {
-		if cerr := daemon.Close(); cerr != nil {
-			role.logger.Warn("daemon close", "error", cerr)
+	socketPath, err := daemonpath.SocketPath(role.root)
+	if err != nil {
+		return fmt.Errorf("resolve daemon socket: %w", err)
+	}
+	logPath, err := daemonpath.LogPath(role.root)
+	if err != nil {
+		return fmt.Errorf("resolve daemon log: %w", err)
+	}
+
+	role.logger.Info("bound project", "project", role.root, "socket", socketPath)
+
+	// Spawning re-execs this binary as a detached daemon child. The client does
+	// not create or own a daemon: the socket is the only rendezvous.
+	spawn := func(_ context.Context) error {
+		exe, exeErr := executablePath()
+		if exeErr != nil {
+			return fmt.Errorf("resolve executable: %w", exeErr)
 		}
-	}()
-
-	role.logger.Info("bound project", "project", role.root)
-
-	spawn := func(spawnCtx context.Context) error {
-		go func() {
-			if serveErr := daemon.Serve(spawnCtx); serveErr != nil && !errors.Is(serveErr, context.Canceled) {
-				role.logger.Error("daemon serve ended", "error", serveErr)
-			}
-		}()
+		if detachErr := startDetachedDaemon(exe, role.root, opts, logPath); detachErr != nil {
+			return fmt.Errorf("start detached daemon: %w", detachErr)
+		}
 		return nil
 	}
-	client := mcp.NewClient(endpoint.Dial, spawn, role.root, role.logger)
+	client := mcp.NewClient(mcp.DialUnix, spawn, socketPath, role.logger)
 
 	if err := client.Run(role.ctx, stdin, stdout); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("client: %w", err)
@@ -231,9 +229,9 @@ func runClient(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 }
 
 // runDaemon is the daemon role: it owns the server, the queue, and the accepted
-// connections, and serves until a signal, an expired idle timeout, or Close.
-// With the in-process transport it has no cross-process rendezvous yet, so it
-// is the shape, not the deployment, until the Unix-socket backend lands. Its
+// socket connections, and serves until a signal, an expired idle timeout, or
+// Close. It listens on the project's derived Unix socket, so a thin client for
+// the same project reconnects to it instead of starting a second server. Its
 // slog output goes to the per-project log file rather than stderr, because a
 // detached daemon has no terminal.
 func runDaemon(args []string, stdout, stderr io.Writer) error {
@@ -283,12 +281,16 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	}
 	defer role.stop()
 
-	endpoint := mcp.NewInProcEndpoint()
+	socketPath, err := daemonpath.SocketPath(role.root)
+	if err != nil {
+		return fmt.Errorf("resolve daemon socket: %w", err)
+	}
+
 	daemon := mcp.NewDaemon(
 		role.newServer(),
 		mcp.NewQueue(operationQueueDepth, operationQueueTimeout),
-		endpoint.Listen,
-		role.root,
+		mcp.ListenUnix,
+		socketPath,
 	)
 	daemon.SetIdleTimeout(opts.idleTimeout)
 	defer func() {
@@ -297,7 +299,7 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 		}
 	}()
 
-	role.logger.Info("daemon listening", "project", role.root, "log", logPath)
+	role.logger.Info("daemon listening", "project", role.root, "socket", socketPath, "log", logPath)
 	if err := daemon.Serve(role.ctx); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("daemon serve: %w", err)
 	}
