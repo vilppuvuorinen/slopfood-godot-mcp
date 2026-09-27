@@ -125,13 +125,24 @@ func run() error {
 	// behavior; it moves the serialization point next to the engine so it
 	// survives the many connections the IPC daemon will add.
 	queue := mcp.NewQueue(operationQueueDepth, operationQueueTimeout)
-	defer queue.Close()
-	srv.SetQueue(queue)
+
+	// The daemon owns the server, the queue, and every connection it serves.
+	// Today the only connection is stdio, served below through ServeConnection;
+	// the accept loop and its socket listener arrive with the later IPC daemon
+	// phases, so the in-process listener is the transport for now.
+	daemon := mcp.NewDaemon(srv, queue, mcp.ListenInProc, root)
+	defer func() {
+		if cerr := daemon.Close(); cerr != nil {
+			logger.Warn("daemon close", "error", cerr)
+		}
+	}()
 
 	logger.Info("bound project", "project", root)
 	tools.Register(srv, root, categories...)
 
-	if err := srv.Serve(ctx, os.Stdin, os.Stdout); err != nil && !errors.Is(err, context.Canceled) {
+	// Stdio is one connection to the daemon core, not a special case: the core
+	// runs the same Serve loop on it as it will on an accepted socket.
+	if err := daemon.ServeConnection(ctx, mcp.NewStdioConn(os.Stdin, os.Stdout)); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("serve: %w", err)
 	}
 	return nil
