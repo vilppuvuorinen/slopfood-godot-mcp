@@ -102,8 +102,6 @@ func _init():
     var operation = args[operation_index]
     var params_json = args[params_index]
 
-    log_info(result, "Operation: " + operation)
-
     # Parse JSON using Godot 4.x API
     var json = JSON.new()
     var error = json.parse(params_json)
@@ -122,6 +120,17 @@ func _init():
         _finish(result)
         return
 
+    result = dispatch(operation, params)
+    _finish(result)
+
+# Turn an operation name and its already-decoded params into a Result by
+# invoking the matching handler. _init calls it once, after argv and JSON
+# parsing, so handler invocation no longer depends on either: a daemon driver
+# can call it per request without the process exiting between them.
+func dispatch(operation, params) -> Result:
+    var result := Result.new()
+
+    log_info(result, "Operation: " + operation)
     log_info(result, "Executing operation: " + operation)
 
     match operation:
@@ -159,7 +168,7 @@ func _init():
             log_error(result, "Unknown operation: " + operation)
             result.ok = false
 
-    _finish(result)
+    return result
 
 # Print the buffers a handler produced to their standard streams and end the
 # main loop with the status it reported. SceneTree.quit() does not stop the
