@@ -284,7 +284,7 @@ func TestInstrumentedOperationsScriptReportsHits(t *testing.T) {
 	}
 
 	got := readHitsGlob(t, hits+"*")
-	for _, marker := range []string{"var args = OS.get_cmdline_args()", `"validate_project":`} {
+	for _, marker := range []string{"run_one_shot(OS.get_cmdline_args())", `"validate_project":`} {
 		line := lineOf(t, string(original), marker)
 		if !got[line] {
 			t.Errorf("line %d (%q) was not reported; hits=%v", line, marker, got)

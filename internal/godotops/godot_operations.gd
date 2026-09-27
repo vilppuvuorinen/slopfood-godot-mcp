@@ -76,10 +76,16 @@ class DecodeResult extends RefCounted:
         return result
 
 func _init():
+    run_one_shot(OS.get_cmdline_args())
+
+# run_one_shot is the one-shot driver: parse the operation and params JSON from
+# argv, dispatch once, and finish. It is the whole of the one-shot entry point,
+# so _init only has to pick a driver; a daemon driver shares dispatch and emit
+# with it and replaces just this function.
+func run_one_shot(args) -> void:
     # The active result is allocated here and threaded through every handler
-    # and helper that emits output or reports failure. _finish flushes it last.
+    # and helper that emits output or reports failure. _finish emits it last.
     var result := Result.new()
-    var args = OS.get_cmdline_args()
 
     # Find the script argument and determine the positions of operation and params
     var script_index = args.find("--script")
