@@ -184,6 +184,18 @@ func _finish(result: Result):
         printerr(stderr.substr(0, stderr.length() - 1))
     quit(0 if result.ok else 1)
 
+# Route every resource read through one helper so the daemon design has a single
+# place to audit. CACHE_MODE_IGNORE forces a fresh read from disk: a one-shot
+# process starts clean so it is behaviorally identical, but a long-lived engine
+# would otherwise return the stale cached resource after an on-disk edit.
+func load_resource(path):
+    return ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
+
+# load_object is load_resource with a type hint, for a caller that wants Godot's
+# own type filtering (and its matching not-a-type failure).
+func load_object(path, type_hint):
+    return ResourceLoader.load(path, type_hint, ResourceLoader.CACHE_MODE_IGNORE)
+
 # Temporary nodes instantiated by handlers are tracked in _temp_nodes. dispatch
 # owns this list: it clears it before invoking a handler and frees every entry
 # after the handler returns, success or failure. The nodes are never added to
@@ -232,7 +244,7 @@ func get_script_by_name(result: Result, name_of_class):
         var found_path = global_class["path"]
         
         if found_name_of_class == name_of_class:
-            var script = load(found_path) as Script
+            var script = load_resource(found_path) as Script
             if script:
                 return script
             else:
@@ -418,7 +430,7 @@ func add_node(result: Result, params) -> Result:
     if _reject_inherited_scene(result, full_scene_path):
         return result.fail()
     
-    var scene = load(full_scene_path)
+    var scene = load_object(full_scene_path, "PackedScene")
     if not scene:
         result.err("Failed to load scene: " + full_scene_path)
         return result.fail()
@@ -447,7 +459,7 @@ func add_node(result: Result, params) -> Result:
         if not FileAccess.file_exists(full_instance_path):
             result.err("Instance scene does not exist at: " + full_instance_path)
             return result.fail()
-        var packed_instance = load(full_instance_path)
+        var packed_instance = load_object(full_instance_path, "PackedScene")
         if not (packed_instance is PackedScene):
             result.err("Not a scene file: " + full_instance_path)
             return result.fail()
@@ -514,7 +526,7 @@ func export_mesh_library(result: Result, params) -> Result:
         return result.fail()
     
     # Load the scene
-    var scene = load(full_scene_path)
+    var scene = load_object(full_scene_path, "PackedScene")
     if not scene:
         result.err("Failed to load scene: " + full_scene_path)
         return result.fail()
@@ -629,7 +641,7 @@ func read_scene(result: Result, params) -> Result:
     # degraded raw-text success; read_binary_resource inspects those resources. A null
     # load is a parse/IO failure whose engine errors already reach stderr, so no
     # extra stderr line here: it would only duplicate them.
-    var scene = load(full_scene_path)
+    var scene = load_resource(full_scene_path)
     if scene == null:
         return result.fail()
     if not (scene is PackedScene):
@@ -1164,10 +1176,9 @@ func _decode_resource(value) -> DecodeResult:
     return _decode_resource_path(path)
 
 func _decode_resource_path(path) -> DecodeResult:
-    if ResourceLoader.exists(path):
-        var res = load(path)
-        if res != null:
-            return DecodeResult.success(res)
+    var res = load_resource(path)
+    if res != null:
+        return DecodeResult.success(res)
     return DecodeResult.failure("failed to load resource: " + path)
 
 # Field readers. Each returns a DecodeResult whose value is a neutral fallback
@@ -1211,7 +1222,7 @@ func modify_node(result: Result, params) -> Result:
     if _reject_inherited_scene(result, full_scene_path):
         return result.fail()
 
-    var scene = load(full_scene_path)
+    var scene = load_object(full_scene_path, "PackedScene")
     if not scene:
         result.err("Failed to load scene: " + full_scene_path)
         return result.fail()
@@ -1269,7 +1280,7 @@ func remove_node(result: Result, params) -> Result:
     if _reject_inherited_scene(result, full_scene_path):
         return result.fail()
 
-    var scene = load(full_scene_path)
+    var scene = load_object(full_scene_path, "PackedScene")
     if not scene:
         result.err("Failed to load scene: " + full_scene_path)
         return result.fail()
@@ -1338,7 +1349,7 @@ func manage_scene_signals(result: Result, params) -> Result:
                 result.err("Signal connection fields cannot contain quotes, backslashes, or newlines")
                 return result.fail()
 
-        var scene = load(full_path) as PackedScene
+        var scene = load_object(full_path, "PackedScene") as PackedScene
         if scene == null:
             result.err("Failed to load scene: " + full_path)
             return result.fail()
@@ -1463,7 +1474,7 @@ func manage_scene_structure(result: Result, params) -> Result:
     if _reject_inherited_scene(result, full_path):
         return result.fail()
 
-    var scene = load(full_path) as PackedScene
+    var scene = load_object(full_path, "PackedScene") as PackedScene
     if scene == null:
         result.err("Failed to load scene: " + full_path)
         return result.fail()
@@ -1576,7 +1587,7 @@ func attach_script(result: Result, params) -> Result:
         result.err("Script file does not exist at: " + full_script_path)
         return result.fail()
 
-    var scene = load(full_scene_path)
+    var scene = load_object(full_scene_path, "PackedScene")
     if not scene:
         result.err("Failed to load scene: " + full_scene_path)
         return result.fail()
@@ -1596,7 +1607,7 @@ func attach_script(result: Result, params) -> Result:
         return result.fail()
 
     # Load and attach the script
-    var script = load(full_script_path)
+    var script = load_object(full_script_path, "Script")
     if not script:
         result.err("Failed to load script: " + full_script_path)
         return result.fail()
@@ -1714,7 +1725,7 @@ func _load_resource(result: Result, full_path):
         result.err("Resource not found: " + full_path)
         result.ok = false
         return null
-    var resource = ResourceLoader.load(full_path)
+    var resource = load_resource(full_path)
     if resource == null:
         result.err("Failed to load resource: " + full_path)
         result.ok = false
@@ -1872,7 +1883,7 @@ func _load_animation(result: Result, full_path):
         result.err("Animation resource not found: " + full_path)
         result.ok = false
         return null
-    var resource = ResourceLoader.load(full_path)
+    var resource = load_object(full_path, "Animation")
     if resource == null:
         result.err("Failed to load animation: " + full_path)
         result.ok = false
@@ -2292,7 +2303,7 @@ func _load_tileset(result: Result, full_path):
         result.err("TileSet resource not found: " + full_path)
         result.ok = false
         return null
-    var resource = ResourceLoader.load(full_path)
+    var resource = load_object(full_path, "TileSet")
     if resource == null:
         result.err("Failed to load tileset: " + full_path)
         result.ok = false
@@ -2429,7 +2440,7 @@ func _add_tileset_tile(tile_set, params) -> DecodeResult:
             return DecodeResult.failure("scenePath is required to add a scene tile")
         if not scene_path.begins_with("res://"):
             scene_path = "res://" + scene_path
-        var packed = load(scene_path)
+        var packed = load_object(scene_path, "PackedScene")
         if not (packed is PackedScene):
             return DecodeResult.failure("scenePath must name a PackedScene: " + scene_path)
         var override_id = -1
@@ -2690,7 +2701,7 @@ func _load_theme(result: Result, full_path):
         result.err("Theme resource not found: " + full_path)
         result.ok = false
         return null
-    var resource = ResourceLoader.load(full_path)
+    var resource = load_object(full_path, "Theme")
     if resource == null:
         result.err("Failed to load theme: " + full_path)
         result.ok = false
@@ -2817,7 +2828,7 @@ func manage_tilemap(result: Result, params) -> Result:
     if not FileAccess.file_exists(full_path):
         result.err("Scene file does not exist at: " + full_path)
         return result.fail()
-    var scene = load(full_path)
+    var scene = load_object(full_path, "PackedScene")
     if not (scene is PackedScene):
         result.err("Failed to load scene: " + full_path)
         return result.fail()
