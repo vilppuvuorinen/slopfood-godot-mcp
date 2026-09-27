@@ -12,21 +12,21 @@ const JSON_END = "<<<GODOT_MCP_JSON_END>>>"
 # Every handler has the signature `func <name>(result: Result, params) -> Result`
 # and reports exclusively through the Result it is handed:
 #
-#   - Progress goes to stdout: log_info(result, ...) buffers a line that _finish
+#   - Progress goes to stdout: log_info(result, ...) buffers a line that flush
 #     prints to standard output. A structured payload is JSON between
 #     JSON_START and JSON_END, which the Go side extracts with markerJSON; an
 #     operation without one reports status text instead.
 #   - Diagnostics go to stderr: log_error(result, ...) buffers a line that
-#     _finish prints to standard error. The Go side fails the operation on any
+#     flush prints to standard error. The Go side fails the operation on any
 #     stderr line, so nothing benign is written there.
 #   - A handler returns the same Result on success, or result.fail(...) (which
 #     flips ok to false and buffers the reason) on failure. Helpers that report
 #     failure return null/false for their caller to propagate.
 #
 # A handler never calls print()/printerr() and never calls quit(): _init is the
-# only place that flushes the buffers and sets the exit code, through _finish.
-# This keeps a failing handler from leaving a partial payload on stdout and
-# keeps the exit status decided once.
+# only place that flushes the buffers and sets the exit code, through flush and
+# _finish. This keeps a failing handler from leaving a partial payload on stdout
+# and keeps the exit status decided once.
 
 # Result carries a handler's outcome back to the dispatcher. ok is the exit
 # status; stdout and stderr are buffers the dispatcher flushes to the matching
@@ -172,16 +172,22 @@ func dispatch(operation, params) -> Result:
     _free_temp_nodes()
     return result
 
-# Print the buffers a handler produced to their standard streams and end the
-# main loop with the status it reported. SceneTree.quit() does not stop the
-# current call, so quit() is the last thing _init does.
-func _finish(result: Result):
+# Print the buffers a handler produced to their standard streams. This is
+# separate from quitting so a daemon response writer can build its frame from
+# the same ok/stdout/stderr fields without ending the main loop.
+func flush(result: Result):
     var stdout := result.stdout
     if not stdout.is_empty():
         print(stdout.substr(0, stdout.length() - 1))
     var stderr := result.stderr
     if not stderr.is_empty():
         printerr(stderr.substr(0, stderr.length() - 1))
+
+# Flush the result and end the main loop with the status it reported. SceneTree
+# quit() does not stop the current call, so quit() is the last thing _init does.
+# The one-shot driver calls this; a daemon reserves quit for its own exit path.
+func _finish(result: Result):
+    flush(result)
     quit(0 if result.ok else 1)
 
 # Route every resource read through one helper so the daemon design has a single
