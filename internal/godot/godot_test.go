@@ -42,6 +42,23 @@ func TestPathIgnoresBlankEnv(t *testing.T) {
 	}
 }
 
+// TestPathEnvOverrideIsNotCached confirms the local-build cache never masks an
+// explicit GODOT_PATH: the override is consulted on every call, so changing it
+// after a lookup still takes effect and the cache only covers the filesystem
+// walk.
+func TestPathEnvOverrideIsNotCached(t *testing.T) {
+	t.Setenv(PathEnv, "/first/godot")
+	if got := Path(); got != "/first/godot" {
+		t.Fatalf("Path() = %q, want /first/godot", got)
+	}
+	if err := os.Setenv(PathEnv, "/second/godot"); err != nil {
+		t.Fatalf("setenv: %v", err)
+	}
+	if got := Path(); got != "/second/godot" {
+		t.Fatalf("Path() = %q, want /second/godot", got)
+	}
+}
+
 func TestFindInFindsMinorBuild(t *testing.T) {
 	root := t.TempDir()
 	binary := filepath.Join(root, ".godot", "4.7", "Godot_v4.7.2-stable_linux.x86_64")

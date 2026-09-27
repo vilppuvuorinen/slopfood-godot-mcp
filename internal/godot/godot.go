@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 const (
@@ -36,6 +37,16 @@ func engineGlobs(goos string) []string {
 	}
 }
 
+// localEngine caches the repository-local lookup so Path does not walk the
+// filesystem on every engine call. The working directory and executable are
+// fixed for the process's lifetime, so it is computed once. An explicit PathEnv
+// is never cached, so an operator or test can still repoint the engine at any
+// time.
+var (
+	localEngineOnce sync.Once
+	localEngine     string
+)
+
 // Path resolves the Godot executable to use. An explicit PathEnv value wins;
 // otherwise the repository-local DefaultMinor build is used, falling back to
 // "godot" on PATH.
@@ -43,8 +54,9 @@ func Path() string {
 	if p := strings.TrimSpace(os.Getenv(PathEnv)); p != "" {
 		return p
 	}
-	if p := findLocal(); p != "" {
-		return p
+	localEngineOnce.Do(func() { localEngine = findLocal() })
+	if localEngine != "" {
+		return localEngine
 	}
 	return "godot"
 }
