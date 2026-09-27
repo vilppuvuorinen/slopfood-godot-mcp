@@ -68,7 +68,11 @@ type Server struct {
 	Instructions string
 	mu           sync.RWMutex
 	tools        map[string]Tool
-	writeMu      sync.Mutex
+	// queue, when set, serializes every tool call. It is the one point that
+	// orders engine-touching work shared by all connections; a nil queue runs
+	// handlers inline, the original single-connection behavior.
+	queue   *Queue
+	writeMu sync.Mutex
 }
 
 type Tool struct {
@@ -312,6 +316,16 @@ func (s *Server) RegisterTool(t Tool) {
 	s.tools[t.Name] = t
 }
 
+// SetQueue installs the queue that serializes tool calls. With one installed,
+// concurrent calls submit to the same queue and run one at a time, so the
+// serialization a single connection got for free holds across many. A nil
+// queue leaves handlers running inline.
+func (s *Server) SetQueue(q *Queue) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.queue = q
+}
+
 func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	scanner := bufio.NewScanner(r)
 	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
@@ -507,11 +521,12 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 	}
 	s.mu.RLock()
 	tool, ok := s.tools[p.Name]
+	queue := s.queue
 	s.mu.RUnlock()
 	if !ok {
 		return nil, errors.New("unknown tool: " + p.Name)
 	}
-	out, err := tool.Handler(ctx, p.Arguments)
+	out, err := s.callHandler(ctx, queue, tool.Handler, p.Arguments)
 	if err != nil {
 		return ErrorResult(err.Error()), nil
 	}
@@ -526,6 +541,19 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 		return nil, fmt.Errorf("encode tool result: %w", err)
 	}
 	return TextResult(string(text)), nil
+}
+
+// callHandler runs a tool handler, submitting it to queue when one is
+// installed so every engine-touching call serializes behind the same worker.
+// The handler receives the job's context, so a queue timeout cancels any
+// engine work it started, and its error becomes an ordinary tool error.
+func (s *Server) callHandler(ctx context.Context, queue *Queue, handler ToolHandler, args json.RawMessage) (any, error) {
+	if queue == nil {
+		return handler(ctx, args)
+	}
+	return queue.Submit(ctx, func(ctx context.Context) (any, error) {
+		return handler(ctx, args)
+	})
 }
 
 func (s *Server) write(w io.Writer, resp response) error {

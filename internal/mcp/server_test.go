@@ -7,7 +7,10 @@ import (
 	"io"
 	"log/slog"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func testServer() *Server {
@@ -187,6 +190,104 @@ func TestServeToolsCall(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "hi") {
 		t.Errorf("output = %s", out.String())
+	}
+}
+
+// TestServeToolsCallThroughQueue asserts single-client behavior is unchanged
+// when a queue is installed: the call still runs and returns its result.
+func TestServeToolsCallThroughQueue(t *testing.T) {
+	s := testServer()
+	q := NewQueue(4, testQueueTimeout)
+	defer q.Close()
+	s.SetQueue(q)
+
+	in := strings.NewReader(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"echo","arguments":{"message":"hi"}}}` + "\n")
+	var out bytes.Buffer
+
+	if err := s.Serve(context.Background(), in, &out); err != nil {
+		t.Fatalf("Serve: %v", err)
+	}
+	if !strings.Contains(out.String(), "hi") {
+		t.Errorf("output = %s", out.String())
+	}
+}
+
+// TestCallToolSerializesThroughQueue asserts concurrent tool calls share the
+// one queue and therefore never run two handlers at once.
+func TestCallToolSerializesThroughQueue(t *testing.T) {
+	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	q := NewQueue(64, testQueueTimeout)
+	defer q.Close()
+	s.SetQueue(q)
+
+	var active, maxActive int64
+	s.RegisterTool(Tool{
+		Name:        "engine",
+		Description: "engine",
+		InputSchema: map[string]any{"type": "object"},
+		Handler: func(context.Context, json.RawMessage) (any, error) {
+			n := atomic.AddInt64(&active, 1)
+			for {
+				highest := atomic.LoadInt64(&maxActive)
+				if n <= highest || atomic.CompareAndSwapInt64(&maxActive, highest, n) {
+					break
+				}
+			}
+			time.Sleep(time.Millisecond)
+			atomic.AddInt64(&active, -1)
+			return nil, nil
+		},
+	})
+
+	const calls = 20
+	var wg sync.WaitGroup
+	for range calls {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := s.callTool(context.Background(), json.RawMessage(`{"name":"engine"}`)); err != nil {
+				t.Errorf("callTool: %v", err)
+			}
+		}()
+	}
+	wg.Wait()
+
+	if got := atomic.LoadInt64(&maxActive); got != 1 {
+		t.Errorf("max concurrent handlers = %d, want 1", got)
+	}
+}
+
+// TestCallToolQueueTimeoutIsToolError asserts a job that outlives the queue
+// timeout surfaces as an ordinary tool error, not a protocol failure.
+func TestCallToolQueueTimeoutIsToolError(t *testing.T) {
+	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	q := NewQueue(4, 20*time.Millisecond)
+	defer q.Close()
+	s.SetQueue(q)
+
+	s.RegisterTool(Tool{
+		Name:        "hang",
+		Description: "hang",
+		InputSchema: map[string]any{"type": "object"},
+		Handler: func(ctx context.Context, _ json.RawMessage) (any, error) {
+			<-ctx.Done()
+			return nil, ctx.Err()
+		},
+	})
+
+	out, err := s.callTool(context.Background(), json.RawMessage(`{"name":"hang"}`))
+	if err != nil {
+		t.Fatalf("callTool: %v", err)
+	}
+	result, ok := out.(ToolResult)
+	if !ok {
+		t.Fatalf("result type %T, want ToolResult", out)
+	}
+	if !result.IsError {
+		t.Fatalf("IsError = false, want a tool error")
+	}
+	if len(result.Content) == 0 || !strings.Contains(result.Content[0].Text, ErrQueueTimeout.Error()) {
+		t.Errorf("content = %+v, want queue timeout message", result.Content)
 	}
 }
 

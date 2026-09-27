@@ -73,10 +73,12 @@ func TestQueueSerializesJobs(t *testing.T) {
 }
 
 func TestQueueConcurrentSubmissions(t *testing.T) {
-	q := NewQueue(64, testQueueTimeout)
+	const jobs = 100
+	// Size the backlog for every job so concurrent submissions cannot trip the
+	// overload path this test is not about; overload has its own test.
+	q := NewQueue(jobs, testQueueTimeout)
 	defer q.Close()
 
-	const jobs = 100
 	var sum int64
 	var wg sync.WaitGroup
 	for i := 1; i <= jobs; i++ {

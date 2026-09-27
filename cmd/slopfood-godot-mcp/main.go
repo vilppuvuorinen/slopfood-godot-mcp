@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/tools"
@@ -21,6 +22,17 @@ var version = "dev"
 // projectEnv is the environment variable naming the project to bind when
 // --project is not passed.
 const projectEnv = "GODOT_PROJECT"
+
+// operationQueueDepth bounds how many engine operations may wait behind the
+// one the worker is running. The queue is the single serialization point for
+// engine work, so a burst sheds excess calls with an overload error instead of
+// piling up pending engine spawns.
+const operationQueueDepth = 8
+
+// operationQueueTimeout bounds one engine operation so a hung engine cannot
+// pin the queue's one slot; the job's context is canceled and the caller sees
+// a normal tool error. It is a generous safety valve, not a tight budget.
+const operationQueueTimeout = 10 * time.Minute
 
 // resolveProject determines the Godot project this server instance is bound to.
 // The --project flag wins, then $GODOT_PROJECT, and the working directory is the
@@ -107,6 +119,14 @@ func run() error {
 			"paths relative to it, and no tool accepts or changes the project directory. Read-only "+
 			"tools are safe to call freely; tools that write files may overwrite existing content.",
 		root)
+
+	// One queue serializes every engine-touching call. Today a single stdio
+	// connection already serializes itself, so this changes no observable
+	// behavior; it moves the serialization point next to the engine so it
+	// survives the many connections the IPC daemon will add.
+	queue := mcp.NewQueue(operationQueueDepth, operationQueueTimeout)
+	defer queue.Close()
+	srv.SetQueue(queue)
 
 	logger.Info("bound project", "project", root)
 	tools.Register(srv, root, categories...)
