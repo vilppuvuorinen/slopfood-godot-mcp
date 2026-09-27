@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -46,25 +49,31 @@ func connectCategories(t *testing.T, categories string) *mcp.ClientSession {
 	return connectSession(t, nil, "--enable", categories)
 }
 
-// sessionEnv returns the child environment and argument list for one e2e
-// session. Each session gets a private XDG_RUNTIME_DIR, so sessions with
-// different --enable values cannot share a reused per-project daemon and a
-// stale daemon from a previous run cannot be picked up. It also appends a short
-// idle timeout, so the daemon a session spawns exits soon after the session
-// closes. The caller's args and env slices are not mutated.
+// newRuntimeDir creates a private XDG_RUNTIME_DIR for one e2e session (or a
+// shared one several sessions dial into) and removes it when the test ends.
 //
-// The runtime directory is a short-prefixed MkdirTemp under the system temp
-// dir rather than t.TempDir: a Unix socket path is capped near 108 bytes, and
-// t.TempDir embeds the (often long) test name, which can push the derived
-// socket path over the limit and make the daemon fail to bind.
-func sessionEnv(t *testing.T, env, args []string) ([]string, []string) {
+// It is a short-prefixed MkdirTemp under the system temp dir rather than
+// t.TempDir: a Unix socket path is capped near 108 bytes, and t.TempDir embeds
+// the (often long) test name, which can push the derived socket path over the
+// limit and make the daemon fail to bind.
+func newRuntimeDir(t *testing.T) string {
 	t.Helper()
 	runtimeDir, err := os.MkdirTemp("", "slopfood-rt-")
 	if err != nil {
 		t.Fatalf("create runtime dir: %v", err)
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
+	return runtimeDir
+}
 
+// sessionEnv returns the child environment and argument list for one e2e
+// session bound to runtimeDir. A private runtime dir per session keeps sessions
+// with different --enable values from sharing a reused per-project daemon and
+// keeps a stale daemon from a previous run from being picked up. It also appends
+// a short idle timeout, so the daemon a session spawns exits soon after the
+// session closes. The caller's args and env slices are not mutated.
+func sessionEnv(t *testing.T, runtimeDir string, env, args []string) ([]string, []string) {
+	t.Helper()
 	childEnv := slices.DeleteFunc(slices.Clone(os.Environ()), func(entry string) bool {
 		return strings.HasPrefix(entry, "XDG_RUNTIME_DIR=")
 	})
@@ -86,7 +95,7 @@ func connectSession(t *testing.T, env []string, args ...string) *mcp.ClientSessi
 		t.Fatalf("%s is not set; build the server and point it at the binary", binaryEnv)
 	}
 
-	cmdEnv, cmdArgs := sessionEnv(t, env, args)
+	cmdEnv, cmdArgs := sessionEnv(t, newRuntimeDir(t), env, args)
 	cmd := exec.CommandContext(context.Background(), binary, cmdArgs...) //nolint:gosec // the binary path is supplied by the test harness.
 	cmd.Env = cmdEnv
 	client := mcp.NewClient(&mcp.Implementation{Name: "slopfood-godot-mcp-e2e", Version: "0.0.1"}, nil)
@@ -112,7 +121,7 @@ func connectWithProtocolVersion(t *testing.T, protocolVersion string) *mcp.Clien
 		t.Fatalf("%s is not set; build the server and point it at the binary", binaryEnv)
 	}
 
-	cmdEnv, cmdArgs := sessionEnv(t, nil, []string{"--enable", "all"})
+	cmdEnv, cmdArgs := sessionEnv(t, newRuntimeDir(t), nil, []string{"--enable", "all"})
 	cmd := exec.CommandContext(context.Background(), binary, cmdArgs...) //nolint:gosec // the binary path is supplied by the test harness.
 	cmd.Env = cmdEnv
 	client := mcp.NewClient(&mcp.Implementation{Name: "slopfood-godot-mcp-e2e", Version: "0.0.1"}, nil)
@@ -126,6 +135,131 @@ func connectWithProtocolVersion(t *testing.T, protocolVersion string) *mcp.Clien
 		}
 	})
 	return session
+}
+
+// defaultInRuntimeIdleTimeout is the --idle-timeout connectInRuntime appends
+// when the caller does not pass one. A test that needs a different grace period
+// passes its own --idle-timeout in args.
+const defaultInRuntimeIdleTimeout = "2s"
+
+// connectInRuntime starts the server binary with XDG_RUNTIME_DIR set to
+// runtimeDir, so several callers can point at one shared daemon, and returns the
+// connected session. Unlike connectSession it returns an error instead of
+// failing the test, so a test can start several concurrently and join their
+// results. A successful session is closed by t.Cleanup; the close error is
+// ignored because a test that kills the daemon behind the session makes the
+// child exit non-zero.
+func connectInRuntime(t *testing.T, runtimeDir string, args ...string) (*mcp.ClientSession, error) {
+	t.Helper()
+
+	binary := os.Getenv(binaryEnv)
+	if binary == "" {
+		return nil, fmt.Errorf("%s is not set; build the server and point it at the binary", binaryEnv)
+	}
+
+	childEnv := slices.DeleteFunc(slices.Clone(os.Environ()), func(entry string) bool {
+		return strings.HasPrefix(entry, "XDG_RUNTIME_DIR=")
+	})
+	childEnv = append(childEnv, "XDG_RUNTIME_DIR="+runtimeDir)
+
+	childArgs := slices.Clone(args)
+	if !hasIdleTimeout(childArgs) {
+		childArgs = append(childArgs, "--idle-timeout", defaultInRuntimeIdleTimeout)
+	}
+
+	cmd := exec.CommandContext(context.Background(), binary, childArgs...) //nolint:gosec // the binary path is supplied by the test harness.
+	cmd.Env = childEnv
+	client := mcp.NewClient(&mcp.Implementation{Name: "slopfood-godot-mcp-e2e", Version: "0.0.1"}, nil)
+	session, err := client.Connect(context.Background(), &mcp.CommandTransport{Command: cmd}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("connect in runtime: %w", err)
+	}
+	t.Cleanup(func() { _ = session.Close() })
+	return session, nil
+}
+
+// hasIdleTimeout reports whether args already carry an --idle-timeout flag, so
+// connectInRuntime does not override a caller's value.
+func hasIdleTimeout(args []string) bool {
+	for _, arg := range args {
+		if arg == "--idle-timeout" || arg == "-idle-timeout" ||
+			strings.HasPrefix(arg, "--idle-timeout=") || strings.HasPrefix(arg, "-idle-timeout=") {
+			return true
+		}
+	}
+	return false
+}
+
+// daemonWaitTimeout bounds the polling helpers that watch detached daemons.
+const daemonWaitTimeout = 15 * time.Second
+
+// daemonPIDs returns the PIDs of the detached daemons bound to project. A
+// candidate must carry the server binary's name, the daemon subcommand, and the
+// project path on its command line; the thin clients share the binary name and
+// project but not the daemon subcommand, so they are not counted.
+func daemonPIDs(t *testing.T, project string) []int {
+	t.Helper()
+
+	output, err := exec.CommandContext(context.Background(), "ps", "-eo", "pid=,args=").Output() //nolint:gosec // ps is a fixed host tool, not user input.
+	if err != nil {
+		t.Fatalf("ps: %v", err)
+	}
+	binary := filepath.Base(os.Getenv(binaryEnv))
+	pids := make([]int, 0, 4)
+	for _, line := range strings.Split(string(output), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 3 {
+			continue
+		}
+		pid, perr := strconv.Atoi(fields[0])
+		if perr != nil {
+			continue
+		}
+		command := fields[1:]
+		joined := strings.Join(command, " ")
+		if !slices.Contains(command, "daemon") || !strings.Contains(joined, binary) || !strings.Contains(joined, project) {
+			continue
+		}
+		pids = append(pids, pid)
+	}
+	return pids
+}
+
+// waitForDaemon polls until project has exactly want detached daemons, then
+// returns; it fails the test if the count never reaches want before the
+// deadline.
+func waitForDaemon(t *testing.T, project string, want int) {
+	t.Helper()
+	deadline := time.Now().Add(daemonWaitTimeout)
+	var got []int
+	for time.Now().Before(deadline) {
+		got = daemonPIDs(t, project)
+		if len(got) == want {
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatalf("daemon count = %d %v, want %d for project %s", len(got), got, want, project)
+}
+
+// waitForNoDaemon polls until project has no detached daemon left.
+func waitForNoDaemon(t *testing.T, project string) {
+	t.Helper()
+	waitForDaemon(t, project, 0)
+}
+
+// socketPath returns the single Unix socket the daemon bound under runtimeDir.
+func socketPath(t *testing.T, runtimeDir string) string {
+	t.Helper()
+	pattern := filepath.Join(runtimeDir, "slopfood-godot-mcp", "*.sock")
+	matches, err := filepath.Glob(pattern)
+	if err != nil {
+		t.Fatalf("glob %s: %v", pattern, err)
+	}
+	if len(matches) != 1 {
+		t.Fatalf("socket files = %v, want exactly one under %s", matches, runtimeDir)
+	}
+	return matches[0]
 }
 
 // findTool returns a listed tool by name, failing when it is absent.
