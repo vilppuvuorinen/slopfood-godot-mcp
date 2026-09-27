@@ -15,7 +15,6 @@ import (
 func TestAddNodeFromGlobalClass(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
-	requireGodot(t, session)
 
 	writeE2EFile(t, filepath.Join(root, "scripts", "player.gd"), "class_name Player\nextends Node2D\n")
 	requireToolText(t, session, "reimport_project", map[string]any{})

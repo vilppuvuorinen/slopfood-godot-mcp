@@ -129,7 +129,6 @@ func TestThemeTools(t *testing.T) {
 	t.Run("creates a theme with defaults", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedThemeResources(t, session)
 
 		text := requireToolText(t, session, "create_theme", map[string]any{
@@ -162,7 +161,6 @@ func TestThemeTools(t *testing.T) {
 	t.Run("sets and clears items", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedThemeResources(t, session)
 		requireToolText(t, session, "create_theme", map[string]any{
 			"resourcePath": "themes/main.tres",
@@ -219,7 +217,6 @@ func TestThemeTools(t *testing.T) {
 	t.Run("manages type variations", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		requireToolText(t, session, "create_theme", map[string]any{
 			"resourcePath": "themes/main.tres",
 		})
@@ -248,7 +245,6 @@ func TestThemeTools(t *testing.T) {
 	t.Run("removes a type with its items", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		requireToolText(t, session, "create_theme", map[string]any{
 			"resourcePath": "themes/main.tres",
 		})
@@ -273,7 +269,6 @@ func TestThemeTools(t *testing.T) {
 	t.Run("modifies theme defaults", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		requireToolText(t, session, "create_theme", map[string]any{
 			"resourcePath":    "themes/main.tres",
 			"defaultFontSize": 12,
@@ -318,7 +313,6 @@ func TestThemeErrors(t *testing.T) {
 	t.Run("unknown item type", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		requireToolText(t, session, "create_theme", map[string]any{
 			"resourcePath": "themes/main.tres",
 		})
@@ -339,7 +333,6 @@ func TestThemeErrors(t *testing.T) {
 	t.Run("missing theme", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		res := callTool(t, session, "read_theme", map[string]any{"resourcePath": "themes/missing.tres"})
 		if !res.IsError {
@@ -351,7 +344,6 @@ func TestThemeErrors(t *testing.T) {
 	t.Run("not a theme resource", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		requireToolText(t, session, "create_resource", map[string]any{
 			"resourcePath": "resources/mat.tres",

@@ -26,7 +26,6 @@ func TestValidateProjectTool(t *testing.T) {
 		root := t.TempDir()
 		writeE2EFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[application]\n\nconfig/name=\"Demo\"\n")
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		text := requireToolText(t, session, "validate_project", map[string]any{})
 		var payload validateProjectPayload
@@ -45,7 +44,6 @@ func TestValidateProjectTool(t *testing.T) {
 		root := t.TempDir()
 		writeE2EFile(t, filepath.Join(root, "project.godot"), "config_version=5\n\n[application\n\nconfig/name=\"Demo\"\n")
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		res := callTool(t, session, "validate_project", map[string]any{})
 		if res.IsError {

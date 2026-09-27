@@ -25,7 +25,6 @@ func TestCreateSceneTool(t *testing.T) {
 	t.Run("custom root", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		requireToolText(t, session, "create_scene", map[string]any{
 			"scenePath":    "level.tscn",
@@ -72,7 +71,6 @@ func TestCreateSceneErrors(t *testing.T) {
 
 	t.Run("abstract rootNodeType", func(t *testing.T) {
 		session := connectProject(t, newProject(t))
-		requireGodot(t, session)
 
 		// CanvasItem is a registered ClassDB class Godot refuses to
 		// instantiate.

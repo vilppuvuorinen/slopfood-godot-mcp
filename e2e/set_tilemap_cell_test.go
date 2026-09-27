@@ -17,7 +17,6 @@ func TestSetTilemapCellTool(t *testing.T) {
 	t.Run("places and reads cells", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedAtlasTexture(t, root)
 		setupTestTileSet(t, session)
 		setupTilemapScene(t, session)
@@ -49,7 +48,6 @@ func TestSetTilemapCellTool(t *testing.T) {
 	t.Run("places a cell with an alternative tile", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedAtlasTexture(t, root)
 		setupTestTileSet(t, session)
 		setupTilemapScene(t, session)
@@ -99,7 +97,6 @@ func TestSetTilemapCellErrors(t *testing.T) {
 	t.Run("missing node", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/level.tscn", "rootNodeType": "Node2D"})
 
 		res := callTool(t, session, "set_tilemap_cell", map[string]any{

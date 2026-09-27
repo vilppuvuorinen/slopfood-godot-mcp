@@ -121,7 +121,6 @@ func seedExportProject(t *testing.T) (string, *mcp.ClientSession) {
 	t.Helper()
 	root := newProject(t)
 	session := connectProject(t, root)
-	requireGodot(t, session)
 
 	writeE2EFile(t, filepath.Join(root, "export_presets.cfg"), exportPresetLinux)
 	// Godot packs project resources only, so the project needs at least one

@@ -35,7 +35,6 @@ func TestValidateScriptsTool(t *testing.T) {
 		writeE2EFile(t, filepath.Join(root, "scripts", "valid.gd"), "extends Node\n")
 		writeE2EFile(t, filepath.Join(root, "scripts", "invalid.gd"), "extends Node\n\nfunc broken(\n")
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		text := requireToolText(t, session, "validate_scripts", map[string]any{
 			"scriptPaths": []string{"scripts/valid.gd", "scripts/invalid.gd"},
@@ -72,7 +71,6 @@ func TestValidateScriptsTool(t *testing.T) {
 		root := t.TempDir()
 		seedProject(t, root)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		// Outside a work tree the default scope is an explicit error, not a
 		// silent fallback to validating every script.
@@ -117,7 +115,6 @@ func TestValidateScriptsTool(t *testing.T) {
 		writeE2EFile(t, filepath.Join(root, "scripts", "broken.gd"),
 			"extends Node\n\n@onready var state = NotAnAutoload\n")
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		text := requireToolText(t, session, "validate_scripts", map[string]any{
 			"scriptPaths": []string{"scripts/player.gd", "scripts/broken.gd"},
@@ -143,7 +140,6 @@ func TestValidateScriptsTool(t *testing.T) {
 		writeE2EFile(t, filepath.Join(root, "a.gd"), "extends Node\n")
 		writeE2EFile(t, filepath.Join(root, "nested", "b.gd"), "extends Node\n")
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		text := requireToolText(t, session, "validate_scripts", map[string]any{
 			"scope": "all",

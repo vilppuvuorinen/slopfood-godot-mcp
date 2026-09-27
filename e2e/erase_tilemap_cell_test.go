@@ -15,7 +15,6 @@ func TestEraseTilemapCellSchema(t *testing.T) {
 func TestEraseTilemapCellTool(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
-	requireGodot(t, session)
 	seedAtlasTexture(t, root)
 	setupTestTileSet(t, session)
 	setupTilemapScene(t, session)

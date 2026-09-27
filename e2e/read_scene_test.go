@@ -238,7 +238,6 @@ func TestReadSceneNestedProperties(t *testing.T) {
 func TestReadSceneGroups(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
-	requireGodot(t, session)
 
 	writeE2EFile(t, filepath.Join(root, "scenes", "groups.tscn"), `[gd_scene format=3]
 

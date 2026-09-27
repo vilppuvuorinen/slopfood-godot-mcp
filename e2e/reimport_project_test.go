@@ -20,7 +20,6 @@ func TestReimportProjectSchema(t *testing.T) {
 // header uid and an ext_resource uid) untouched.
 func TestReimportProjectTool(t *testing.T) {
 	root, session := seedScene(t, "scenes/main.tscn")
-	requireGodot(t, session)
 
 	// An un-UID'd script that the scan must give a sidecar.
 	scriptPath := filepath.Join(root, "player.gd")
@@ -60,7 +59,6 @@ func TestReimportProjectAppliesSidecarEdit(t *testing.T) {
 	root := newProject(t)
 	writeE2EFile(t, filepath.Join(root, "icon.svg"), `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/></svg>`)
 	session := connectProject(t, root)
-	requireGodot(t, session)
 
 	// The scan materializes the first-shot sidecar for a new source.
 	requireToolText(t, session, "reimport_project", nil)

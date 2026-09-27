@@ -66,7 +66,6 @@ func TestResourceTools(t *testing.T) {
 	t.Run("reads a resource", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedMaterialRes(t, session)
 
 		text := requireToolText(t, session, "read_binary_resource", map[string]any{
@@ -85,7 +84,6 @@ func TestResourceTools(t *testing.T) {
 	t.Run("reads with a property filter", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedMaterialRes(t, session)
 
 		text := requireToolText(t, session, "read_binary_resource", map[string]any{
@@ -106,7 +104,6 @@ func TestResourceTools(t *testing.T) {
 	t.Run("filters with a single-character wildcard", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedMaterialRes(t, session)
 
 		text := requireToolText(t, session, "read_binary_resource", map[string]any{
@@ -120,7 +117,6 @@ func TestResourceTools(t *testing.T) {
 	t.Run("filter matching nothing yields no properties", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedMaterialRes(t, session)
 
 		text := requireToolText(t, session, "read_binary_resource", map[string]any{
@@ -133,7 +129,6 @@ func TestResourceTools(t *testing.T) {
 	t.Run("modifies then re-reads a resource", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedMaterialRes(t, session)
 
 		modifyText := requireToolText(t, session, "modify_resource", map[string]any{
@@ -151,7 +146,6 @@ func TestResourceTools(t *testing.T) {
 	t.Run("creates then reads a resource", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		createText := requireToolText(t, session, "create_resource", map[string]any{
 			"resourcePath": "materials/red.res",
@@ -188,7 +182,6 @@ func TestResourceTools(t *testing.T) {
 func TestResourceTheme(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
-	requireGodot(t, session)
 
 	createText := requireToolText(t, session, "create_resource", map[string]any{
 		"resourcePath": "themes/main.res",
@@ -222,7 +215,6 @@ func TestResourceTheme(t *testing.T) {
 func TestResourceThemeConvertsTypes(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
-	requireGodot(t, session)
 
 	requireToolText(t, session, "create_resource", map[string]any{
 		"resourcePath": "themes/panel_box.res",
@@ -291,7 +283,6 @@ func TestResourceThemeConvertsTypes(t *testing.T) {
 func TestResourceThemeMoreCategories(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
-	requireGodot(t, session)
 
 	requireToolText(t, session, "create_resource", map[string]any{
 		"resourcePath": "themes/font.res",
@@ -358,7 +349,6 @@ func TestResourceErrors(t *testing.T) {
 	t.Run("unknown resource type", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		res := callTool(t, session, "create_resource", map[string]any{
 			"resourcePath": "materials/red.tres",
@@ -373,7 +363,6 @@ func TestResourceErrors(t *testing.T) {
 	t.Run("abstract resource type", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		// BaseMaterial3D is a registered Resource subclass that Godot
 		// refuses to instantiate directly.
@@ -390,7 +379,6 @@ func TestResourceErrors(t *testing.T) {
 	t.Run("non-resource type", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		// Node is instantiable, so the failure is the Resource-subclass guard.
 		res := callTool(t, session, "create_resource", map[string]any{
@@ -406,7 +394,6 @@ func TestResourceErrors(t *testing.T) {
 	t.Run("resource not found", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		res := callTool(t, session, "read_binary_resource", map[string]any{
 			"resourcePath": "resources/missing.res",
@@ -420,7 +407,6 @@ func TestResourceErrors(t *testing.T) {
 	t.Run("unloadable resource", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		writeE2EFile(t, filepath.Join(root, "resources", "bad.res"), "this is not a valid resource\n")
 
 		res := callTool(t, session, "read_binary_resource", map[string]any{
@@ -435,7 +421,6 @@ func TestResourceErrors(t *testing.T) {
 	t.Run("invalid property value", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		res := callTool(t, session, "create_resource", map[string]any{
 			"resourcePath": "materials/red.tres",

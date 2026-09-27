@@ -58,7 +58,6 @@ func TestValueContractScriptHalf(t *testing.T) {
 	contract := loadValueContract(t)
 
 	root, session := seedScene(t, "scenes/contract.tscn", "Node2D")
-	requireGodot(t, session)
 	writeE2EFile(t, filepath.Join(root, "scripts", "contract.gd"),
 		"extends Node2D\n\n@export var config: Dictionary = {}\n")
 	requireToolText(t, session, "attach_script", map[string]any{

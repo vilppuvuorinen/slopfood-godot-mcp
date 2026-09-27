@@ -99,7 +99,6 @@ func TestAnimationTools(t *testing.T) {
 	t.Run("creates and reads an animation", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		createText := requireToolText(t, session, "create_animation", map[string]any{
 			"resourcePath": "anims/walk.tres",
@@ -123,7 +122,6 @@ func TestAnimationTools(t *testing.T) {
 	t.Run("adds a value track and reads it back", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		createTestAnimation(t, session)
 
 		addText := requireToolText(t, session, "add_animation_track", map[string]any{
@@ -160,7 +158,6 @@ func TestAnimationTools(t *testing.T) {
 	t.Run("adds a method track", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		createTestAnimation(t, session)
 
 		requireToolText(t, session, "add_animation_track", map[string]any{
@@ -187,7 +184,6 @@ func TestAnimationTools(t *testing.T) {
 	t.Run("set replaces a track's keys", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		createTestAnimation(t, session)
 
 		requireToolText(t, session, "add_animation_track", map[string]any{
@@ -218,7 +214,6 @@ func TestAnimationTools(t *testing.T) {
 	t.Run("removes a track", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		createTestAnimation(t, session)
 
 		requireToolText(t, session, "add_animation_track", map[string]any{
@@ -240,7 +235,6 @@ func TestAnimationTools(t *testing.T) {
 	t.Run("modifies animation properties", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		requireToolText(t, session, "create_animation", map[string]any{
 			"resourcePath": "anims/walk.tres",
@@ -261,7 +255,6 @@ func TestAnimationTools(t *testing.T) {
 	t.Run("adds the 3D and blend-shape track family", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		createTestAnimation(t, session)
 
 		requireToolText(t, session, "add_animation_track", map[string]any{
@@ -328,7 +321,6 @@ func TestAnimationTools(t *testing.T) {
 	t.Run("adds a bezier track with and without handles", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		createTestAnimation(t, session)
 
 		requireToolText(t, session, "add_animation_track", map[string]any{
@@ -379,7 +371,6 @@ func TestAnimationTools(t *testing.T) {
 	t.Run("adds audio and nested animation tracks", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		createTestAnimation(t, session)
 
 		// An animation track's value is the name of the animation to play,
@@ -484,7 +475,6 @@ func TestAnimationErrors(t *testing.T) {
 	t.Run("unknown track type", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		res := callTool(t, session, "create_animation", map[string]any{
 			"resourcePath": "anim.tres",
@@ -505,7 +495,6 @@ func TestAnimationErrors(t *testing.T) {
 	t.Run("missing animation", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		res := callTool(t, session, "read_animation", map[string]any{"resourcePath": "anims/missing.tres"})
 		if !res.IsError {
@@ -517,7 +506,6 @@ func TestAnimationErrors(t *testing.T) {
 	t.Run("not an animation resource", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		requireToolText(t, session, "create_resource", map[string]any{
 			"resourcePath": "resources/mat.tres",

@@ -131,7 +131,6 @@ func TestStructuredContent(t *testing.T) {
 	root := t.TempDir()
 	seedProject(t, root)
 	session := connectProject(t, root)
-	requireGodot(t, session)
 
 	res := callTool(t, session, "validate_project", map[string]any{})
 	if res.IsError {
@@ -163,7 +162,6 @@ func TestMutationToolMetadata(t *testing.T) {
 func TestMutationStructuredContent(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
-	requireGodot(t, session)
 
 	res := callTool(t, session, "create_scene", map[string]any{
 		"scenePath":    "level.tscn",

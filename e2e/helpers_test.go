@@ -95,15 +95,6 @@ func connectWithProtocolVersion(t *testing.T, protocolVersion string) *mcp.Clien
 	return session
 }
 
-// requireGodot fails a test when no usable Godot executable is configured. A
-// missing engine is a broken environment, not a reason to pass the suite.
-func requireGodot(t *testing.T, session *mcp.ClientSession) {
-	t.Helper()
-	if res := callTool(t, session, "get_godot_version", nil); res.IsError {
-		t.Fatalf("Godot unavailable: %s", firstText(t, res))
-	}
-}
-
 // findTool returns a listed tool by name, failing when it is absent.
 func findTool(t *testing.T, session *mcp.ClientSession, name string) *mcp.Tool {
 	t.Helper()

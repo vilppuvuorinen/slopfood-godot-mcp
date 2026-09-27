@@ -206,7 +206,6 @@ func TestTilesetTools(t *testing.T) {
 	t.Run("creates a tileset with an atlas source and tile", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedAtlasTexture(t, root)
 
 		setupTestTileSet(t, session)
@@ -231,7 +230,6 @@ func TestTilesetTools(t *testing.T) {
 	t.Run("sets tile data and adds an alternative", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedAtlasTexture(t, root)
 		setupTestTileSet(t, session)
 
@@ -264,7 +262,6 @@ func TestTilesetTools(t *testing.T) {
 	t.Run("removes a tile alternative", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedAtlasTexture(t, root)
 		setupTestTileSet(t, session)
 
@@ -298,7 +295,6 @@ func TestTilesetTools(t *testing.T) {
 	t.Run("adds and removes a scenes source tile", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedAtlasTexture(t, root)
 		setupTestTileSet(t, session)
 		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "props/box.tscn", "rootNodeType": "Node2D"})
@@ -345,7 +341,6 @@ func TestTilesetTools(t *testing.T) {
 	t.Run("removes a tile and a source", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedAtlasTexture(t, root)
 		setupTestTileSet(t, session)
 
@@ -389,7 +384,6 @@ func TestTilesetErrors(t *testing.T) {
 	t.Run("unknown source", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		seedAtlasTexture(t, root)
 		setupTestTileSet(t, session)
 
@@ -407,7 +401,6 @@ func TestTilesetErrors(t *testing.T) {
 	t.Run("missing tileset", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		res := callTool(t, session, "read_tileset", map[string]any{"resourcePath": "tiles/missing.tres"})
 		if !res.IsError {
@@ -419,7 +412,6 @@ func TestTilesetErrors(t *testing.T) {
 	t.Run("not a tileset resource", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		requireToolText(t, session, "create_resource", map[string]any{
 			"resourcePath": "resources/mat.tres",
@@ -477,7 +469,6 @@ func TestReadTilemapErrors(t *testing.T) {
 	t.Run("missing node", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/level.tscn", "rootNodeType": "Node2D"})
 
 		res := callTool(t, session, "read_tilemap", map[string]any{
@@ -493,7 +484,6 @@ func TestReadTilemapErrors(t *testing.T) {
 	t.Run("node is not a TileMapLayer", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/level.tscn", "rootNodeType": "Node2D"})
 		requireToolText(t, session, "add_node", map[string]any{
 			"scenePath": "scenes/level.tscn",
@@ -514,7 +504,6 @@ func TestReadTilemapErrors(t *testing.T) {
 	t.Run("missing scene", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireGodot(t, session)
 
 		requireToolError(t, session, "read_tilemap", map[string]any{
 			"scenePath": "scenes/missing.tscn",

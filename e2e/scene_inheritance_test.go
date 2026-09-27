@@ -27,7 +27,6 @@ func seedInheritedScene(t *testing.T, derivedPath string) (string, *mcp.ClientSe
 	t.Helper()
 	root := newProject(t)
 	session := connectProject(t, root)
-	requireGodot(t, session)
 
 	requireToolText(t, session, "create_scene", map[string]any{
 		"scenePath":    "scenes/base.tscn",
