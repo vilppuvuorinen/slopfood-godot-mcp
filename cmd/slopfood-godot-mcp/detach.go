@@ -18,7 +18,7 @@ var (
 // daemon subcommand bound to the same project, with the daemon-role options
 // carried over and the log path made explicit.
 func daemonChildArgs(root string, opts *options, logPath string) []string {
-	args := make([]string, 0, 9+2*len(opts.enable))
+	args := make([]string, 0, 10+2*len(opts.enable))
 	args = append(args,
 		daemonSubcommand,
 		"--project", root,
@@ -28,6 +28,9 @@ func daemonChildArgs(root string, opts *options, logPath string) []string {
 	)
 	for _, value := range opts.enable {
 		args = append(args, "--enable", value)
+	}
+	if opts.gdDaemon {
+		args = append(args, "--gd-daemon")
 	}
 	return args
 }
