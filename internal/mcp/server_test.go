@@ -194,21 +194,130 @@ func TestServeToolsCall(t *testing.T) {
 }
 
 // TestServeToolsCallThroughQueue asserts single-client behavior is unchanged
-// when a queue is installed: the call still runs and returns its result.
+// when a queue is installed: the call still runs and returns its result. The
+// input stream is held open until the reply arrives, because a disconnect now
+// cancels an in-flight queued call.
 func TestServeToolsCallThroughQueue(t *testing.T) {
 	s := testServer()
 	q := NewQueue(4, testQueueTimeout)
 	defer q.Close()
 	s.SetQueue(q)
 
-	in := strings.NewReader(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"echo","arguments":{"message":"hi"}}}` + "\n")
-	var out bytes.Buffer
+	inR, inW := io.Pipe()
+	var out lockedBuffer
+	done := make(chan error, 1)
+	go func() { done <- s.Serve(context.Background(), inR, &out) }()
 
-	if err := s.Serve(context.Background(), in, &out); err != nil {
-		t.Fatalf("Serve: %v", err)
+	writeLine(t, inW, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"echo","arguments":{"message":"hi"}}}`)
+	awaitCondition(t, func() bool { return strings.Contains(out.String(), "hi") }, "the queued echo reply")
+	_ = inW.Close()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Serve: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Serve did not return after the stream closed")
 	}
-	if !strings.Contains(out.String(), "hi") {
-		t.Errorf("output = %s", out.String())
+}
+
+// blockingServer returns a server whose "block" tool signals started, then
+// blocks until its context is canceled and signals canceled. It is the shared
+// fixture for the disconnect-cancellation tests.
+func blockingServer() (*Server, <-chan struct{}, <-chan struct{}) {
+	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	started := make(chan struct{})
+	canceled := make(chan struct{})
+	s.RegisterTool(Tool{
+		Name:        "block",
+		Description: "block",
+		InputSchema: map[string]any{"type": "object"},
+		Handler: func(ctx context.Context, _ json.RawMessage) (any, error) {
+			close(started)
+			<-ctx.Done()
+			close(canceled)
+			return nil, ctx.Err()
+		},
+	})
+	return s, started, canceled
+}
+
+// TestServeCancelsHandlerOnDisconnect asserts that a client disconnect cancels
+// a handler still running: the reader hits EOF and cancels the connection
+// context, which the handler observes, proving the propagation that reaches
+// exec.CommandContext.
+func TestServeCancelsHandlerOnDisconnect(t *testing.T) {
+	s, started, canceled := blockingServer()
+
+	inR, inW := io.Pipe()
+	var out lockedBuffer
+	done := make(chan error, 1)
+	go func() { done <- s.Serve(context.Background(), inR, &out) }()
+
+	writeLine(t, inW, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"block"}}`)
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler did not start")
+	}
+
+	_ = inW.Close()
+
+	select {
+	case <-canceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler context was not canceled on disconnect")
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Serve: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not return after disconnect")
+	}
+}
+
+// TestServeParentContextCancelCancelsHandler asserts daemon shutdown
+// propagates: canceling the context passed to Serve cancels a running handler.
+// The reader is parked in Read, so the stream is closed afterwards to let
+// Serve's reader return; the cancellation itself came from the parent context.
+func TestServeParentContextCancelCancelsHandler(t *testing.T) {
+	s, started, canceled := blockingServer()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	inR, inW := io.Pipe()
+	var out lockedBuffer
+	done := make(chan error, 1)
+	go func() { done <- s.Serve(ctx, inR, &out) }()
+
+	writeLine(t, inW, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"block"}}`)
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler did not start")
+	}
+
+	cancel()
+
+	select {
+	case <-canceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler context was not canceled by the parent context")
+	}
+
+	_ = inW.Close()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Serve: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not return")
 	}
 }
 

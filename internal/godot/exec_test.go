@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func writeExecutable(t *testing.T, body string) string {
@@ -59,6 +60,29 @@ func TestRunOperationCapturesOutputOnNonZeroExit(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "Failed to create scene") {
 		t.Errorf("stderr = %q", stderr)
+	}
+}
+
+// TestRunOperationContextCancelStopsEngine proves the context reaches
+// exec.CommandContext: a canceled context kills the running engine instead of
+// letting it run to completion. RunOperation treats a killed process as an
+// ordinary non-zero engine exit rather than a wrapper failure, so the proof is
+// that the call returns well before the 30s sleep, not with a clean exit.
+func TestRunOperationContextCancelStopsEngine(t *testing.T) {
+	bin := writeExecutable(t, "exec sleep 30")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, _, exitCode, err := RunOperation(ctx, bin, "/proj", "/script.gd", "create_scene", nil)
+	elapsed := time.Since(start)
+
+	if elapsed >= 10*time.Second {
+		t.Fatalf("RunOperation took %s, want it to stop well before the 30s sleep", elapsed)
+	}
+	if err == nil && exitCode == 0 {
+		t.Fatal("RunOperation reported success, want the engine stopped by context cancellation")
 	}
 }
 

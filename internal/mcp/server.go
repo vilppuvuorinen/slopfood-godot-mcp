@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -326,14 +327,42 @@ func (s *Server) SetQueue(q *Queue) {
 	s.queue = q
 }
 
+// Serve reads newline-delimited JSON-RPC requests from r and writes responses
+// to w, handling one request at a time. The stream is read on its own
+// goroutine so a client disconnect is noticed while a handler is still running:
+// when the reader reaches EOF or an error it cancels the connection context,
+// which propagates through the queue into exec.CommandContext and kills any
+// in-flight engine work. The reader may run ahead of the handler, but the
+// handler still runs one at a time per connection, so a slow client cannot
+// overtake itself and the queue remains the single engine serialization point.
+// Only the Serve goroutine calls write, so responses stay ordered.
 func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
-	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
-	for scanner.Scan() {
-		if err := ctx.Err(); err != nil {
-			return fmt.Errorf("context: %w", err)
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	lines := make(chan []byte)
+	readErr := make(chan error, 1)
+
+	go func() {
+		defer close(lines)
+		scanner := bufio.NewScanner(r)
+		scanner.Buffer(make([]byte, 0, 64*1024), 16*1024*1024)
+		for scanner.Scan() {
+			line := bytes.Clone(scanner.Bytes())
+			select {
+			case lines <- line:
+			case <-ctx.Done():
+				readErr <- ctx.Err()
+				return
+			}
 		}
-		line := scanner.Bytes()
+		// The stream ended (clean EOF or a read error), so cancel the
+		// connection: a handler still running is killed through its context.
+		cancel()
+		readErr <- scanner.Err()
+	}()
+
+	for line := range lines {
 		if len(line) == 0 {
 			continue
 		}
@@ -350,7 +379,7 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 			return err
 		}
 	}
-	if err := scanner.Err(); err != nil {
+	if err := <-readErr; err != nil {
 		return fmt.Errorf("read input: %w", err)
 	}
 	return nil

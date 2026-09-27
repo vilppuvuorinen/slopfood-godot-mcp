@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestUnixSocketServesProtocol drives the existing line protocol over a real
@@ -128,6 +129,52 @@ func TestUnixDialWithoutListenerFails(t *testing.T) {
 		_ = conn.Close()
 		t.Fatal("DialUnix to a missing socket succeeded, want an error")
 	}
+}
+
+// TestUnixDisconnectCancelsEngine is the end-to-end disconnect proof: a client
+// closes its Unix-socket connection while a blocking handler runs, and the
+// canceled connection context reaches the handler. The socket lives under a
+// short os.MkdirTemp path so sun_path length limits are never an issue.
+func TestUnixDisconnectCancelsEngine(t *testing.T) {
+	s, started, canceled := blockingServer()
+
+	dir, err := os.MkdirTemp("", "mcp-sock-")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	sock := filepath.Join(dir, "d.sock")
+	l, err := ListenUnix(sock)
+	if err != nil {
+		t.Fatalf("ListenUnix: %v", err)
+	}
+
+	q := NewQueue(4, testQueueTimeout)
+	d := NewDaemon(s, q, func(string) (Listener, error) { return l, nil }, sock)
+	done := make(chan error, 1)
+	go func() { done <- d.Serve(context.Background()) }()
+
+	client, err := DialUnix(sock)
+	if err != nil {
+		t.Fatalf("DialUnix: %v", err)
+	}
+	writeLine(t, client, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"block"}}`)
+
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler did not start")
+	}
+
+	_ = client.Close()
+
+	select {
+	case <-canceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("engine handler was not canceled on disconnect")
+	}
+
+	stopDaemon(t, d, done)
 }
 
 // TestUnixPeerIdentity asserts the accepted connection reports the kernel's
