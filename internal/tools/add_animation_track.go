@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -76,7 +75,7 @@ func addAnimationTrack() mcp.Tool {
 			"resourcePath": map[string]any{"type": "string"},
 			"trackType":    map[string]any{"type": "string"},
 		}),
-		Handler: handleAddAnimationTrack,
+		Handler: withContext(handleAddAnimationTrack),
 	}
 }
 
@@ -88,7 +87,7 @@ type addAnimationTrackArgs struct {
 	Keys          []map[string]any `json:"keys"`
 }
 
-func handleAddAnimationTrack(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleAddAnimationTrack(ctx Context, raw json.RawMessage) (any, error) {
 	var args addAnimationTrackArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -33,7 +32,7 @@ func removeTilesetSource() mcp.Tool {
 			"resourcePath": map[string]any{"type": "string"},
 			"sourceId":     map[string]any{"type": "integer"},
 		}),
-		Handler: handleRemoveTilesetSource,
+		Handler: withContext(handleRemoveTilesetSource),
 	}
 }
 
@@ -42,7 +41,7 @@ type removeTilesetSourceArgs struct {
 	SourceID     *int   `json:"sourceId"`
 }
 
-func handleRemoveTilesetSource(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleRemoveTilesetSource(ctx Context, raw json.RawMessage) (any, error) {
 	var args removeTilesetSourceArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

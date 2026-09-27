@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -25,7 +24,7 @@ func readTheme() mcp.Tool {
 			},
 			"required": []string{"resourcePath"},
 		},
-		Handler: handleReadTheme,
+		Handler: withContext(handleReadTheme),
 	}
 }
 
@@ -33,7 +32,7 @@ type readThemeArgs struct {
 	ResourcePath string `json:"resourcePath"`
 }
 
-func handleReadTheme(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleReadTheme(ctx Context, raw json.RawMessage) (any, error) {
 	var args readThemeArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -54,7 +53,7 @@ func setThemeItem() mcp.Tool {
 			"itemType":     map[string]any{"type": "string"},
 			"itemName":     map[string]any{"type": "string"},
 		}),
-		Handler: handleSetThemeItem,
+		Handler: withContext(handleSetThemeItem),
 	}
 }
 
@@ -66,7 +65,7 @@ type setThemeItemArgs struct {
 	Value        any    `json:"value"`
 }
 
-func handleSetThemeItem(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleSetThemeItem(ctx Context, raw json.RawMessage) (any, error) {
 	var args setThemeItemArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

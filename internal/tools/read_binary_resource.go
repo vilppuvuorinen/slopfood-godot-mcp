@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -31,7 +30,7 @@ func readBinaryResource() mcp.Tool {
 			},
 			"required": []string{"resourcePath"},
 		},
-		Handler: handleReadBinaryResource,
+		Handler: withContext(handleReadBinaryResource),
 	}
 }
 
@@ -40,7 +39,7 @@ type readBinaryResourceArgs struct {
 	PropertyFilter []string `json:"propertyFilter"`
 }
 
-func handleReadBinaryResource(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleReadBinaryResource(ctx Context, raw json.RawMessage) (any, error) {
 	var args readBinaryResourceArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

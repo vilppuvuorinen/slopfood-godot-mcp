@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -29,7 +28,7 @@ func modifyResource() mcp.Tool {
 		OutputSchema: statusOutputSchema(map[string]any{
 			"resourcePath": map[string]any{"type": "string"},
 		}),
-		Handler: handleModifyResource,
+		Handler: withContext(handleModifyResource),
 	}
 }
 
@@ -38,7 +37,7 @@ type modifyResourceArgs struct {
 	Properties   map[string]any `json:"properties"`
 }
 
-func handleModifyResource(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleModifyResource(ctx Context, raw json.RawMessage) (any, error) {
 	var args modifyResourceArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

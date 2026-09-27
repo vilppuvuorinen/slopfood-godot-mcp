@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -25,7 +24,7 @@ func readAnimation() mcp.Tool {
 			},
 			"required": []string{"resourcePath"},
 		},
-		Handler: handleReadAnimation,
+		Handler: withContext(handleReadAnimation),
 	}
 }
 
@@ -33,7 +32,7 @@ type readAnimationArgs struct {
 	ResourcePath string `json:"resourcePath"`
 }
 
-func handleReadAnimation(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleReadAnimation(ctx Context, raw json.RawMessage) (any, error) {
 	var args readAnimationArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

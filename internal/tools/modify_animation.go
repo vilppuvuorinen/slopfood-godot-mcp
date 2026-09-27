@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -41,7 +40,7 @@ func modifyAnimation() mcp.Tool {
 		OutputSchema: statusOutputSchema(map[string]any{
 			"resourcePath": map[string]any{"type": "string"},
 		}),
-		Handler: handleModifyAnimation,
+		Handler: withContext(handleModifyAnimation),
 	}
 }
 
@@ -52,7 +51,7 @@ type modifyAnimationArgs struct {
 	Step         *float64 `json:"step"`
 }
 
-func handleModifyAnimation(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleModifyAnimation(ctx Context, raw json.RawMessage) (any, error) {
 	var args modifyAnimationArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

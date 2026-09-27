@@ -52,7 +52,7 @@ func createProject() mcp.Tool {
 			"projectName": map[string]any{"type": "string"},
 			"dotnet":      map[string]any{"type": "boolean"},
 		}),
-		Handler: handleCreateProject,
+		Handler: withContext(handleCreateProject),
 	}
 }
 
@@ -61,7 +61,7 @@ type createProjectArgs struct {
 	Dotnet      bool   `json:"dotnet"`
 }
 
-func handleCreateProject(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleCreateProject(ctx Context, raw json.RawMessage) (any, error) {
 	var args createProjectArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

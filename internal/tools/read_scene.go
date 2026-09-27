@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -34,7 +33,7 @@ func readScene() mcp.Tool {
 			},
 			"required": []string{"scenePath"},
 		},
-		Handler: handleReadScene,
+		Handler: withContext(handleReadScene),
 	}
 }
 
@@ -44,7 +43,7 @@ type readSceneArgs struct {
 	Depth     *int   `json:"depth"`
 }
 
-func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleReadScene(ctx Context, raw json.RawMessage) (any, error) {
 	var args readSceneArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {
@@ -79,7 +78,7 @@ func handleReadScene(ctx context.Context, raw json.RawMessage) (any, error) {
 	if args.Depth != nil {
 		params["depth"] = *args.Depth
 	}
-	stdout, stderr, exitCode, err := runOperation(ctx, project, "read_scene", params)
+	stdout, stderr, exitCode, err := ctx.Run(project, "read_scene", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to read scene: "+err.Error(),

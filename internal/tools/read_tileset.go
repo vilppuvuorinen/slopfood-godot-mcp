@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -25,7 +24,7 @@ func readTileset() mcp.Tool {
 			},
 			"required": []string{"resourcePath"},
 		},
-		Handler: handleReadTileset,
+		Handler: withContext(handleReadTileset),
 	}
 }
 
@@ -33,7 +32,7 @@ type readTilesetArgs struct {
 	ResourcePath string `json:"resourcePath"`
 }
 
-func handleReadTileset(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleReadTileset(ctx Context, raw json.RawMessage) (any, error) {
 	var args readTilesetArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

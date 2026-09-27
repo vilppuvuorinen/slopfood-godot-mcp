@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
@@ -26,11 +25,11 @@ func getGodotVersion() mcp.Tool {
 			},
 			"required": []string{"version"},
 		},
-		Handler: handleGetGodotVersion,
+		Handler: withContext(handleGetGodotVersion),
 	}
 }
 
-func handleGetGodotVersion(ctx context.Context, _ json.RawMessage) (any, error) {
+func handleGetGodotVersion(ctx Context, _ json.RawMessage) (any, error) {
 	version, err := godot.Version(ctx, godot.Path())
 	if err == nil {
 		return mcp.StructuredResult(version, map[string]any{"version": version}), nil

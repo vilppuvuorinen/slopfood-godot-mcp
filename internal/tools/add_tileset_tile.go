@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -47,7 +46,7 @@ func addTilesetTile() mcp.Tool {
 			"resourcePath": map[string]any{"type": "string"},
 			"sourceId":     map[string]any{"type": "integer"},
 		}),
-		Handler: handleAddTilesetTile,
+		Handler: withContext(handleAddTilesetTile),
 	}
 }
 
@@ -61,7 +60,7 @@ type addTilesetTileArgs struct {
 	DisplayPlaceholder *bool  `json:"displayPlaceholder"`
 }
 
-func handleAddTilesetTile(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleAddTilesetTile(ctx Context, raw json.RawMessage) (any, error) {
 	var args addTilesetTileArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

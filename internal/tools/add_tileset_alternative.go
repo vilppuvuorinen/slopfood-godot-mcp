@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -38,7 +37,7 @@ func addTilesetAlternative() mcp.Tool {
 			"resourcePath": map[string]any{"type": "string"},
 			"sourceId":     map[string]any{"type": "integer"},
 		}),
-		Handler: handleAddTilesetAlternative,
+		Handler: withContext(handleAddTilesetAlternative),
 	}
 }
 
@@ -49,7 +48,7 @@ type addTilesetAlternativeArgs struct {
 	AlternativeID *int   `json:"alternativeId"`
 }
 
-func handleAddTilesetAlternative(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleAddTilesetAlternative(ctx Context, raw json.RawMessage) (any, error) {
 	var args addTilesetAlternativeArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

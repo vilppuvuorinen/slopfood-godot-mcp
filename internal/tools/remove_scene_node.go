@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -33,7 +32,7 @@ func removeSceneNode() mcp.Tool {
 			"scenePath": map[string]any{"type": "string"},
 			"nodePath":  map[string]any{"type": "string"},
 		}),
-		Handler: handleRemoveSceneNode,
+		Handler: withContext(handleRemoveSceneNode),
 	}
 }
 
@@ -42,7 +41,7 @@ type removeSceneNodeArgs struct {
 	NodePath  string `json:"nodePath"`
 }
 
-func handleRemoveSceneNode(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleRemoveSceneNode(ctx Context, raw json.RawMessage) (any, error) {
 	var args removeSceneNodeArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

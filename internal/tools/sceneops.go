@@ -2,15 +2,11 @@ package tools
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
-	"fmt"
 	"sort"
 	"strings"
 
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotconfig"
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
@@ -40,19 +36,6 @@ func markerJSON(stdout string) (string, bool) {
 	return buf.String(), true
 }
 
-// runOperation executes an operations-script operation against a project.
-func runOperation(ctx context.Context, projectPath, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error) {
-	scriptPath, err := godotops.OperationsScript()
-	if err != nil {
-		return "", "", 0, fmt.Errorf("materialize operations script: %w", err)
-	}
-	stdout, stderr, exitCode, err = godot.RunOperation(ctx, godot.Path(), projectPath, scriptPath, operation, params)
-	if err != nil {
-		return stdout, stderr, exitCode, fmt.Errorf("run godot operation: %w", err)
-	}
-	return stdout, stderr, exitCode, nil
-}
-
 // headlessSolutions are the shared "Possible solutions" lines for a Godot
 // operation that could not run.
 var headlessSolutions = []string{
@@ -73,8 +56,8 @@ var headlessSolutions = []string{
 // engine noise it cannot prevent, add that pattern to a per-tool allowlist and
 // pass it to scriptFailed (see stderr.go) together with a test, rather than
 // carrying an unused hook here.
-func runHeadlessOperation(ctx context.Context, projectPath, operation string, params, fields map[string]any) (any, error) {
-	stdout, stderr, exitCode, err := runOperation(ctx, projectPath, operation, params)
+func runHeadlessOperation(ctx Context, projectPath, operation string, params, fields map[string]any) (any, error) {
+	stdout, stderr, exitCode, err := ctx.Run(projectPath, operation, params)
 	if err != nil {
 		return mcp.ErrorResult(operation+" failed: "+err.Error(), headlessSolutions...), nil //nolint:nilerr // the failure is reported through the tool result.
 	}

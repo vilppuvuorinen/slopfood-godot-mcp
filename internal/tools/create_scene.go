@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -38,7 +37,7 @@ func createScene() mcp.Tool {
 			"rootNodeType":  map[string]any{"type": "string"},
 			"baseScenePath": map[string]any{"type": "string"},
 		}),
-		Handler: handleCreateScene,
+		Handler: withContext(handleCreateScene),
 	}
 }
 
@@ -48,7 +47,7 @@ type createSceneArgs struct {
 	BaseScenePath string `json:"baseScenePath"`
 }
 
-func handleCreateScene(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleCreateScene(ctx Context, raw json.RawMessage) (any, error) {
 	var args createSceneArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {
@@ -108,7 +107,7 @@ func handleCreateScene(ctx context.Context, raw json.RawMessage) (any, error) {
 		params["rootNodeType"] = rootNodeType
 		fields["rootNodeType"] = rootNodeType
 	}
-	stdout, stderr, exitCode, err := runOperation(ctx, project, "create_scene", params)
+	stdout, stderr, exitCode, err := ctx.Run(project, "create_scene", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to create scene: "+err.Error(),

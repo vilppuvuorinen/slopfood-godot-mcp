@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -53,7 +52,7 @@ func addNode() mcp.Tool {
 			"instancePath":   map[string]any{"type": "string"},
 			"parentNodePath": map[string]any{"type": "string"},
 		}),
-		Handler: handleAddNode,
+		Handler: withContext(handleAddNode),
 	}
 }
 
@@ -66,7 +65,7 @@ type addNodeArgs struct {
 	Properties     map[string]any `json:"properties"`
 }
 
-func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleAddNode(ctx Context, raw json.RawMessage) (any, error) {
 	var args addNodeArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {
@@ -132,7 +131,7 @@ func handleAddNode(ctx context.Context, raw json.RawMessage) (any, error) {
 		params["properties"] = args.Properties
 	}
 
-	stdout, stderr, exitCode, err := runOperation(ctx, project, "add_node", params)
+	stdout, stderr, exitCode, err := ctx.Run(project, "add_node", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to add node: "+err.Error(),

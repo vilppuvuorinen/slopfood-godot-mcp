@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -38,7 +37,7 @@ func setThemeTypeVariation() mcp.Tool {
 			"themeType":    map[string]any{"type": "string"},
 			"baseType":     map[string]any{"type": "string"},
 		}),
-		Handler: handleSetThemeTypeVariation,
+		Handler: withContext(handleSetThemeTypeVariation),
 	}
 }
 
@@ -48,7 +47,7 @@ type setThemeTypeVariationArgs struct {
 	BaseType     string `json:"baseType"`
 }
 
-func handleSetThemeTypeVariation(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleSetThemeTypeVariation(ctx Context, raw json.RawMessage) (any, error) {
 	var args setThemeTypeVariationArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

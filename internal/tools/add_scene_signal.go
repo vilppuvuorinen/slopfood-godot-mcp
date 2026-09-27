@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -48,7 +47,7 @@ func addSceneSignal() mcp.Tool {
 			"targetPath": map[string]any{"type": "string"},
 			"method":     map[string]any{"type": "string"},
 		}),
-		Handler: handleAddSceneSignal,
+		Handler: withContext(handleAddSceneSignal),
 	}
 }
 
@@ -60,7 +59,7 @@ type addSceneSignalArgs struct {
 	Method     string `json:"method"`
 }
 
-func handleAddSceneSignal(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleAddSceneSignal(ctx Context, raw json.RawMessage) (any, error) {
 	var args addSceneSignalArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

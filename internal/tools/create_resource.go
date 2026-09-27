@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -34,7 +33,7 @@ func createResource() mcp.Tool {
 			"resourcePath": map[string]any{"type": "string"},
 			"resourceType": map[string]any{"type": "string"},
 		}),
-		Handler: handleCreateResource,
+		Handler: withContext(handleCreateResource),
 	}
 }
 
@@ -44,7 +43,7 @@ type createResourceArgs struct {
 	Properties   map[string]any `json:"properties"`
 }
 
-func handleCreateResource(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleCreateResource(ctx Context, raw json.RawMessage) (any, error) {
 	var args createResourceArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

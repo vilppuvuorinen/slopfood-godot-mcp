@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -33,7 +32,7 @@ func removeThemeType() mcp.Tool {
 			"resourcePath": map[string]any{"type": "string"},
 			"themeType":    map[string]any{"type": "string"},
 		}),
-		Handler: handleRemoveThemeType,
+		Handler: withContext(handleRemoveThemeType),
 	}
 }
 
@@ -42,7 +41,7 @@ type removeThemeTypeArgs struct {
 	ThemeType    string `json:"themeType"`
 }
 
-func handleRemoveThemeType(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleRemoveThemeType(ctx Context, raw json.RawMessage) (any, error) {
 	var args removeThemeTypeArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

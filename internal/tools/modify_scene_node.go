@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -34,7 +33,7 @@ func modifySceneNode() mcp.Tool {
 			"scenePath": map[string]any{"type": "string"},
 			"nodePath":  map[string]any{"type": "string"},
 		}),
-		Handler: handleModifySceneNode,
+		Handler: withContext(handleModifySceneNode),
 	}
 }
 
@@ -44,7 +43,7 @@ type modifySceneNodeArgs struct {
 	Properties map[string]any `json:"properties"`
 }
 
-func handleModifySceneNode(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleModifySceneNode(ctx Context, raw json.RawMessage) (any, error) {
 	var args modifySceneNodeArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

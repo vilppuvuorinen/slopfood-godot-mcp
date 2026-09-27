@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -29,7 +28,7 @@ func readTilemap() mcp.Tool {
 			},
 			"required": []string{"scenePath", "nodePath"},
 		},
-		Handler: handleReadTilemap,
+		Handler: withContext(handleReadTilemap),
 	}
 }
 
@@ -38,7 +37,7 @@ type readTilemapArgs struct {
 	NodePath  string `json:"nodePath"`
 }
 
-func handleReadTilemap(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleReadTilemap(ctx Context, raw json.RawMessage) (any, error) {
 	var args readTilemapArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

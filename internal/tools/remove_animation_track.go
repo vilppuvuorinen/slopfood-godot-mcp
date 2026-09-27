@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -33,7 +32,7 @@ func removeAnimationTrack() mcp.Tool {
 			"resourcePath": map[string]any{"type": "string"},
 			"trackIndex":   map[string]any{"type": "integer"},
 		}),
-		Handler: handleRemoveAnimationTrack,
+		Handler: withContext(handleRemoveAnimationTrack),
 	}
 }
 
@@ -42,7 +41,7 @@ type removeAnimationTrackArgs struct {
 	TrackIndex   *int   `json:"trackIndex"`
 }
 
-func handleRemoveAnimationTrack(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleRemoveAnimationTrack(ctx Context, raw json.RawMessage) (any, error) {
 	var args removeAnimationTrackArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

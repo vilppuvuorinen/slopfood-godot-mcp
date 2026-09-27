@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -33,7 +32,7 @@ func duplicateSceneNode() mcp.Tool {
 			"scenePath": map[string]any{"type": "string"},
 			"nodePath":  map[string]any{"type": "string"},
 		}),
-		Handler: handleDuplicateSceneNode,
+		Handler: withContext(handleDuplicateSceneNode),
 	}
 }
 
@@ -42,7 +41,7 @@ type duplicateSceneNodeArgs struct {
 	NodePath  string `json:"nodePath"`
 }
 
-func handleDuplicateSceneNode(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleDuplicateSceneNode(ctx Context, raw json.RawMessage) (any, error) {
 	var args duplicateSceneNodeArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

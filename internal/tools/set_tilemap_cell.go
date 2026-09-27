@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -37,7 +36,7 @@ func setTilemapCell() mcp.Tool {
 			"scenePath": map[string]any{"type": "string"},
 			"nodePath":  map[string]any{"type": "string"},
 		}),
-		Handler: handleSetTilemapCell,
+		Handler: withContext(handleSetTilemapCell),
 	}
 }
 
@@ -50,7 +49,7 @@ type setTilemapCellArgs struct {
 	AlternativeTile *int   `json:"alternativeTile"`
 }
 
-func handleSetTilemapCell(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleSetTilemapCell(ctx Context, raw json.RawMessage) (any, error) {
 	var args setTilemapCellArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

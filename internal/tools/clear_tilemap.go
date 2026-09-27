@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -33,7 +32,7 @@ func clearTilemap() mcp.Tool {
 			"scenePath": map[string]any{"type": "string"},
 			"nodePath":  map[string]any{"type": "string"},
 		}),
-		Handler: handleClearTilemap,
+		Handler: withContext(handleClearTilemap),
 	}
 }
 
@@ -42,7 +41,7 @@ type clearTilemapArgs struct {
 	NodePath  string `json:"nodePath"`
 }
 
-func handleClearTilemap(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleClearTilemap(ctx Context, raw json.RawMessage) (any, error) {
 	var args clearTilemapArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -50,7 +49,7 @@ func addTilesetSource() mcp.Tool {
 			"resourcePath": map[string]any{"type": "string"},
 			"sourceType":   map[string]any{"type": "string"},
 		}),
-		Handler: handleAddTilesetSource,
+		Handler: withContext(handleAddTilesetSource),
 	}
 }
 
@@ -65,7 +64,7 @@ type addTilesetSourceArgs struct {
 	UseTexturePadding *bool  `json:"useTexturePadding"`
 }
 
-func handleAddTilesetSource(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleAddTilesetSource(ctx Context, raw json.RawMessage) (any, error) {
 	var args addTilesetSourceArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

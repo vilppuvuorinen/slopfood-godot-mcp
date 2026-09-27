@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -33,7 +32,7 @@ func validateScripts() mcp.Tool {
 			},
 			"required": []string{},
 		},
-		Handler: handleValidateScripts,
+		Handler: withContext(handleValidateScripts),
 	}
 }
 
@@ -69,7 +68,7 @@ type validateScriptsReport struct {
 	Results         []any  `json:"results"`
 }
 
-func handleValidateScripts(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleValidateScripts(ctx Context, raw json.RawMessage) (any, error) {
 	var args validateScriptsArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

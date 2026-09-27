@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -38,7 +37,7 @@ func attachScript() mcp.Tool {
 			"nodePath":   map[string]any{"type": "string"},
 			"scriptPath": map[string]any{"type": "string"},
 		}),
-		Handler: handleAttachScript,
+		Handler: withContext(handleAttachScript),
 	}
 }
 
@@ -48,7 +47,7 @@ type attachScriptArgs struct {
 	ScriptPath string `json:"scriptPath"`
 }
 
-func handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleAttachScript(ctx Context, raw json.RawMessage) (any, error) {
 	var args attachScriptArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {
@@ -75,9 +74,15 @@ func handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
 		"nodePath":   args.NodePath,
 		"scriptPath": args.ScriptPath,
 	}
-	return runHeadlessOperation(ctx, project, "attach_script", params, map[string]any{
+	result, err := runHeadlessOperation(ctx, project, "attach_script", params, map[string]any{
 		"scenePath":  args.ScenePath,
 		"nodePath":   args.NodePath,
 		"scriptPath": args.ScriptPath,
 	})
+	// Attaching by path needs no restart itself, but a following create_scene
+	// or add_node by class name would consult the global class registry, which a
+	// newly attached class_name script changes. Invalidate so the next
+	// session call respawns with a fresh registry.
+	ctx.Invalidate()
+	return result, err
 }

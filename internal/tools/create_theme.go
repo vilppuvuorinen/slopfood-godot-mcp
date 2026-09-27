@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -33,7 +32,7 @@ func createTheme() mcp.Tool {
 		OutputSchema: statusOutputSchema(map[string]any{
 			"resourcePath": map[string]any{"type": "string"},
 		}),
-		Handler: handleCreateTheme,
+		Handler: withContext(handleCreateTheme),
 	}
 }
 
@@ -44,7 +43,7 @@ type createThemeArgs struct {
 	DefaultBaseScale any    `json:"defaultBaseScale"`
 }
 
-func handleCreateTheme(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleCreateTheme(ctx Context, raw json.RawMessage) (any, error) {
 	var args createThemeArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -38,7 +37,7 @@ func renameSceneNode() mcp.Tool {
 			"nodePath":  map[string]any{"type": "string"},
 			"newName":   map[string]any{"type": "string"},
 		}),
-		Handler: handleRenameSceneNode,
+		Handler: withContext(handleRenameSceneNode),
 	}
 }
 
@@ -48,7 +47,7 @@ type renameSceneNodeArgs struct {
 	NewName   string `json:"newName"`
 }
 
-func handleRenameSceneNode(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleRenameSceneNode(ctx Context, raw json.RawMessage) (any, error) {
 	var args renameSceneNodeArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

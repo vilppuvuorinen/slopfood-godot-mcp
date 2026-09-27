@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"path/filepath"
 	"regexp"
@@ -39,11 +38,11 @@ func reimportProject() mcp.Tool {
 		OutputSchema: statusOutputSchema(map[string]any{
 			"projectPath": map[string]any{"type": "string"},
 		}),
-		Handler: handleReimportProject,
+		Handler: withContext(handleReimportProject),
 	}
 }
 
-func handleReimportProject(ctx context.Context, _ json.RawMessage) (any, error) {
+func handleReimportProject(ctx Context, _ json.RawMessage) (any, error) {
 	project := projectRoot(ctx)
 	if !validPath(project) {
 		return invalidPathResult(), nil
@@ -61,6 +60,10 @@ func handleReimportProject(ctx context.Context, _ json.RawMessage) (any, error) 
 	// `uid=` references. Scanning is non-destructive, so this leaves every
 	// already-assigned UID and up-to-date artifact untouched.
 	stdout, stderr, exitCode, err := godot.Import(ctx, godot.Path(), project)
+	// The scan rewrites .import/.uid artifacts and regenerates the global class
+	// cache, so a live session's engine-global state is stale whatever the exit
+	// code. Invalidate unconditionally so the next session call respawns.
+	ctx.Invalidate()
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to reimport project: "+err.Error(),

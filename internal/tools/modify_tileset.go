@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -23,7 +22,7 @@ func modifyTileset() mcp.Tool {
 		OutputSchema: statusOutputSchema(map[string]any{
 			"resourcePath": map[string]any{"type": "string"},
 		}),
-		Handler: handleModifyTileset,
+		Handler: withContext(handleModifyTileset),
 	}
 }
 
@@ -36,7 +35,7 @@ type modifyTilesetArgs struct {
 	UVClipping     *bool  `json:"uvClipping"`
 }
 
-func handleModifyTileset(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleModifyTileset(ctx Context, raw json.RawMessage) (any, error) {
 	var args modifyTilesetArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

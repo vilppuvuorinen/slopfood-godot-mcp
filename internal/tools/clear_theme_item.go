@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -40,7 +39,7 @@ func clearThemeItem() mcp.Tool {
 			"itemType":     map[string]any{"type": "string"},
 			"itemName":     map[string]any{"type": "string"},
 		}),
-		Handler: handleClearThemeItem,
+		Handler: withContext(handleClearThemeItem),
 	}
 }
 
@@ -51,7 +50,7 @@ type clearThemeItemArgs struct {
 	ItemName     string `json:"itemName"`
 }
 
-func handleClearThemeItem(ctx context.Context, raw json.RawMessage) (any, error) {
+func handleClearThemeItem(ctx Context, raw json.RawMessage) (any, error) {
 	var args clearThemeItemArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

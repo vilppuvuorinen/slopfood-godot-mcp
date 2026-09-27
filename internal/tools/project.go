@@ -7,6 +7,36 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
+// Context is the per-call context a tool handler receives. It embeds
+// context.Context so cancellation and values flow through unchanged, and adds
+// the engine seam's vocabulary as methods on the handler's first argument: Run
+// executes an operation against the bound project, and Invalidate marks the
+// engine's project-global state dirty. A handler never branches on whether a
+// call spawns a one-shot engine or reaches a warm session.
+type Context struct {
+	context.Context
+}
+
+// Run executes one operations-script call through the engine bound to c.
+func (c Context) Run(project, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error) {
+	return engineFrom(c.Context).Run(project, operation, params)
+}
+
+// Invalidate marks the engine's project-global state dirty so the next call
+// respawns it. It is a no-op when no session is installed.
+func (c Context) Invalidate() {
+	engineFrom(c.Context).Invalidate()
+}
+
+// withContext adapts a handler that takes the tool Context to the
+// mcp.ToolHandler signature, wrapping each incoming context. Registration binds
+// the project first, so the wrapped Context carries it.
+func withContext(handler func(Context, json.RawMessage) (any, error)) mcp.ToolHandler {
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
+		return handler(Context{Context: ctx}, args)
+	}
+}
+
 // projectKey is the context key under which the bound project root is carried.
 // The root is fixed when the server starts (--project, GODOT_PROJECT, or the
 // working directory); tools resolve their project-relative paths against it and
