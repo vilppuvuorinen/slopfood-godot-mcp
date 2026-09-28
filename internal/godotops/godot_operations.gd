@@ -184,6 +184,28 @@ func _filesystem_ready() -> bool:
         return false
     return _scan_seen
 
+# _reconcile_path makes a path a handler just wrote visible to EditorFileSystem,
+# so its UID and global-class side effects are current before the next operation
+# instead of needing a separate rescan or a respawn. Outside editor mode there is
+# no EditorFileSystem and this is a no-op, which keeps the bridge usable if it is
+# ever run as a plain SceneTree. The dispatch is path-aware per the Phase 0.3
+# findings: update_file is synchronous and covers scripts, scenes, and resources
+# (it writes the .uid and registers class_name before returning), but it does not
+# reimport a changed .import, so a source the import system owns goes through
+# reimport_files, which is also synchronous. Neither needs a completion signal.
+func _reconcile_path(path: String) -> void:
+    if not Engine.is_editor_hint() or not path.begins_with("res://"):
+        return
+    var filesystem := _filesystem
+    if filesystem == null:
+        filesystem = EditorInterface.get_resource_filesystem()
+        if filesystem == null:
+            return
+    if FileAccess.file_exists(path + ".import"):
+        filesystem.reimport_files(PackedStringArray([path]))
+    else:
+        filesystem.update_file(path)
+
 # _read_peer drains every available byte into the per-connection buffer and
 # hands each complete newline-delimited frame to the request handler. A
 # disconnected peer is dropped so the driver keeps serving new connections.
@@ -509,6 +531,7 @@ func _create_inherited_scene(result: Result, full_scene_path, base_scene_path):
         result.err("Failed to create scene: " + full_scene_path)
         result.ok = false
         return
+    _reconcile_path(full_scene_path)
     result.out("Scene created successfully at: " + project_relative(full_scene_path))
 
 # Create a new scene with a specified root node type, or an inherited scene when
@@ -553,6 +576,7 @@ func create_scene(result: Result, params) -> Result:
             # Check the scene file was actually written
             var file_exists = FileAccess.file_exists(full_scene_path)
             if file_exists:
+                _reconcile_path(full_scene_path)
                 result.out("Scene created successfully at: " + params.scenePath)
             else:
                 result.err("Failed to create scene: " + params.scenePath)
@@ -650,6 +674,7 @@ func add_node(result: Result, params) -> Result:
     if pack_error == OK:
         var save_error = ResourceSaver.save(packed_scene, absolute_scene_path)
         if save_error == OK:
+            _reconcile_path(full_scene_path)
             if instance_path.is_empty():
                 result.out("Node '" + params.nodeName + "' of type '" + params.nodeType + "' added successfully")
             else:
@@ -760,6 +785,7 @@ func export_mesh_library(result: Result, params) -> Result:
         var error = ResourceSaver.save(mesh_library, full_output_path)
         if error == OK:
             # Verify the file was actually created
+            _reconcile_path(full_output_path)
             result.out("MeshLibrary exported successfully with " + str(item_id) + " items to: " + full_output_path)
         else:
             result.err("Failed to save MeshLibrary: " + str(error))
@@ -1420,6 +1446,7 @@ func modify_node(result: Result, params) -> Result:
         result.err("Failed to save modified scene: " + str(save_error))
         return result.fail()
 
+    _reconcile_path(full_scene_path)
     result.out("Node modified successfully in: " + full_scene_path)
     return result
 
@@ -1484,6 +1511,7 @@ func remove_node(result: Result, params) -> Result:
         result.err("Failed to save scene after removal: " + str(save_error))
         return result.fail()
 
+    _reconcile_path(full_scene_path)
     result.out("Node '" + removed_name + "' removed successfully from: " + full_scene_path)
     return result
 
@@ -1540,6 +1568,7 @@ func manage_scene_signals(result: Result, params) -> Result:
         var file = FileAccess.open(full_path, FileAccess.WRITE)
         file.store_string(content)
         file.close()
+        _reconcile_path(full_path)
         result.out("Signal connection added: " + conn_line)
     elif action == "remove":
         # A connection is identified by its signal, source, target, and (when
@@ -1578,6 +1607,7 @@ func manage_scene_signals(result: Result, params) -> Result:
             return result.fail()
         file.store_string("\n".join(new_lines))
         file.close()
+        _reconcile_path(full_path)
         result.out("Signal connection removed: %d" % [removed])
     else:
         result.err("Unknown manage_scene_signals action: " + action)
@@ -1700,6 +1730,7 @@ func manage_scene_structure(result: Result, params) -> Result:
     if save_error != OK:
         result.err("Failed to save scene: " + str(save_error))
         return result.fail()
+    _reconcile_path(full_path)
     result.out("Scene structure saved: " + full_path)
     return result
 
@@ -1794,6 +1825,11 @@ func attach_script(result: Result, params) -> Result:
         result.err("Failed to save scene after attaching script: " + str(save_error))
         return result.fail()
 
+    # Reconcile the script as well as the scene: update_file on the script
+    # writes its .uid and registers its class_name synchronously, so a following
+    # class-name lookup sees the newly attached script without a respawn.
+    _reconcile_path(full_script_path)
+    _reconcile_path(full_scene_path)
     result.out("Script '" + full_script_path + "' attached successfully to node in: " + full_scene_path)
     return result
 
@@ -1915,6 +1951,7 @@ func _save_resource(result: Result, resource, full_path) -> bool:
         result.err("Failed to save resource: " + str(save_error))
         result.ok = false
         return false
+    _reconcile_path(full_path)
     return true
 
 
@@ -3040,6 +3077,7 @@ func manage_tilemap(result: Result, params) -> Result:
     if save_error != OK:
         result.err("Failed to save tilemap scene: " + str(save_error))
         return result.fail()
+    _reconcile_path(full_path)
     result.out("TileMap " + action + " succeeded: " + full_path)
     return result
 

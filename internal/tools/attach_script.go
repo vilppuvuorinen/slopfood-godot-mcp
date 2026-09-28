@@ -79,10 +79,8 @@ func handleAttachScript(ctx Context, raw json.RawMessage) (any, error) {
 		"nodePath":   args.NodePath,
 		"scriptPath": args.ScriptPath,
 	})
-	// Attaching by path needs no restart itself, but a following create_scene
-	// or add_node by class name would consult the global class registry, which a
-	// newly attached class_name script changes. Invalidate so the next
-	// session call respawns with a fresh registry.
-	ctx.Invalidate()
+	// The bridge reconciles the attached script and the saved scene with the
+	// editor filesystem, registering the script's class_name synchronously, so a
+	// following class-name lookup sees it without a respawn. No Invalidate.
 	return result, err
 }

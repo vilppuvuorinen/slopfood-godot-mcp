@@ -95,10 +95,11 @@ func TestSessionEligibleHandlerUsesInstalledSession(t *testing.T) {
 	}
 }
 
-// TestAttachScriptInvalidatesSession confirms attach_script routes through the
-// session and invalidates it, because a following class-name lookup would
-// otherwise consult a stale class registry.
-func TestAttachScriptInvalidatesSession(t *testing.T) {
+// TestAttachScriptReconcilesWithoutInvalidation confirms attach_script routes
+// through the session and does not invalidate it: the bridge reconciles the
+// attached script with the editor filesystem, so a following class-name lookup
+// sees it without a respawn.
+func TestAttachScriptReconcilesWithoutInvalidation(t *testing.T) {
 	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
 	root := t.TempDir()
 	makeProject(t, root)
@@ -122,8 +123,8 @@ func TestAttachScriptInvalidatesSession(t *testing.T) {
 	if len(sess.runs) != 1 || sess.runs[0].operation != "attach_script" {
 		t.Fatalf("session runs = %+v", sess.runs)
 	}
-	if sess.invalidated != 1 {
-		t.Errorf("invalidated = %d, want 1", sess.invalidated)
+	if sess.invalidated != 0 {
+		t.Errorf("invalidated = %d, want 0: the bridge reconciles in place", sess.invalidated)
 	}
 }
 
