@@ -9,49 +9,97 @@ import (
 	"time"
 )
 
-// sessionFake is a fake daemon engine. It records one line per process start in
-// starts, then loops reading request lines from stdin, parsing the id with sed
-// and emitting a frame plus the matching stderr terminator. args records the
-// arguments the session passed.
-type sessionFake struct {
+// shortRuntimeDir points XDG_RUNTIME_DIR at a short directory for one test, so
+// the derived engine socket path stays under the Linux sun_path limit even
+// though t.TempDir embeds a long test name.
+func shortRuntimeDir(t *testing.T) {
+	t.Helper()
+	dir, err := os.MkdirTemp("", "sess-rt-")
+	if err != nil {
+		t.Fatalf("create runtime dir: %v", err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	t.Setenv("XDG_RUNTIME_DIR", dir)
+}
+
+// socketSessionFake is a fake engine process that speaks the bridge's
+// newline-delimited Unix-socket protocol. It records one line per process start
+// in starts, the spawn arguments in args, the engine environment hook value in
+// env, and the quit operation in quit. It prints an engine banner and a
+// non-JSON stdout line before the readiness object, binds the --gd-socket path
+// it was handed, and runs the python snippet response for each request; a quit
+// operation is always answered and recorded before the process exits.
+type socketSessionFake struct {
 	bin    string
 	starts string
 	args   string
+	env    string
+	quit   string
 }
 
-// newSessionFake writes a daemon fake driven by response, which is a shell
-// snippet emitting a frame and its terminator after $id is set. It may ignore
-// its args.
-func newSessionFake(t *testing.T, response string) *sessionFake {
+// defaultSocketResponse answers every request by echoing its id in stdout.
+const defaultSocketResponse = `
+        send(conn, req["id"], True, "out-" + str(req["id"]), "")`
+
+// newSocketSessionFake writes the fake engine, running response for each
+// request. response is a python snippet inserted in the receive loop with
+// `req`, `conn`, and send() in scope; it must be indented to match the loop.
+func newSocketSessionFake(t *testing.T, response string) *socketSessionFake {
 	t.Helper()
 	dir := t.TempDir()
-	f := &sessionFake{
+	f := &socketSessionFake{
 		bin:    filepath.Join(dir, "godot"),
 		starts: filepath.Join(dir, "starts"),
 		args:   filepath.Join(dir, "args"),
+		env:    filepath.Join(dir, "env"),
+		quit:   filepath.Join(dir, "quit"),
 	}
-	body := `printf '%s\n' "$*" >> '` + f.args + `'
+	body := `#!/bin/sh
+printf '%s\n' "$*" >> '` + f.args + `'
 echo start >> '` + f.starts + `'
+printf '%s' "$GDCOVER_FILE" > '` + f.env + `'
 echo 'Godot Engine v4.7 fake'
-echo '{"ready":true}'
-while IFS= read -r line; do
-  id=$(printf '%s\n' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
-  [ -z "$id" ] && continue
+exec python3 - "$@" <<'PY'
+import json, os, socket, sys
+args = sys.argv[1:]
+path = args[args.index("--gd-socket") + 1]
+if os.path.exists(path):
+    os.remove(path)
+srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+srv.bind(path)
+srv.listen(1)
+os.chmod(path, 0o755)
+print(json.dumps({"ready": True, "transport": "uds", "path": path, "token": "tok"}), flush=True)
+print("engine noise on stdout", flush=True)
+
+def send(conn, i, ok, out, err):
+    conn.sendall(json.dumps({"id": i, "ok": ok, "stdout": out, "stderr": err}).encode() + b"\n")
+
+conn, _ = srv.accept()
+buf = b""
+while True:
+    data = conn.recv(4096)
+    if not data:
+        break
+    buf += data
+    while b"\n" in buf:
+        line, buf = buf.split(b"\n", 1)
+        req = json.loads(line)
+        if req.get("operation") == "quit":
+            send(conn, req["id"], True, "", "")
+            open('` + f.quit + `', "w").write("quit")
+            sys.exit(0)
 ` + response + `
-done
+PY
 `
-	if err := os.WriteFile(f.bin, []byte("#!/bin/sh\n"+body), 0o755); err != nil { //nolint:gosec // test helper needs an executable script.
+	if err := os.WriteFile(f.bin, []byte(body), 0o755); err != nil { //nolint:gosec // test helper needs an executable script.
 		t.Fatalf("write fake: %v", err)
 	}
 	return f
 }
 
-// defaultResponse succeeds with a fixed stdout and empty stderr.
-const defaultResponse = `  printf '{"id":%s,"ok":true,"stdout":"out-%s","stderr":""}\n' "$id" "$id"
-  printf 'GODOT_MCP_STDERR_END %s\n' "$id" >&2`
-
 // startCount returns how many times the fake has been spawned.
-func (f *sessionFake) startCount(t *testing.T) int {
+func (f *socketSessionFake) startCount(t *testing.T) int {
 	t.Helper()
 	data, err := os.ReadFile(f.starts)
 	if err != nil {
@@ -63,7 +111,7 @@ func (f *sessionFake) startCount(t *testing.T) int {
 	return len(strings.Fields(string(data)))
 }
 
-func (f *sessionFake) argLines(t *testing.T) []string {
+func (f *socketSessionFake) argLines(t *testing.T) []string {
 	t.Helper()
 	data, err := os.ReadFile(f.args)
 	if err != nil {
@@ -72,8 +120,34 @@ func (f *sessionFake) argLines(t *testing.T) []string {
 	return strings.Split(strings.TrimSpace(string(data)), "\n")
 }
 
+func (f *socketSessionFake) envValue(t *testing.T) string {
+	t.Helper()
+	data, err := os.ReadFile(f.env)
+	if err != nil {
+		t.Fatalf("read env: %v", err)
+	}
+	return string(data)
+}
+
+func (f *socketSessionFake) quitRecorded(t *testing.T) bool {
+	t.Helper()
+	_, err := os.Stat(f.quit)
+	if err == nil {
+		return true
+	}
+	if os.IsNotExist(err) {
+		return false
+	}
+	t.Fatalf("stat quit: %v", err)
+	return false
+}
+
+// TestSessionRoundTripFraming proves one socket engine process serves two
+// sequential operations and that the spawn carries the socket args and never
+// --gd-daemon.
 func TestSessionRoundTripFraming(t *testing.T) {
-	f := newSessionFake(t, defaultResponse)
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, defaultSocketResponse)
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 	project := t.TempDir()
@@ -104,20 +178,27 @@ func TestSessionRoundTripFraming(t *testing.T) {
 	if len(lines) != 1 {
 		t.Fatalf("spawn arg lines = %d, want 1", len(lines))
 	}
-	for _, want := range []string{"--headless", "--path " + project, "--script /ops.gd", "--gd-daemon"} {
+	for _, want := range []string{"--headless", "--path " + project, "--script /ops.gd", "-- --gd-socket "} {
 		if !strings.Contains(lines[0], want) {
 			t.Errorf("spawn args %q missing %q", lines[0], want)
 		}
 	}
+	if strings.Contains(lines[0], "--gd-daemon") {
+		t.Errorf("spawn args still carry --gd-daemon: %q", lines[0])
+	}
 }
 
 // TestSessionFramesRecorded proves the request frames carry the assigned ids and
-// the caller's operation/params, and that nil params marshal to {}. The fake
-// copies each stdin line into a file.
+// the caller's operation/params, and that nil params marshal to {}. The token
+// the client adds to the first frame is stripped before comparison.
 func TestSessionFramesRecorded(t *testing.T) {
+	shortRuntimeDir(t)
 	reqs := filepath.Join(t.TempDir(), "reqs")
-	f := newSessionFake(t, `  printf '%s\n' "$line" >> '`+reqs+`'
-`+defaultResponse)
+	response := `
+        req.pop("token", None)
+        open('` + reqs + `', "a").write(json.dumps(req, separators=(",", ":")) + "\n")
+        send(conn, req["id"], True, "out-" + str(req["id"]), "")`
+	f := newSocketSessionFake(t, response)
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 	project := t.TempDir()
@@ -152,12 +233,15 @@ func TestSessionFramesRecorded(t *testing.T) {
 	}
 }
 
-// TestSessionStderrMerge proves the process-stderr batch precedes the frame's
-// own stderr and never includes the terminator.
-func TestSessionStderrMerge(t *testing.T) {
-	f := newSessionFake(t, `  printf 'engine diagnostic %s\n' "$id" >&2
-  printf '{"id":%s,"ok":true,"stdout":"ok","stderr":"frame stderr line"}\n' "$id"
-  printf 'GODOT_MCP_STDERR_END %s\n' "$id" >&2`)
+// TestSessionStderrDiagnosticsOnly proves the deliberate transport change: the
+// process stderr pipe is diagnostics only, and the response frame's stderr is
+// authoritative and returned alone.
+func TestSessionStderrDiagnosticsOnly(t *testing.T) {
+	shortRuntimeDir(t)
+	response := `
+        print("engine diagnostic " + str(req["id"]), file=sys.stderr, flush=True)
+        send(conn, req["id"], True, "ok", "frame stderr line")`
+	f := newSocketSessionFake(t, response)
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 
@@ -168,23 +252,19 @@ func TestSessionStderrMerge(t *testing.T) {
 	if exitCode != 0 {
 		t.Fatalf("exitCode = %d", exitCode)
 	}
-	if strings.Contains(stderr, "GODOT_MCP_STDERR_END") {
-		t.Errorf("stderr leaked the terminator: %q", stderr)
+	if stderr != "frame stderr line" {
+		t.Errorf("stderr = %q, want only the frame's stderr", stderr)
 	}
-	procAt := strings.Index(stderr, "engine diagnostic 1")
-	frameAt := strings.Index(stderr, "frame stderr line")
-	if procAt < 0 || frameAt < 0 {
-		t.Fatalf("stderr = %q, want both lines", stderr)
-	}
-	if procAt > frameAt {
-		t.Errorf("process stderr should precede frame stderr: %q", stderr)
+	if strings.Contains(stderr, "engine diagnostic") {
+		t.Errorf("stderr merged process diagnostics: %q", stderr)
 	}
 }
 
-// TestSessionSkipsNonFrameStdout proves the banner and readiness line are not
-// mistaken for a response.
+// TestSessionSkipsNonFrameStdout proves the engine banner and a stray non-JSON
+// stdout line are not mistaken for a response; the fake prints both.
 func TestSessionSkipsNonFrameStdout(t *testing.T) {
-	f := newSessionFake(t, defaultResponse)
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, defaultSocketResponse)
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 
@@ -198,7 +278,8 @@ func TestSessionSkipsNonFrameStdout(t *testing.T) {
 }
 
 func TestSessionInvalidateRestarts(t *testing.T) {
-	f := newSessionFake(t, defaultResponse)
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, defaultSocketResponse)
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 	project := t.TempDir()
@@ -219,7 +300,8 @@ func TestSessionInvalidateRestarts(t *testing.T) {
 }
 
 func TestSessionOperationCapRestarts(t *testing.T) {
-	f := newSessionFake(t, defaultResponse)
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, defaultSocketResponse)
 	s := NewSession(f.bin, "/ops.gd")
 	s.operationCap = 2
 	defer s.Close()
@@ -242,7 +324,8 @@ func TestSessionOperationCapRestarts(t *testing.T) {
 }
 
 func TestSessionProjectChangeRestarts(t *testing.T) {
-	f := newSessionFake(t, defaultResponse)
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, defaultSocketResponse)
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 
@@ -258,7 +341,8 @@ func TestSessionProjectChangeRestarts(t *testing.T) {
 }
 
 func TestSessionFingerprintRestarts(t *testing.T) {
-	f := newSessionFake(t, defaultResponse)
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, defaultSocketResponse)
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 	project := t.TempDir()
@@ -287,11 +371,11 @@ func TestSessionFingerprintRestarts(t *testing.T) {
 	}
 }
 
-// TestSessionEOFRespawn proves a process that exits after its first response is
-// replaced by the next Run.
+// TestSessionEOFRespawn proves a frame delivered just before the process exits
+// is not lost and that the next Run replaces the dead process.
 func TestSessionEOFRespawn(t *testing.T) {
-	f := newSessionFake(t, defaultResponse+`
-  exit 0`)
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, defaultSocketResponse+"\n        sys.exit(0)")
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 	project := t.TempDir()
@@ -310,21 +394,39 @@ func TestSessionEOFRespawn(t *testing.T) {
 	}
 }
 
+// TestSessionResponseIDDesyncAborts proves a mismatched response id still kills
+// the process instead of returning the wrong frame.
+func TestSessionResponseIDDesyncAborts(t *testing.T) {
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, `
+        send(conn, req["id"] + 100, True, "wrong", "")`)
+	s := NewSession(f.bin, "/ops.gd")
+	defer s.Close()
+	project := t.TempDir()
+
+	_, _, _, err := s.Run(context.Background(), project, "op", nil)
+	if err == nil {
+		t.Fatal("Run accepted a mismatched response id, want an error")
+	}
+	if !strings.Contains(err.Error(), "response id") {
+		t.Errorf("err = %v, want a response-id desync", err)
+	}
+
+	// The desync kills the process; the next Run respawns a healthy one.
+	healthy := newSocketSessionFake(t, defaultSocketResponse)
+	s.executable = healthy.bin
+	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+		t.Fatalf("Run after desync: %v", err)
+	}
+}
+
 // TestSessionContextCancelKill proves a canceled request kills the wedged engine
 // promptly and that the session respawns a healthy one afterwards.
 func TestSessionContextCancelKill(t *testing.T) {
-	dir := t.TempDir()
-	bin := filepath.Join(dir, "godot")
-	body := `#!/bin/sh
-echo '{"ready":true}'
-while IFS= read -r line; do
-  exec sleep 30
-done
-`
-	if err := os.WriteFile(bin, []byte(body), 0o755); err != nil { //nolint:gosec // test helper.
-		t.Fatalf("write fake: %v", err)
-	}
-	s := NewSession(bin, "/ops.gd")
+	shortRuntimeDir(t)
+	// The fake accepts the connection but never answers.
+	f := newSocketSessionFake(t, "\n        pass")
+	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 	project := t.TempDir()
 
@@ -336,58 +438,21 @@ done
 		t.Fatal("Run reported success, want a context error")
 	}
 	if elapsed := time.Since(start); elapsed >= 10*time.Second {
-		t.Fatalf("Run took %s, want it to stop well before the 30s sleep", elapsed)
+		t.Fatalf("Run took %s, want it to stop well before a wedged engine", elapsed)
 	}
 
-	healthy := newSessionFake(t, defaultResponse)
+	healthy := newSocketSessionFake(t, defaultSocketResponse)
 	s.executable = healthy.bin
 	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("Run after cancel: %v", err)
 	}
 }
 
-// TestSessionFrameTerminatedByBlankLine locks the daemon framing protocol: each
-// request is a JSON line followed by a blank line. The bridge's
-// OS.read_string_from_stdin caps a read at 1023 bytes and strips the newline, so
-// the blank line is the only end-of-frame marker it can see; without it a frame
-// longer than one read would be lost.
-func TestSessionFrameTerminatedByBlankLine(t *testing.T) {
-	marker := filepath.Join(t.TempDir(), "terminator")
-	dir := t.TempDir()
-	bin := filepath.Join(dir, "godot")
-	body := `#!/bin/sh
-echo '{"ready":true}'
-IFS= read -r first
-IFS= read -r second
-if [ -z "$second" ]; then
-  echo blank > '` + marker + `'
-else
-  echo nonblank > '` + marker + `'
-fi
-id=$(printf '%s\n' "$first" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p')
-printf '{"id":%s,"ok":true,"stdout":"out","stderr":""}\n' "$id"
-printf 'GODOT_MCP_STDERR_END %s\n' "$id" >&2
-`
-	if err := os.WriteFile(bin, []byte(body), 0o755); err != nil { //nolint:gosec // test helper needs an executable script.
-		t.Fatalf("write fake: %v", err)
-	}
-	s := NewSession(bin, "/ops.gd")
-	defer s.Close()
-
-	if _, _, _, err := s.Run(context.Background(), t.TempDir(), "op", nil); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	data, err := os.ReadFile(marker)
-	if err != nil {
-		t.Fatalf("read marker: %v", err)
-	}
-	if got := strings.TrimSpace(string(data)); got != "blank" {
-		t.Errorf("frame terminator = %q, want a blank line after the JSON line", got)
-	}
-}
-
-func TestSessionCloseIdempotentAndFailsRuns(t *testing.T) {
-	f := newSessionFake(t, defaultResponse)
+// TestSessionCloseQuitAndFailsRuns proves Close asks the bridge to quit
+// gracefully, is idempotent, and makes a later Run fail.
+func TestSessionCloseQuitAndFailsRuns(t *testing.T) {
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, defaultSocketResponse)
 	s := NewSession(f.bin, "/ops.gd")
 	project := t.TempDir()
 
@@ -396,6 +461,9 @@ func TestSessionCloseIdempotentAndFailsRuns(t *testing.T) {
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
+	}
+	if !f.quitRecorded(t) {
+		t.Error("Close did not send the bridge a quit operation")
 	}
 	if err := s.Close(); err != nil {
 		t.Fatalf("second Close: %v", err)
@@ -409,25 +477,20 @@ func TestSessionCloseIdempotentAndFailsRuns(t *testing.T) {
 // TestSessionAppliesEngineEnv proves the engine environment hook reaches the
 // session-spawned child, mirroring TestRunOperationAppliesEngineEnv.
 func TestSessionAppliesEngineEnv(t *testing.T) {
+	shortRuntimeDir(t)
 	SetEngineEnv(func(env []string) []string {
 		return append(env, "GDCOVER_FILE=keyed/hits.txt")
 	})
 	t.Cleanup(func() { SetEngineEnv(nil) })
 
-	envFile := filepath.Join(t.TempDir(), "env")
-	f := newSessionFake(t, `  printf '%s' "$GDCOVER_FILE" > '`+envFile+`'
-`+defaultResponse)
+	f := newSocketSessionFake(t, defaultSocketResponse)
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 
 	if _, _, _, err := s.Run(context.Background(), t.TempDir(), "op", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	data, err := os.ReadFile(envFile)
-	if err != nil {
-		t.Fatalf("read env: %v", err)
-	}
-	if string(data) != "keyed/hits.txt" {
-		t.Errorf("GDCOVER_FILE = %q, want keyed/hits.txt", string(data))
+	if got := f.envValue(t); got != "keyed/hits.txt" {
+		t.Errorf("GDCOVER_FILE = %q, want keyed/hits.txt", got)
 	}
 }

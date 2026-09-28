@@ -30,9 +30,9 @@ type projectSettingsProbe struct {
 // Godot could not be started; a project.godot the engine rejects is reported
 // through the probe's stderr.
 func probeProjectWithGodot(ctx context.Context, projectPath string) (projectSettingsProbe, error) {
-	scriptPath, err := godotops.OperationsScript()
+	scriptPath, err := godotops.ProjectProbeScript()
 	if err != nil {
-		return projectSettingsProbe{}, fmt.Errorf("materialize operations script: %w", err)
+		return projectSettingsProbe{}, fmt.Errorf("materialize project probe script: %w", err)
 	}
 	_, stderr, exitCode, err := godot.ValidateProject(ctx, godot.Path(), projectPath, scriptPath)
 	if err != nil {

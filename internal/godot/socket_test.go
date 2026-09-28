@@ -318,129 +318,6 @@ func TestPrepareSocketDirAndSecureSocket(t *testing.T) {
 	}
 }
 
-// TestSocketSessionSpawnArgs proves a socket session passes the engine-socket
-// path after the -- separator (so it reaches get_cmdline_user_args) and prints
-// a readiness object the session parses and dials. The fake binds a socket at
-// the path it was handed, prints readiness, then serves one request.
-func TestSocketSessionSpawnArgs(t *testing.T) {
-	dir := t.TempDir()
-	argsFile := filepath.Join(dir, "args")
-	bin := filepath.Join(dir, "godot")
-	body := `#!/bin/sh
-printf '%s\n' "$*" > '` + argsFile + `'
-echo 'Godot Engine v4.7 fake'
-exec python3 - "$@" <<'PY'
-import json, os, socket, sys
-args = sys.argv[1:]
-path = args[args.index("--gd-socket") + 1]
-if os.path.exists(path):
-    os.remove(path)
-srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-srv.bind(path)
-srv.listen(1)
-os.chmod(path, 0o755)
-print(json.dumps({"ready": True, "transport": "uds", "path": path, "token": "tok"}), flush=True)
-conn, _ = srv.accept()
-buf = b""
-while True:
-    data = conn.recv(4096)
-    if not data:
-        break
-    buf += data
-    while b"\n" in buf:
-        line, buf = buf.split(b"\n", 1)
-        req = json.loads(line)
-        conn.sendall(json.dumps({"id": req["id"], "ok": True, "stdout": "out-" + str(req["id"]), "stderr": ""}).encode() + b"\n")
-PY
-`
-	if err := os.WriteFile(bin, []byte(body), 0o755); err != nil { //nolint:gosec // test helper needs an executable script.
-		t.Fatalf("write fake: %v", err)
-	}
-
-	t.Setenv("XDG_RUNTIME_DIR", dir)
-	project := t.TempDir()
-	s := newSocketSession(bin, "/ops.gd")
-	defer s.Close()
-
-	stdout, stderr, exitCode, err := s.Run(context.Background(), project, "op", nil)
-	if err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if exitCode != 0 || stderr != "" || stdout != "out-1" {
-		t.Fatalf("run: stdout=%q stderr=%q exit=%d", stdout, stderr, exitCode)
-	}
-
-	argsData, err := os.ReadFile(argsFile)
-	if err != nil {
-		t.Fatalf("read args: %v", err)
-	}
-	args := strings.TrimSpace(string(argsData))
-	for _, want := range []string{"--headless", "--path " + project, "--script /ops.gd", "-- --gd-socket "} {
-		if !strings.Contains(args, want) {
-			t.Errorf("spawn args %q missing %q", args, want)
-		}
-	}
-	if strings.Contains(args, "--gd-daemon") {
-		t.Errorf("socket spawn args still carry --gd-daemon: %q", args)
-	}
-}
-
-// TestSocketSessionOperationCapRestarts proves the operation cap still recycles
-// the engine on the socket transport: a second process binds the same socket
-// after the first is stopped.
-func TestSocketSessionOperationCapRestarts(t *testing.T) {
-	dir := t.TempDir()
-	startsFile := filepath.Join(dir, "starts")
-	bin := filepath.Join(dir, "godot")
-	body := `#!/bin/sh
-echo start >> '` + startsFile + `'
-exec python3 - "$@" <<'PY'
-import json, os, socket, sys
-args = sys.argv[1:]
-path = args[args.index("--gd-socket") + 1]
-if os.path.exists(path):
-    os.remove(path)
-srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-srv.bind(path)
-srv.listen(1)
-print(json.dumps({"ready": True, "transport": "uds", "path": path, "token": "tok"}), flush=True)
-conn, _ = srv.accept()
-buf = b""
-while True:
-    data = conn.recv(4096)
-    if not data:
-        break
-    buf += data
-    while b"\n" in buf:
-        line, buf = buf.split(b"\n", 1)
-        req = json.loads(line)
-        conn.sendall(json.dumps({"id": req["id"], "ok": True, "stdout": "out", "stderr": ""}).encode() + b"\n")
-PY
-`
-	if err := os.WriteFile(bin, []byte(body), 0o755); err != nil { //nolint:gosec // test helper needs an executable script.
-		t.Fatalf("write fake: %v", err)
-	}
-
-	t.Setenv("XDG_RUNTIME_DIR", dir)
-	project := t.TempDir()
-	s := newSocketSession(bin, "/ops.gd")
-	s.operationCap = 2
-	defer s.Close()
-
-	for i := 0; i < 3; i++ {
-		if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
-			t.Fatalf("Run %d: %v", i, err)
-		}
-	}
-	data, err := os.ReadFile(startsFile)
-	if err != nil {
-		t.Fatalf("read starts: %v", err)
-	}
-	if got := len(strings.Fields(string(data))); got != 2 {
-		t.Errorf("starts = %d, want 2 once the cap is reached", got)
-	}
-}
-
 // requireSocketGodot returns a usable engine path or skips the test, mirroring
 // the godotops requireGodot helper for the package's socket bridge test.
 func requireSocketGodot(t *testing.T) string {
@@ -481,7 +358,7 @@ func TestSocketSessionDrivesRealBridge(t *testing.T) {
 		t.Fatalf("write project.godot: %v", writeErr)
 	}
 
-	session := newSocketSession(engine, script)
+	session := NewSession(engine, script)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 

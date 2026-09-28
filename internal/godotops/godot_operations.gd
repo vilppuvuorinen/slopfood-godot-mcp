@@ -6,27 +6,27 @@ extends SceneTree
 
 const JSON_START = "<<<GODOT_MCP_JSON_START>>>"
 const JSON_END = "<<<GODOT_MCP_JSON_END>>>"
-const STDERR_END_MARKER = "GODOT_MCP_STDERR_END"
 
 # Bridge contract
 #
 # Every handler has the signature `func <name>(result: Result, params) -> Result`
 # and reports exclusively through the Result it is handed:
 #
-#   - Progress goes to stdout: log_info(result, ...) buffers a line that emit
-#     prints to standard output. A structured payload is JSON between
-#     JSON_START and JSON_END, which the Go side extracts with markerJSON; an
-#     operation without one reports status text instead.
-#   - Diagnostics go to stderr: log_error(result, ...) buffers a line that
-#     emit prints to standard error. The Go side fails the operation on any
-#     stderr line, so nothing benign is written there.
+#   - Progress goes in result.stdout: log_info(result, ...) buffers a line. The
+#     driver returns the buffer in the response frame's stdout field. A
+#     structured payload is JSON between JSON_START and JSON_END, which the Go
+#     side extracts with markerJSON; an operation without one reports status
+#     text instead.
+#   - Diagnostics go in result.stderr: log_error(result, ...) buffers a line.
+#     The driver returns it in the frame's stderr field, and the Go side fails
+#     the operation on any stderr line, so nothing benign is written there.
 #   - A handler returns the same Result on success, or result.fail(...) (which
 #     flips ok to false and buffers the reason) on failure. Helpers that report
 #     failure return null/false for their caller to propagate.
 #
 # A handler never calls print()/printerr() and never calls quit(): the driver
-# is the only place that flushes the buffers, through emit. This keeps a failing
-# handler from leaving a partial payload on stdout.
+# is the only place that writes the response frame. This keeps a failing handler
+# from leaving a partial payload on the wire.
 
 # Result carries a handler's outcome back to the dispatcher. ok is the exit
 # status; stdout and stderr are buffers the driver emits to the matching
@@ -78,14 +78,15 @@ class DecodeResult extends RefCounted:
 func _init():
     var socket_path := _engine_socket_path()
     if socket_path.is_empty():
-        run_daemon()
+        printerr("engine socket: --gd-socket <path> is required; launch the bridge through the engine session")
+        quit(1)
         return
     run_socket(socket_path)
 
 # _engine_socket_path reads the --gd-socket <path> value the Go side passes
-# after the `--` separator, or "" when the bridge was launched over stdio. Only
-# the post-`--` form reaches OS.get_cmdline_user_args, so the socket path never
-# has to survive the engine's own flag parsing.
+# after the `--` separator. Only the post-`--` form reaches
+# OS.get_cmdline_user_args, so the socket path never has to survive the engine's
+# own flag parsing.
 func _engine_socket_path() -> String:
     var args := OS.get_cmdline_user_args()
     for index in range(args.size()):
@@ -128,7 +129,9 @@ func run_socket(socket_path: String) -> void:
     }))
 
 # _process polls the socket once per frame and returns false to keep the main
-# loop iterating. In stdio mode run_daemon blocks in _init, so it never runs.
+# loop iterating. _init returns after binding, so this is the only hook that can
+# service the socket once the main loop starts; a blocking _init would starve
+# EditorFileSystem in editor mode.
 func _process(_delta: float) -> bool:
     if _server == null:
         return false
@@ -186,15 +189,22 @@ func _handle_socket_request(line: String) -> bool:
     if not (raw_id is float or raw_id is int) or not (operation is String):
         _send_socket_response(-1, false, "", "malformed request: missing id or operation")
         return true
+    var id := int(raw_id)
+    # quit is the graceful shutdown the Go side asks for in Close: acknowledge
+    # it so the caller is unblocked, then leave the main loop.
+    if operation == "quit":
+        _send_socket_response(id, true, "", "")
+        quit(0)
+        return true
     var params = request.get("params", {})
     if not (params is Dictionary):
         params = {}
     var result := dispatch(operation, params)
-    _send_socket_response(int(raw_id), result.ok, result.stdout, result.stderr)
+    _send_socket_response(id, result.ok, result.stdout, result.stderr)
     return true
 
-# _send_socket_response writes one newline-delimited response frame, reusing the
-# Result fields the stdio driver emits in its frame.
+# _send_socket_response writes one newline-delimited response frame carrying a
+# Result's stdout and stderr plus the request id and exit status.
 func _send_socket_response(id: int, ok: bool, stdout: String, stderr: String) -> void:
     if _peer == null:
         return
@@ -216,67 +226,6 @@ func _drop_peer() -> void:
     _recv = PackedByteArray()
     _authenticated = false
 
-# run_daemon is the persistent driver: announce readiness, then read request
-# frames until EOF, dispatching each and emitting one response frame plus a
-# stderr terminator. quit() is reserved for the EOF exit so a handler failure
-# only fails its own request.
-#
-# OS.read_string_from_stdin() caps every read at 1023 bytes, so a frame larger
-# than that arrives split across reads. It also strips the terminating newline,
-# so a short read cannot be told apart from the tail of a long one. The client
-# therefore terminates each frame with a blank line, which reads back as the
-# empty string; an empty read with a buffered frame ends that frame, and an empty
-# read with nothing buffered is EOF. The loop accumulates non-empty reads into
-# `buffer` until then.
-func run_daemon() -> void:
-    print(JSON.stringify({"ready": true}))
-
-    var buffer := ""
-    while true:
-        var chunk := OS.read_string_from_stdin()
-        if chunk.is_empty():
-            if buffer.is_empty():
-                break
-            handle_daemon_request(buffer)
-            buffer = ""
-        else:
-            buffer += chunk
-
-    quit(0)
-
-# handle_daemon_request parses one complete JSON request and dispatches it,
-# emitting the response frame and its stderr terminator. A malformed frame is
-# reported as id -1 so the client can tell it apart from a valid response.
-func handle_daemon_request(line: String) -> void:
-    var json := JSON.new()
-    if json.parse(line) != OK:
-        printerr(STDERR_END_MARKER + " -1")
-        return
-
-    var request = json.get_data()
-    if not (request is Dictionary):
-        printerr(STDERR_END_MARKER + " -1")
-        return
-
-    # JSON decodes every number as a float, so a valid request id arrives as a
-    # float and is narrowed back to the int the protocol specifies.
-    var raw_id = request.get("id", null)
-    var operation = request.get("operation", null)
-    if not (raw_id is float or raw_id is int) or not (operation is String):
-        printerr(STDERR_END_MARKER + " -1")
-        return
-    var id := int(raw_id)
-
-    # params is already decoded; pass it straight through so dispatch never sees
-    # a re-encoded or double-parsed value.
-    var params = request.get("params", {})
-    if not (params is Dictionary):
-        params = {}
-
-    var result := dispatch(operation, params)
-    emit(result, id)
-    printerr(STDERR_END_MARKER + " " + str(id))
-
 # Turn an operation name and its already-decoded params into a Result by
 # invoking the matching handler. The driver calls it once per request, so
 # handler invocation never depends on argv or JSON parsing and the process does
@@ -291,7 +240,7 @@ func dispatch(operation, params) -> Result:
     # A handler returns the Result it was handed (or result.fail(...)). If a
     # handler hits an unhandled engine error, GDScript stops it and returns
     # null to the dispatcher, which must not propagate that null: the driver
-    # dereferences the Result to flush the streams and decide the exit status.
+    # dereferences the Result to build the response and decide the exit status.
     var handler_result = null
     match operation:
         "create_scene":
@@ -339,19 +288,6 @@ func dispatch(operation, params) -> Result:
 
     _free_temp_nodes()
     return result
-
-# emit is the one place a Result reaches the wire. It writes the single-line
-# JSON response frame the Go reader parses; the frame carries the same stdout
-# markers and stderr lines the Go-side markerJSON and scriptFailed parsers
-# expect. JSON.stringify escapes embedded newlines, so a frame stays on one
-# line.
-func emit(result: Result, id: int):
-    print(JSON.stringify({
-        "id": id,
-        "ok": result.ok,
-        "stdout": result.stdout,
-        "stderr": result.stderr,
-    }))
 
 # Route every resource read through one helper so the bridge has a single place
 # to audit. CACHE_MODE_IGNORE forces a fresh read from disk: the engine is
@@ -1778,10 +1714,13 @@ func attach_script(result: Result, params) -> Result:
         result.err("Node not found: " + params.nodePath)
         return result.fail()
 
-    # Load and attach the script
+    # Load and attach the script. A path that resolves to a resource that is not
+    # a Script (for example a .tres) must fail here: set_script's own engine
+    # error only reaches process stderr, which is diagnostics only now and no
+    # longer fails the operation.
     var script = load_object(full_script_path, "Script")
-    if not script:
-        result.err("Failed to load script: " + full_script_path)
+    if not (script is Script):
+        result.err("Parameter should be null or a reference to a valid script")
         return result.fail()
 
     target.set_script(script)

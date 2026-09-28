@@ -18,6 +18,9 @@ var operationsScript string
 //go:embed validate_script.gd
 var validateScript string
 
+//go:embed project_probe.gd
+var projectProbeScript string
+
 var (
 	once sync.Once
 	path string
@@ -28,6 +31,12 @@ var (
 	validateOnce sync.Once
 	validatePath string
 	validateErr  error
+)
+
+var (
+	probeOnce sync.Once
+	probePath string
+	probeErr  error
 )
 
 // userCacheDir is os.UserCacheDir, overridable in tests to keep the shared
@@ -93,6 +102,18 @@ func ValidateScript() (string, error) {
 		validatePath, validateErr = materialize("validate_script", content)
 	})
 	return validatePath, validateErr
+}
+
+// ProjectProbeScript materializes the embedded project_probe.gd and returns its
+// path. The probe boots the engine against a project and quits immediately, so
+// project.godot is parsed during startup and the caller can read the engine's
+// stderr and exit code. It exists because validate_project must not go through
+// the operations bridge, which now only speaks its socket transport.
+func ProjectProbeScript() (string, error) {
+	probeOnce.Do(func() {
+		probePath, probeErr = materialize("project_probe", projectProbeScript)
+	})
+	return probePath, probeErr
 }
 
 // materialize writes content to a content-addressed file in the shared script

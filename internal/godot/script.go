@@ -22,22 +22,18 @@ func CheckScript(ctx context.Context, executable, projectPath, checkerPath, scri
 	return runScript(ctx, executable, args)
 }
 
-// ValidateProject runs the operations-script validate_project operation against
-// a project and returns the engine's stdout, stderr, and exit code separately.
-// Godot parses project.godot during startup and logs a parse error to stderr
-// while still exiting 0 when the file is malformed, so the exit code and stderr
-// are both returned for the caller to combine. Only a failure to start the
-// process is an error.
+// ValidateProject boots the engine against a project with a no-op probe script
+// and returns the engine's stdout, stderr, and exit code separately. Godot
+// parses project.godot during startup and logs a parse error to stderr while
+// still exiting 0 when the file is malformed, so the exit code and stderr are
+// both returned for the caller to combine. The probe script only lets startup
+// run and quits; the operations bridge cannot be used here because it now only
+// speaks its socket transport. Only a failure to start the process is an error.
 func ValidateProject(ctx context.Context, executable, projectPath, scriptPath string) (stdout, stderr string, exitCode int, err error) {
 	args := []string{
 		"--headless",
 		"--path", projectPath,
 		"--script", scriptPath,
-		"validate_project",
-		// The operations script rejects falsy params, so an empty object would
-		// make it log an error and exit 1 even though validate_project ignores
-		// its arguments.
-		`{"operation":"validate_project"}`,
 	}
 	return runScript(ctx, executable, args)
 }
