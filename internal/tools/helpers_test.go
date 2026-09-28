@@ -3,10 +3,13 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
@@ -32,18 +35,41 @@ func seedFile(t *testing.T, path, content string) {
 	}
 }
 
+// oneShotSession is a test-only Session that reproduces the one-shot spawn the
+// engine seam used before a warm session existed, so handler tests exercise the
+// seam without a real engine. It keeps every fakeGodotOps shell fake working.
+type oneShotSession struct {
+	invalidated int
+}
+
+func (s *oneShotSession) Run(ctx context.Context, project, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error) {
+	scriptPath, err := godotops.OperationsScript()
+	if err != nil {
+		return "", "", 0, fmt.Errorf("materialize operations script: %w", err)
+	}
+	stdout, stderr, exitCode, err = godot.RunOperation(ctx, godot.Path(), project, scriptPath, operation, params)
+	if err != nil {
+		return stdout, stderr, exitCode, fmt.Errorf("run godot operation: %w", err)
+	}
+	return stdout, stderr, exitCode, nil
+}
+
+func (s *oneShotSession) Invalidate() { s.invalidated++ }
+
 // callToolArgs invokes a tool handler with the bound project and raw JSON
 // arguments and returns the ToolResult, failing on a transport-style error.
 //
 // The bound project is not a tool argument; it is lifted into the handler
-// context, as Register does in production. An empty project leaves the context
-// unbound.
+// context, as Register does in production. An empty project leaves the project
+// unbound. The context always carries the one-shot session double, so
+// engine-reaching handlers use the seam rather than its one-shot fallback.
 func callToolArgs(t *testing.T, tool mcp.Tool, project, args string) mcp.ToolResult {
 	t.Helper()
 	ctx := context.Background()
 	if project != "" {
 		ctx = withProject(ctx, project)
 	}
+	ctx = WithEngine(ctx, &oneShotSession{})
 	out, err := tool.Handler(ctx, json.RawMessage(args))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
