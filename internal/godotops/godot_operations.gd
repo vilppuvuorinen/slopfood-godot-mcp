@@ -100,16 +100,28 @@ func _engine_socket_path() -> String:
 # the readiness token.
 var _server: UDSServer = null
 var _peer: StreamPeerUDS = null
+var _socket_path := ""
 var _token := ""
 var _recv := PackedByteArray()
 var _authenticated := false
 
-# run_socket is the non-blocking socket driver. It binds before announcing
-# readiness, so the Go side can dial as soon as it reads the line, then returns
-# from _init: the socket is serviced from _process, the only hook that fires
-# after the main loop starts (a blocking _init would starve EditorFileSystem in
-# editor mode). The readiness line travels on the parent's private stdout pipe,
-# so the token never passes through argv or the environment.
+# Editor readiness state. _filesystem is resolved from EditorInterface on the
+# first _process tick because it is null during _init. _ready_printed guards the
+# single readiness line, _scan_seen records that the initial scan was observed
+# running, and _quit_pending defers an exit requested mid-scan.
+var _filesystem: EditorFileSystem = null
+var _ready_printed := false
+var _scan_seen := false
+var _quit_pending := false
+
+# run_socket is the non-blocking socket driver. It binds before anything else so
+# the Go side can dial as soon as it reads the readiness line, then returns from
+# _init: the socket is serviced from _process, the only hook that fires after
+# the main loop starts (a blocking _init would starve EditorFileSystem in editor
+# mode). Readiness is printed from _process rather than here because the editor
+# filesystem does not exist until the main loop runs. The readiness line travels
+# on the parent's private stdout pipe, so the token never passes through argv or
+# the environment.
 func run_socket(socket_path: String) -> void:
     # A stale socket or regular file makes listen fail with EINVAL.
     if FileAccess.file_exists(socket_path):
@@ -120,13 +132,8 @@ func run_socket(socket_path: String) -> void:
         printerr("engine socket: listen failed: " + str(listen_error))
         quit(1)
         return
+    _socket_path = socket_path
     _token = Crypto.new().generate_random_bytes(16).hex_encode()
-    print(JSON.stringify({
-        "ready": true,
-        "transport": "uds",
-        "path": socket_path,
-        "token": _token,
-    }))
 
 # _process polls the socket once per frame and returns false to keep the main
 # loop iterating. _init returns after binding, so this is the only hook that can
@@ -135,6 +142,19 @@ func run_socket(socket_path: String) -> void:
 func _process(_delta: float) -> bool:
     if _server == null:
         return false
+    if not _ready_printed:
+        if not _filesystem_ready():
+            return false
+        _ready_printed = true
+        print(JSON.stringify({
+            "ready": true,
+            "transport": "uds",
+            "path": _socket_path,
+            "token": _token,
+        }))
+    if _quit_pending and (_filesystem == null or not _filesystem.is_scanning()):
+        quit(0)
+        return false
     if _peer == null and _server.is_connection_available():
         _peer = _server.take_connection()
         _recv = PackedByteArray()
@@ -142,6 +162,27 @@ func _process(_delta: float) -> bool:
     if _peer != null:
         _read_peer()
     return false
+
+# _filesystem_ready gates the readiness line on the initial editor scan. In
+# runtime mode there is no editor filesystem and the first tick is ready. In
+# editor mode EditorFileSystem is null during _init and live from the first
+# _process, with the initial scan started during editor boot still running.
+# is_scanning() true->false is the only universal completion signal: a
+# change-detecting scan emits filesystem_changed, but a no-change scan emits
+# nothing, so the transition is deterministic. Waiting for it here, with the
+# scan seen running once, puts every operation behind one gate instead of
+# polling per handler.
+func _filesystem_ready() -> bool:
+    if not Engine.is_editor_hint():
+        return true
+    if _filesystem == null:
+        _filesystem = EditorInterface.get_resource_filesystem()
+        if _filesystem == null:
+            return false
+    if _filesystem.is_scanning():
+        _scan_seen = true
+        return false
+    return _scan_seen
 
 # _read_peer drains every available byte into the per-connection buffer and
 # hands each complete newline-delimited frame to the request handler. A
@@ -194,7 +235,14 @@ func _handle_socket_request(line: String) -> bool:
     # it so the caller is unblocked, then leave the main loop.
     if operation == "quit":
         _send_socket_response(id, true, "", "")
-        quit(0)
+        # Exiting mid-scan aborts the scan thread and prints an extra warning, so
+        # defer the exit until any running scan has finished. The ObjectDB/RID
+        # leak noise editor exit prints is diagnostics only over the socket
+        # transport, never a result.
+        if Engine.is_editor_hint() and _filesystem != null and _filesystem.is_scanning():
+            _quit_pending = true
+        else:
+            quit(0)
         return true
     var params = request.get("params", {})
     if not (params is Dictionary):
@@ -243,6 +291,8 @@ func dispatch(operation, params) -> Result:
     # dereferences the Result to build the response and decide the exit status.
     var handler_result = null
     match operation:
+        "ping":
+            handler_result = ping(result, params)
         "create_scene":
             handler_result = create_scene(result, params)
         "add_node":
@@ -320,6 +370,13 @@ func _free_temp_nodes():
         if is_instance_valid(node):
             node.free()
     _temp_nodes.clear()
+
+# ping is a trivial liveness operation with no side effects. Because readiness
+# is gated on the editor scan, a returned ping also proves the socket round-trip
+# and the filesystem gate both completed.
+func ping(result: Result, _params) -> Result:
+    result.out("pong")
+    return result
 
 # Logging functions
 func log_info(result: Result, message):

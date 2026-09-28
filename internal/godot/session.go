@@ -322,7 +322,10 @@ func startSessionProc(executable, script, project string) (*sessionProc, error) 
 		cancel()
 		return nil, err
 	}
-	args := []string{"--headless", "--path", project, "--script", script, "--", "--gd-socket", socketPath}
+	// Editor entry: --editor (equivalent to -e) makes EditorInterface and
+	// EditorFileSystem live; Phase 0.7 confirmed it is accepted alongside
+	// --script and that user args after -- reach OS.get_cmdline_user_args.
+	args := []string{"--headless", "--editor", "--path", project, "--script", script, "--", "--gd-socket", socketPath}
 
 	cmd := newCommand(ctx, executable, args...)
 	stdout, err := cmd.StdoutPipe()
@@ -425,7 +428,8 @@ func (p *sessionProc) shutdown() {
 
 // readStdout drains the engine process's stdout. The readiness line was already
 // consumed and response frames travel over the socket, so after startup stdout
-// is diagnostics only.
+// is diagnostics only. Editor exit prints fixed ObjectDB/RID leak ERROR lines
+// here; they are diagnostics, never drained into a result.
 func (p *sessionProc) readStdout() {
 	defer p.wg.Done()
 	for {
@@ -455,7 +459,10 @@ func (p *sessionProc) readSocketFrames() {
 
 // readStderr drains the engine process's stderr. It is diagnostics only now: the
 // response frame carries the handler's stderr, so process stderr is logged and
-// never merged into a result or used as a protocol delimiter.
+// never merged into a result or used as a protocol delimiter. Editor exit prints
+// fixed RID/ObjectDB leak WARNING lines here; they are the expected teardown
+// noise, not an operation failure, and prefer the graceful quit path so the
+// scan thread is not aborted mid-scan.
 func (p *sessionProc) readStderr() {
 	defer p.wg.Done()
 	r := bufio.NewReader(p.stderr)

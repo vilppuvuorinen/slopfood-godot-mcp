@@ -178,7 +178,7 @@ func TestSessionRoundTripFraming(t *testing.T) {
 	if len(lines) != 1 {
 		t.Fatalf("spawn arg lines = %d, want 1", len(lines))
 	}
-	for _, want := range []string{"--headless", "--path " + project, "--script /ops.gd", "-- --gd-socket "} {
+	for _, want := range []string{"--headless", "--editor", "--path " + project, "--script /ops.gd", "-- --gd-socket "} {
 		if !strings.Contains(lines[0], want) {
 			t.Errorf("spawn args %q missing %q", lines[0], want)
 		}

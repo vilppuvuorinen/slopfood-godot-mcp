@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"path/filepath"
+	"regexp"
 	"testing"
 )
 
@@ -47,10 +48,14 @@ func TestAddNodeTool(t *testing.T) {
 		requirePrefix(t, text, "Scene 'scenes/enemy.tscn' instanced as 'Foe' added successfully to 'scenes/main.tscn'.")
 
 		scene := readFile(t, filepath.Join(root, "scenes", "main.tscn"))
-		requireContains(t, scene,
-			`[ext_resource type="PackedScene" path="res://scenes/enemy.tscn"`,
-			`instance=ExtResource(`,
-		)
+		requireContains(t, scene, `instance=ExtResource(`)
+		// The editor records the instance's UID on the ext_resource line, so the
+		// path is not adjacent to the type; match the reference with the uid
+		// optional rather than pinning attribute order.
+		extResource := regexp.MustCompile(`\[ext_resource type="PackedScene"( uid="uid://[^"]+")? path="res://scenes/enemy\.tscn"`)
+		if !extResource.MatchString(scene) {
+			t.Errorf("missing a PackedScene ext_resource for enemy.tscn in:\n%s", scene)
+		}
 	})
 }
 

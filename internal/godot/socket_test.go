@@ -3,6 +3,7 @@ package godot
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net"
 	"os"
@@ -407,5 +408,76 @@ func TestSocketSessionDrivesRealBridge(t *testing.T) {
 	}
 	if _, err := os.Stat(socketPath); !os.IsNotExist(err) {
 		t.Errorf("socket still exists after Close: %v", err)
+	}
+}
+
+// minimalPNG is a 1x1 RGBA PNG, enough for the editor to import as a texture
+// and write an .import sidecar.
+const minimalPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII="
+
+// TestSocketSessionGatesEditorFilesystem is the Phase 5a validation: the real
+// editor server withholds readiness until its initial scan completes, so the
+// first operation is served only after the editor has materialized the sidecars
+// for files already in the project (a script .uid and a texture .import).
+func TestSocketSessionGatesEditorFilesystem(t *testing.T) {
+	engine := requireSocketGodot(t)
+
+	script, absErr := filepath.Abs(filepath.Join("..", "godotops", "godot_operations.gd"))
+	if absErr != nil {
+		t.Fatalf("resolve bridge script: %v", absErr)
+	}
+	if _, statErr := os.Stat(script); statErr != nil {
+		t.Fatalf("bridge script: %v", statErr)
+	}
+
+	// A short runtime dir keeps the derived socket path under the sun_path
+	// limit even when the test's temporary directories are long.
+	runtimeDir, mkErr := os.MkdirTemp("", "sgfs")
+	if mkErr != nil {
+		t.Fatalf("mkdir runtime: %v", mkErr)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+
+	project := t.TempDir()
+	if writeErr := os.WriteFile(filepath.Join(project, "project.godot"), []byte("config_version=5\n"), 0o600); writeErr != nil {
+		t.Fatalf("write project.godot: %v", writeErr)
+	}
+	if mkErr := os.MkdirAll(filepath.Join(project, "scripts"), 0o755); mkErr != nil {
+		t.Fatalf("mkdir scripts: %v", mkErr)
+	}
+	if writeErr := os.WriteFile(filepath.Join(project, "scripts", "foo.gd"), []byte("extends Node\nclass_name Foo\n"), 0o600); writeErr != nil {
+		t.Fatalf("write foo.gd: %v", writeErr)
+	}
+	png, decodeErr := base64.StdEncoding.DecodeString(minimalPNG)
+	if decodeErr != nil {
+		t.Fatalf("decode png: %v", decodeErr)
+	}
+	if writeErr := os.WriteFile(filepath.Join(project, "icon.png"), png, 0o600); writeErr != nil {
+		t.Fatalf("write icon.png: %v", writeErr)
+	}
+
+	session := NewSession(engine, script)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	// ping is the first operation; the session can only serve it after the
+	// editor reported readiness, which the bridge gates on the initial scan.
+	stdout, stderr, exitCode, err := session.Run(ctx, project, "ping", nil)
+	if err != nil {
+		t.Fatalf("ping: %v", err)
+	}
+	if exitCode != 0 {
+		t.Fatalf("ping exitCode = %d; stderr:\n%s", exitCode, stderr)
+	}
+	if !strings.Contains(stdout, "pong") {
+		t.Errorf("ping stdout = %q, want pong", stdout)
+	}
+
+	if _, statErr := os.Stat(filepath.Join(project, "scripts", "foo.gd.uid")); statErr != nil {
+		t.Errorf("script .uid sidecar missing after the gated scan: %v", statErr)
+	}
+	if _, statErr := os.Stat(filepath.Join(project, "icon.png.import")); statErr != nil {
+		t.Errorf("texture .import sidecar missing after the gated scan: %v", statErr)
 	}
 }
