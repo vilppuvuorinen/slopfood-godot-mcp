@@ -49,6 +49,19 @@ func SocketPath(root string) (string, error) {
 	return filepath.Join(dir, ProjectHash(root)+".sock"), nil
 }
 
+// EngineSocketPath returns the Unix socket path the engine operations bridge
+// bound to root listens on. It shares the runtime directory and project hash
+// with SocketPath but carries a distinct .engine.sock suffix, so the bridge
+// and the MCP daemon never collide. The suffix is short enough to stay under
+// the Linux sun_path limit for the same runtime directory SocketPath assumes.
+func EngineSocketPath(root string) (string, error) {
+	dir, err := RuntimeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, ProjectHash(root)+".engine.sock"), nil
+}
+
 // LogPath returns the log file path for the daemon bound to root.
 func LogPath(root string) (string, error) {
 	dir, err := RuntimeDir()

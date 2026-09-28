@@ -76,7 +76,145 @@ class DecodeResult extends RefCounted:
         return result
 
 func _init():
-    run_daemon()
+    var socket_path := _engine_socket_path()
+    if socket_path.is_empty():
+        run_daemon()
+        return
+    run_socket(socket_path)
+
+# _engine_socket_path reads the --gd-socket <path> value the Go side passes
+# after the `--` separator, or "" when the bridge was launched over stdio. Only
+# the post-`--` form reaches OS.get_cmdline_user_args, so the socket path never
+# has to survive the engine's own flag parsing.
+func _engine_socket_path() -> String:
+    var args := OS.get_cmdline_user_args()
+    for index in range(args.size()):
+        if args[index] == "--gd-socket" and index + 1 < args.size():
+            return args[index + 1]
+    return ""
+
+# The socket driver's connection state. _server and _peer are null until the
+# socket path selects this driver; _recv accumulates bytes per connection until
+# a newline completes a frame, and _authenticated gates every operation behind
+# the readiness token.
+var _server: UDSServer = null
+var _peer: StreamPeerUDS = null
+var _token := ""
+var _recv := PackedByteArray()
+var _authenticated := false
+
+# run_socket is the non-blocking socket driver. It binds before announcing
+# readiness, so the Go side can dial as soon as it reads the line, then returns
+# from _init: the socket is serviced from _process, the only hook that fires
+# after the main loop starts (a blocking _init would starve EditorFileSystem in
+# editor mode). The readiness line travels on the parent's private stdout pipe,
+# so the token never passes through argv or the environment.
+func run_socket(socket_path: String) -> void:
+    # A stale socket or regular file makes listen fail with EINVAL.
+    if FileAccess.file_exists(socket_path):
+        DirAccess.remove_absolute(socket_path)
+    _server = UDSServer.new()
+    var listen_error := _server.listen(socket_path)
+    if listen_error != OK:
+        printerr("engine socket: listen failed: " + str(listen_error))
+        quit(1)
+        return
+    _token = Crypto.new().generate_random_bytes(16).hex_encode()
+    print(JSON.stringify({
+        "ready": true,
+        "transport": "uds",
+        "path": socket_path,
+        "token": _token,
+    }))
+
+# _process polls the socket once per frame and returns false to keep the main
+# loop iterating. In stdio mode run_daemon blocks in _init, so it never runs.
+func _process(_delta: float) -> bool:
+    if _server == null:
+        return false
+    if _peer == null and _server.is_connection_available():
+        _peer = _server.take_connection()
+        _recv = PackedByteArray()
+        _authenticated = false
+    if _peer != null:
+        _read_peer()
+    return false
+
+# _read_peer drains every available byte into the per-connection buffer and
+# hands each complete newline-delimited frame to the request handler. A
+# disconnected peer is dropped so the driver keeps serving new connections.
+func _read_peer() -> void:
+    var available := _peer.get_available_bytes()
+    while available > 0:
+        var chunk := _peer.get_partial_data(available)
+        if chunk[0] != OK:
+            _drop_peer()
+            return
+        _recv.append_array(chunk[1])
+        available = _peer.get_available_bytes()
+    while true:
+        var newline := _recv.find(10)
+        if newline == -1:
+            return
+        var line := _recv.slice(0, newline).get_string_from_utf8()
+        _recv = _recv.slice(newline + 1)
+        if not _handle_socket_request(line):
+            return
+
+# _handle_socket_request authenticates the first frame on a connection and
+# dispatches every subsequent one. The first frame must carry the token from
+# the readiness line; a missing or wrong token closes the connection before any
+# operation runs. A malformed frame is answered as id -1. Returns false when the
+# connection was dropped.
+func _handle_socket_request(line: String) -> bool:
+    var json := JSON.new()
+    if json.parse(line) != OK:
+        _send_socket_response(-1, false, "", "malformed request: " + json.get_error_message())
+        return true
+    var request = json.get_data()
+    if not (request is Dictionary):
+        _send_socket_response(-1, false, "", "malformed request: not an object")
+        return true
+    if not _authenticated:
+        var presented = request.get("token", null)
+        if not (presented is String) or presented != _token:
+            _drop_peer()
+            return false
+        _authenticated = true
+    var raw_id = request.get("id", null)
+    var operation = request.get("operation", null)
+    if not (raw_id is float or raw_id is int) or not (operation is String):
+        _send_socket_response(-1, false, "", "malformed request: missing id or operation")
+        return true
+    var params = request.get("params", {})
+    if not (params is Dictionary):
+        params = {}
+    var result := dispatch(operation, params)
+    _send_socket_response(int(raw_id), result.ok, result.stdout, result.stderr)
+    return true
+
+# _send_socket_response writes one newline-delimited response frame, reusing the
+# Result fields the stdio driver emits in its frame.
+func _send_socket_response(id: int, ok: bool, stdout: String, stderr: String) -> void:
+    if _peer == null:
+        return
+    var frame := JSON.stringify({
+        "id": id,
+        "ok": ok,
+        "stdout": stdout,
+        "stderr": stderr,
+    }) + "\n"
+    _peer.put_data(frame.to_utf8_buffer())
+
+# _drop_peer closes and forgets the current connection so the next frame can
+# accept a fresh one, and resets authentication so it must present the token
+# again.
+func _drop_peer() -> void:
+    if _peer != null:
+        _peer.disconnect_from_host()
+        _peer = null
+    _recv = PackedByteArray()
+    _authenticated = false
 
 # run_daemon is the persistent driver: announce readiness, then read request
 # frames until EOF, dispatching each and emitting one response frame plus a

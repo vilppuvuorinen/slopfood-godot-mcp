@@ -267,8 +267,8 @@ func TestInstrumentedOperationsScriptParses(t *testing.T) {
 }
 
 // TestInstrumentedOperationsScriptReportsHits runs a real operation through the
-// instrumented bridge and checks that the dispatch and driver-entry paths report
-// their original lines.
+// instrumented bridge and checks that the dispatch and driver-selection paths
+// report their original lines.
 func TestInstrumentedOperationsScriptReportsHits(t *testing.T) {
 	engine := requireGodot(t)
 	script, original := instrumentedOperationsScript(t)

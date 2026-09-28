@@ -67,6 +67,53 @@ func TestSocketAndLogPaths(t *testing.T) {
 	}
 }
 
+// TestEngineSocketPath asserts the engine socket shares the runtime directory
+// and project hash, carries the .engine.sock suffix rather than the daemon's
+// .sock, stays distinct across projects, and fits under the Linux sun_path
+// limit when the runtime directory is short.
+func TestEngineSocketPath(t *testing.T) {
+	runtimeDir := "/tmp/sg-runtime"
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+
+	path, err := EngineSocketPath("/tmp/project")
+	if err != nil {
+		t.Fatalf("EngineSocketPath: %v", err)
+	}
+	want := filepath.Join(runtimeDir, "slopfood-godot-mcp", ProjectHash("/tmp/project")+".engine.sock")
+	if path != want {
+		t.Errorf("EngineSocketPath = %q, want %q", path, want)
+	}
+	if filepath.Dir(path) != filepath.Join(runtimeDir, "slopfood-godot-mcp") {
+		t.Errorf("EngineSocketPath dir = %q", filepath.Dir(path))
+	}
+	if !strings.HasSuffix(path, ".engine.sock") {
+		t.Errorf("path %q does not end in .engine.sock", path)
+	}
+	daemonPath, err := SocketPath("/tmp/project")
+	if err != nil {
+		t.Fatalf("SocketPath: %v", err)
+	}
+	if path == daemonPath {
+		t.Errorf("EngineSocketPath collided with SocketPath: %q", path)
+	}
+	other, err := EngineSocketPath("/tmp/other")
+	if err != nil {
+		t.Fatalf("EngineSocketPath other: %v", err)
+	}
+	if other == path {
+		t.Errorf("EngineSocketPath collided across projects: %q", path)
+	}
+	if again, err := EngineSocketPath("/tmp/project"); err != nil {
+		t.Fatalf("EngineSocketPath again: %v", err)
+	} else if again != path {
+		t.Errorf("EngineSocketPath not deterministic: %q, %q", path, again)
+	}
+	// Godot's sun_path limit is 106 bytes; the derived path must fit.
+	if len(path) > 106 {
+		t.Errorf("EngineSocketPath length = %d, want <= 106", len(path))
+	}
+}
+
 // TestRuntimeDirHonorsXDG asserts XDG_RUNTIME_DIR wins when it is set.
 func TestRuntimeDirHonorsXDG(t *testing.T) {
 	runtimeDir := t.TempDir()
