@@ -25,9 +25,8 @@ const STDERR_END_MARKER = "GODOT_MCP_STDERR_END"
 #     failure return null/false for their caller to propagate.
 #
 # A handler never calls print()/printerr() and never calls quit(): the driver
-# is the only place that flushes the buffers and sets the exit code, through
-# emit and _finish. This keeps a failing handler from leaving a partial payload
-# on stdout and keeps the exit status decided once.
+# is the only place that flushes the buffers, through emit. This keeps a failing
+# handler from leaving a partial payload on stdout.
 
 # Result carries a handler's outcome back to the dispatcher. ok is the exit
 # status; stdout and stderr are buffers the driver emits to the matching
@@ -77,67 +76,12 @@ class DecodeResult extends RefCounted:
         return result
 
 func _init():
-    var args := OS.get_cmdline_args()
-    if args.has("--gd-daemon"):
-        run_daemon()
-    else:
-        run_one_shot(args)
-
-# run_one_shot is the one-shot driver: parse the operation and params JSON from
-# argv, dispatch once, and finish. It is the whole of the one-shot entry point,
-# so _init only has to pick a driver; run_daemon shares dispatch and emit with
-# it and adds the request loop instead.
-func run_one_shot(args) -> void:
-    # The active result is allocated here and threaded through every handler
-    # and helper that emits output or reports failure. _finish emits it last.
-    var result := Result.new()
-
-    # Find the script argument and determine the positions of operation and params
-    var script_index = args.find("--script")
-    if script_index == -1:
-        log_error(result, "Could not find --script argument")
-        _finish(result)
-        return
-
-    # The operation should be 2 positions after the script path (script_index + 1 is the script path itself)
-    var operation_index = script_index + 2
-    # The params should be 3 positions after the script path
-    var params_index = script_index + 3
-
-    if args.size() <= params_index:
-        log_error(result, "Usage: godot --headless --script godot_operations.gd <operation> <json_params>")
-        log_error(result, "Not enough command-line arguments provided.")
-        _finish(result)
-        return
-
-    var operation = args[operation_index]
-    var params_json = args[params_index]
-
-    # Parse JSON using Godot 4.x API
-    var json = JSON.new()
-    var error = json.parse(params_json)
-    var params = null
-
-    if error == OK:
-        params = json.get_data()
-    else:
-        log_error(result, "Failed to parse JSON parameters: " + params_json)
-        log_error(result, "JSON Error: " + json.get_error_message() + " at line " + str(json.get_error_line()))
-        _finish(result)
-        return
-
-    if params == null:
-        log_error(result, "Failed to parse JSON parameters: " + params_json)
-        _finish(result)
-        return
-
-    result = dispatch(operation, params)
-    _finish(result)
+    run_daemon()
 
 # run_daemon is the persistent driver: announce readiness, then read request
 # frames until EOF, dispatching each and emitting one response frame plus a
-# stderr terminator. It shares dispatch and emit with run_one_shot, and quit() is
-# reserved for the EOF exit so a handler failure only fails its own request.
+# stderr terminator. quit() is reserved for the EOF exit so a handler failure
+# only fails its own request.
 #
 # OS.read_string_from_stdin() caps every read at 1023 bytes, so a frame larger
 # than that arrives split across reads. It also strips the terminating newline,
@@ -196,9 +140,9 @@ func handle_daemon_request(line: String) -> void:
     printerr(STDERR_END_MARKER + " " + str(id))
 
 # Turn an operation name and its already-decoded params into a Result by
-# invoking the matching handler. _init calls it once, after argv and JSON
-# parsing, so handler invocation no longer depends on either: a daemon driver
-# can call it per request without the process exiting between them.
+# invoking the matching handler. The driver calls it once per request, so
+# handler invocation never depends on argv or JSON parsing and the process does
+# not exit between requests.
 func dispatch(operation, params) -> Result:
     var result := Result.new()
     _temp_nodes.clear()
@@ -258,47 +202,23 @@ func dispatch(operation, params) -> Result:
     _free_temp_nodes()
     return result
 
-# emit is the one place a Result reaches the wire. In one-shot mode (id < 0) it
-# prints the stdout and stderr buffers, preserving today's stream output; in
-# daemon mode (id >= 0) it writes the single-line JSON response frame the Go
-# reader parses. Both modes carry the same stdout markers and stderr lines, so
-# the Go-side markerJSON and scriptFailed parsers work unchanged either way, and
-# building both from one Result keeps the two drivers from drifting.
-# JSON.stringify escapes embedded newlines, so a frame stays on one line.
-func emit(result: Result, id := -1):
-    if id >= 0:
-        print(JSON.stringify({
-            "id": id,
-            "ok": result.ok,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
-        }))
-        return
-    var stdout := result.stdout
-    if not stdout.is_empty():
-        print(stdout.substr(0, stdout.length() - 1))
-    var stderr := result.stderr
-    if not stderr.is_empty():
-        printerr(stderr.substr(0, stderr.length() - 1))
+# emit is the one place a Result reaches the wire. It writes the single-line
+# JSON response frame the Go reader parses; the frame carries the same stdout
+# markers and stderr lines the Go-side markerJSON and scriptFailed parsers
+# expect. JSON.stringify escapes embedded newlines, so a frame stays on one
+# line.
+func emit(result: Result, id: int):
+    print(JSON.stringify({
+        "id": id,
+        "ok": result.ok,
+        "stdout": result.stdout,
+        "stderr": result.stderr,
+    }))
 
-# Emit the result and end the main loop with the status it reported. SceneTree
-# quit() does not stop the current call, so quit() is the last thing the
-# one-shot driver does. A daemon driver calls emit with a request id instead and
-# reserves quit for its own exit path.
-func _finish(result: Result):
-    if result == null:
-        # Defensive: dispatch recovers a handler abort, so this only triggers
-        # before dispatch runs. Quitting nonzero beats dereferencing null here,
-        # which would skip quit() and leave a one-shot engine spinning.
-        quit(1)
-        return
-    emit(result)
-    quit(0 if result.ok else 1)
-
-# Route every resource read through one helper so the daemon design has a single
-# place to audit. CACHE_MODE_IGNORE forces a fresh read from disk: a one-shot
-# process starts clean so it is behaviorally identical, but a long-lived engine
-# would otherwise return the stale cached resource after an on-disk edit.
+# Route every resource read through one helper so the bridge has a single place
+# to audit. CACHE_MODE_IGNORE forces a fresh read from disk: the engine is
+# long-lived, so without it a read after an on-disk edit would return the stale
+# cached resource.
 func load_resource(path):
     return ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
 

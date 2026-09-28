@@ -69,12 +69,14 @@ func Import(ctx context.Context, executable, projectPath string) (stdout, stderr
 
 // RunOperation invokes
 // `<executable> --headless --path <project> --script <script> <operation>
-// <params-json>`, mirroring the reference server's executeOperation.
+// <params-json>`, mirroring the reference server's executeOperation. It has no
+// production caller: the operations bridge is reached through the session seam.
+// It backs the tools package's test double and the pure Go unit tests, which
+// run it against shell fakes rather than the real bridge.
 //
-// A non-zero exit is not a wrapper failure: the operations script calls quit(1)
-// on every error and quit() on success, so the exit code is returned for the
-// caller to interpret. Only a failure to start the process is returned as an
-// error, matching the reference's rethrow behavior.
+// A non-zero exit is not a wrapper failure: the script reports its own exit
+// status, so the exit code is returned for the caller to interpret. Only a
+// failure to start the process is returned as an error.
 func RunOperation(ctx context.Context, executable, projectPath, scriptPath, operation string, params OperationParams) (stdout, stderr string, exitCode int, err error) {
 	payload, err := json.Marshal(params)
 	if err != nil {

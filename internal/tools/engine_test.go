@@ -13,7 +13,7 @@ import (
 
 // fakeSession is a live engine session that records the calls the seam routes
 // to it, so a test can prove a session-eligible handler used the session
-// instead of spawning a one-shot engine.
+// instead of spawning a separate engine.
 type fakeSession struct {
 	runs        []fakeSessionRun
 	invalidated int
@@ -32,30 +32,23 @@ func (f *fakeSession) Run(_ context.Context, project, operation string, params m
 
 func (f *fakeSession) Invalidate() { f.invalidated++ }
 
-// TestContextRunOneShotWithoutSession confirms the seam defaults to today's
-// one-shot spawn when no session is installed, and that Invalidate is a no-op.
-func TestContextRunOneShotWithoutSession(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo one-shot`))
-	root := t.TempDir()
-	makeProject(t, root)
-
+// TestContextRunRequiresSession confirms the seam requires an installed engine
+// session: with none, Run reports a clear error instead of spawning an engine.
+func TestContextRunRequiresSession(t *testing.T) {
 	ctx := Context{Context: context.Background()}
-	stdout, stderr, exitCode, err := ctx.Run(root, "create_scene", nil)
-	if err != nil {
-		t.Fatalf("Run: %v", err)
+	_, _, _, err := ctx.Run("/proj", "create_scene", nil)
+	if err == nil {
+		t.Fatal("Run with no session: err = nil, want an error")
 	}
-	if exitCode != 0 || stderr != "" {
-		t.Fatalf("exitCode = %d, stderr = %q", exitCode, stderr)
-	}
-	if got := strings.TrimSpace(stdout); got != "one-shot" {
-		t.Errorf("stdout = %q, want one-shot", got)
+	if got := err.Error(); !strings.Contains(got, "engine session required") {
+		t.Errorf("err = %q, want the session-required message", got)
 	}
 
 	ctx.Invalidate()
 }
 
 // TestContextWithSessionDelegates confirms an installed session receives the
-// call and its Invalidate, so one-shot and session are interchangeable.
+// call and its Invalidate, so the handler always reaches the session.
 func TestContextWithSessionDelegates(t *testing.T) {
 	sess := &fakeSession{}
 	ctx := Context{Context: WithEngine(context.Background(), sess)}
@@ -77,8 +70,8 @@ func TestContextWithSessionDelegates(t *testing.T) {
 }
 
 // TestSessionEligibleHandlerUsesInstalledSession confirms a handler reaches the
-// session through its context. GODOT_PATH points at a missing binary, so a
-// fallback to the one-shot spawn would fail the call.
+// session through its context. GODOT_PATH points at a missing binary, so any
+// attempt to spawn a separate engine would fail the call.
 func TestSessionEligibleHandlerUsesInstalledSession(t *testing.T) {
 	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
 	root := t.TempDir()

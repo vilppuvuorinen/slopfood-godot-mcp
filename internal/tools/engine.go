@@ -2,10 +2,7 @@ package tools
 
 import (
 	"context"
-	"fmt"
-
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
+	"errors"
 )
 
 // Session is the live engine a serving context may carry. The seam needs only
@@ -34,34 +31,33 @@ func WithEngine(ctx context.Context, s Session) context.Context {
 }
 
 // Engine is the single entry point a session-eligible handler uses to reach a
-// Godot engine. It binds the call context to whichever engine serves the call,
-// so one-shot and warm-session calls are interchangeable and a handler never
-// branches on mode. The wrapper is per call and cheap; the session it may
-// delegate to is long-lived.
+// Godot engine. It binds the call context to the live session that serves the
+// call. The wrapper is per call and cheap; the session it delegates to is
+// long-lived.
 type Engine struct {
 	ctx     context.Context
 	session Session
 }
 
 // engineFrom returns the Engine bound to ctx: the installed session when one is
-// present, otherwise the one-shot engine. A package-level setter is avoided
-// because tests run in parallel in one process and would race on it.
+// present, otherwise an engine with no session. A package-level setter is
+// avoided because tests run in parallel in one process and would race on it.
 func engineFrom(ctx context.Context) *Engine {
 	s, _ := ctx.Value(engineKey{}).(Session)
 	return &Engine{ctx: ctx, session: s}
 }
 
-// Run executes one operations-script call. With no session installed it is
-// exactly a one-shot spawn; with a session it is a warm-engine call. Either way
-// it returns the same tuple, so a caller cannot tell which engine was targeted.
+// Run executes one operations-script call through the installed session. A
+// serving context always installs one: runDaemon installs the production
+// session and tests install a double. A context without one is a programming
+// error, reported rather than silently falling back to a separate engine.
 func (e *Engine) Run(project, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error) {
-	if e.session != nil {
-		// The session already describes the failure the same way the one-shot
-		// path does, so callers cannot tell the transports apart; wrapping here
-		// would make the session's message differ.
-		return e.session.Run(e.ctx, project, operation, params) //nolint:wrapcheck // session errors are already caller-facing.
+	if e.session == nil {
+		return "", "", 0, errors.New("engine session required: no engine installed on the context")
 	}
-	return runOneShot(e.ctx, project, operation, params)
+	// The session already describes the failure the same way a caller expects,
+	// so wrapping here would change its message.
+	return e.session.Run(e.ctx, project, operation, params) //nolint:wrapcheck // session errors are already caller-facing.
 }
 
 // Invalidate marks the engine's project-global state dirty so the next call
@@ -70,19 +66,4 @@ func (e *Engine) Invalidate() {
 	if e.session != nil {
 		e.session.Invalidate()
 	}
-}
-
-// runOneShot executes an operations-script operation as a one-shot engine
-// spawn. It is the one-shot implementation behind Engine.Run and is exactly the
-// spawn the tool layer used before the session existed.
-func runOneShot(ctx context.Context, projectPath, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error) {
-	scriptPath, err := godotops.OperationsScript()
-	if err != nil {
-		return "", "", 0, fmt.Errorf("materialize operations script: %w", err)
-	}
-	stdout, stderr, exitCode, err = godot.RunOperation(ctx, godot.Path(), projectPath, scriptPath, operation, params)
-	if err != nil {
-		return stdout, stderr, exitCode, fmt.Errorf("run godot operation: %w", err)
-	}
-	return stdout, stderr, exitCode, nil
 }

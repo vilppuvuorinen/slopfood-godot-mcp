@@ -11,19 +11,20 @@ import (
 // context.Context so cancellation and values flow through unchanged, and adds
 // the engine seam's vocabulary as methods on the handler's first argument: Run
 // executes an operation against the bound project, and Invalidate marks the
-// engine's project-global state dirty. A handler never branches on whether a
-// call spawns a one-shot engine or reaches a warm session.
+// engine's project-global state dirty. The engine is always a live session; a
+// handler never branches on the engine's lifecycle.
 type Context struct {
 	context.Context
 }
 
-// Run executes one operations-script call through the engine bound to c.
+// Run executes one operations-script call through the live session bound to c.
 func (c Context) Run(project, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error) {
 	return engineFrom(c.Context).Run(project, operation, params)
 }
 
-// Invalidate marks the engine's project-global state dirty so the next call
-// respawns it. It is a no-op when no session is installed.
+// Invalidate marks the session's project-global state dirty so the next call
+// respawns it. A context with no session installed has nothing to invalidate,
+// so it is a no-op.
 func (c Context) Invalidate() {
 	engineFrom(c.Context).Invalidate()
 }

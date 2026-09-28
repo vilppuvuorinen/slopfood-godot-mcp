@@ -62,7 +62,7 @@ func (s *oneShotSession) Invalidate() { s.invalidated++ }
 // The bound project is not a tool argument; it is lifted into the handler
 // context, as Register does in production. An empty project leaves the project
 // unbound. The context always carries the one-shot session double, so
-// engine-reaching handlers use the seam rather than its one-shot fallback.
+// engine-reaching handlers exercise the seam.
 func callToolArgs(t *testing.T, tool mcp.Tool, project, args string) mcp.ToolResult {
 	t.Helper()
 	ctx := context.Background()

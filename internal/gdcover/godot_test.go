@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
@@ -266,7 +267,7 @@ func TestInstrumentedOperationsScriptParses(t *testing.T) {
 }
 
 // TestInstrumentedOperationsScriptReportsHits runs a real operation through the
-// instrumented bridge and checks that the dispatch and handler paths report
+// instrumented bridge and checks that the dispatch and driver-entry paths report
 // their original lines.
 func TestInstrumentedOperationsScriptReportsHits(t *testing.T) {
 	engine := requireGodot(t)
@@ -274,17 +275,21 @@ func TestInstrumentedOperationsScriptReportsHits(t *testing.T) {
 	hits := filepath.Join(t.TempDir(), "hits.txt")
 	t.Setenv(FileEnv, hits)
 
-	_, stderr, exit, err := godot.RunOperation(context.Background(), engine,
-		writeProject(t), script, "validate_project", godot.OperationParams{"operation": "validate_project"})
+	sess := godot.NewSession(engine, script)
+	defer func() { _ = sess.Close() }()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	_, stderr, exit, err := sess.Run(ctx, writeProject(t), "validate_project",
+		godot.OperationParams{"operation": "validate_project"})
 	if err != nil {
-		t.Fatalf("RunOperation: %v", err)
+		t.Fatalf("Run: %v", err)
 	}
 	if exit != 0 {
 		t.Fatalf("validate_project exited %d: %s", exit, stderr)
 	}
 
 	got := readHitsGlob(t, hits+"*")
-	for _, marker := range []string{"run_one_shot(args)", `"validate_project":`} {
+	for _, marker := range []string{"func _init():", `"validate_project":`} {
 		line := lineOf(t, string(original), marker)
 		if !got[line] {
 			t.Errorf("line %d (%q) was not reported; hits=%v", line, marker, got)
