@@ -29,9 +29,6 @@ func daemonChildArgs(root string, opts *options, logPath string) []string {
 	for _, value := range opts.enable {
 		args = append(args, "--enable", value)
 	}
-	if opts.gdDaemon {
-		args = append(args, "--gd-daemon")
-	}
 	return args
 }
 

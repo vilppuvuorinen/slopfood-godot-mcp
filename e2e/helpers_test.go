@@ -21,31 +21,6 @@ import (
 // running these tests; the test itself never builds anything.
 const binaryEnv = "GODOT_MCP_BIN"
 
-// gdDaemonEnv selects the persistent engine bridge for every e2e session. It is
-// unset (or false-y) by default so the shipping one-shot bridge is what the
-// suite exercises; GD_DAEMON=1 in the Makefile turns it on for a comparison run.
-const gdDaemonEnv = "GODOT_MCP_GD_DAEMON"
-
-// gdDaemonRequested reports whether the suite-wide persistent bridge is on.
-// Unset, empty, and the usual false-y spellings mean off; anything else is on.
-func gdDaemonRequested() bool {
-	switch strings.ToLower(strings.TrimSpace(os.Getenv(gdDaemonEnv))) {
-	case "", "0", "false", "no", "off":
-		return false
-	default:
-		return true
-	}
-}
-
-// withGDDaemon appends --gd-daemon when the suite toggle is on and the flag is
-// not already present, so a caller that forces the flag never gets it twice.
-func withGDDaemon(args []string) []string {
-	if !gdDaemonRequested() || slices.Contains(args, "--gd-daemon") {
-		return args
-	}
-	return append(args, "--gd-daemon")
-}
-
 // connect starts the server binary with every tool category enabled and returns
 // a connected MCP client session. The server binds to the working directory, so
 // this is only for tools that do not touch a project (version and protocol
@@ -66,14 +41,6 @@ func connectProject(t *testing.T, root string) *mcp.ClientSession {
 func connectProjectWithEnv(t *testing.T, root string, env ...string) *mcp.ClientSession {
 	t.Helper()
 	return connectSession(t, env, "--enable", "all", "--project", root)
-}
-
-// connectProjectDaemon is connectProject with the persistent bridge forced on
-// regardless of the suite toggle, so the daemon driver is exercised even on a
-// default one-shot run.
-func connectProjectDaemon(t *testing.T, root string) *mcp.ClientSession {
-	t.Helper()
-	return connectSession(t, nil, "--enable", "all", "--project", root, "--gd-daemon")
 }
 
 // connectCategories starts the server with exactly the given --enable value.
@@ -115,7 +82,6 @@ func sessionEnv(t *testing.T, runtimeDir string, env, args []string) ([]string, 
 
 	childArgs := slices.Clone(args)
 	childArgs = append(childArgs, "--idle-timeout", "2s")
-	childArgs = withGDDaemon(childArgs)
 	return childEnv, childArgs
 }
 
@@ -200,7 +166,6 @@ func connectInRuntime(t *testing.T, runtimeDir string, args ...string) (*mcp.Cli
 	if !hasIdleTimeout(childArgs) {
 		childArgs = append(childArgs, "--idle-timeout", defaultInRuntimeIdleTimeout)
 	}
-	childArgs = withGDDaemon(childArgs)
 
 	cmd := exec.CommandContext(context.Background(), binary, childArgs...) //nolint:gosec // the binary path is supplied by the test harness.
 	cmd.Env = childEnv

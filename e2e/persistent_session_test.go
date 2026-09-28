@@ -5,15 +5,15 @@ import (
 	"testing"
 )
 
-// TestPersistentBridgeReloadsEditedScene proves the persistent bridge serves a
-// fresh view of the project even after an out-of-band edit. connectProjectDaemon
-// forces --gd-daemon, so this exercises the daemon driver on every run, not just
-// a GD_DAEMON=1 comparison. A warm engine that cached the scene would keep
-// reporting the stale node; CACHE_MODE_IGNORE on read must show the new one.
-func TestPersistentBridgeReloadsEditedScene(t *testing.T) {
+// TestPersistentSessionReloadsEditedScene proves the persistent session serves a
+// fresh view of the project even after an out-of-band edit. It is the only
+// bridge the server has now, so this exercises it on every run. A warm engine
+// that cached the scene would keep reporting the stale node; CACHE_MODE_IGNORE
+// on read must show the new one.
+func TestPersistentSessionReloadsEditedScene(t *testing.T) {
 	t.Parallel()
 	root := newProject(t)
-	session := connectProjectDaemon(t, root)
+	session := connectProject(t, root)
 
 	requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/main.tscn"})
 	requireToolText(t, session, "add_node", map[string]any{

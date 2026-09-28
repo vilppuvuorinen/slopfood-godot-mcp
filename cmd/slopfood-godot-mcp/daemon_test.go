@@ -90,10 +90,9 @@ func TestOpenDaemonLog(t *testing.T) {
 }
 
 // TestDaemonChildArgs asserts the detached child argv carries the bound project,
-// the log level, the log file, the idle timeout, and every enable value, and
-// that --gd-daemon is forwarded only when the option is set.
+// the log level, the log file, the idle timeout, and every enable value.
 func TestDaemonChildArgs(t *testing.T) {
-	base := []string{
+	want := []string{
 		daemonSubcommand,
 		"--project", "/tmp/project",
 		"--log-level", "debug",
@@ -102,35 +101,14 @@ func TestDaemonChildArgs(t *testing.T) {
 		"--enable", "scene",
 		"--enable", "script",
 	}
-	tests := []struct {
-		name     string
-		gdDaemon bool
-		want     []string
-	}{
-		{
-			name:     "default omits gd-daemon",
-			gdDaemon: false,
-			want:     base,
-		},
-		{
-			name:     "gd-daemon appended when set",
-			gdDaemon: true,
-			want:     append(slices.Clone(base), "--gd-daemon"),
-		},
+	opts := &options{
+		logLevel:    "debug",
+		enable:      enableValues{"scene", "script"},
+		idleTimeout: 90 * time.Second,
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			opts := &options{
-				logLevel:    "debug",
-				enable:      enableValues{"scene", "script"},
-				idleTimeout: 90 * time.Second,
-				gdDaemon:    tt.gdDaemon,
-			}
-			got := daemonChildArgs("/tmp/project", opts, "/tmp/project.log")
-			if !slices.Equal(got, tt.want) {
-				t.Errorf("daemonChildArgs = %q, want %q", got, tt.want)
-			}
-		})
+	got := daemonChildArgs("/tmp/project", opts, "/tmp/project.log")
+	if !slices.Equal(got, want) {
+		t.Errorf("daemonChildArgs = %q, want %q", got, want)
 	}
 }
 
@@ -185,36 +163,5 @@ func TestRunDaemonDetach(t *testing.T) {
 	}
 	if gotLogPath != wantLog {
 		t.Errorf("logPath = %q, want %q", gotLogPath, wantLog)
-	}
-}
-
-// TestRunDaemonDetachForwardsGDDaemon asserts the daemon-role --gd-daemon flag
-// parses without error and reaches the child seam on the options it is handed.
-func TestRunDaemonDetachForwardsGDDaemon(t *testing.T) {
-	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
-
-	originalExe, originalStart := executablePath, startDetachedDaemon
-	t.Cleanup(func() {
-		executablePath = originalExe
-		startDetachedDaemon = originalStart
-	})
-
-	executablePath = func() (string, error) { return "/fake/exe", nil }
-	var gotOpts *options
-	startDetachedDaemon = func(_, _ string, opts *options, _ string) error {
-		gotOpts = opts
-		return nil
-	}
-
-	var stdout, stderr strings.Builder
-	args := []string{daemonSubcommand, "--detach", "--gd-daemon", "--project", t.TempDir()}
-	if err := run(args, strings.NewReader(""), &stdout, &stderr); err != nil {
-		t.Fatalf("run detach --gd-daemon: %v", err)
-	}
-	if gotOpts == nil {
-		t.Fatal("startDetachedDaemon was not called")
-	}
-	if !gotOpts.gdDaemon {
-		t.Error("options.gdDaemon = false, want true")
 	}
 }

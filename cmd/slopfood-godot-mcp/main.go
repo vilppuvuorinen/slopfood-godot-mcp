@@ -97,7 +97,6 @@ type options struct {
 	idleTimeout time.Duration
 	logFile     string
 	detach      bool
-	gdDaemon    bool
 }
 
 func newFlags(name string) (*flag.FlagSet, *options) {
@@ -110,7 +109,6 @@ func newFlags(name string) (*flag.FlagSet, *options) {
 	fs.DurationVar(&opts.idleTimeout, "idle-timeout", defaultIdleTimeout, "daemon: exit after this long with no clients (0 disables)")
 	fs.StringVar(&opts.logFile, "log-file", "", "daemon: log file (default: a per-project path under the runtime directory)")
 	fs.BoolVar(&opts.detach, "detach", false, "daemon: re-exec as a detached child and exit")
-	fs.BoolVar(&opts.gdDaemon, "gd-daemon", false, "daemon: reuse one headless Godot engine per project for the operations bridge (default: spawn one engine per call)")
 	return fs, opts
 }
 
@@ -292,21 +290,17 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	// closed after daemon.Close stops the queue and worker. Registering its defer
 	// first makes LIFO run daemon.Close before the engine is killed, so no
 	// in-flight operation loses its engine.
-	serveCtx := role.ctx
-	if opts.gdDaemon {
-		script, scriptErr := godotops.OperationsScript()
-		if scriptErr != nil {
-			return fmt.Errorf("materialize operations script: %w", scriptErr)
-		}
-		session := godot.NewSession(godot.Path(), script)
-		defer func() {
-			if cerr := session.Close(); cerr != nil {
-				role.logger.Warn("engine session close", "error", cerr)
-			}
-		}()
-		serveCtx = tools.WithEngine(role.ctx, session)
-		role.logger.Info("reusing one headless Godot engine for the operations bridge")
+	script, err := godotops.OperationsScript()
+	if err != nil {
+		return fmt.Errorf("materialize operations script: %w", err)
 	}
+	session := godot.NewSession(godot.Path(), script)
+	defer func() {
+		if cerr := session.Close(); cerr != nil {
+			role.logger.Warn("engine session close", "error", cerr)
+		}
+	}()
+	serveCtx := tools.WithEngine(role.ctx, session)
 
 	socketPath, err := daemonpath.SocketPath(role.root)
 	if err != nil {
