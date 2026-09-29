@@ -142,8 +142,10 @@ jobs:
           go test -race -parallel 4 -covermode=atomic ./...
 
   # e2e-windows exercises the whole runtime on Windows with one Godot build (the
-  # newest supported minor line), so the loopback-TCP engine and daemon
-  # transports are proven end to end without multiplying Windows build minutes.
+  # newest stable minor line), so the loopback-TCP engine and daemon transports
+  # are proven end to end without multiplying Windows build minutes. Only stable
+  # lines are considered: the Linux matrix chases dev/rc releases on purpose,
+  # but the Windows smoke lane should not hinge on a half-published dev build.
   # It is functional, not the concurrency lane: -race is dropped because the
   # Windows runner has no gcc and the Linux job already covers races.
   e2e-windows:
@@ -163,19 +165,20 @@ jobs:
         run: |
           "GODOT_TEMPLATES_DIR=$env:APPDATA\Godot\export_templates" |
             Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      # One Godot version: the highest supported minor line. The downloader's
-      # surface is unchanged; install-latest resolves that line's newest
-      # release for GODOT_OS=windows.
-      - name: Resolve highest minor
+      # One Godot version: the newest stable minor line. The downloader's
+      # surface is unchanged; install-latest resolves that line's newest stable
+      # release for GODOT_OS=windows. --stable keeps dev lines (e.g. 4.8-dev7)
+      # out of the Windows lane.
+      - name: Resolve latest stable minor
         shell: pwsh
         run: |
-          $minors = python scripts/download-godot.py minors "$env:MIN_GODOT_MINOR"
-          $highest = $minors | Select-Object -Last 1
-          if (-not $highest) {
-            Write-Error "no Godot releases found for minors >= $env:MIN_GODOT_MINOR"
+          $minors = python scripts/download-godot.py minors --stable "$env:MIN_GODOT_MINOR"
+          $latest = $minors | Select-Object -Last 1
+          if (-not $latest) {
+            Write-Error "no stable Godot releases found for minors >= $env:MIN_GODOT_MINOR"
             exit 1
           }
-          "GODOT_MINOR=$highest" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "GODOT_MINOR=$latest" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       # The Linux members are required even on Windows: the export e2e installs
       # a Linux preset and exports an ELF, so its templates must be present or
       # TestExportProjectTool fails.

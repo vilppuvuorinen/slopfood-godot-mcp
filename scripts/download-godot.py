@@ -9,7 +9,7 @@ templates.
 Usage:
     scripts/download-godot.py install [manifest]
     scripts/download-godot.py install-latest <minor>
-    scripts/download-godot.py minors [lower]
+    scripts/download-godot.py minors [--stable] [lower]
 
 The manifest defaults to godot.versions next to this script; pass "-" to read
 it from stdin. Each version is fetched from the godotengine/godot-builds GitHub
@@ -37,9 +37,12 @@ is how CI chases the newest published build per supported minor:
 
 The same manifests back the "minors" subcommand, which prints every minor line
 at or above a lower bound that has a published release, so CI can build its
-matrix from the script instead of the GitHub API:
+matrix from the script instead of the GitHub API. With --stable, only lines that
+have a stable release are printed, so a caller can pick the newest stable line
+without resolving each one:
 
     scripts/download-godot.py minors 4.7
+    scripts/download-godot.py minors --stable 4.7
 
 The "install-latest" subcommand is the single-entry form of that resolution: it
 resolves one minor line and installs the winning release, honoring the same
@@ -411,21 +414,31 @@ def resolve_latest_release(minor, config):
     return select_latest_release(installable)
 
 
-def list_minors(lower, config):
-    """Return every published minor line at or above lower, ascending."""
+def list_minors(lower, config, stable_only=False):
+    """Return every published minor line at or above lower, ascending.
+
+    With stable_only, only lines that have at least one stable release are
+    listed, so a caller can pick the newest stable line without resolving each
+    candidate release.
+    """
     match = re.match(r"^(\d+)\.(\d+)", lower)
     if match is None:
         die("invalid minor lower bound '%s'" % lower)
     floor = (int(match.group(1)), int(match.group(2)))
-    minors = set()
+    minors = {}
     for tag in release_tags(config):
         found = re.match(r"^(\d+)\.(\d+)", tag)
         if found is None:
             continue
         key = (int(found.group(1)), int(found.group(2)))
-        if key >= floor:
-            minors.add(key)
-    return ["%d.%d" % key for key in sorted(minors)]
+        if key < floor:
+            continue
+        minors[key] = minors.get(key, False) or tag.endswith("-stable")
+    return [
+        "%d.%d" % key
+        for key, stable in sorted(minors.items())
+        if stable or not stable_only
+    ]
 
 
 def engine_asset_name(version, config):
@@ -779,6 +792,11 @@ def build_parser():
         default="0.0",
         help="lowest minor line to print, e.g. 4.7 (default: 0.0)",
     )
+    minors.add_argument(
+        "--stable",
+        action="store_true",
+        help="only print lines that have a stable release",
+    )
     return parser
 
 
@@ -789,7 +807,7 @@ def main(argv=None):
     elif args.command == "install-latest":
         cmd_install_latest(args.minor)
     elif args.command == "minors":
-        for minor in list_minors(args.lower, load_config(None)):
+        for minor in list_minors(args.lower, load_config(None), args.stable):
             print(minor)
 
 
