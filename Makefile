@@ -13,9 +13,20 @@ GOLANGCI_LINT ?= $(GO) tool -modfile=$(CURDIR)/$(TOOLS_MOD) golangci-lint
 .PHONY: all
 all: fmt vet test build
 
+# build compiles the server for every release target: the host's arch, then the
+# cross pairs. The portability guard catches Linux-only code (e.g. syscall.Flock)
+# on the push that introduces it rather than at the next release dispatch; vet
+# is what compiles build-tagged *test* files, so a tagged file that does not
+# compile also fails here.
 .PHONY: build
 build:
 	$(GO) build $(GOFLAGS) -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY) $(CMD)
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build ./...
+	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build ./...
+	GOOS=windows $(GO) vet ./...
+	GOOS=darwin $(GO) vet ./...
+	cd e2e && GOOS=windows $(GO) vet ./...
+	cd e2e && GOOS=darwin $(GO) vet ./...
 
 .PHONY: install
 install:
@@ -27,7 +38,7 @@ run:
 
 .PHONY: test
 test:
-	$(GO) test $(GOFLAGS) -covermode=atomic -coverprofile=coverage.out ./...
+	$(GO) test $(GOFLAGS) -race -covermode=atomic -coverprofile=coverage.out ./...
 
 # godot downloads the pinned engine builds into .godot/. With GODOT_TEMPLATES=1
 # it also fetches the matching export templates into .godot/godot/export_templates,
@@ -113,23 +124,22 @@ fmt:
 	$(GO) fmt ./...
 	cd e2e && $(GO) fmt ./...
 
+# fmt-check is fmt as a gate: it fails when any Go file is not gofmt-clean,
+# listing the offenders, so CI can fail on a formatting diff. `fmt` stays the
+# fix-it target. gofmt -l walks the tree, so it covers the e2e module too.
+.PHONY: fmt-check
+fmt-check:
+	@files=$$(gofmt -l .); \
+	if [ -n "$$files" ]; then \
+		printf '%s\n' "$$files" >&2; \
+		printf 'gofmt: files above are not formatted\n' >&2; \
+		exit 1; \
+	fi
+
 .PHONY: vet
 vet:
 	$(GO) vet ./...
 	cd e2e && $(GO) vet ./...
-
-# cross is the local half of the CI portability guard: it compiles the runtime
-# and vets both modules for the other release targets. vet is what compiles
-# build-tagged *test* files, so a tagged file that does not compile fails here
-# rather than at the next release dispatch. It is fast and CGO-free.
-.PHONY: cross
-cross:
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build ./...
-	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build ./...
-	GOOS=windows $(GO) vet ./...
-	GOOS=darwin $(GO) vet ./...
-	cd e2e && GOOS=windows $(GO) vet ./...
-	cd e2e && GOOS=darwin $(GO) vet ./...
 
 # lint covers the e2e module too; it is a separate module, so it must be
 # linted from its own directory.
@@ -143,8 +153,16 @@ tidy:
 	$(GO) mod tidy
 	cd e2e && $(GO) mod tidy
 
+# static is the half of the gate that needs no Godot: formatting, vet, lint,
+# unit tests, and the multi-platform build. CI runs it in the job that has no
+# engine installed. `check` adds the engine-backed e2e suite.
+.PHONY: static
+static: fmt-check vet lint test build
+
+# check is the full local gate. godot is first so the engine and templates are
+# fetched before anything depends on them; e2e then drives the downloaded build.
 .PHONY: check
-check: fmt vet lint test e2e cross
+check: godot static e2e
 
 .PHONY: clean
 clean:
@@ -160,5 +178,7 @@ help:
 	@printf '  godot    download pinned Godot builds (GODOT_TEMPLATES=1 adds export templates)\n'
 	@printf '  e2e      build, then run the SDK-backed black-box tests in parallel (E2E_PARALLEL=%s)\n' '$(E2E_PARALLEL)'
 	@printf '  e2e-cover  e2e coverage: Go to %s, GDScript bridge to %s and %s\n' '$(E2E_COVERPROFILE)' '$(GDCOVER_PROFILE)' '$(GDCOVER_VALIDATE_PROFILE)'
-	@printf '  fmt/vet/lint/check  code quality\n'
+	@printf '  fmt-check/vet/lint  code quality (fmt fixes)\n'
+	@printf '  static   fmt-check vet lint test build (no Godot needed)\n'
+	@printf '  check    static plus godot and e2e\n'
 	@printf '  clean    remove build artifacts\n'

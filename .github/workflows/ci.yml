@@ -46,36 +46,10 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           check-latest: true
       - run: go mod download
-      - run: gofmt -l . | tee /dev/stderr | (! read)
-      - run: go vet ./...
-      - run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
-      - run: go build -trimpath -o bin/slopfood-godot-mcp ./cmd/slopfood-godot-mcp
-      # Cross-compile the runtime for the other release targets. This is a
-      # compile check only; it catches Linux-only code (e.g. syscall.Flock) on
-      # the push that introduces it, rather than at the next release dispatch.
-      - name: Cross-compile
-        run: |
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build ./...
-      # Vet both modules for the other release targets. vet is what compiles
-      # build-tagged *test* files, so a tagged file that does not compile fails
-      # on the push that adds it rather than on the Windows e2e lane.
-      - name: Cross-vet
-        run: |
-          for target in windows darwin; do
-            GOOS="$target" go vet ./...
-            (cd e2e && GOOS="$target" go vet ./...)
-          done
-
-  lint:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          check-latest: true
-      - run: make lint
+      # static is the Godot-free half of `make check`: the gofmt gate, vet,
+      # lint, race unit tests, and the multi-platform build (host arch plus the
+      # windows/amd64 and darwin/arm64 portability guard).
+      - run: make static
 
   # Discover which minor lines >= MIN_GODOT_MINOR have published releases via
   # the downloader's "minors" subcommand. The release within each line is
@@ -236,7 +210,7 @@ jobs:
     # Gated on the dispatch input: pushes never release. It runs after every
     # check, so the tagged commit is one that passed the whole Godot matrix.
     if: ${{ inputs.version != '' }}
-    needs: [test, lint, e2e, e2e-windows]
+    needs: [test, e2e, e2e-windows]
     runs-on: ubuntu-latest
     concurrency:
       group: release
