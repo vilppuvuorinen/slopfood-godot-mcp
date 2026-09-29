@@ -76,31 +76,52 @@ class DecodeResult extends RefCounted:
         return result
 
 func _init():
-    var socket_path := _engine_socket_path()
-    if socket_path.is_empty():
-        printerr("engine socket: --gd-socket <path> is required; launch the bridge through the engine session")
+    var endpoint := _engine_endpoint()
+    if endpoint.is_empty():
+        printerr("engine socket: exactly one of --gd-socket <path> or --gd-tcp <host:port> is required; launch the bridge through the engine session")
         quit(1)
         return
-    run_socket(socket_path)
+    if endpoint["transport"] == "uds":
+        _bind_uds(endpoint["path"])
+    else:
+        _bind_tcp(endpoint["host"], endpoint["port"])
 
-# _engine_socket_path reads the --gd-socket <path> value the Go side passes
-# after the `--` separator. Only the post-`--` form reaches
-# OS.get_cmdline_user_args, so the socket path never has to survive the engine's
-# own flag parsing.
-func _engine_socket_path() -> String:
+# _engine_endpoint reads the transport endpoint the Go side passes after the `--`
+# separator. Only the post-`--` form reaches OS.get_cmdline_user_args, so the
+# endpoint never has to survive the engine's own flag parsing. Exactly one of
+# --gd-socket <path> (UDS) or --gd-tcp <host:port> (loopback TCP) is required;
+# the Go side picks the transport, so the bridge stays a dumb server.
+func _engine_endpoint() -> Dictionary:
     var args := OS.get_cmdline_user_args()
+    var endpoint := {}
     for index in range(args.size()):
         if args[index] == "--gd-socket" and index + 1 < args.size():
-            return args[index + 1]
-    return ""
+            if not endpoint.is_empty():
+                return {}
+            endpoint = {"transport": "uds", "path": args[index + 1]}
+        elif args[index] == "--gd-tcp" and index + 1 < args.size():
+            if not endpoint.is_empty():
+                return {}
+            var address := args[index + 1]
+            var colon := address.rfind(":")
+            if colon <= 0 or colon + 1 >= address.length():
+                return {}
+            endpoint = {
+                "transport": "tcp",
+                "host": address.substr(0, colon),
+                "port": address.substr(colon + 1).to_int(),
+            }
+    return endpoint
 
-# The socket driver's connection state. _server and _peer are null until the
-# socket path selects this driver; _recv accumulates bytes per connection until
-# a newline completes a frame, and _authenticated gates every operation behind
-# the readiness token.
-var _server: UDSServer = null
-var _peer: StreamPeerUDS = null
-var _socket_path := ""
+# The socket driver's connection state. _server and _peer are null until an
+# endpoint selects this driver; _recv accumulates bytes per connection until a
+# newline completes a frame, and _authenticated gates every operation behind the
+# readiness token. _transport is "uds" or "tcp", and _endpoint carries the
+# transport-carrying readiness fields (path for UDS; host and port for TCP).
+var _server: SocketServer = null
+var _peer: StreamPeerSocket = null
+var _transport := ""
+var _endpoint := {}
 var _token := ""
 var _recv := PackedByteArray()
 var _authenticated := false
@@ -133,25 +154,44 @@ var _deferred_result: Result = null
 # immediately and leaves this empty.
 var _reconcile_paths_pending: PackedStringArray = PackedStringArray()
 
-# run_socket is the non-blocking socket driver. It binds before anything else so
-# the Go side can dial as soon as it reads the readiness line, then returns from
-# _init: the socket is serviced from _process, the only hook that fires after
-# the main loop starts (a blocking _init would starve EditorFileSystem in editor
-# mode). Readiness is printed from _process rather than here because the editor
-# filesystem does not exist until the main loop runs. The readiness line travels
-# on the parent's private stdout pipe, so the token never passes through argv or
-# the environment.
-func run_socket(socket_path: String) -> void:
+# _bind_uds binds the UDS backend and records the transport-carrying readiness
+# fields. It binds before anything else so the Go side can dial as soon as it
+# reads the readiness line, then returns from _init: the socket is serviced from
+# _process, the only hook that fires after the main loop starts (a blocking _init
+# would starve EditorFileSystem in editor mode). Readiness is printed from
+# _process rather than here because the editor filesystem does not exist until
+# the main loop runs. The readiness line travels on the parent's private stdout
+# pipe, so the token never passes through argv or the environment.
+func _bind_uds(socket_path: String) -> void:
     # A stale socket or regular file makes listen fail with EINVAL.
     if FileAccess.file_exists(socket_path):
         DirAccess.remove_absolute(socket_path)
-    _server = UDSServer.new()
-    var listen_error := _server.listen(socket_path)
+    var server := UDSServer.new()
+    var listen_error := server.listen(socket_path)
     if listen_error != OK:
         printerr("engine socket: listen failed: " + str(listen_error))
         quit(1)
         return
-    _socket_path = socket_path
+    _server = server
+    _transport = "uds"
+    _endpoint = {"path": socket_path}
+    _token = Crypto.new().generate_random_bytes(16).hex_encode()
+
+# _bind_tcp binds the loopback TCP backend with an ephemeral port and records
+# the transport-carrying readiness fields. The Go side passes host:port after
+# `--`, and port 0 asks the OS for an ephemeral port the readiness line then
+# reports. There is no filesystem permission on a loopback port, so the token is
+# the only gate; the Go side passes the same host back on dial.
+func _bind_tcp(host: String, port: int) -> void:
+    var server := TCPServer.new()
+    var listen_error := server.listen(port, host)
+    if listen_error != OK:
+        printerr("engine socket: listen failed: " + str(listen_error))
+        quit(1)
+        return
+    _server = server
+    _transport = "tcp"
+    _endpoint = {"host": host, "port": server.get_local_port()}
     _token = Crypto.new().generate_random_bytes(16).hex_encode()
 
 # _process polls the socket once per frame and returns false to keep the main
@@ -165,12 +205,9 @@ func _process(_delta: float) -> bool:
         if not _filesystem_ready():
             return false
         _ready_printed = true
-        print(JSON.stringify({
-            "ready": true,
-            "transport": "uds",
-            "path": _socket_path,
-            "token": _token,
-        }))
+        var ready := {"ready": true, "transport": _transport, "token": _token}
+        ready.merge(_endpoint)
+        print(JSON.stringify(ready))
     if _quit_pending and (_filesystem == null or not _filesystem.is_scanning()):
         quit(0)
         return false
@@ -179,6 +216,12 @@ func _process(_delta: float) -> bool:
         _recv = PackedByteArray()
         _authenticated = false
     if _peer != null:
+        # A StreamPeerTCP from take_connection is not necessarily connected yet:
+        # poll it until it reaches STATUS_CONNECTED before trusting reads. A UDS
+        # peer is connected already, so this is a no-op there.
+        _peer.poll()
+        if _transport == "tcp" and _peer.get_status() != StreamPeerSocket.STATUS_CONNECTED:
+            return false
         _read_peer()
     # A reconcile parked paths because it had to start a scan to discover a newly
     # created file or directory. Once the scan clears, apply update_file to each
