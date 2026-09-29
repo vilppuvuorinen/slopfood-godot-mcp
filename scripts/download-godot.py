@@ -509,7 +509,8 @@ def installed_binary(dest_dir, config):
     matches = sorted(dest_dir.glob(profile.binary_glob))
     if matches:
         return matches[0]
-    return dest_dir / "Godot_v*_%s" % profile.binary_platform.format(arch=config.arch)
+    name = "Godot_v*_%s" % profile.binary_platform.format(arch=config.arch)
+    return dest_dir / name
 
 
 def install_build(minor, version, expected, config):
