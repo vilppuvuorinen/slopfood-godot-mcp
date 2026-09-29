@@ -20,7 +20,10 @@ upgrade in place. With no subcommand, "install" runs with the default manifest.
 An entry may be just a minor (e.g. "4.7"): the release to install is resolved
 from the godot-builds release manifests. Within a minor line a stable release is
 preferred when one exists; otherwise the release with the newest release_date
-wins. The manifests live in the godot-builds repository, which is shallow-cloned
+wins. A release whose manifest lacks the engine asset for the target GODOT_OS
+(or the export templates when GODOT_TEMPLATES=1) is skipped, because a tag can
+be published before every platform build finishes uploading. The manifests live
+in the godot-builds repository, which is shallow-cloned
 once into <builds-dir> (a few MB) and refreshed on later runs, so no GitHub API
 and no token are involved. A checksum missing from the manifest is filled in from
 the selected release manifest (releases/godot-<tag>.json), which lists the sha512
@@ -330,8 +333,30 @@ def candidate_tags(tags, minor):
     ]
 
 
+def release_has_assets(release, version, config):
+    """Return whether a release manifest carries the assets an install needs.
+
+    A tag's manifest is committed when the release is published, but the
+    release can go public before every platform build finishes uploading, so
+    the newest tag is not always installable. Require the engine asset, and the
+    export templates when they were requested, so resolution can fall back to
+    the newest release that can actually be installed. A missing manifest
+    (offline, or an old tag without one) is treated as usable so pinned and
+    offline flows keep working.
+    """
+    if release is None:
+        return True
+    if not manifest_checksum(release, engine_asset_name(version, config)):
+        return False
+    if config.download_templates == "1" and not manifest_checksum(
+        release, templates_asset_name(version)
+    ):
+        return False
+    return True
+
+
 def select_latest_release(records):
-    """Pick from (tag, release_date, stable) records for a minor line.
+    """Pick from (tag, release_date, stable, ...) records for a minor line.
 
     A stable release wins when the line has any; otherwise the newest release
     by date wins. A zero date (manifest unavailable) defers to the tag's
@@ -343,10 +368,12 @@ def select_latest_release(records):
 
 
 def resolve_latest_release(minor, config):
-    """Return the release tag to install for a minor line.
+    """Return the newest installable release tag for a minor line.
 
     Ordering comes from each release's release_date in the godot-builds
     release manifest, with a stable release preferred when the line has one.
+    Releases missing the assets this install needs are dropped first, so a
+    half-published tag never wins over a complete older one.
     """
     candidates = candidate_tags(release_tags(config), minor)
     if not candidates:
@@ -355,8 +382,33 @@ def resolve_latest_release(minor, config):
     for tag in candidates:
         manifest = load_release_manifest(tag, config)
         date = int(manifest.get("release_date") or 0) if manifest else 0
-        records.append((tag, date, tag.endswith("-stable")))
-    return select_latest_release(records)
+        records.append(
+            (
+                tag,
+                date,
+                tag.endswith("-stable"),
+                release_has_assets(manifest, tag, config),
+            )
+        )
+    installable = [record for record in records if record[3]]
+    if not installable:
+        needed = (
+            "engine or export-template"
+            if config.download_templates == "1"
+            else "engine"
+        )
+        die(
+            "no installable release for minor '%s' in %s: every candidate (%s) "
+            "lacks the %s assets for GODOT_OS=%s"
+            % (
+                minor,
+                config.repo,
+                ", ".join(record[0] for record in records),
+                needed,
+                config.os,
+            )
+        )
+    return select_latest_release(installable)
 
 
 def list_minors(lower, config):
