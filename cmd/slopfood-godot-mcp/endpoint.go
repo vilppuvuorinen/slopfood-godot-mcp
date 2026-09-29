@@ -18,6 +18,10 @@ type daemonEndpoint struct {
 	transport    godot.Transport
 	endpointPath string
 	socketPath   string
+	// tcpListener is the pre-bound listener for the TCP transport, held so a
+	// teardown before the daemon is constructed still closes it. It is nil for
+	// UDS, whose listener is owned entirely by ListenUnix inside Serve.
+	tcpListener *mcp.TCPListener
 }
 
 // newDaemonEndpoint resolves the effective transport and derives the paths it
@@ -81,5 +85,16 @@ func (e *daemonEndpoint) listenFunc() (mcp.ListenFunc, error) {
 		_ = lock.Close()
 		return nil, fmt.Errorf("bind tcp endpoint: %w", err)
 	}
+	e.tcpListener = listener
 	return func(string) (mcp.Listener, error) { return listener, nil }, nil
+}
+
+// close releases the TCP listener if one was bound, so an early return between
+// binding and daemon construction does not leak the endpoint file and lock. The
+// daemon's own Close also closes the listener; TCPListener.Close is idempotent,
+// so both paths are safe.
+func (e *daemonEndpoint) close() {
+	if e.tcpListener != nil {
+		_ = e.tcpListener.Close()
+	}
 }

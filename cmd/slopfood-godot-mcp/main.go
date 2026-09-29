@@ -309,6 +309,10 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("bind daemon endpoint: %w", err)
 	}
+	// Registered first, so it runs last: daemon.Close (below) closes the
+	// listener on the normal path, and this catches an early return between
+	// binding and daemon construction. TCPListener.Close is idempotent.
+	defer endpoint.close()
 
 	// The engine session outlives individual calls but not the daemon, so it is
 	// closed after daemon.Close stops the queue and worker. Registering its defer

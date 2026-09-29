@@ -122,6 +122,28 @@ func TestEndpointFactoryTCP(t *testing.T) {
 	}
 }
 
+// TestEndpointFactoryTCPCloseReleasesEndpoint asserts endpoint.close removes
+// the endpoint record after listenFunc binds, so an early return between bind
+// and daemon construction does not leak it.
+func TestEndpointFactoryTCPCloseReleasesEndpoint(t *testing.T) {
+	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
+
+	endpoint, err := newDaemonEndpoint("/tmp/project", godot.TransportTCP)
+	if err != nil {
+		t.Fatalf("newDaemonEndpoint: %v", err)
+	}
+	if _, err := endpoint.listenFunc(); err != nil {
+		t.Fatalf("listenFunc: %v", err)
+	}
+	if _, statErr := os.Stat(endpoint.addr()); statErr != nil {
+		t.Fatalf("endpoint record missing after bind: %v", statErr)
+	}
+	endpoint.close()
+	if _, statErr := os.Stat(endpoint.addr()); !os.IsNotExist(statErr) {
+		t.Errorf("endpoint record still present after close: %v", statErr)
+	}
+}
+
 // TestDaemonChildArgsForwardsTransport asserts --transport is forwarded only
 // when it was actually set, so a release child never sees an unknown flag.
 func TestDaemonChildArgsForwardsTransport(t *testing.T) {
