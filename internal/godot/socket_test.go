@@ -360,6 +360,201 @@ func TestSocketSessionDrivesRealBridge(t *testing.T) {
 	}
 }
 
+// TestSocketSessionDrivesRealBridgeTCP is the TCP integration proof: the Go
+// socket session forces the loopback-TCP transport, boots the real bridge,
+// serves a create_scene then a read_scene, and creates no UDS engine socket.
+func TestSocketSessionDrivesRealBridgeTCP(t *testing.T) {
+	engine := requireSocketGodot(t)
+
+	script, absErr := filepath.Abs(filepath.Join("..", "godotops", "godot_operations.gd"))
+	if absErr != nil {
+		t.Fatalf("resolve bridge script: %v", absErr)
+	}
+	if _, statErr := os.Stat(script); statErr != nil {
+		t.Fatalf("bridge script: %v", statErr)
+	}
+
+	// The runtime dir is where a UDS bind would land; the TCP path must not
+	// create the engine socket under it.
+	runtimeDir, mkErr := os.MkdirTemp("", "sgtcp")
+	if mkErr != nil {
+		t.Fatalf("mkdir runtime: %v", mkErr)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(runtimeDir) })
+	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
+
+	project := t.TempDir()
+	if writeErr := os.WriteFile(filepath.Join(project, "project.godot"), []byte("config_version=5\n"), 0o600); writeErr != nil {
+		t.Fatalf("write project.godot: %v", writeErr)
+	}
+
+	session := NewSessionTransport(engine, script, TransportTCP)
+	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+	defer cancel()
+
+	if _, stderr, exitCode, runErr := session.Run(ctx, project, "create_scene",
+		map[string]any{"scenePath": "scenes/main.tscn"}); runErr != nil {
+		t.Fatalf("create_scene: %v", runErr)
+	} else if exitCode != 0 {
+		t.Fatalf("create_scene exitCode = %d; stderr:\n%s", exitCode, stderr)
+	}
+
+	// The session dialed TCP, so it has no socket path to unlink and no UDS
+	// engine socket exists on disk.
+	if proc := session.proc; proc == nil || proc.socketPath != "" {
+		t.Fatalf("TCP session socketPath = %q, want empty", proc.socketPath)
+	}
+	if matches, _ := filepath.Glob(filepath.Join(runtimeDir, "slopfood-godot-mcp", "*.engine.sock")); len(matches) != 0 {
+		t.Errorf("TCP run created engine sockets: %v", matches)
+	}
+
+	stdout, stderr, exitCode, err := session.Run(ctx, project, "read_scene",
+		map[string]any{"scenePath": "scenes/main.tscn"})
+	if err != nil {
+		t.Fatalf("read_scene: %v", err)
+	}
+	if exitCode != 0 {
+		t.Fatalf("read_scene exitCode = %d; stderr:\n%s", exitCode, stderr)
+	}
+	if !strings.Contains(stdout, `"name":"root"`) {
+		t.Errorf("read_scene stdout = %q, want the root node payload", stdout)
+	}
+	if err := session.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+}
+
+// fakeTCPServer is an in-process loopback-TCP server that speaks the bridge's
+// newline-delimited framing, so the TCP client path can be exercised without an
+// engine.
+type fakeTCPServer struct {
+	t        *testing.T
+	listener net.Listener
+	conn     net.Conn
+	reader   *bufio.Reader
+}
+
+func newFakeTCPServer(t *testing.T) *fakeTCPServer {
+	t.Helper()
+	var lc net.ListenConfig
+	listener, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	server := &fakeTCPServer{t: t, listener: listener}
+	t.Cleanup(server.close)
+	return server
+}
+
+func (s *fakeTCPServer) addr() string { return s.listener.Addr().String() }
+
+func (s *fakeTCPServer) accept() {
+	s.t.Helper()
+	conn, err := s.listener.Accept()
+	if err != nil {
+		s.t.Fatalf("accept: %v", err)
+	}
+	s.conn = conn
+	s.reader = bufio.NewReader(conn)
+}
+
+func (s *fakeTCPServer) readLine() string {
+	s.t.Helper()
+	line, err := s.reader.ReadString('\n')
+	if err != nil {
+		s.t.Fatalf("read line: %v", err)
+	}
+	return strings.TrimRight(line, "\n")
+}
+
+func (s *fakeTCPServer) write(text string) {
+	s.t.Helper()
+	if _, err := s.conn.Write([]byte(text)); err != nil {
+		s.t.Fatalf("write: %v", err)
+	}
+}
+
+func (s *fakeTCPServer) close() {
+	if s.conn != nil {
+		_ = s.conn.Close()
+	}
+	if s.listener != nil {
+		_ = s.listener.Close()
+	}
+}
+
+// TestEngineSocketTCPPresentsTokenOnce proves the TCP client puts the token on
+// the first request frame and omits it from later frames, matching the UDS
+// framing.
+func TestEngineSocketTCPPresentsTokenOnce(t *testing.T) {
+	server := newFakeTCPServer(t)
+	client, err := dialEngineSocketNetwork(context.Background(), "tcp", server.addr(), "secret")
+	if err != nil {
+		t.Fatalf("dialEngineSocketNetwork: %v", err)
+	}
+	defer client.Close()
+	server.accept()
+
+	if err := client.writeRequest([]byte(`{"id":1,"operation":"ping","params":{}}`)); err != nil {
+		t.Fatalf("first writeRequest: %v", err)
+	}
+	first := decodeLine(t, server.readLine())
+	if first["token"] != "secret" {
+		t.Errorf("first frame token = %v, want secret", first["token"])
+	}
+	server.write(`{"id":1,"ok":true,"stdout":"pong","stderr":""}` + "\n")
+	if _, err := client.readFrame(); err != nil {
+		t.Fatalf("readFrame: %v", err)
+	}
+
+	if err := client.writeRequest([]byte(`{"id":2,"operation":"ping","params":{}}`)); err != nil {
+		t.Fatalf("second writeRequest: %v", err)
+	}
+	second := decodeLine(t, server.readLine())
+	if _, present := second["token"]; present {
+		t.Errorf("second frame repeated the token: %v", second)
+	}
+}
+
+// TestEngineSocketTCPTokenRejectClosesWithoutServing proves a TCP server that
+// rejects the token closes the connection and the client surfaces the failure
+// without receiving a response.
+func TestEngineSocketTCPTokenRejectClosesWithoutServing(t *testing.T) {
+	server := newFakeTCPServer(t)
+	client, err := dialEngineSocketNetwork(context.Background(), "tcp", server.addr(), "wrong")
+	if err != nil {
+		t.Fatalf("dialEngineSocketNetwork: %v", err)
+	}
+	defer client.Close()
+	server.accept()
+
+	served := make(chan struct{})
+	go func() {
+		line, err := server.reader.ReadString('\n')
+		if err != nil {
+			return
+		}
+		request := decodeLine(t, strings.TrimRight(line, "\n"))
+		if request["token"] != "secret" {
+			_ = server.conn.Close()
+			return
+		}
+		close(served)
+	}()
+
+	if err := client.writeRequest([]byte(`{"id":1,"operation":"ping","params":{}}`)); err != nil {
+		t.Fatalf("writeRequest: %v", err)
+	}
+	if _, err := client.readFrame(); err == nil {
+		t.Fatal("readFrame succeeded after a token reject, want a closed-connection error")
+	}
+	select {
+	case <-served:
+		t.Fatal("server served an operation despite the rejected token")
+	case <-time.After(100 * time.Millisecond):
+	}
+}
+
 // minimalPNG is a 1x1 RGBA PNG, enough for the editor to import as a texture
 // and write an .import sidecar.
 const minimalPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII="

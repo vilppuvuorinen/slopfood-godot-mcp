@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +39,11 @@ type Session struct {
 	mu         sync.Mutex
 	executable string
 	script     string
+
+	// transport selects the bridge's wire transport. It defaults to
+	// TransportAuto, so the engine uses UDS off Windows and TCP on Windows; a
+	// dev build's --transport override can force either.
+	transport Transport
 
 	// operationCap restarts the engine after this many operations. It is a field
 	// rather than a constant so same-package tests can set it low.
@@ -118,11 +125,20 @@ type projectFingerprint struct {
 }
 
 // NewSession returns a session that spawns executable's socket driver for the
-// bridge at script. The engine is started lazily by the first Run.
+// bridge at script. The engine is started lazily by the first Run and uses the
+// platform-default transport (UDS off Windows, TCP on Windows).
 func NewSession(executable, script string) *Session {
+	return NewSessionTransport(executable, script, TransportAuto)
+}
+
+// NewSessionTransport is NewSession with an explicit transport, so the daemon's
+// --transport override can force one for the local-test lane. Auto resolves to
+// the platform default.
+func NewSessionTransport(executable, script string, transport Transport) *Session {
 	return &Session{
 		executable:   executable,
 		script:       script,
+		transport:    transport,
 		operationCap: defaultOperationCap,
 	}
 }
@@ -338,7 +354,7 @@ func (s *Session) ensureStartedLocked(project string) (*sessionProc, error) {
 	if s.proc != nil {
 		return s.proc, nil
 	}
-	p, err := startSessionProc(s.executable, s.script, project)
+	p, err := startSessionProc(s.executable, s.script, project, s.transport)
 	if err != nil {
 		return nil, err
 	}
@@ -358,31 +374,50 @@ func (s *Session) stopLocked() {
 	p.stop()
 }
 
+// engineLaunch is the post-`--` user args an engine spawn needs for the
+// resolved transport, plus any UDS filesystem prep. It branches on the explicit
+// transport, so the TCP branch is portable and only resolving auto inspects
+// GOOS. The UDS branch derives the socket path, creates its 0700 directory, and
+// unlinks a stale socket; the TCP branch passes an ephemeral loopback address
+// and does no filesystem work.
+func engineLaunch(project string, transport Transport) (args []string, socketPath string, err error) {
+	switch resolveTransport(transport) {
+	case TransportTCP:
+		return []string{"--gd-tcp", "127.0.0.1:0"}, "", nil
+	case TransportUDS, TransportAuto:
+		socketPath, err = daemonpath.EngineSocketPath(project)
+		if err != nil {
+			return nil, "", fmt.Errorf("engine session: derive socket path: %w", err)
+		}
+		if err = prepareSocketDir(socketPath); err != nil {
+			return nil, "", err
+		}
+		if err = removeStaleSocket(socketPath); err != nil {
+			return nil, "", err
+		}
+		return []string{"--gd-socket", socketPath}, socketPath, nil
+	}
+	// Unreachable: resolveTransport returns only TransportUDS or TransportTCP.
+	return nil, "", fmt.Errorf("engine session: unsupported transport %q", transport)
+}
+
 // startSessionProc starts the bridge in socket mode and its reader goroutines.
 // The context is session-owned (see sessionProc) and exists only so cancel can
-// kill the child. It creates the runtime directory, removes a stale socket,
-// passes the derived path after the -- separator so it reaches
-// OS.get_cmdline_user_args, reads the readiness object from stdout, dials the
-// socket, and narrows it to 0600.
-func startSessionProc(executable, script, project string) (*sessionProc, error) {
+// kill the child. It builds the transport's launch args, passes them after the
+// -- separator so they reach OS.get_cmdline_user_args, reads the readiness
+// object from stdout, dials the transport the readiness reports, and narrows a
+// UDS socket to 0600.
+func startSessionProc(executable, script, project string, transport Transport) (*sessionProc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
-	socketPath, err := daemonpath.EngineSocketPath(project)
+	launchArgs, socketPath, err := engineLaunch(project, transport)
 	if err != nil {
-		cancel()
-		return nil, fmt.Errorf("engine session: derive socket path: %w", err)
-	}
-	if err = prepareSocketDir(socketPath); err != nil {
-		cancel()
-		return nil, err
-	}
-	if err = removeStaleSocket(socketPath); err != nil {
 		cancel()
 		return nil, err
 	}
 	// Editor entry: --editor (equivalent to -e) makes EditorInterface and
 	// EditorFileSystem live; Phase 0.7 confirmed it is accepted alongside
 	// --script and that user args after -- reach OS.get_cmdline_user_args.
-	args := []string{"--headless", "--editor", "--path", project, "--script", script, "--", "--gd-socket", socketPath}
+	args := append([]string{"--headless", "--editor", "--path", project, "--script", script, "--"}, launchArgs...)
 
 	cmd := newCommand(ctx, executable, args...)
 	stdout, err := cmd.StdoutPipe()
@@ -419,18 +454,8 @@ func startSessionProc(executable, script, project string) (*sessionProc, error) 
 		_ = cmd.Wait()
 		return nil, err
 	}
-	dialPath := info.Path
-	if dialPath == "" {
-		dialPath = socketPath
-	}
-	socket, err := dialEngineSocket(ctx, dialPath, info.Token)
+	socket, dialPath, err := dialReady(ctx, info, socketPath)
 	if err != nil {
-		cancel()
-		_ = cmd.Wait()
-		return nil, err
-	}
-	if err := secureSocket(dialPath); err != nil {
-		_ = socket.Close()
 		cancel()
 		_ = cmd.Wait()
 		return nil, err
@@ -447,6 +472,35 @@ func startSessionProc(executable, script, project string) (*sessionProc, error) 
 		p.doneOnce.Do(func() { close(p.done) })
 	}()
 	return p, nil
+}
+
+// dialReady connects to the bridge endpoint the readiness object reports. A
+// UDS readiness dials its path and narrows the socket to 0600; a TCP readiness
+// dials the host and port. socketPath is the UDS path derived before launch,
+// used when the readiness omits it. The returned dialPath is the UDS path to
+// unlink on stop, empty for TCP so stop unlinks nothing.
+func dialReady(ctx context.Context, info *readyInfo, socketPath string) (*engineSocket, string, error) {
+	if info.Transport == "tcp" {
+		address := net.JoinHostPort(info.Host, strconv.Itoa(info.Port))
+		socket, err := dialEngineSocketNetwork(ctx, "tcp", address, info.Token)
+		if err != nil {
+			return nil, "", err
+		}
+		return socket, "", nil
+	}
+	dialPath := info.Path
+	if dialPath == "" {
+		dialPath = socketPath
+	}
+	socket, err := dialEngineSocket(ctx, dialPath, info.Token)
+	if err != nil {
+		return nil, "", err
+	}
+	if err := secureSocket(dialPath); err != nil {
+		_ = socket.Close()
+		return nil, "", err
+	}
+	return socket, dialPath, nil
 }
 
 // stop closes quit before killing the process, so a reader blocked sending on a

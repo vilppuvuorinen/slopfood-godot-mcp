@@ -14,11 +14,14 @@ import (
 
 // readyInfo is the readiness object the bridge prints on stdout after it binds
 // the socket. The parent's stdout pipe is private, so the per-process token
-// travels here rather than through argv or the environment.
+// travels here rather than through argv or the environment. Path is set for the
+// UDS transport; Host and Port are set for TCP.
 type readyInfo struct {
 	Ready     bool   `json:"ready"`
 	Transport string `json:"transport"`
 	Path      string `json:"path"`
+	Host      string `json:"host"`
+	Port      int    `json:"port"`
 	Token     string `json:"token"`
 }
 
@@ -78,13 +81,19 @@ type engineSocket struct {
 	tokenSent bool
 }
 
-// dialEngineSocket connects to the bridge's socket and returns its framing
+// dialEngineSocket connects to the bridge's Unix socket and returns its framing
 // wrapper.
 func dialEngineSocket(ctx context.Context, path, token string) (*engineSocket, error) {
+	return dialEngineSocketNetwork(ctx, "unix", path, token)
+}
+
+// dialEngineSocketNetwork connects to the bridge over the given network ("unix"
+// for a socket path, "tcp" for a host:port) and returns its framing wrapper.
+func dialEngineSocketNetwork(ctx context.Context, network, address, token string) (*engineSocket, error) {
 	var dialer net.Dialer
-	conn, err := dialer.DialContext(ctx, "unix", path)
+	conn, err := dialer.DialContext(ctx, network, address)
 	if err != nil {
-		return nil, fmt.Errorf("engine session: dial socket: %w", err)
+		return nil, fmt.Errorf("engine session: dial %s: %w", network, err)
 	}
 	return &engineSocket{conn: conn, reader: bufio.NewReader(conn), token: token}, nil
 }

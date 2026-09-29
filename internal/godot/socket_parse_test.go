@@ -36,6 +36,22 @@ func TestParseReadyObject(t *testing.T) {
 	}
 }
 
+// TestParseReadyTCPObject asserts a TCP readiness object carries its host and
+// port instead of a path.
+func TestParseReadyTCPObject(t *testing.T) {
+	line := `{"ready":true,"transport":"tcp","host":"127.0.0.1","port":44444,"token":"cd"}` + "\n"
+	info, err := parseReady(line)
+	if err != nil {
+		t.Fatalf("parseReady: %v", err)
+	}
+	if info == nil {
+		t.Fatal("parseReady returned nil, want the readiness object")
+	}
+	if !info.Ready || info.Transport != "tcp" || info.Host != "127.0.0.1" || info.Port != 44444 || info.Token != "cd" {
+		t.Errorf("readiness = %+v", info)
+	}
+}
+
 func TestParseReadyMalformed(t *testing.T) {
 	if _, err := parseReady(`{"ready":` + "\n"); err == nil {
 		t.Fatal("parseReady accepted malformed JSON, want an error")

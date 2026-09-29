@@ -71,14 +71,23 @@ echo 'Godot Engine v4.7 fake'
 exec python3 - "$@" <<'PY'
 import json, os, socket, sys
 args = sys.argv[1:]
-path = args[args.index("--gd-socket") + 1]
-if os.path.exists(path):
-    os.remove(path)
-srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-srv.bind(path)
-srv.listen(1)
-os.chmod(path, 0o755)
-print(json.dumps({"ready": True, "transport": "uds", "path": path, "token": "tok"}), flush=True)
+if "--gd-tcp" in args:
+    host, port = args[args.index("--gd-tcp") + 1].rsplit(":", 1)
+    srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind((host, int(port)))
+    srv.listen(1)
+    bound_host, bound_port = srv.getsockname()
+    print(json.dumps({"ready": True, "transport": "tcp", "host": bound_host, "port": bound_port, "token": "tok"}), flush=True)
+else:
+    path = args[args.index("--gd-socket") + 1]
+    if os.path.exists(path):
+        os.remove(path)
+    srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    srv.bind(path)
+    srv.listen(1)
+    os.chmod(path, 0o755)
+    print(json.dumps({"ready": True, "transport": "uds", "path": path, "token": "tok"}), flush=True)
 print("engine noise on stdout", flush=True)
 
 def send(conn, i, ok, out, err):
@@ -219,6 +228,37 @@ func TestSessionRoundTripFraming(t *testing.T) {
 	}
 	if strings.Contains(lines[0], "--gd-daemon") {
 		t.Errorf("spawn args still carry --gd-daemon: %q", lines[0])
+	}
+}
+
+// TestSessionForcedTCPFraming drives the same fake engine over the loopback-TCP
+// transport, proving the forced transport reaches the bridge as --gd-tcp and no
+// UDS socket path is derived or created.
+func TestSessionForcedTCPFraming(t *testing.T) {
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, defaultSocketResponse)
+	s := NewSessionTransport(f.bin, "/ops.gd", TransportTCP)
+	defer s.Close()
+	project := t.TempDir()
+
+	stdout, stderr, exitCode, err := s.Run(context.Background(), project, "create_scene",
+		map[string]any{"scenePath": "scenes/main.tscn"})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if exitCode != 0 || stderr != "" || stdout != "out-1" {
+		t.Fatalf("run: stdout=%q stderr=%q exit=%d", stdout, stderr, exitCode)
+	}
+
+	lines := f.argLines(t)
+	if len(lines) != 1 {
+		t.Fatalf("spawn arg lines = %d, want 1", len(lines))
+	}
+	if !strings.Contains(lines[0], "-- --gd-tcp 127.0.0.1:0") {
+		t.Errorf("spawn args %q missing the --gd-tcp user arg", lines[0])
+	}
+	if strings.Contains(lines[0], "--gd-socket") {
+		t.Errorf("forced-TCP spawn args still carry --gd-socket: %q", lines[0])
 	}
 }
 
