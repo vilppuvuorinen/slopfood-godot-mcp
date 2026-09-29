@@ -141,6 +141,28 @@ jobs:
           go mod download
           go test -race -parallel 4 -covermode=atomic ./...
 
+  # build-windows cross-compiles the server for Windows on Linux and hands the
+  # artifact to e2e-windows. Testing the cross-compiled binary means the lane
+  # exercises the same kind of artifact the release job publishes, rather than a
+  # separately native-built one. Go is still needed on the Windows runner to
+  # compile and run the e2e test module, which cannot be cross-compiled.
+  build-windows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      - run: go mod download
+      - name: Cross-compile server
+        run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -o dist/slopfood-godot-mcp.exe ./cmd/slopfood-godot-mcp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-windows-amd64
+          path: dist/slopfood-godot-mcp.exe
+          if-no-files-found: error
+
   # e2e-windows exercises the whole runtime on Windows with one Godot build (the
   # newest stable minor line), so the loopback-TCP engine and daemon transports
   # are proven end to end without multiplying Windows build minutes. Only stable
@@ -149,7 +171,7 @@ jobs:
   # It is functional, not the concurrency lane: -race is dropped because the
   # Windows runner has no gcc and the Linux job already covers races.
   e2e-windows:
-    needs: versions
+    needs: [versions, build-windows]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -195,9 +217,11 @@ jobs:
             Select-Object -First 1
           if (-not $binary) { Write-Error "no win64 console engine found"; exit 1 }
           "GODOT_PATH=$($binary.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      - name: Build server
-        shell: pwsh
-        run: go build -trimpath -o bin\slopfood-godot-mcp.exe ./cmd/slopfood-godot-mcp
+      - name: Download cross-compiled server
+        uses: actions/download-artifact@v4
+        with:
+          name: server-windows-amd64
+          path: bin
       - name: e2e (Godot ${{ env.GODOT_MINOR }}, windows)
         working-directory: e2e
         shell: pwsh
