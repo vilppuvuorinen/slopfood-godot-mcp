@@ -206,8 +206,8 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 }
 
 // Invalidate marks the running engine's project-global view dirty so the next
-// Run respawns it. It never touches the process itself, so it is cheap and safe
-// to call after Close.
+// Run asks the editor to rescan before serving. It never touches the process
+// itself, so it is cheap and safe to call after Close.
 func (s *Session) Invalidate() {
 	s.mu.Lock()
 	s.rescanPending = true

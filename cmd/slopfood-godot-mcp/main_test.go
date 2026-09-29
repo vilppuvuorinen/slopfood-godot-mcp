@@ -30,6 +30,17 @@ func TestRunRejectsInvalidLogLevel(t *testing.T) {
 	}
 }
 
+// TestRunRejectsGDDaemonFlag asserts the removed one-shot opt-in is now just an
+// unknown flag: flag.Parse fails, so a stale --gd-daemon invocation cannot
+// silently start a daemon.
+func TestRunRejectsGDDaemonFlag(t *testing.T) {
+	var stdout, stderr strings.Builder
+	args := []string{daemonSubcommand, "--gd-daemon", "--project", t.TempDir()}
+	if err := run(args, strings.NewReader(""), &stdout, &stderr); err == nil {
+		t.Fatalf("run %v returned nil, want an unknown-flag error", args)
+	}
+}
+
 // TestResolveProjectPrecedence asserts the flag beats the environment, the
 // environment beats the working directory, and blank values fall through.
 func TestResolveProjectPrecedence(t *testing.T) {

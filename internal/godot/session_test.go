@@ -3,7 +3,9 @@ package godot
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -482,6 +484,45 @@ func TestSessionEOFRespawn(t *testing.T) {
 	}
 	if got := f.startCount(t); got != 2 {
 		t.Errorf("starts = %d, want 2 after EOF", got)
+	}
+}
+
+// TestSessionRetriesOnceOnWriteFailure proves the write-failure supervision: a
+// request whose first socket write fails (the process died between the liveness
+// check and the write) respawns the engine once and retries the same frame
+// instead of surfacing the failure. The session is given a process whose socket
+// is already closed, so the write fails deterministically with no live reader to
+// race, and the retry then spawns the fake.
+func TestSessionRetriesOnceOnWriteFailure(t *testing.T) {
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, defaultSocketResponse)
+	s := NewSession(f.bin, "/ops.gd")
+	defer s.Close()
+	project := t.TempDir()
+
+	conn, peer := net.Pipe()
+	_ = peer.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	s.proc = &sessionProc{
+		cmd:     exec.CommandContext(ctx, f.bin), //nolint:gosec // test-controlled fake.
+		cancel:  cancel,
+		socket:  &engineSocket{conn: conn},
+		done:    make(chan struct{}),
+		quit:    make(chan struct{}),
+		frames:  make(chan *responseFrame, 1),
+		project: project,
+	}
+
+	stdout, _, _, err := s.Run(context.Background(), project, "op", nil)
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if stdout != "out-1" {
+		t.Errorf("stdout = %q, want the retried response", stdout)
+	}
+	if got := f.startCount(t); got != 1 {
+		t.Errorf("starts = %d, want 1: the retry spawns a fresh process", got)
 	}
 }
 
