@@ -2,6 +2,7 @@ package godot
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,6 +36,9 @@ type socketSessionFake struct {
 	args   string
 	env    string
 	quit   string
+	// ops records each request line, so a test can assert the operations and
+	// params the session sent without a transport-level response assertion.
+	ops string
 }
 
 // defaultSocketResponse answers every request by echoing its id in stdout.
@@ -53,6 +57,7 @@ func newSocketSessionFake(t *testing.T, response string) *socketSessionFake {
 		args:   filepath.Join(dir, "args"),
 		env:    filepath.Join(dir, "env"),
 		quit:   filepath.Join(dir, "quit"),
+		ops:    filepath.Join(dir, "ops"),
 	}
 	body := `#!/bin/sh
 printf '%s\n' "$*" >> '` + f.args + `'
@@ -85,6 +90,7 @@ while True:
     while b"\n" in buf:
         line, buf = buf.split(b"\n", 1)
         req = json.loads(line)
+        open('` + f.ops + `', "a").write(line.decode() + "\n")
         if req.get("operation") == "quit":
             send(conn, req["id"], True, "", "")
             open('` + f.quit + `', "w").write("quit")
@@ -127,6 +133,30 @@ func (f *socketSessionFake) envValue(t *testing.T) string {
 		t.Fatalf("read env: %v", err)
 	}
 	return string(data)
+}
+
+// recordedOps returns the decoded request objects the fake received, in order.
+func (f *socketSessionFake) recordedOps(t *testing.T) []map[string]any {
+	t.Helper()
+	data, err := os.ReadFile(f.ops)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		t.Fatalf("read ops: %v", err)
+	}
+	var out []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if line == "" {
+			continue
+		}
+		var req map[string]any
+		if err := json.Unmarshal([]byte(line), &req); err != nil {
+			t.Fatalf("decode request %q: %v", line, err)
+		}
+		out = append(out, req)
+	}
+	return out
 }
 
 func (f *socketSessionFake) quitRecorded(t *testing.T) bool {
@@ -277,9 +307,16 @@ func TestSessionSkipsNonFrameStdout(t *testing.T) {
 	}
 }
 
-func TestSessionInvalidateRestarts(t *testing.T) {
+// TestSessionInvalidateRescans pins the new Invalidate contract: it asks the
+// editor to rescan before the next Run instead of forcing a respawn, so the
+// project-global change is reflected while the same process keeps serving.
+func TestSessionInvalidateRescans(t *testing.T) {
 	shortRuntimeDir(t)
-	f := newSocketSessionFake(t, defaultSocketResponse)
+	ops := filepath.Join(t.TempDir(), "ops")
+	response := `
+        open('` + ops + `', "a").write(req["operation"] + "\n")
+        send(conn, req["id"], True, "out-" + str(req["id"]), "")`
+	f := newSocketSessionFake(t, response)
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 	project := t.TempDir()
@@ -294,8 +331,43 @@ func TestSessionInvalidateRestarts(t *testing.T) {
 	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if got := f.startCount(t); got != 2 {
-		t.Errorf("starts = %d, want 2 after Invalidate", got)
+	if got := f.startCount(t); got != 1 {
+		t.Errorf("starts = %d, want 1: Invalidate must rescan, not respawn", got)
+	}
+
+	data, err := os.ReadFile(ops)
+	if err != nil {
+		t.Fatalf("read ops: %v", err)
+	}
+	got := strings.Fields(string(data))
+	want := []string{"op", "reimport_project", "op"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("operations = %v, want %v", got, want)
+	}
+}
+
+// TestSessionReimportProjectDrivesScan proves the session routes the
+// reimport_project operation straight to the bridge without a respawn, so the
+// warm editor filesystem, not a one-shot --import fork, drives the scan.
+func TestSessionReimportProjectDrivesScan(t *testing.T) {
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, defaultSocketResponse)
+	s := NewSession(f.bin, "/ops.gd")
+	defer s.Close()
+	project := t.TempDir()
+
+	if _, _, _, err := s.Run(context.Background(), project, "reimport_project", nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if got := f.startCount(t); got != 1 {
+		t.Fatalf("starts = %d, want 1", got)
+	}
+	reqs := f.recordedOps(t)
+	if len(reqs) != 1 {
+		t.Fatalf("requests = %+v, want one", reqs)
+	}
+	if reqs[0]["operation"] != "reimport_project" {
+		t.Errorf("operation = %v, want reimport_project", reqs[0]["operation"])
 	}
 }
 
@@ -340,9 +412,18 @@ func TestSessionProjectChangeRestarts(t *testing.T) {
 	}
 }
 
-func TestSessionFingerprintRestarts(t *testing.T) {
+// TestSessionFingerprintRescans pins the new fingerprint contract: a
+// project.godot change is reconciled by a rescan before the next operation
+// instead of restarting the engine, so the change is reflected while the same
+// process keeps serving. The pre-editor guarantee — a project-global change is
+// reflected before the next operation — is preserved either way.
+func TestSessionFingerprintRescans(t *testing.T) {
 	shortRuntimeDir(t)
-	f := newSocketSessionFake(t, defaultSocketResponse)
+	ops := filepath.Join(t.TempDir(), "ops")
+	response := `
+        open('` + ops + `', "a").write(req["operation"] + "\n")
+        send(conn, req["id"], True, "out-" + str(req["id"]), "")`
+	f := newSocketSessionFake(t, response)
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 	project := t.TempDir()
@@ -366,8 +447,18 @@ func TestSessionFingerprintRestarts(t *testing.T) {
 	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if got := f.startCount(t); got != 2 {
-		t.Errorf("starts = %d, want 2 after the fingerprint changed", got)
+	if got := f.startCount(t); got != 1 {
+		t.Errorf("starts = %d, want 1: a fingerprint change must rescan, not respawn", got)
+	}
+
+	data, err := os.ReadFile(ops)
+	if err != nil {
+		t.Fatalf("read ops: %v", err)
+	}
+	got := strings.Fields(string(data))
+	want := []string{"op", "reimport_project", "op"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("operations = %v, want %v", got, want)
 	}
 }
 

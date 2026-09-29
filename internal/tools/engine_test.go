@@ -128,38 +128,34 @@ func TestAttachScriptReconcilesWithoutInvalidation(t *testing.T) {
 	}
 }
 
-// TestReimportProjectInvalidatesSession confirms reimport_project invalidates a
-// live session whether the scan succeeds or fails, since the scan mutates
-// engine-global state either way.
-func TestReimportProjectInvalidatesSession(t *testing.T) {
-	tests := []struct {
-		name string
-		body string
-	}{
-		{name: "success", body: `exit 0`},
-		{name: "failure", body: `echo boom >&2; exit 1`},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv(godot.PathEnv, fakeGodotOps(t, tt.body))
-			root := t.TempDir()
-			makeProject(t, root)
+// TestReimportProjectReconcilesSession confirms reimport_project drives the
+// reconcile through the live session's reimport_project operation and does not
+// invalidate it: the bridge reconciles through the editor filesystem in place,
+// so no respawn is needed.
+func TestReimportProjectReconcilesSession(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
 
-			sess := &fakeSession{}
-			ctx := WithEngine(withProject(context.Background(), root), sess)
-			out, err := reimportProject().Handler(ctx, json.RawMessage(`{}`))
-			if err != nil {
-				t.Fatalf("handler: %v", err)
-			}
-			if _, ok := out.(mcp.ToolResult); !ok {
-				t.Fatalf("result type %T", out)
-			}
-			if len(sess.runs) != 0 {
-				t.Errorf("session runs = %+v, want none: reimport is one-shot", sess.runs)
-			}
-			if sess.invalidated != 1 {
-				t.Errorf("invalidated = %d, want 1", sess.invalidated)
-			}
-		})
+	sess := &fakeSession{}
+	ctx := WithEngine(withProject(context.Background(), root), sess)
+	out, err := reimportProject().Handler(ctx, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	result, ok := out.(mcp.ToolResult)
+	if !ok {
+		t.Fatalf("result type %T", out)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if len(sess.runs) != 1 || sess.runs[0].operation != "reimport_project" {
+		t.Fatalf("session runs = %+v, want one reimport_project", sess.runs)
+	}
+	if sess.runs[0].project != root {
+		t.Errorf("session project = %q, want %q", sess.runs[0].project, root)
+	}
+	if sess.invalidated != 0 {
+		t.Errorf("invalidated = %d, want 0: the bridge reconciles in place", sess.invalidated)
 	}
 }

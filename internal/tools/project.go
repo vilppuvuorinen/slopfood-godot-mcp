@@ -10,9 +10,9 @@ import (
 // Context is the per-call context a tool handler receives. It embeds
 // context.Context so cancellation and values flow through unchanged, and adds
 // the engine seam's vocabulary as methods on the handler's first argument: Run
-// executes an operation against the bound project, and Invalidate marks the
-// engine's project-global state dirty. The engine is always a live session; a
-// handler never branches on the engine's lifecycle.
+// executes an operation against the bound project, and Invalidate asks the
+// editor to rescan/reload. The engine is always a live session; a handler never
+// branches on the engine's lifecycle.
 type Context struct {
 	context.Context
 }
@@ -22,9 +22,9 @@ func (c Context) Run(project, operation string, params map[string]any) (stdout, 
 	return engineFrom(c.Context).Run(project, operation, params)
 }
 
-// Invalidate marks the session's project-global state dirty so the next call
-// respawns it. A context with no session installed has nothing to invalidate,
-// so it is a no-op.
+// Invalidate asks the session's editor to rescan/reload before the next call. A
+// context with no session installed has nothing to invalidate, so it is a
+// no-op.
 func (c Context) Invalidate() {
 	engineFrom(c.Context).Invalidate()
 }

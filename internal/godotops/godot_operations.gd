@@ -114,6 +114,25 @@ var _ready_printed := false
 var _scan_seen := false
 var _quit_pending := false
 
+# A full-scan reimport_project cannot answer inside the handler: waiting for
+# is_scanning() to clear there would block _process and starve the very scan
+# thread being waited on. Instead the handler starts scan_sources() and sets
+# _await_scan; the request handler parks that request's id and Result in
+# _deferred_*, and _process sends the response on the first frame after the scan
+# completes. That keeps the main loop iterating (no sleeps) while still gating
+# the response on is_scanning() true->false.
+var _await_scan := false
+var _deferred_id := -1
+var _deferred_result: Result = null
+
+# _reconcile_paths_pending holds paths a mutation just wrote that the editor
+# filesystem may not know yet. A newly created file or directory is invisible to
+# EditorFileSystem.update_file until a scan discovers it, so a reconcile first
+# requests scan_sources() and parks the path here; _process re-applies update_file
+# once the scan clears. A reconcile that needs no scan applies update_file
+# immediately and leaves this empty.
+var _reconcile_paths_pending: PackedStringArray = PackedStringArray()
+
 # run_socket is the non-blocking socket driver. It binds before anything else so
 # the Go side can dial as soon as it reads the readiness line, then returns from
 # _init: the socket is serviced from _process, the only hook that fires after
@@ -161,6 +180,21 @@ func _process(_delta: float) -> bool:
         _authenticated = false
     if _peer != null:
         _read_peer()
+    # A reconcile parked paths because it had to start a scan to discover a newly
+    # created file or directory. Once the scan clears, apply update_file to each
+    # path so its .uid/class_name side effects land, then answer the deferred
+    # request. The re-apply is what makes an out-of-band write visible: the first
+    # update_file ran before the scan tracked the path and was a no-op.
+    if _reconcile_paths_pending.size() > 0 and (_filesystem == null or not _filesystem.is_scanning()):
+        for path in _reconcile_paths_pending:
+            _apply_reconcile(path)
+        _reconcile_paths_pending = PackedStringArray()
+    # A full-scan reimport_project answers here, on the first frame after its
+    # scan completes, instead of inside the handler (which would block the scan).
+    if _deferred_result != null and (_filesystem == null or not _filesystem.is_scanning()):
+        _send_socket_response(_deferred_id, _deferred_result.ok, _deferred_result.stdout, _deferred_result.stderr)
+        _deferred_result = null
+        _deferred_id = -1
     return false
 
 # _filesystem_ready gates the readiness line on the initial editor scan. In
@@ -193,6 +227,9 @@ func _filesystem_ready() -> bool:
 # (it writes the .uid and registers class_name before returning), but it does not
 # reimport a changed .import, so a source the import system owns goes through
 # reimport_files, which is also synchronous. Neither needs a completion signal.
+#
+# It reconciles a single path; reimport_project reuses it per touched path and
+# only falls back to a full scan when it has none.
 func _reconcile_path(path: String) -> void:
     if not Engine.is_editor_hint() or not path.begins_with("res://"):
         return
@@ -201,10 +238,41 @@ func _reconcile_path(path: String) -> void:
         filesystem = EditorInterface.get_resource_filesystem()
         if filesystem == null:
             return
+    # update_file is synchronous and covers a path the filesystem already tracks.
+    # A path whose parent directory the editor has not scanned (a file created
+    # out of band) is invisible to update_file, so request a scan and re-apply
+    # once it clears; the response is deferred until then. scan_sources() is a
+    # no-op when nothing changed, so an already-tracked path still reconciles in
+    # this same frame and needs no deferral.
+    if not _apply_reconcile(path):
+        filesystem.scan_sources()
+        _reconcile_paths_pending.append(path)
+
+# _apply_reconcile makes one path visible to the editor filesystem and reports
+# whether it took effect. update_file covers scripts, scenes, and resources and
+# writes the .uid and registers class_name before returning; an imported source
+# the import system owns goes through reimport_files, which is also synchronous.
+# A file the filesystem does not track yet is a no-op, so the caller must scan
+# and retry.
+func _apply_reconcile(path: String) -> bool:
+    var filesystem := _filesystem
+    if filesystem == null:
+        filesystem = EditorInterface.get_resource_filesystem()
+    if filesystem == null:
+        return false
     if FileAccess.file_exists(path + ".import"):
         filesystem.reimport_files(PackedStringArray([path]))
-    else:
-        filesystem.update_file(path)
+        return true
+    filesystem.update_file(path)
+    # update_file on an untracked path silently no-ops; a tracked script gains
+    # its .uid, which is the observable proof the reconcile took effect.
+    return not path.ends_with(".gd") or FileAccess.file_exists(path + ".uid")
+
+# _reconcile_paths applies the same per-path reconcile to each touched path, so
+# reimport_project routes every path through the one Phase 6a dispatch.
+func _reconcile_paths(paths: PackedStringArray) -> void:
+    for path in paths:
+        _reconcile_path(path)
 
 # _read_peer drains every available byte into the per-connection buffer and
 # hands each complete newline-delimited frame to the request handler. A
@@ -270,6 +338,16 @@ func _handle_socket_request(line: String) -> bool:
     if not (params is Dictionary):
         params = {}
     var result := dispatch(operation, params)
+    # A full-scan reimport_project, or a mutation whose reconcile started a scan
+    # to discover a newly written path, cannot answer inside the handler: waiting
+    # for is_scanning() here would block _process and starve the scan. Park the
+    # id and Result; _process finishes the reconcile and sends the frame once
+    # is_scanning() clears.
+    if _await_scan or _reconcile_paths_pending.size() > 0:
+        _await_scan = false
+        _deferred_id = id
+        _deferred_result = result
+        return true
     _send_socket_response(id, result.ok, result.stdout, result.stderr)
     return true
 
@@ -333,6 +411,8 @@ func dispatch(operation, params) -> Result:
             handler_result = manage_scene_signals(result, params)
         "attach_script":
             handler_result = attach_script(result, params)
+        "reimport_project":
+            handler_result = reimport_project(result, params)
         "manage_resource":
             handler_result = manage_resource(result, params)
         "manage_animation":
@@ -392,6 +472,42 @@ func _free_temp_nodes():
         if is_instance_valid(node):
             node.free()
     _temp_nodes.clear()
+
+# reimport_project reconciles the project with EditorFileSystem: it materializes
+# missing .import sidecars and .uid sidecars and applies edits to existing ones,
+# without restarting the engine. It prefers the targeted reconcile per touched
+# path (a changed .import goes through reimport_files), and only when it has no
+# touched path does it fall back to a project-wide scan_sources().
+#
+# A full scan cannot complete inside the handler: a no-change scan emits no
+# signal and is_scanning() is true immediately after the call (Phase 0.4), so the
+# only universal completion gate is is_scanning() true->false — but waiting for
+# it here would block _process and starve the scan it waits on. The handler
+# therefore starts scan_sources() and flags _await_scan; _handle_socket_request
+# parks the response and _process sends it once the transition is observed. No
+# sleeps.
+func reimport_project(result: Result, params) -> Result:
+    if not Engine.is_editor_hint():
+        result.err("reimport_project requires the editor filesystem; run it through the editor session")
+        return result.fail()
+    var filesystem := _filesystem
+    if filesystem == null:
+        filesystem = EditorInterface.get_resource_filesystem()
+        if filesystem == null:
+            result.err("reimport_project requires the editor filesystem; run it through the editor session")
+            return result.fail()
+    var touched = params.get("paths", [])
+    if touched is Array and touched.size() > 0:
+        var paths := PackedStringArray()
+        for path in touched:
+            paths.append(str(path))
+        _reconcile_paths(paths)
+        result.out("Reconciled " + str(paths.size()) + " path(s) with the editor filesystem")
+        return result
+    filesystem.scan_sources()
+    _await_scan = true
+    result.out("Scanned project sources")
+    return result
 
 # ping is a trivial liveness operation with no side effects. Because readiness
 # is gated on the editor scan, a returned ping also proves the socket round-trip

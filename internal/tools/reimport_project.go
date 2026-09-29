@@ -3,23 +3,9 @@ package tools
 import (
 	"encoding/json"
 	"path/filepath"
-	"regexp"
 
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
-
-// importAllowedStderr lists editor-mode stderr lines that do not indicate a
-// failed scan. `--import` starts the full editor, which initializes editor-only
-// subsystems (the ObjectDB profiler among them) that can fail to set up a
-// `user://` directory without affecting the filesystem scan. The exit code
-// remains authoritative: a real scan failure calls quit(EXIT_FAILURE).
-var importAllowedStderr = []*regexp.Regexp{
-	regexp.MustCompile(`Could not create ObjectDB Snapshots directory:`),
-	// The engine prints a stack-trace continuation line under the diagnostic
-	// above; it is part of the same benign warning.
-	regexp.MustCompile(`^at: _get_and_create_snapshot_storage_dir`),
-}
 
 func reimportProject() mcp.Tool {
 	return mcp.Tool{
@@ -52,18 +38,15 @@ func handleReimportProject(ctx Context, _ json.RawMessage) (any, error) {
 		return notAProjectResult(project), nil
 	}
 
-	// `--import` drives the editor filesystem scan, the only headless mechanism
-	// that both writes `.import` sidecars for new sources and reapplies edited
-	// ones, and that writes `.uid` sidecars for scripts and shaders. Resaving
-	// resources at runtime cannot do it: ResourceSaver.save has no UID logic,
-	// and without EditorFileSystem the text saver actively strips existing
-	// `uid=` references. Scanning is non-destructive, so this leaves every
-	// already-assigned UID and up-to-date artifact untouched.
-	stdout, stderr, exitCode, err := godot.Import(ctx, godot.Path(), project)
-	// The scan rewrites .import/.uid artifacts and regenerates the global class
-	// cache, so a live session's engine-global state is stale whatever the exit
-	// code. Invalidate unconditionally so the next session call respawns.
-	ctx.Invalidate()
+	// The editor session's reimport_project operation drives EditorFileSystem:
+	// it materializes missing `.import` sidecars and `.uid` sidecars, registers
+	// class_name scripts, and reapplies edited `.import` files, all in the warm
+	// engine. Resaving resources at runtime cannot do it: ResourceSaver.save has
+	// no UID logic, and without EditorFileSystem the text saver actively strips
+	// existing `uid=` references. The reconcile is non-destructive, so it leaves
+	// every already-assigned UID and up-to-date artifact untouched. The operation
+	// reconciles through the editor in place, so no Invalidate/respawn is needed.
+	stdout, stderr, exitCode, err := ctx.Run(project, "reimport_project", nil)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to reimport project: "+err.Error(),
@@ -72,7 +55,7 @@ func handleReimportProject(ctx Context, _ json.RawMessage) (any, error) {
 			"Verify the project path is accessible",
 		), nil
 	}
-	if scriptFailed(exitCode, stderr, importAllowedStderr...) {
+	if scriptFailed(exitCode, stderr) {
 		return mcp.ErrorResult(
 			"Failed to reimport project: "+stderr,
 			"Check if the project is valid",

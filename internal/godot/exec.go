@@ -48,25 +48,6 @@ func Export(ctx context.Context, executable, projectPath, presetName, outputPath
 	return stdout, stderr, 0, nil
 }
 
-// Import runs `<executable> --headless --path <project> --import`, which starts
-// the editor, waits for the initial filesystem scan, and quits. The scan is what
-// generates `.uid` sidecars for un-UID'd scripts and shaders: a runtime
-// ResourceSaver.save does not write them, so this is the only headless path that
-// materializes UIDs.
-//
-// A non-zero exit is not a wrapper failure: Godot's editor calls
-// quit(EXIT_FAILURE) on scan/import errors, so the exit code is returned for the
-// caller to interpret. Only a failure to start the process is returned as an
-// error.
-func Import(ctx context.Context, executable, projectPath string) (stdout, stderr string, exitCode int, err error) {
-	args := []string{
-		"--headless",
-		"--path", projectPath,
-		"--import",
-	}
-	return runScript(ctx, executable, args)
-}
-
 // RunOperation invokes
 // `<executable> --headless --path <project> --script <script> <operation>
 // <params-json>`, mirroring the reference server's executeOperation. It has no

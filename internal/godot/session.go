@@ -42,10 +42,10 @@ type Session struct {
 	// rather than a constant so same-package tests can set it low.
 	operationCap int
 
-	proc   *sessionProc
-	nextID int
-	dirty  bool
-	closed bool
+	proc          *sessionProc
+	nextID        int
+	rescanPending bool
+	closed        bool
 }
 
 // sessionProc is one engine process plus the goroutines that read its pipes and
@@ -147,6 +147,16 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 		return "", "", 0, err
 	}
 
+	// A project-global change (an explicit Invalidate or a changed fingerprint)
+	// is reconciled by asking the live editor to rescan before the next
+	// operation, rather than by respawning the process. The rescan reuses the
+	// warm engine and the same reimport_project operation the tool layer drives.
+	if s.consumeRescan(project) {
+		if rescanErr := s.runRescanLocked(ctx, p); rescanErr != nil {
+			return "", "", 0, rescanErr
+		}
+	}
+
 	s.nextID++
 	id := s.nextID
 
@@ -184,6 +194,10 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 		return "", "", 0, err
 	}
 	p.ops++
+	// The engine's view is current as of this operation, so a fingerprint change
+	// observed before it was already reconciled by the rescan above. Restamp so
+	// the next call does not rescan for the same change.
+	p.fingerprint = fingerprintProject(project)
 
 	if !frame.OK {
 		exitCode = 1
@@ -196,7 +210,7 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 // to call after Close.
 func (s *Session) Invalidate() {
 	s.mu.Lock()
-	s.dirty = true
+	s.rescanPending = true
 	s.mu.Unlock()
 }
 
@@ -251,13 +265,11 @@ func (s *Session) recvFrameLocked(ctx context.Context, p *sessionProc, id int) (
 }
 
 // restartNeeded reports whether the current process cannot serve project. Any
-// doubt (death, dirty state, changed project or project-global files, or too
-// many served operations) is resolved by a clean respawn rather than by trying
-// to salvage the process.
+// doubt about liveness (no process, death, changed project, or too many served
+// operations) is resolved by a clean respawn rather than by trying to salvage
+// the process. A dirty project-global view is not a restart: it is reconciled by
+// a rescan (see consumeRescan).
 func (s *Session) restartNeeded(project string) bool {
-	if s.dirty {
-		return true
-	}
 	p := s.proc
 	if p == nil {
 		return true
@@ -270,10 +282,55 @@ func (s *Session) restartNeeded(project string) bool {
 	if p.project != project {
 		return true
 	}
-	if p.ops >= s.operationCap {
-		return true
+	return p.ops >= s.operationCap
+}
+
+// consumeRescan reports whether a project-global change is pending and clears
+// it. The pending flag covers both an explicit Invalidate and a changed
+// fingerprint: once the editor has rescanned, the flag and the stored
+// fingerprint are current again.
+func (s *Session) consumeRescan(project string) bool {
+	if s.proc == nil {
+		return false
 	}
-	return p.fingerprint != fingerprintProject(project)
+	fingerprint := fingerprintProject(project)
+	if !s.rescanPending && s.proc.fingerprint == fingerprint {
+		return false
+	}
+	s.rescanPending = false
+	s.proc.fingerprint = fingerprint
+	return true
+}
+
+// runRescanLocked drives one reimport_project operation through the running
+// engine so a project-global change is visible before the caller's operation.
+// It uses its own request id and frame exchange, distinct from the caller's, and
+// is attributed under the same session lock.
+func (s *Session) runRescanLocked(ctx context.Context, p *sessionProc) error {
+	s.nextID++
+	id := s.nextID
+	payload := struct {
+		ID        int            `json:"id"`
+		Operation string         `json:"operation"`
+		Params    map[string]any `json:"params"`
+	}{ID: id, Operation: "reimport_project", Params: map[string]any{}}
+	line, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("engine session: encode rescan request: %w", err)
+	}
+	if err = p.socket.writeRequest(line); err != nil {
+		s.stopLocked()
+		return fmt.Errorf("engine session: write rescan request: %w", err)
+	}
+	frame, err := s.recvFrameLocked(ctx, p, id)
+	if err != nil {
+		return err
+	}
+	p.ops++
+	if !frame.OK {
+		return fmt.Errorf("engine session: rescan failed: %s", strings.TrimSpace(frame.Stderr))
+	}
+	return nil
 }
 
 // ensureStartedLocked spawns the bridge for project when no process is running.
@@ -286,7 +343,7 @@ func (s *Session) ensureStartedLocked(project string) (*sessionProc, error) {
 		return nil, err
 	}
 	s.proc = p
-	s.dirty = false
+	s.rescanPending = false
 	return p, nil
 }
 

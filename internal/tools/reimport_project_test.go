@@ -1,11 +1,12 @@
 package tools
 
 import (
-	"path/filepath"
+	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
 func TestReimportProjectSchema(t *testing.T) {
@@ -30,13 +31,38 @@ func TestReimportProjectSchema(t *testing.T) {
 	}
 }
 
+// recordingSession is a Session double that records the operation each Run
+// carries and echoes a canned stdout. It proves a handler reached the warm
+// session instead of forking a separate engine.
+type recordingSession struct {
+	runs   []fakeSessionRun
+	stdout string
+	stderr string
+	exit   int
+	err    error
+}
+
+func (s *recordingSession) Run(_ context.Context, project, operation string, params map[string]any) (string, string, int, error) {
+	s.runs = append(s.runs, fakeSessionRun{project: project, operation: operation, params: params})
+	return s.stdout, s.stderr, s.exit, s.err
+}
+
+func (s *recordingSession) Invalidate() {}
+
 func TestReimportProjectSuccess(t *testing.T) {
-	fake := fakeGodotOps(t, `echo "$@"`)
-	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, reimportProject(), root, `{}`)
+	sess := &recordingSession{stdout: "Scanned project sources\n"}
+	ctx := WithEngine(withProject(context.Background(), root), sess)
+	out, err := reimportProject().Handler(ctx, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	result, ok := out.(mcp.ToolResult)
+	if !ok {
+		t.Fatalf("result type %T", out)
+	}
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -47,17 +73,19 @@ func TestReimportProjectSuccess(t *testing.T) {
 	if !strings.HasPrefix(text, "Project reimported successfully.") {
 		t.Errorf("text = %q", text)
 	}
-	// The scan must be driven by --import: a runtime script (resave_resources)
-	// cannot generate UIDs or apply imports, and resaving resources would strip
-	// existing UIDs.
-	if !strings.Contains(text, "--import") {
-		t.Errorf("text = %q, want it to contain --import", text)
+	if !strings.Contains(text, "Scanned project sources") {
+		t.Errorf("text = %q, want the session's output", text)
 	}
-	if strings.Contains(text, "--script") {
-		t.Errorf("text = %q, want no --script invocation", text)
+	// The scan must reach the warm session's reimport_project operation, which
+	// reconciles through the editor filesystem.
+	if len(sess.runs) != 1 {
+		t.Fatalf("session runs = %+v, want one", sess.runs)
 	}
-	if !strings.Contains(text, root) {
-		t.Errorf("text = %q, want it to contain the project root", text)
+	if sess.runs[0].operation != "reimport_project" {
+		t.Errorf("session operation = %q, want reimport_project", sess.runs[0].operation)
+	}
+	if sess.runs[0].project != root {
+		t.Errorf("session project = %q, want the bound root %q", sess.runs[0].project, root)
 	}
 }
 
@@ -90,12 +118,19 @@ func TestReimportProjectValidation(t *testing.T) {
 }
 
 func TestReimportProjectScriptFailure(t *testing.T) {
-	fake := fakeGodotOps(t, `echo 'Failed to reimport project: boom' >&2; exit 1`)
-	t.Setenv(godot.PathEnv, fake)
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, reimportProject(), root, `{}`)
+	sess := &recordingSession{stderr: "Failed to reimport project: boom", exit: 1}
+	ctx := WithEngine(withProject(context.Background(), root), sess)
+	out, err := reimportProject().Handler(ctx, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	result, ok := out.(mcp.ToolResult)
+	if !ok {
+		t.Fatalf("result type %T", out)
+	}
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -110,12 +145,23 @@ func TestReimportProjectScriptFailure(t *testing.T) {
 	}
 }
 
-func TestReimportProjectSpawnFailure(t *testing.T) {
-	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
+// TestReimportProjectSessionFailure covers the session itself failing (an engine
+// that never started, a dead socket): the tool reports it with the spawn-style
+// solutions, mirroring the pre-warm --import spawn failure.
+func TestReimportProjectSessionFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, reimportProject(), root, `{}`)
+	sess := &recordingSession{err: context.DeadlineExceeded}
+	ctx := WithEngine(withProject(context.Background(), root), sess)
+	out, err := reimportProject().Handler(ctx, json.RawMessage(`{}`))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	result, ok := out.(mcp.ToolResult)
+	if !ok {
+		t.Fatalf("result type %T", out)
+	}
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
