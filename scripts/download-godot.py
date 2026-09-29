@@ -60,13 +60,16 @@ Environment overrides:
                        (default: <repo>/.godot)
   GODOT_BUILDS_DIR     checkout of the godot-builds release manifests
                        (default: <GODOT_DIR>/godot-builds)
+  GODOT_OS             engine platform to download: linux (default), windows,
+                       or macos; selects the asset name, binary name, and the
+                       default GODOT_TEMPLATE_FILES
   GODOT_VERIFY         set to 0 to skip checksum verification (default: 1);
                        missing checksums are filled from the release manifest,
                        so verification needs no pinned manifest
   GODOT_TEMPLATES      set to 1 to also download export templates
                        (default: 0)
   GODOT_TEMPLATE_FILES space-separated unzip patterns selecting which .tpz
-                       members to unpack; unset unpacks all of templates/
+                       members to unpack; unset uses the OS default
   GODOT_TEMPLATES_DIR  export templates root, i.e. Godot's
                        "<data>/godot/export_templates"
                        (default: <GODOT_DIR>/godot/export_templates)
@@ -110,11 +113,64 @@ def info(message):
 
 
 @dataclass
+class OSProfile:
+    """Per-platform asset, binary, and template defaults."""
+
+    # Asset-name platform fragment: "linux.<arch>" or "win64.exe"/"macos.universal".
+    asset_platform: str
+    # Binary-name platform fragment used in diagnostics.
+    binary_platform: str
+    # Glob matching the engine binary inside the unpacked minor directory.
+    binary_glob: str
+    # Glob matching the stale point releases to remove on upgrade.
+    stale_glob: str
+    # Default GODOT_TEMPLATE_FILES when the variable is unset.
+    template_glob: str
+
+
+OS_PROFILES = {
+    "linux": OSProfile(
+        asset_platform="linux.{arch}",
+        binary_platform="linux.{arch}",
+        binary_glob="Godot_v*_linux.*",
+        stale_glob="Godot_v*_linux.{arch}",
+        template_glob="templates/version.txt templates/linux_*",
+    ),
+    "windows": OSProfile(
+        asset_platform="win64.exe",
+        binary_platform="win64",
+        # The console-subsystem build is preferred: its stdout survives a pipe,
+        # which the readiness line, --version, and diagnostics depend on. The
+        # GUI build is a fallback.
+        binary_glob="Godot_v*_win64_console.exe",
+        stale_glob="Godot_v*_win64*.exe",
+        template_glob="templates/version.txt templates/windows_*",
+    ),
+    "macos": OSProfile(
+        asset_platform="macos.universal",
+        binary_platform="macos.universal",
+        binary_glob="Godot_v*_macos.*",
+        stale_glob="Godot_v*_macos.*",
+        template_glob="templates/version.txt templates/macosx_* templates/macos_*",
+    ),
+}
+
+
+def os_profile(config):
+    """Return the OSProfile for config.os, or die on an unknown platform."""
+    profile = OS_PROFILES.get(config.os)
+    if profile is None:
+        die("unsupported GODOT_OS '%s': want one of %s" % (config.os, ", ".join(sorted(OS_PROFILES))))
+    return profile
+
+
+@dataclass
 class Config:
     manifest: str
     out_dir: Path
     repo: str
     arch: str
+    os: str
     force: str
     verify: str
     download_templates: str
@@ -129,15 +185,25 @@ def load_config(manifest=None):
         out_dir / "godot" / "export_templates"
     )
     builds_dir = os.environ.get("GODOT_BUILDS_DIR") or (out_dir / "godot-builds")
+    target_os = os.environ.get("GODOT_OS") or "linux"
+    template_files = os.environ.get("GODOT_TEMPLATE_FILES")
+    if template_files is None:
+        # Default to the target OS's templates so a per-OS install stays small;
+        # a caller that needs another platform's templates sets the variable
+        # explicitly (the Windows e2e lane adds the Linux ones the export test
+        # needs).
+        profile = OS_PROFILES.get(target_os)
+        template_files = profile.template_glob if profile else ""
     return Config(
         manifest=str(DEFAULT_MANIFEST) if manifest is None else manifest,
         out_dir=out_dir,
         repo=os.environ.get("GODOT_REPO") or "godotengine/godot-builds",
         arch=os.environ.get("GODOT_ARCH") or "x86_64",
+        os=target_os,
         force=os.environ.get("GODOT_FORCE") or "0",
         verify=os.environ.get("GODOT_VERIFY") or "1",
         download_templates=os.environ.get("GODOT_TEMPLATES") or "0",
-        template_files=os.environ.get("GODOT_TEMPLATE_FILES") or "",
+        template_files=template_files,
         templates_dir=Path(templates_dir),
         builds_dir=Path(builds_dir),
     )
@@ -311,8 +377,15 @@ def list_minors(lower, config):
 
 
 def engine_asset_name(version, config):
-    """Return the Linux engine zip asset name for a release tag."""
-    return "Godot_v%s_linux.%s.zip" % (version, config.arch)
+    """Return the engine zip asset name for a release tag and target OS."""
+    profile = os_profile(config)
+    platform = profile.asset_platform.format(arch=config.arch)
+    return "Godot_v%s_%s.zip" % (version, platform)
+
+
+def engine_binary_glob(config):
+    """Return the glob matching the engine binary inside the unpacked dir."""
+    return os_profile(config).binary_glob
 
 
 def templates_asset_name(version):
@@ -425,9 +498,23 @@ def install_export_templates(version, expected, config):
     info("installed export templates %s -> %s" % (version, dest_dir))
 
 
+def installed_binary(dest_dir, config):
+    """Return the first existing engine binary in dest_dir, or the preferred name.
+
+    The glob is OS-specific, so a Windows install resolves the console build
+    ahead of the plain GUI one. Returns the matched path, or the preferred
+    (first-glob) path when nothing exists yet.
+    """
+    profile = os_profile(config)
+    matches = sorted(dest_dir.glob(profile.binary_glob))
+    if matches:
+        return matches[0]
+    return dest_dir / "Godot_v*_%s" % profile.binary_platform.format(arch=config.arch)
+
+
 def install_build(minor, version, expected, config):
     asset = engine_asset_name(version, config)
-    binary = "Godot_v%s_linux.%s" % (version, config.arch)
+    profile = os_profile(config)
     dest_dir = config.out_dir / minor
     url = "https://github.com/%s/releases/download/%s/%s" % (
         config.repo,
@@ -435,7 +522,9 @@ def install_build(minor, version, expected, config):
         asset,
     )
 
-    if config.force != "1" and os.access(dest_dir / binary, os.X_OK):
+    # Existence is a regular file, not X_OK: the execute bit is meaningless on
+    # Windows, where the engine binary is a .exe.
+    if config.force != "1" and installed_binary(dest_dir, config).is_file():
         info("already unpacked: %s" % version)
         return
 
@@ -461,9 +550,13 @@ def install_build(minor, version, expected, config):
     else:
         info("skipping checksum: %s" % version)
 
-    # Drop any older point release already sitting in the shared minor dir.
-    for stale in dest_dir.glob("Godot_v*_linux.%s" % config.arch):
-        if stale.name != binary and stale.is_file():
+    # Drop any older point release already sitting in the shared minor dir. The
+    # glob follows the target OS, so the Linux and Windows builds of a minor
+    # line can coexist without one pruning the other.
+    stale_glob = profile.stale_glob.format(arch=config.arch)
+    keep = {installed_binary(dest_dir, config).name}
+    for stale in dest_dir.glob(stale_glob):
+        if stale.name not in keep and stale.is_file():
             stale.unlink()
 
     try:
@@ -474,10 +567,11 @@ def install_build(minor, version, expected, config):
         die("unpack failed: %s: %s" % (asset, exc))
     zip_path.unlink(missing_ok=True)
 
-    target = dest_dir / binary
+    target = installed_binary(dest_dir, config)
     if not target.is_file():
         die("expected binary not found after unpack: %s" % target)
-    target.chmod(target.stat().st_mode | 0o111)
+    if config.os != "windows":
+        target.chmod(target.stat().st_mode | 0o111)
     info("installed %s -> %s" % (version, target))
 
 

@@ -141,11 +141,75 @@ jobs:
           go mod download
           go test -race -parallel 4 -covermode=atomic ./...
 
+  # e2e-windows exercises the whole runtime on Windows with one Godot build (the
+  # newest supported minor line), so the loopback-TCP engine and daemon
+  # transports are proven end to end without multiplying Windows build minutes.
+  # It is functional, not the concurrency lane: -race is dropped because the
+  # Windows runner has no gcc and the Linux job already covers races.
+  e2e-windows:
+    needs: versions
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      # %APPDATA% does not expand in a workflow env: block and the default
+      # Windows shell is PowerShell, so resolve Godot's template root here and
+      # export it for the later steps.
+      - name: Resolve templates dir
+        shell: pwsh
+        run: |
+          "GODOT_TEMPLATES_DIR=$env:APPDATA\Godot\export_templates" |
+            Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      # One Godot version: the highest supported minor line. The downloader's
+      # surface is unchanged; install-latest resolves that line's newest
+      # release for GODOT_OS=windows.
+      - name: Resolve highest minor
+        shell: pwsh
+        run: |
+          $minors = python scripts/download-godot.py minors "$env:MIN_GODOT_MINOR"
+          $highest = $minors | Select-Object -Last 1
+          if (-not $highest) {
+            Write-Error "no Godot releases found for minors >= $env:MIN_GODOT_MINOR"
+            exit 1
+          }
+          "GODOT_MINOR=$highest" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      # The Linux members are required even on Windows: the export e2e installs
+      # a Linux preset and exports an ELF, so its templates must be present or
+      # TestExportProjectTool fails.
+      - name: Install Godot ${{ env.GODOT_MINOR }}
+        shell: pwsh
+        env:
+          GODOT_OS: windows
+          GODOT_VERIFY: "1"
+          GODOT_TEMPLATES: "1"
+          GODOT_TEMPLATE_FILES: "templates/version.txt templates/linux_* templates/windows_*"
+        run: |
+          python scripts/download-godot.py install-latest "$env:GODOT_MINOR"
+          $binary = Get-ChildItem -Path "$env:GITHUB_WORKSPACE\.godot\$env:GODOT_MINOR\Godot_v*_win64_console.exe" |
+            Select-Object -First 1
+          if (-not $binary) { Write-Error "no win64 console engine found"; exit 1 }
+          "GODOT_PATH=$($binary.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Build server
+        shell: pwsh
+        run: go build -trimpath -o bin\slopfood-godot-mcp.exe ./cmd/slopfood-godot-mcp
+      - name: e2e (Godot ${{ env.GODOT_MINOR }}, windows)
+        working-directory: e2e
+        shell: pwsh
+        env:
+          GODOT_MCP_BIN: ${{ github.workspace }}\bin\slopfood-godot-mcp.exe
+          GODOT_MINOR: ${{ env.GODOT_MINOR }}
+        run: |
+          go mod download
+          go test -parallel 2 -count=1 ./...
+
   release:
     # Gated on the dispatch input: pushes never release. It runs after every
     # check, so the tagged commit is one that passed the whole Godot matrix.
     if: ${{ inputs.version != '' }}
-    needs: [test, lint, e2e]
+    needs: [test, lint, e2e, e2e-windows]
     runs-on: ubuntu-latest
     concurrency:
       group: release
