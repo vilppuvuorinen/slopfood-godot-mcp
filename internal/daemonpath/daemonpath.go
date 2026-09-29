@@ -70,3 +70,17 @@ func LogPath(root string) (string, error) {
 	}
 	return filepath.Join(dir, ProjectHash(root)+".log"), nil
 }
+
+// EndpointPath returns the path of the TCP transport's endpoint record for the
+// daemon bound to root. It shares the runtime directory and project hash with
+// the socket and log paths but carries a distinct .endpoint suffix. The record
+// carries the per-spawn token, so the runtime directory must be 0700 and the
+// file 0600; the TCP backend creates and tightens both. The lock file the TCP
+// endpoint holds for its lifetime is EndpointPath(root)+".lock".
+func EndpointPath(root string) (string, error) {
+	dir, err := RuntimeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, ProjectHash(root)+".endpoint"), nil
+}

@@ -13,6 +13,32 @@ import (
 // wherever the package builds, and only the non-Linux Unix backend returns it.
 var errPeerIdentityUnsupported = errors.New("peer credentials unsupported on this platform")
 
+// errPeerIdentityAbsent reports that a transport has no peer identity at all
+// and no filesystem permission acting as its gate: a loopback-TCP port is
+// reachable by any local process and exposes no kernel credentials. Unlike
+// errPeerIdentityUnsupported, the daemon must not fall through to trusting the
+// transport; it requires the connection's token pre-auth to have succeeded
+// first. Only the TCP backend returns it.
+var errPeerIdentityAbsent = errors.New("peer identity absent for this transport")
+
+// TokenConnection is the optional pre-auth seam for transports with no kernel
+// peer identity and no filesystem permission gate. The TCP connection
+// implements it; the Unix and stdio connections do not, so "no token" means
+// the daemon skips the pre-auth step and runs the identical Serve path. The
+// daemon calls Authenticate in the per-connection goroutine, never on the
+// accept path, and only serves the connection when it succeeds and
+// Authenticated reports true.
+type TokenConnection interface {
+	// Authenticate consumes the transport's token prelude, a single bounded
+	// newline-delimited line read from the connection. It returns an error for
+	// a missing, malformed, or mismatched token, or on a read failure or
+	// deadline. It must be bounded in both time and bytes.
+	Authenticate() error
+	// Authenticated reports whether Authenticate succeeded. The daemon consults
+	// it when PeerIdentity returns errPeerIdentityAbsent.
+	Authenticated() bool
+}
+
 // PeerIdentity is the kernel-reported identity of the process on the far end of
 // a Connection. Each platform fills it from whatever the kernel exposes:
 // SO_PEERCRED on Linux, LOCAL_PEERCRED on macOS, and GetNamedPipeClientProcessId

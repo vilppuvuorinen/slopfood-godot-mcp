@@ -443,6 +443,44 @@ func TestDaemonRejectsDifferentUser(t *testing.T) {
 	}
 }
 
+// TestDaemonRejectsAbsentPeerWithoutToken asserts a transport with no peer
+// identity and no filesystem gate (TCP) is rejected when its token pre-auth did
+// not succeed, so it cannot fall through to trusting the transport.
+func TestDaemonRejectsAbsentPeerWithoutToken(t *testing.T) {
+	d := NewDaemon(testServer(), nil, ListenInProc, "")
+	defer func() { _ = d.Close() }()
+
+	conn := &authConn{authErr: errTCPTokenRejected}
+	if err := d.ServeConnection(context.Background(), conn); !errors.Is(err, errPeerRejected) {
+		t.Fatalf("ServeConnection err = %v, want %v", err, errPeerRejected)
+	}
+	if !conn.closed {
+		t.Error("rejected connection was not closed")
+	}
+}
+
+// TestDaemonAllowsAuthenticatedAbsentPeer asserts a TCP connection whose token
+// pre-auth succeeded is admitted despite the absent peer identity.
+func TestDaemonAllowsAuthenticatedAbsentPeer(t *testing.T) {
+	conn := &authConn{
+		fakeConn: fakeConn{in: strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n")},
+	}
+	d := NewDaemon(testServer(), nil, ListenInProc, "")
+	defer func() { _ = d.Close() }()
+
+	// ServeConnection does not run the pre-auth hook; authenticate directly to
+	// model a token transport that has already pre-authed.
+	if err := conn.Authenticate(); err != nil {
+		t.Fatalf("Authenticate: %v", err)
+	}
+	if err := d.ServeConnection(context.Background(), conn); err != nil {
+		t.Fatalf("ServeConnection: %v", err)
+	}
+	if !strings.Contains(conn.out.String(), `"tools"`) {
+		t.Errorf("output = %s", conn.out.String())
+	}
+}
+
 // TestDaemonAllowsUnsupportedPeerIdentity asserts a platform that reports peer
 // credentials as unsupported is allowed through, relying on the transport's
 // filesystem permissions instead.

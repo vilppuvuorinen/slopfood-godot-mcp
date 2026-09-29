@@ -96,10 +96,17 @@ type options struct {
 	idleTimeout time.Duration
 	logFile     string
 	detach      bool
+	// transport is the dev-build transport override. It defaults to "auto"
+	// (UDS off Windows, TCP on Windows) and is only settable when built with
+	// the devtransport tag, so a release binary always resolves auto.
+	transport string
+	// transportSet records whether --transport was actually given, so
+	// daemonChildArgs only forwards it to a spawned child that can accept it.
+	transportSet bool
 }
 
 func newFlags(name string) (*flag.FlagSet, *options) {
-	opts := &options{}
+	opts := &options{transport: "auto"}
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.BoolVar(&opts.showVersion, "version", false, "print version and exit")
 	fs.StringVar(&opts.logLevel, "log-level", "info", "log level (debug, info, warn, error)")
@@ -108,6 +115,7 @@ func newFlags(name string) (*flag.FlagSet, *options) {
 	fs.DurationVar(&opts.idleTimeout, "idle-timeout", defaultIdleTimeout, "daemon: exit after this long with no clients (0 disables)")
 	fs.StringVar(&opts.logFile, "log-file", "", "daemon: log file (default: a per-project path under the runtime directory)")
 	fs.BoolVar(&opts.detach, "detach", false, "daemon: re-exec as a detached child and exit")
+	registerTransportFlag(fs, opts)
 	return fs, opts
 }
 
@@ -201,19 +209,23 @@ func runClient(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 	defer role.stop()
 
-	socketPath, err := daemonpath.SocketPath(role.root)
+	transport, err := parseTransport(opts.transport)
 	if err != nil {
-		return fmt.Errorf("resolve daemon socket: %w", err)
+		return err
+	}
+	endpoint, err := newDaemonEndpoint(role.root, transport)
+	if err != nil {
+		return fmt.Errorf("resolve daemon endpoint: %w", err)
 	}
 	logPath, err := daemonpath.LogPath(role.root)
 	if err != nil {
 		return fmt.Errorf("resolve daemon log: %w", err)
 	}
 
-	role.logger.Info("bound project", "project", role.root, "socket", socketPath)
+	role.logger.Info("bound project", "project", role.root, "transport", transport, "endpoint", endpoint.addr())
 
 	// Spawning re-execs this binary as a detached daemon child. The client does
-	// not create or own a daemon: the socket is the only rendezvous.
+	// not create or own a daemon: the endpoint is the only rendezvous.
 	spawn := func(_ context.Context) error {
 		exe, exeErr := executablePath()
 		if exeErr != nil {
@@ -224,7 +236,7 @@ func runClient(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		}
 		return nil
 	}
-	client := mcp.NewClient(mcp.DialUnix, spawn, socketPath, role.logger)
+	client := mcp.NewClient(endpoint.dialFunc(), spawn, endpoint.addr(), role.logger)
 
 	if err := client.Run(role.ctx, stdin, stdout); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("client: %w", err)
@@ -285,6 +297,19 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	}
 	defer role.stop()
 
+	transport, err := parseTransport(opts.transport)
+	if err != nil {
+		return err
+	}
+	endpoint, err := newDaemonEndpoint(role.root, transport)
+	if err != nil {
+		return fmt.Errorf("resolve daemon endpoint: %w", err)
+	}
+	listen, err := endpoint.listenFunc()
+	if err != nil {
+		return fmt.Errorf("bind daemon endpoint: %w", err)
+	}
+
 	// The engine session outlives individual calls but not the daemon, so it is
 	// closed after daemon.Close stops the queue and worker. Registering its defer
 	// first makes LIFO run daemon.Close before the engine is killed, so no
@@ -293,7 +318,7 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("materialize operations script: %w", err)
 	}
-	session := godot.NewSession(godot.Path(), script)
+	session := godot.NewSessionTransport(godot.Path(), script, transport)
 	defer func() {
 		if cerr := session.Close(); cerr != nil {
 			role.logger.Warn("engine session close", "error", cerr)
@@ -301,17 +326,12 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	}()
 	serveCtx := tools.WithEngine(role.ctx, session)
 
-	socketPath, err := daemonpath.SocketPath(role.root)
-	if err != nil {
-		return fmt.Errorf("resolve daemon socket: %w", err)
-	}
-
 	queue := mcp.NewQueue(operationQueueDepth, operationQueueTimeout)
 	daemon := mcp.NewDaemon(
 		role.newServer(),
 		queue,
-		mcp.ListenUnix,
-		socketPath,
+		listen,
+		endpoint.addr(),
 	)
 	// A quarantined queue can no longer prove that engine work is serialized,
 	// so the daemon stops serving and the process exits; the host respawns it
@@ -327,7 +347,7 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 		}
 	}()
 
-	role.logger.Info("daemon listening", "project", role.root, "socket", socketPath, "log", logPath)
+	role.logger.Info("daemon listening", "project", role.root, "transport", transport, "endpoint", endpoint.addr(), "log", logPath)
 	if err := daemon.Serve(serveCtx); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("daemon serve: %w", err)
 	}

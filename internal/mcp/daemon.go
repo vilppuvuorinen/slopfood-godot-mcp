@@ -232,14 +232,15 @@ func (d *Daemon) Close() error {
 	return nil
 }
 
-// startConnection registers conn and serves it on a new goroutine. A
-// connection accepted after Close, or one whose peer fails authorization, is
-// dropped rather than served.
+// startConnection registers conn and serves it on a new goroutine. The
+// connection is tracked immediately, before any token pre-auth, so Close still
+// closes it and waits rather than returning while a token reader lingers. The
+// pre-auth read and the authorization that depends on it run inside the
+// goroutine, never on the accept path, so a silent client parked in a token
+// read cannot stall every other accept. A connection accepted after Close, one
+// whose token pre-auth fails, or one whose peer fails authorization is dropped
+// without serving.
 func (d *Daemon) startConnection(ctx context.Context, conn Connection) {
-	if !d.authorize(conn) {
-		_ = conn.Close()
-		return
-	}
 	if !d.track(conn) {
 		_ = conn.Close()
 		return
@@ -247,16 +248,41 @@ func (d *Daemon) startConnection(ctx context.Context, conn Connection) {
 	go func() {
 		defer d.untrack(conn)
 		defer func() { _ = conn.Close() }()
+		if err := preAuthenticate(conn); err != nil {
+			d.server.logger.Warn("rejected connection: token pre-auth failed", "error", err)
+			return
+		}
+		if !d.authorize(conn) {
+			return
+		}
 		if err := d.server.Serve(ctx, conn, conn); err != nil {
 			d.server.logger.Debug("connection serve ended", "error", err)
 		}
 	}()
 }
 
+// preAuthenticate runs conn's token handshake when the transport requires one.
+// A transport with a kernel identity or a filesystem permission gate does not
+// implement TokenConnection, so this is a no-op there; the TCP transport does,
+// and its Authenticate reads the bounded token prelude before the MCP scan
+// starts.
+func preAuthenticate(conn Connection) error {
+	tokenConn, ok := conn.(TokenConnection)
+	if !ok {
+		return nil
+	}
+	if err := tokenConn.Authenticate(); err != nil {
+		return fmt.Errorf("token pre-auth: %w", err)
+	}
+	return nil
+}
+
 // authorize reports whether conn's peer may be served. The transport may be
 // unable to name the peer, which is only acceptable when the platform reports
 // credentials as unsupported; every other failure, and any UID that differs
-// from this process's, is a rejection. The caller must not track or serve a
+// from this process's, is a rejection. A transport with no peer identity and no
+// filesystem gate (TCP) reports errPeerIdentityAbsent and is admitted only when
+// its token pre-auth already succeeded. The caller must not track or serve a
 // connection authorize rejects.
 func (d *Daemon) authorize(conn Connection) bool {
 	peer, err := conn.PeerIdentity()
@@ -264,6 +290,13 @@ func (d *Daemon) authorize(conn Connection) bool {
 		if errors.Is(err, errPeerIdentityUnsupported) {
 			d.server.logger.Debug("peer identity unavailable; relying on filesystem permissions")
 			return true
+		}
+		if errors.Is(err, errPeerIdentityAbsent) {
+			if tokenConn, ok := conn.(TokenConnection); ok && tokenConn.Authenticated() {
+				return true
+			}
+			d.server.logger.Warn("rejected connection: transport has no peer identity and no valid token")
+			return false
 		}
 		d.server.logger.Warn("rejected connection: cannot identify peer", "error", err)
 		return false

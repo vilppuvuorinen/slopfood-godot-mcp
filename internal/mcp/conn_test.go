@@ -34,6 +34,29 @@ func (c *fakeConn) PeerIdentity() (PeerIdentity, error) {
 	return c.peer, c.peerErr
 }
 
+// authConn is a fake TokenConnection: it wraps a fakeConn, reports the absent
+// peer identity sentinel, and authenticates according to authErr. It models the
+// TCP transport's contract without a socket.
+type authConn struct {
+	fakeConn
+	authErr       error
+	authenticated bool
+}
+
+func (c *authConn) Authenticate() error {
+	if c.authErr != nil {
+		return c.authErr
+	}
+	c.authenticated = true
+	return nil
+}
+
+func (c *authConn) Authenticated() bool { return c.authenticated }
+
+func (c *authConn) PeerIdentity() (PeerIdentity, error) {
+	return PeerIdentity{}, errPeerIdentityAbsent
+}
+
 // errListenerClosed is the error fakeListener reports once Close has been called.
 var errListenerClosed = errors.New("listener closed")
 
@@ -65,8 +88,9 @@ func (l *fakeListener) Close() error {
 }
 
 var (
-	_ Connection = (*fakeConn)(nil)
-	_ Listener   = (*fakeListener)(nil)
+	_ Connection      = (*fakeConn)(nil)
+	_ Listener        = (*fakeListener)(nil)
+	_ TokenConnection = (*authConn)(nil)
 )
 
 // TestConnectionServesProtocol asserts a Connection is exactly what Serve

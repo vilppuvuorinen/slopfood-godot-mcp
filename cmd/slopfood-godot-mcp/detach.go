@@ -18,7 +18,7 @@ var (
 // daemon subcommand bound to the same project, with the daemon-role options
 // carried over and the log path made explicit.
 func daemonChildArgs(root string, opts *options, logPath string) []string {
-	args := make([]string, 0, 10+2*len(opts.enable))
+	args := make([]string, 0, 12+2*len(opts.enable))
 	args = append(args,
 		daemonSubcommand,
 		"--project", root,
@@ -26,6 +26,12 @@ func daemonChildArgs(root string, opts *options, logPath string) []string {
 		"--log-file", logPath,
 		"--idle-timeout", opts.idleTimeout.String(),
 	)
+	// Forward --transport only when the user actually set it, so a release
+	// child that does not register the flag is never handed an unknown
+	// argument. It keeps the spawned daemon and its client on one transport.
+	if opts.transportSet {
+		args = append(args, "--transport", opts.transport)
+	}
 	for _, value := range opts.enable {
 		args = append(args, "--enable", value)
 	}
