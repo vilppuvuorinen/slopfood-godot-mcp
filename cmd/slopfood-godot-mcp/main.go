@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/daemonpath"
@@ -153,7 +152,7 @@ func setupRole(opts *options, stderr io.Writer) (*role, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	ctx, stop := signal.NotifyContext(context.Background(), shutdownSignals()...)
 	return &role{root: root, categories: categories, logger: logger, ctx: ctx, stop: stop}, nil
 }
 

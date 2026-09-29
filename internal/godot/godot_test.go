@@ -95,7 +95,7 @@ func TestEngineGlobs(t *testing.T) {
 		want []string
 	}{
 		{"linux", []string{"Godot_v*_linux.*"}},
-		{"windows", []string{"Godot_v*_win64.exe", "Godot_v*_win32.exe"}},
+		{"windows", []string{"Godot_v*_win64_console.exe", "Godot_v*_win64.exe", "Godot_v*_win32.exe"}},
 		{"darwin", []string{"Godot.app/Contents/MacOS/Godot", "Godot_v*_macos.*"}},
 	}
 	for _, tt := range tests {

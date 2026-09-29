@@ -9,7 +9,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -193,41 +192,10 @@ func hasIdleTimeout(args []string) bool {
 // daemonWaitTimeout bounds the polling helpers that watch detached daemons.
 const daemonWaitTimeout = 15 * time.Second
 
-// daemonPIDs returns the PIDs of the detached daemons bound to project. A
-// candidate must carry the server binary's name, the daemon subcommand, and the
-// project path on its command line; the thin clients share the binary name and
-// project but not the daemon subcommand, so they are not counted.
-func daemonPIDs(t *testing.T, project string) []int {
-	t.Helper()
-
-	output, err := exec.CommandContext(context.Background(), "ps", "-eo", "pid=,args=").Output() //nolint:gosec // ps is a fixed host tool, not user input.
-	if err != nil {
-		t.Fatalf("ps: %v", err)
-	}
-	binary := filepath.Base(os.Getenv(binaryEnv))
-	pids := make([]int, 0, 4)
-	for _, line := range strings.Split(string(output), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) < 3 {
-			continue
-		}
-		pid, perr := strconv.Atoi(fields[0])
-		if perr != nil {
-			continue
-		}
-		command := fields[1:]
-		// project is its own argv token after --project. Match it exactly, not
-		// as a substring: under a parallel run one project's temp path could
-		// otherwise match another's daemon.
-		if !slices.Contains(command, "daemon") || !slices.ContainsFunc(command, func(arg string) bool {
-			return strings.Contains(arg, binary)
-		}) || !slices.Contains(command, project) {
-			continue
-		}
-		pids = append(pids, pid)
-	}
-	return pids
-}
+// daemonPollInterval is how long waitForDaemon sleeps between daemonPIDs polls.
+// Process enumeration is expensive on Windows (a CIM query), so the interval is
+// widened there via the build-tagged override; elsewhere it is short.
+var daemonPollInterval = 100 * time.Millisecond
 
 // waitForDaemon polls until project has exactly want detached daemons, then
 // returns; it fails the test if the count never reaches want before the
@@ -241,7 +209,7 @@ func waitForDaemon(t *testing.T, project string, want int) {
 		if len(got) == want {
 			return
 		}
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(daemonPollInterval)
 	}
 	t.Fatalf("daemon count = %d %v, want %d for project %s", len(got), got, want, project)
 }
@@ -250,20 +218,6 @@ func waitForDaemon(t *testing.T, project string, want int) {
 func waitForNoDaemon(t *testing.T, project string) {
 	t.Helper()
 	waitForDaemon(t, project, 0)
-}
-
-// socketPath returns the single Unix socket the daemon bound under runtimeDir.
-func socketPath(t *testing.T, runtimeDir string) string {
-	t.Helper()
-	pattern := filepath.Join(runtimeDir, "slopfood-godot-mcp", "*.sock")
-	matches, err := filepath.Glob(pattern)
-	if err != nil {
-		t.Fatalf("glob %s: %v", pattern, err)
-	}
-	if len(matches) != 1 {
-		t.Fatalf("socket files = %v, want exactly one under %s", matches, runtimeDir)
-	}
-	return matches[0]
 }
 
 // findTool returns a listed tool by name, failing when it is absent.
@@ -497,7 +451,7 @@ func runGit(t *testing.T, dir string, args ...string) {
 	cmd.Env = append(os.Environ(),
 		"GIT_AUTHOR_NAME=e2e", "GIT_AUTHOR_EMAIL=e2e@example.com",
 		"GIT_COMMITTER_NAME=e2e", "GIT_COMMITTER_EMAIL=e2e@example.com",
-		"GIT_CONFIG_GLOBAL=/dev/null", "GIT_CONFIG_SYSTEM=/dev/null",
+		"GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_SYSTEM="+os.DevNull,
 	)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

@@ -57,6 +57,15 @@ jobs:
         run: |
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build ./...
           CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build ./...
+      # Vet both modules for the other release targets. vet is what compiles
+      # build-tagged *test* files, so a tagged file that does not compile fails
+      # on the push that adds it rather than on the Windows e2e lane.
+      - name: Cross-vet
+        run: |
+          for target in windows darwin; do
+            GOOS="$target" go vet ./...
+            (cd e2e && GOOS="$target" go vet ./...)
+          done
 
   lint:
     runs-on: ubuntu-latest

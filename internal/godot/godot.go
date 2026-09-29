@@ -29,7 +29,10 @@ const (
 func engineGlobs(goos string) []string {
 	switch goos {
 	case "windows":
-		return []string{"Godot_v*_win64.exe", "Godot_v*_win32.exe"}
+		// Prefer the console-subsystem build: its stdout survives a pipe, which
+		// the readiness line and --version depend on. The plain GUI build is a
+		// fallback for a hand-placed engine without the console sibling.
+		return []string{"Godot_v*_win64_console.exe", "Godot_v*_win64.exe", "Godot_v*_win32.exe"}
 	case "darwin":
 		return []string{"Godot.app/Contents/MacOS/Godot", "Godot_v*_macos.*"}
 	default:

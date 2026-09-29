@@ -178,6 +178,20 @@ func complete(path, content string) bool {
 	return err == nil && info.Mode().IsRegular() && info.Size() == int64(len(content))
 }
 
+// userToken returns a short, stable, filesystem-safe token scoping the temp
+// fallback cache to the current user. os.Getuid is Unix-only, so the token is a
+// short hash of the home directory on every platform: it is unique enough to
+// keep two users' temp caches apart without the home path's separators and
+// length.
+func userToken() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "default"
+	}
+	sum := sha256.Sum256([]byte(home))
+	return hex.EncodeToString(sum[:6])
+}
+
 // cacheDir returns the shared, per-user directory that holds materialized
 // scripts. It is stable across processes, so the cache never grows per server,
 // and its contents are only ever added, never removed. That makes it safe for
@@ -188,7 +202,7 @@ func cacheDir() (string, error) {
 	if base, err := userCacheDir(); err == nil {
 		dirs = append(dirs, filepath.Join(base, "godot-mcp", "scripts"))
 	}
-	dirs = append(dirs, filepath.Join(os.TempDir(), fmt.Sprintf("godot-mcp-scripts-%d", os.Getuid())))
+	dirs = append(dirs, filepath.Join(os.TempDir(), "godot-mcp-scripts-"+userToken()))
 
 	var lastErr error
 	for _, dir := range dirs {
