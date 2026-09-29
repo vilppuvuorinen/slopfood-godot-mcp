@@ -80,10 +80,10 @@ type testAnimationPayload struct {
 	Tracks   []map[string]any `json:"tracks"`
 }
 
-// readAnimationPayload calls read_animation and decodes its payload.
-func readAnimationPayload(t *testing.T, session *mcp.ClientSession) testAnimationPayload {
+// readAnimationPayload calls read_animation on resourcePath and decodes its payload.
+func readAnimationPayload(t *testing.T, session *mcp.ClientSession, resourcePath string) testAnimationPayload {
 	t.Helper()
-	text := requireToolText(t, session, "read_animation", map[string]any{"resourcePath": "anims/walk.tres"})
+	text := requireToolText(t, session, "read_animation", map[string]any{"resourcePath": resourcePath})
 	var payload testAnimationPayload
 	if err := json.Unmarshal([]byte(text), &payload); err != nil {
 		t.Fatalf("unmarshal animation payload: %v\n%s", err, text)
@@ -91,11 +91,11 @@ func readAnimationPayload(t *testing.T, session *mcp.ClientSession) testAnimatio
 	return payload
 }
 
-// createTestAnimation seeds anims/walk.tres through create_animation.
-func createTestAnimation(t *testing.T, session *mcp.ClientSession) {
+// createTestAnimation seeds resourcePath through create_animation.
+func createTestAnimation(t *testing.T, session *mcp.ClientSession, resourcePath string) {
 	t.Helper()
 	requireToolText(t, session, "create_animation", map[string]any{
-		"resourcePath": "anims/walk.tres",
+		"resourcePath": resourcePath,
 		"length":       2,
 	})
 }
@@ -103,22 +103,27 @@ func createTestAnimation(t *testing.T, session *mcp.ClientSession) {
 // TestAnimationTools drives the real animation tools against Godot.
 func TestAnimationTools(t *testing.T) {
 	t.Parallel()
+	// Every subtest below runs serially against this one warm project and
+	// session, so the suite pays for a single engine boot instead of nine. Each
+	// subtest owns a distinct resource path so the shared state never collides.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("creates and reads an animation", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
+		const path = "anims/create.tres"
 
 		createText := requireToolText(t, session, "create_animation", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"length":       2,
 			"loopMode":     "linear",
 			"step":         0.05,
 		})
 		requirePrefix(t, createText, "manage_animation succeeded.")
 
-		requireContains(t, readFile(t, filepath.Join(root, "anims", "walk.tres")), `[gd_resource type="Animation"`)
+		requireContains(t, readFile(t, filepath.Join(root, "anims", "create.tres")), `[gd_resource type="Animation"`)
 
-		payload := readAnimationPayload(t, session)
-		if payload.Path != "anims/walk.tres" || payload.Length != 2 || payload.LoopMode != "linear" {
+		payload := readAnimationPayload(t, session, path)
+		if payload.Path != path || payload.Length != 2 || payload.LoopMode != "linear" {
 			t.Errorf("payload = %+v", payload)
 		}
 		if len(payload.Tracks) != 0 {
@@ -127,12 +132,11 @@ func TestAnimationTools(t *testing.T) {
 	})
 
 	t.Run("adds a value track and reads it back", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		createTestAnimation(t, session)
+		const path = "anims/value_track.tres"
+		createTestAnimation(t, session, path)
 
 		addText := requireToolText(t, session, "add_animation_track", map[string]any{
-			"resourcePath":  "anims/walk.tres",
+			"resourcePath":  path,
 			"trackType":     "value",
 			"trackPath":     "Sprite2D:position",
 			"interpolation": "cubic",
@@ -143,7 +147,7 @@ func TestAnimationTools(t *testing.T) {
 		})
 		requirePrefix(t, addText, "manage_animation succeeded.")
 
-		payload := readAnimationPayload(t, session)
+		payload := readAnimationPayload(t, session, path)
 		if len(payload.Tracks) != 1 {
 			t.Fatalf("tracks = %v, want one", payload.Tracks)
 		}
@@ -163,12 +167,11 @@ func TestAnimationTools(t *testing.T) {
 	})
 
 	t.Run("adds a method track", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		createTestAnimation(t, session)
+		const path = "anims/method_track.tres"
+		createTestAnimation(t, session, path)
 
 		requireToolText(t, session, "add_animation_track", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"trackType":    "method",
 			"trackPath":    "root",
 			"keys": []any{
@@ -176,7 +179,7 @@ func TestAnimationTools(t *testing.T) {
 			},
 		})
 
-		payload := readAnimationPayload(t, session)
+		payload := readAnimationPayload(t, session, path)
 		if len(payload.Tracks) != 1 {
 			t.Fatalf("tracks = %v, want one", payload.Tracks)
 		}
@@ -189,12 +192,11 @@ func TestAnimationTools(t *testing.T) {
 	})
 
 	t.Run("set replaces a track's keys", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		createTestAnimation(t, session)
+		const path = "anims/set_track.tres"
+		createTestAnimation(t, session, path)
 
 		requireToolText(t, session, "add_animation_track", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"trackType":    "value",
 			"trackPath":    "Sprite2D:position",
 			"keys": []any{
@@ -203,7 +205,7 @@ func TestAnimationTools(t *testing.T) {
 			},
 		})
 		requireToolText(t, session, "set_animation_track", map[string]any{
-			"resourcePath":  "anims/walk.tres",
+			"resourcePath":  path,
 			"trackIndex":    0,
 			"interpolation": "linear",
 			"keys": []any{
@@ -211,7 +213,7 @@ func TestAnimationTools(t *testing.T) {
 			},
 		})
 
-		payload := readAnimationPayload(t, session)
+		payload := readAnimationPayload(t, session, path)
 		keys, _ := payload.Tracks[0]["keys"].([]any)
 		if len(keys) != 1 {
 			t.Fatalf("keys = %v, want the replacement set", keys)
@@ -219,53 +221,50 @@ func TestAnimationTools(t *testing.T) {
 	})
 
 	t.Run("removes a track", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		createTestAnimation(t, session)
+		const path = "anims/remove_track.tres"
+		createTestAnimation(t, session, path)
 
 		requireToolText(t, session, "add_animation_track", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"trackType":    "value",
 			"trackPath":    "Sprite2D:position",
 		})
 		requireToolText(t, session, "remove_animation_track", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"trackIndex":   0,
 		})
 
-		payload := readAnimationPayload(t, session)
+		payload := readAnimationPayload(t, session, path)
 		if len(payload.Tracks) != 0 {
 			t.Errorf("tracks = %v, want none after removal", payload.Tracks)
 		}
 	})
 
 	t.Run("modifies animation properties", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
+		const path = "anims/modify.tres"
 
 		requireToolText(t, session, "create_animation", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"length":       1,
 		})
 		requireToolText(t, session, "modify_animation", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"loopMode":     "pingpong",
 			"length":       3,
 		})
 
-		payload := readAnimationPayload(t, session)
+		payload := readAnimationPayload(t, session, path)
 		if payload.Length != 3 || payload.LoopMode != "pingpong" {
 			t.Errorf("payload = %+v, want length 3 pingpong", payload)
 		}
 	})
 
 	t.Run("adds the 3D and blend-shape track family", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		createTestAnimation(t, session)
+		const path = "anims/track_family.tres"
+		createTestAnimation(t, session, path)
 
 		requireToolText(t, session, "add_animation_track", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"trackType":    "position_3d",
 			"trackPath":    "root",
 			"keys": []any{
@@ -273,7 +272,7 @@ func TestAnimationTools(t *testing.T) {
 			},
 		})
 		requireToolText(t, session, "add_animation_track", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"trackType":    "rotation_3d",
 			"trackPath":    "root",
 			"keys": []any{
@@ -281,7 +280,7 @@ func TestAnimationTools(t *testing.T) {
 			},
 		})
 		requireToolText(t, session, "add_animation_track", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"trackType":    "scale_3d",
 			"trackPath":    "root",
 			"keys": []any{
@@ -289,7 +288,7 @@ func TestAnimationTools(t *testing.T) {
 			},
 		})
 		requireToolText(t, session, "add_animation_track", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"trackType":    "blend_shape",
 			"trackPath":    "root",
 			"keys": []any{
@@ -297,7 +296,7 @@ func TestAnimationTools(t *testing.T) {
 			},
 		})
 
-		payload := readAnimationPayload(t, session)
+		payload := readAnimationPayload(t, session, path)
 		wantTypes := []string{"position_3d", "rotation_3d", "scale_3d", "blend_shape"}
 		if len(payload.Tracks) != len(wantTypes) {
 			t.Fatalf("tracks = %v, want %d", payload.Tracks, len(wantTypes))
@@ -326,12 +325,11 @@ func TestAnimationTools(t *testing.T) {
 	})
 
 	t.Run("adds a bezier track with and without handles", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		createTestAnimation(t, session)
+		const path = "anims/bezier.tres"
+		createTestAnimation(t, session, path)
 
 		requireToolText(t, session, "add_animation_track", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"trackType":    "bezier",
 			"trackPath":    "root",
 			"keys": []any{
@@ -346,7 +344,7 @@ func TestAnimationTools(t *testing.T) {
 			},
 		})
 
-		payload := readAnimationPayload(t, session)
+		payload := readAnimationPayload(t, session, path)
 		if len(payload.Tracks) != 1 || payload.Tracks[0]["type"] != "bezier" {
 			t.Fatalf("tracks = %v, want one bezier", payload.Tracks)
 		}
@@ -376,16 +374,15 @@ func TestAnimationTools(t *testing.T) {
 	})
 
 	t.Run("adds audio and nested animation tracks", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		createTestAnimation(t, session)
+		const path = "anims/audio.tres"
+		createTestAnimation(t, session, path)
 
 		// An animation track's value is the name of the animation to play,
 		// decoded as a StringName; an audio track's value is a resource
 		// reference. Each track carries two keys, one bare and one tagged, so
 		// both decode arms run.
 		requireToolText(t, session, "add_animation_track", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"trackType":    "animation",
 			"keys": []any{
 				map[string]any{"time": 0, "value": "idle"},
@@ -397,7 +394,7 @@ func TestAnimationTools(t *testing.T) {
 			"resourceType": "AudioStreamWAV",
 		})
 		requireToolText(t, session, "add_animation_track", map[string]any{
-			"resourcePath": "anims/walk.tres",
+			"resourcePath": path,
 			"trackType":    "audio",
 			"keys": []any{
 				map[string]any{"time": 0, "value": "res://anims/beep.tres", "startOffset": 0.1, "endOffset": 0.5},
@@ -405,7 +402,7 @@ func TestAnimationTools(t *testing.T) {
 			},
 		})
 
-		payload := readAnimationPayload(t, session)
+		payload := readAnimationPayload(t, session, path)
 		if len(payload.Tracks) != 2 {
 			t.Fatalf("tracks = %v, want two", payload.Tracks)
 		}
@@ -480,10 +477,12 @@ func TestAnimationErrors(t *testing.T) {
 		}, "The modify_animation tool requires at least one of: length, loopMode, step.")
 	})
 
-	t.Run("unknown track type", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
+	// The three engine-backed cases below share one warm project and session;
+	// each uses a distinct path, so one engine boot covers all of them.
+	root := newProject(t)
+	session := connectProject(t, root)
 
+	t.Run("unknown track type", func(t *testing.T) {
 		res := callTool(t, session, "create_animation", map[string]any{
 			"resourcePath": "anim.tres",
 		})
@@ -501,9 +500,6 @@ func TestAnimationErrors(t *testing.T) {
 	})
 
 	t.Run("missing animation", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
 		res := callTool(t, session, "read_animation", map[string]any{"resourcePath": "anims/missing.tres"})
 		if !res.IsError {
 			t.Fatal("expected an error result")
@@ -512,9 +508,6 @@ func TestAnimationErrors(t *testing.T) {
 	})
 
 	t.Run("not an animation resource", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
 		requireToolText(t, session, "create_resource", map[string]any{
 			"resourcePath": "resources/mat.tres",
 			"resourceType": "StandardMaterial3D",

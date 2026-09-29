@@ -18,8 +18,8 @@ func TestEraseTilemapCellTool(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
 	seedAtlasTexture(t, root)
-	setupTestTileSet(t, session)
-	setupTilemapScene(t, session)
+	setupTestTileSet(t, session, "tiles/set.tres")
+	setupTilemapScene(t, session, "scenes/level.tscn", "tiles/set.tres")
 
 	requireToolText(t, session, "set_tilemap_cell", map[string]any{
 		"scenePath":   "scenes/level.tscn",
@@ -34,7 +34,7 @@ func TestEraseTilemapCellTool(t *testing.T) {
 		"coords":    map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 	})
 
-	payload := readTilemapPayload(t, session)
+	payload := readTilemapPayload(t, session, "scenes/level.tscn")
 	if len(payload.UsedCells) != 0 {
 		t.Errorf("usedCells = %v, want none after erase", payload.UsedCells)
 	}

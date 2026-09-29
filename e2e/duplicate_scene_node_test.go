@@ -18,8 +18,12 @@ func TestDuplicateSceneNodeSchema(t *testing.T) {
 // Godot.
 func TestDuplicateSceneNodeTool(t *testing.T) {
 	t.Parallel()
+	// The two subtests share one warm project and session; each owns its scene.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("duplicates a node", func(t *testing.T) {
-		root, session := seedScene(t, "scenes/duplicate.tscn", "Node2D")
+		createScene(t, session, "scenes/duplicate.tscn", "Node2D")
 		requireToolText(t, session, "add_node", map[string]any{
 			"scenePath": "scenes/duplicate.tscn",
 			"nodeType":  "Sprite2D",
@@ -36,7 +40,7 @@ func TestDuplicateSceneNodeTool(t *testing.T) {
 	})
 
 	t.Run("duplicates a node with children", func(t *testing.T) {
-		root, session := seedScene(t, "scenes/duplicate_tree.tscn", "Node2D")
+		createScene(t, session, "scenes/duplicate_tree.tscn", "Node2D")
 		requireToolText(t, session, "add_node", map[string]any{
 			"scenePath": "scenes/duplicate_tree.tscn",
 			"nodeType":  "Node2D",

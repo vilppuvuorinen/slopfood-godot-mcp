@@ -19,35 +19,41 @@ func TestAddNodeSchema(t *testing.T) {
 // TestAddNodeTool drives the real add_node tool against Godot.
 func TestAddNodeTool(t *testing.T) {
 	t.Parallel()
+	// Both subtests share one warm project and session, each with its own scene.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("adds a node", func(t *testing.T) {
-		root, session := seedScene(t, "scenes/main.tscn")
+		const path = "scenes/add_main.tscn"
+		createScene(t, session, path)
 
 		text := requireToolText(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/main.tscn",
+			"scenePath": path,
 			"nodeType":  "Sprite2D",
 			"nodeName":  "Player",
 		})
-		requirePrefix(t, text, "Node 'Player' of type 'Sprite2D' added successfully to 'scenes/main.tscn'.")
+		requirePrefix(t, text, "Node 'Player' of type 'Sprite2D' added successfully to '"+path+"'.")
 
-		scene := readFile(t, filepath.Join(root, "scenes", "main.tscn"))
+		scene := readFile(t, filepath.Join(root, "scenes", "add_main.tscn"))
 		requireContains(t, scene, `[node name="Player" type="Sprite2D"`)
 	})
 
 	t.Run("adds a scene instance", func(t *testing.T) {
-		root, session := seedScene(t, "scenes/main.tscn")
+		const path = "scenes/instance_main.tscn"
+		createScene(t, session, path)
 		res := callTool(t, session, "create_scene", map[string]any{"scenePath": "scenes/enemy.tscn"})
 		if res.IsError {
 			t.Fatalf("create_scene failed: %s", firstText(t, res))
 		}
 
 		text := requireToolText(t, session, "add_node", map[string]any{
-			"scenePath":    "scenes/main.tscn",
+			"scenePath":    path,
 			"instancePath": "scenes/enemy.tscn",
 			"nodeName":     "Foe",
 		})
-		requirePrefix(t, text, "Scene 'scenes/enemy.tscn' instanced as 'Foe' added successfully to 'scenes/main.tscn'.")
+		requirePrefix(t, text, "Scene 'scenes/enemy.tscn' instanced as 'Foe' added successfully to '"+path+"'.")
 
-		scene := readFile(t, filepath.Join(root, "scenes", "main.tscn"))
+		scene := readFile(t, filepath.Join(root, "scenes", "instance_main.tscn"))
 		requireContains(t, scene, `instance=ExtResource(`)
 		// The editor records the instance's UID on the ext_resource line, so the
 		// path is not adjacent to the type; match the reference with the uid
@@ -62,20 +68,23 @@ func TestAddNodeTool(t *testing.T) {
 // TestAddNodeErrors covers the reference's validation and failure messages.
 func TestAddNodeErrors(t *testing.T) {
 	t.Parallel()
+	// Every case that touches a project shares one warm session; only the
+	// "not a project" case, which needs a non-project directory, dials its own.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing params", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "add_node", map[string]any{}, "scenePath and nodeName are required.")
 	})
 
 	t.Run("both sources", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/main.tscn")
+		createScene(t, session, "scenes/both.tscn")
 		res := callTool(t, session, "create_scene", map[string]any{"scenePath": "scenes/enemy.tscn"})
 		if res.IsError {
 			t.Fatalf("create_scene failed: %s", firstText(t, res))
 		}
 		requireToolError(t, session, "add_node", map[string]any{
-			"scenePath":    "scenes/main.tscn",
+			"scenePath":    "scenes/both.tscn",
 			"nodeType":     "Sprite2D",
 			"instancePath": "scenes/enemy.tscn",
 			"nodeName":     "Player",
@@ -83,25 +92,23 @@ func TestAddNodeErrors(t *testing.T) {
 	})
 
 	t.Run("neither source", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/main.tscn")
+		createScene(t, session, "scenes/neither.tscn")
 		requireToolError(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/main.tscn",
+			"scenePath": "scenes/neither.tscn",
 			"nodeName":  "Player",
 		}, "Provide exactly one of nodeType or instancePath.")
 	})
 
 	t.Run("missing instance scene", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/main.tscn")
+		createScene(t, session, "scenes/missing_instance.tscn")
 		requireToolError(t, session, "add_node", map[string]any{
-			"scenePath":    "scenes/main.tscn",
+			"scenePath":    "scenes/missing_instance.tscn",
 			"instancePath": "scenes/missing.tscn",
 			"nodeName":     "Foe",
 		}, "Instance scene does not exist: scenes/missing.tscn")
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "add_node", map[string]any{
 			"scenePath": "../escape",
 			"nodeType":  "Sprite2D",
@@ -110,8 +117,6 @@ func TestAddNodeErrors(t *testing.T) {
 	})
 
 	t.Run("invalid nodeType", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "add_node", map[string]any{
 			"scenePath": "main.tscn",
 			"nodeType":  "res://evil.gd",
@@ -120,18 +125,16 @@ func TestAddNodeErrors(t *testing.T) {
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "add_node", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "add_node", map[string]any{
 			"scenePath": "main.tscn",
 			"nodeType":  "Sprite2D",
 			"nodeName":  "Player",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "add_node", map[string]any{
 			"scenePath": "missing.tscn",
 			"nodeType":  "Sprite2D",
@@ -140,10 +143,10 @@ func TestAddNodeErrors(t *testing.T) {
 	})
 
 	t.Run("missing parent node", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+		createScene(t, session, "scenes/missing_parent.tscn", "Node2D")
 
 		res := callTool(t, session, "add_node", map[string]any{
-			"scenePath":      "scenes/main.tscn",
+			"scenePath":      "scenes/missing_parent.tscn",
 			"parentNodePath": "root/Missing",
 			"nodeType":       "Sprite2D",
 			"nodeName":       "Player",
@@ -155,12 +158,12 @@ func TestAddNodeErrors(t *testing.T) {
 	})
 
 	t.Run("bogus node type", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+		createScene(t, session, "scenes/bogus.tscn", "Node2D")
 
 		// validClassName accepts any identifier, so an unregistered class
 		// reaches the engine and fails there rather than being pre-rejected.
 		res := callTool(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/main.tscn",
+			"scenePath": "scenes/bogus.tscn",
 			"nodeType":  "NotARealNode",
 			"nodeName":  "Player",
 		})
@@ -171,13 +174,13 @@ func TestAddNodeErrors(t *testing.T) {
 	})
 
 	t.Run("abstract node type", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+		createScene(t, session, "scenes/abstract.tscn", "Node2D")
 
 		// CanvasItem is a registered ClassDB class Godot refuses to
 		// instantiate, taking the can_instantiate branch rather than the
 		// script-lookup one.
 		res := callTool(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/main.tscn",
+			"scenePath": "scenes/abstract.tscn",
 			"nodeType":  "CanvasItem",
 			"nodeName":  "Player",
 		})

@@ -16,15 +16,22 @@ func TestSetTilemapCellSchema(t *testing.T) {
 // TestSetTilemapCellTool drives the real set_tilemap_cell tool against Godot.
 func TestSetTilemapCellTool(t *testing.T) {
 	t.Parallel()
+	// Both subtests share one warm project and session, each with its own
+	// tileset and scene.
+	root := newProject(t)
+	session := connectProject(t, root)
+	seedAtlasTexture(t, root)
+
 	t.Run("places and reads cells", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedAtlasTexture(t, root)
-		setupTestTileSet(t, session)
-		setupTilemapScene(t, session)
+		const (
+			set   = "tiles/set_cells.tres"
+			scene = "scenes/level_cells.tscn"
+		)
+		setupTestTileSet(t, session, set)
+		setupTilemapScene(t, session, scene, set)
 
 		text := requireToolText(t, session, "set_tilemap_cell", map[string]any{
-			"scenePath":   "scenes/level.tscn",
+			"scenePath":   scene,
 			"nodePath":    "root/Ground",
 			"coords":      map[string]any{"$type": "Vector2i", "x": 1, "y": 2},
 			"sourceId":    0,
@@ -32,12 +39,12 @@ func TestSetTilemapCellTool(t *testing.T) {
 		})
 		requirePrefix(t, text, "manage_tilemap succeeded.")
 
-		payload := readTilemapPayload(t, session)
-		if payload.ScenePath != "scenes/level.tscn" || payload.NodePath != "root/Ground" {
+		payload := readTilemapPayload(t, session, scene)
+		if payload.ScenePath != scene || payload.NodePath != "root/Ground" {
 			t.Errorf("payload = %+v", payload)
 		}
-		if payload.TileSet != "tiles/set.tres" {
-			t.Errorf("tileSet = %q, want tiles/set.tres", payload.TileSet)
+		if payload.TileSet != set {
+			t.Errorf("tileSet = %q, want %s", payload.TileSet, set)
 		}
 		if len(payload.UsedCells) != 1 {
 			t.Fatalf("usedCells = %v, want one", payload.UsedCells)
@@ -48,21 +55,22 @@ func TestSetTilemapCellTool(t *testing.T) {
 	})
 
 	t.Run("places a cell with an alternative tile", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedAtlasTexture(t, root)
-		setupTestTileSet(t, session)
-		setupTilemapScene(t, session)
+		const (
+			set   = "tiles/set_cell_alt.tres"
+			scene = "scenes/level_cell_alt.tscn"
+		)
+		setupTestTileSet(t, session, set)
+		setupTilemapScene(t, session, scene, set)
 
 		requireToolText(t, session, "add_tileset_alternative", map[string]any{
-			"resourcePath": "tiles/set.tres",
+			"resourcePath": set,
 			"sourceId":     0,
 			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 		})
-		alternativeID := requireExtraAlternative(t, readTilesetPayload(t, session))
+		alternativeID := requireExtraAlternative(t, readTilesetPayload(t, session, set))
 
 		requireToolText(t, session, "set_tilemap_cell", map[string]any{
-			"scenePath":       "scenes/level.tscn",
+			"scenePath":       scene,
 			"nodePath":        "root/Ground",
 			"coords":          map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 			"sourceId":        0,
@@ -70,7 +78,7 @@ func TestSetTilemapCellTool(t *testing.T) {
 			"alternativeTile": alternativeID,
 		})
 
-		payload := readTilemapPayload(t, session)
+		payload := readTilemapPayload(t, session, scene)
 		if len(payload.UsedCells) != 1 {
 			t.Fatalf("usedCells = %v, want one", payload.UsedCells)
 		}

@@ -213,11 +213,16 @@ func TestModifySceneNodeErrors(t *testing.T) {
 		}, "Not a valid Godot project: "+root)
 	})
 
+	// The two engine-backed cases share one warm session, each with its own scene.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing node", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+		const path = "scenes/missing_node.tscn"
+		createScene(t, session, path, "Node2D")
 
 		res := callTool(t, session, "modify_scene_node", map[string]any{
-			"scenePath":  "scenes/main.tscn",
+			"scenePath":  path,
 			"nodePath":   "root/Missing",
 			"properties": map[string]any{"visible": true},
 		})
@@ -228,11 +233,12 @@ func TestModifySceneNodeErrors(t *testing.T) {
 	})
 
 	t.Run("invalid property value", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+		const path = "scenes/invalid_property.tscn"
+		createScene(t, session, path, "Node2D")
 
 		// position is a Vector2 slot, so a bare string cannot be decoded.
 		res := callTool(t, session, "modify_scene_node", map[string]any{
-			"scenePath":  "scenes/main.tscn",
+			"scenePath":  path,
 			"nodePath":   "root",
 			"properties": map[string]any{"position": "not-a-vector"},
 		})

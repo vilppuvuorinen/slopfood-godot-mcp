@@ -78,9 +78,10 @@ binary_format/embed_pck=false
 // template fails the suite rather than passing it.
 func TestExportProjectTool(t *testing.T) {
 	t.Parallel()
-	t.Run("release build", func(t *testing.T) {
-		root, session := seedExportProject(t)
+	// Both exports share one warm project and session; the two outputs differ.
+	root, session := seedExportProject(t)
 
+	t.Run("release build", func(t *testing.T) {
 		res := callTool(t, session, "export_project", map[string]any{
 			"presetName": "Linux",
 			"outputPath": "build/game.x86_64",
@@ -94,8 +95,6 @@ func TestExportProjectTool(t *testing.T) {
 	})
 
 	t.Run("debug build", func(t *testing.T) {
-		root, session := seedExportProject(t)
-
 		res := callTool(t, session, "export_project", map[string]any{
 			"presetName": "Linux",
 			"outputPath": "build/game_debug.x86_64",

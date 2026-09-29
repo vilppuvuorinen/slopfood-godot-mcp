@@ -64,15 +64,21 @@ func TestMoveSceneNodeErrors(t *testing.T) {
 		}, "Scene file does not exist: missing.tscn")
 	})
 
+	// The three engine-backed cases share one warm session, each with its own
+	// scene, so a single boot covers them.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("move root", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/structure.tscn", "Node2D")
+		const path = "scenes/move_root.tscn"
+		createScene(t, session, path, "Node2D")
 		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/structure.tscn",
+			"scenePath": path,
 			"nodeType":  "Node2D",
 			"nodeName":  "World",
 		})
 		res := callTool(t, session, "move_scene_node", map[string]any{
-			"scenePath":     "scenes/structure.tscn",
+			"scenePath":     path,
 			"nodePath":      "root",
 			"newParentPath": "root/World",
 		})
@@ -83,20 +89,21 @@ func TestMoveSceneNodeErrors(t *testing.T) {
 	})
 
 	t.Run("move into a descendant", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/structure.tscn", "Node2D")
+		const path = "scenes/move_descendant.tscn"
+		createScene(t, session, path, "Node2D")
 		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/structure.tscn",
+			"scenePath": path,
 			"nodeType":  "Node2D",
 			"nodeName":  "Parent",
 		})
 		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath":      "scenes/structure.tscn",
+			"scenePath":      path,
 			"nodeType":       "Node2D",
 			"nodeName":       "Child",
 			"parentNodePath": "root/Parent",
 		})
 		res := callTool(t, session, "move_scene_node", map[string]any{
-			"scenePath":     "scenes/structure.tscn",
+			"scenePath":     path,
 			"nodePath":      "root/Parent",
 			"newParentPath": "root/Parent/Child",
 		})
@@ -107,14 +114,15 @@ func TestMoveSceneNodeErrors(t *testing.T) {
 	})
 
 	t.Run("move to a missing parent", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/structure.tscn", "Node2D")
+		const path = "scenes/move_missing_parent.tscn"
+		createScene(t, session, path, "Node2D")
 		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/structure.tscn",
+			"scenePath": path,
 			"nodeType":  "Node2D",
 			"nodeName":  "Player",
 		})
 		res := callTool(t, session, "move_scene_node", map[string]any{
-			"scenePath":     "scenes/structure.tscn",
+			"scenePath":     path,
 			"nodePath":      "root/Player",
 			"newParentPath": "root/Missing",
 		})

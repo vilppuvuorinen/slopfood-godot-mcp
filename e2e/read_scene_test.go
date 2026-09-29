@@ -32,8 +32,12 @@ func TestReadSceneSchema(t *testing.T) {
 // the returned JSON node tree.
 func TestReadSceneTool(t *testing.T) {
 	t.Parallel()
+	// One warm project and session serve every subtest; each owns its scene.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("reads the root node", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+		createScene(t, session, "scenes/main.tscn", "Node2D")
 
 		text := requireToolText(t, session, "read_scene", map[string]any{
 			"scenePath": "scenes/main.tscn",
@@ -49,7 +53,7 @@ func TestReadSceneTool(t *testing.T) {
 	})
 
 	t.Run("reads a child node", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/tree.tscn", "Node2D")
+		createScene(t, session, "scenes/tree.tscn", "Node2D")
 
 		requireToolText(t, session, "add_node", map[string]any{
 			"scenePath": "scenes/tree.tscn",
@@ -74,7 +78,7 @@ func TestReadSceneTool(t *testing.T) {
 	})
 
 	t.Run("scopes to a node and depth", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/scope.tscn", "Node2D")
+		createScene(t, session, "scenes/scope.tscn", "Node2D")
 		requireToolText(t, session, "add_node", map[string]any{
 			"scenePath": "scenes/scope.tscn",
 			"nodeType":  "Sprite2D",
@@ -119,7 +123,7 @@ func TestReadSceneTool(t *testing.T) {
 	})
 
 	t.Run("depth zero returns the node alone", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/depth0.tscn", "Node2D")
+		createScene(t, session, "scenes/depth0.tscn", "Node2D")
 		requireToolText(t, session, "add_node", map[string]any{
 			"scenePath": "scenes/depth0.tscn",
 			"nodeType":  "Sprite2D",
@@ -140,7 +144,7 @@ func TestReadSceneTool(t *testing.T) {
 	})
 
 	t.Run("explicit root nodePath", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/rootpath.tscn", "Node2D")
+		createScene(t, session, "scenes/rootpath.tscn", "Node2D")
 
 		text := requireToolText(t, session, "read_scene", map[string]any{
 			"scenePath": "scenes/rootpath.tscn",
@@ -156,7 +160,7 @@ func TestReadSceneTool(t *testing.T) {
 	})
 
 	t.Run("unknown nodePath", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/unknown.tscn", "Node2D")
+		createScene(t, session, "scenes/unknown.tscn", "Node2D")
 
 		res := callTool(t, session, "read_scene", map[string]any{
 			"scenePath": "scenes/unknown.tscn",
@@ -169,7 +173,6 @@ func TestReadSceneTool(t *testing.T) {
 	})
 
 	t.Run("non-scene resource is an error", func(t *testing.T) {
-		root, session := seedScene(t, "scenes/main.tscn", "Node2D")
 		writeE2EFile(t, filepath.Join(root, "thing.tres"), resourceTres)
 
 		// A .tres loads as a Resource, not a PackedScene, so read_scene reports

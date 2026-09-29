@@ -20,8 +20,13 @@ func TestAddSceneSignalSchema(t *testing.T) {
 // TestAddSceneSignalTool drives the real add_scene_signal tool against Godot.
 func TestAddSceneSignalTool(t *testing.T) {
 	t.Parallel()
+	// One warm project and session serve every subtest below; each subtest owns
+	// a distinct scene path, so a single engine boot covers them all.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("adds a connection", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/signals.tscn", "Button")
+		createScene(t, session, "scenes/signals.tscn", "Button")
 
 		empty := requireToolText(t, session, "read_scene", map[string]any{
 			"scenePath": "scenes/signals.tscn",
@@ -63,7 +68,7 @@ func TestAddSceneSignalTool(t *testing.T) {
 	t.Run("writes the connection to the scene", func(t *testing.T) {
 		// Button carries the "pressed" signal; connecting it must not make the
 		// engine log an error when the saved scene is re-instantiated.
-		root, session := seedScene(t, "scenes/connections.tscn", "Button")
+		createScene(t, session, "scenes/connections.tscn", "Button")
 
 		addText := requireToolText(t, session, "add_scene_signal", map[string]any{
 			"scenePath":  "scenes/connections.tscn",
@@ -79,7 +84,7 @@ func TestAddSceneSignalTool(t *testing.T) {
 	})
 
 	t.Run("duplicate add is idempotent", func(t *testing.T) {
-		root, session := seedScene(t, "scenes/duplicate.tscn", "Button")
+		createScene(t, session, "scenes/duplicate.tscn", "Button")
 		args := map[string]any{
 			"scenePath":  "scenes/duplicate.tscn",
 			"signalName": "pressed",
@@ -98,7 +103,7 @@ func TestAddSceneSignalTool(t *testing.T) {
 	})
 
 	t.Run("rejects missing source node", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/dangling.tscn", "Node2D")
+		createScene(t, session, "scenes/dangling.tscn", "Node2D")
 		res := callTool(t, session, "add_scene_signal", map[string]any{
 			"scenePath":  "scenes/dangling.tscn",
 			"signalName": "pressed",
@@ -113,7 +118,7 @@ func TestAddSceneSignalTool(t *testing.T) {
 	})
 
 	t.Run("rejects missing target node", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/dangling_target.tscn", "Button")
+		createScene(t, session, "scenes/dangling_target.tscn", "Button")
 		res := callTool(t, session, "add_scene_signal", map[string]any{
 			"scenePath":  "scenes/dangling_target.tscn",
 			"signalName": "pressed",
@@ -134,9 +139,10 @@ func TestAddSceneSignalTool(t *testing.T) {
 			"newline":   "on\npressed",
 		} {
 			t.Run(name, func(t *testing.T) {
-				_, session := seedScene(t, "scenes/unsafe.tscn", "Node2D")
+				scenePath := "scenes/unsafe_" + name + ".tscn"
+				createScene(t, session, scenePath, "Node2D")
 				res := callTool(t, session, "add_scene_signal", map[string]any{
-					"scenePath":  "scenes/unsafe.tscn",
+					"scenePath":  scenePath,
 					"signalName": "pressed",
 					"sourcePath": "root",
 					"targetPath": "root",

@@ -131,10 +131,10 @@ type testTilesetPayload struct {
 	Sources   []map[string]any `json:"sources"`
 }
 
-// readTilesetPayload calls read_tileset and decodes its payload.
-func readTilesetPayload(t *testing.T, session *mcp.ClientSession) testTilesetPayload {
+// readTilesetPayload calls read_tileset on resourcePath and decodes its payload.
+func readTilesetPayload(t *testing.T, session *mcp.ClientSession, resourcePath string) testTilesetPayload {
 	t.Helper()
-	text := requireToolText(t, session, "read_tileset", map[string]any{"resourcePath": "tiles/set.tres"})
+	text := requireToolText(t, session, "read_tileset", map[string]any{"resourcePath": resourcePath})
 	var payload testTilesetPayload
 	if err := json.Unmarshal([]byte(text), &payload); err != nil {
 		t.Fatalf("unmarshal tileset payload: %v\n%s", err, text)
@@ -191,22 +191,22 @@ func seedAtlasTexture(t *testing.T, root string) {
 		"[gd_resource type=\"GradientTexture2D\" format=3]\n\n[resource]\nwidth = 64\nheight = 64\n")
 }
 
-// setupTestTileSet creates tiles/set.tres with atlas source 0 holding one tile.
-func setupTestTileSet(t *testing.T, session *mcp.ClientSession) {
+// setupTestTileSet creates resourcePath with atlas source 0 holding one tile.
+func setupTestTileSet(t *testing.T, session *mcp.ClientSession, resourcePath string) {
 	t.Helper()
 	requireToolText(t, session, "create_tileset", map[string]any{
-		"resourcePath": "tiles/set.tres",
+		"resourcePath": resourcePath,
 		"tileSize":     map[string]any{"$type": "Vector2i", "x": 16, "y": 16},
 	})
 	requireToolText(t, session, "add_tileset_source", map[string]any{
-		"resourcePath":      "tiles/set.tres",
+		"resourcePath":      resourcePath,
 		"sourceType":        "atlas",
 		"sourceId":          0,
 		"texture":           "tiles/atlas.tres",
 		"textureRegionSize": map[string]any{"$type": "Vector2i", "x": 16, "y": 16},
 	})
 	requireToolText(t, session, "add_tileset_tile", map[string]any{
-		"resourcePath": "tiles/set.tres",
+		"resourcePath": resourcePath,
 		"sourceId":     0,
 		"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 	})
@@ -215,16 +215,19 @@ func setupTestTileSet(t *testing.T, session *mcp.ClientSession) {
 // TestTilesetTools drives the real tileset tools against Godot.
 func TestTilesetTools(t *testing.T) {
 	t.Parallel()
+	// One warm project and session serve every subtest; each builds its own
+	// tileset (and scene where needed) under a distinct path.
+	root := newProject(t)
+	session := connectProject(t, root)
+	seedAtlasTexture(t, root)
+
 	t.Run("creates a tileset with an atlas source and tile", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedAtlasTexture(t, root)
+		const set = "tiles/set_create.tres"
+		setupTestTileSet(t, session, set)
+		requireContains(t, readFile(t, filepath.Join(root, "tiles", "set_create.tres")), `[gd_resource type="TileSet"`)
 
-		setupTestTileSet(t, session)
-		requireContains(t, readFile(t, filepath.Join(root, "tiles", "set.tres")), `[gd_resource type="TileSet"`)
-
-		payload := readTilesetPayload(t, session)
-		if payload.Path != "tiles/set.tres" || payload.TileShape != "square" {
+		payload := readTilesetPayload(t, session, set)
+		if payload.Path != set || payload.TileShape != "square" {
 			t.Errorf("payload = %+v", payload)
 		}
 		if len(payload.Sources) != 1 || payload.Sources[0]["type"] != "atlas" {
@@ -240,24 +243,22 @@ func TestTilesetTools(t *testing.T) {
 	})
 
 	t.Run("sets tile data and adds an alternative", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedAtlasTexture(t, root)
-		setupTestTileSet(t, session)
+		const set = "tiles/set_data.tres"
+		setupTestTileSet(t, session, set)
 
 		requireToolText(t, session, "set_tileset_tile_data", map[string]any{
-			"resourcePath": "tiles/set.tres",
+			"resourcePath": set,
 			"sourceId":     0,
 			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 			"properties":   map[string]any{"z_index": 3},
 		})
 		requireToolText(t, session, "add_tileset_alternative", map[string]any{
-			"resourcePath": "tiles/set.tres",
+			"resourcePath": set,
 			"sourceId":     0,
 			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 		})
 
-		payload := readTilesetPayload(t, session)
+		payload := readTilesetPayload(t, session, set)
 		tiles, _ := payload.Sources[0]["tiles"].([]any)
 		tile, _ := tiles[0].(map[string]any)
 		alternatives, _ := tile["alternatives"].([]any)
@@ -272,30 +273,28 @@ func TestTilesetTools(t *testing.T) {
 	})
 
 	t.Run("removes a tile alternative", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedAtlasTexture(t, root)
-		setupTestTileSet(t, session)
+		const set = "tiles/set_alt.tres"
+		setupTestTileSet(t, session, set)
 
 		requireToolText(t, session, "add_tileset_alternative", map[string]any{
-			"resourcePath": "tiles/set.tres",
+			"resourcePath": set,
 			"sourceId":     0,
 			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 		})
-		added := readTilesetPayload(t, session)
+		added := readTilesetPayload(t, session, set)
 		if got := len(tileAlternatives(t, added)); got != 2 {
 			t.Fatalf("alternatives after add = %d, want 2", got)
 		}
 		alternativeID := requireExtraAlternative(t, added)
 
 		requireToolText(t, session, "remove_tileset_alternative", map[string]any{
-			"resourcePath":  "tiles/set.tres",
+			"resourcePath":  set,
 			"sourceId":      0,
 			"atlasCoords":   map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 			"alternativeId": alternativeID,
 		})
 
-		remaining := tileAlternatives(t, readTilesetPayload(t, session))
+		remaining := tileAlternatives(t, readTilesetPayload(t, session, set))
 		if len(remaining) != 1 {
 			t.Fatalf("alternatives after remove = %v, want only the base", remaining)
 		}
@@ -305,24 +304,22 @@ func TestTilesetTools(t *testing.T) {
 	})
 
 	t.Run("adds and removes a scenes source tile", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedAtlasTexture(t, root)
-		setupTestTileSet(t, session)
+		const set = "tiles/set_scenes.tres"
+		setupTestTileSet(t, session, set)
 		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "props/box.tscn", "rootNodeType": "Node2D"})
 
 		requireToolText(t, session, "add_tileset_source", map[string]any{
-			"resourcePath": "tiles/set.tres",
+			"resourcePath": set,
 			"sourceType":   "scenes",
 			"sourceId":     1,
 		})
 		requireToolText(t, session, "add_tileset_tile", map[string]any{
-			"resourcePath": "tiles/set.tres",
+			"resourcePath": set,
 			"sourceId":     1,
 			"scenePath":    "props/box.tscn",
 		})
 
-		payload := readTilesetPayload(t, session)
+		payload := readTilesetPayload(t, session, set)
 		if len(payload.Sources) != 2 || payload.Sources[1]["type"] != "scenes" {
 			t.Fatalf("sources = %v, want two with a scenes source", payload.Sources)
 		}
@@ -338,12 +335,12 @@ func TestTilesetTools(t *testing.T) {
 
 		// A scenes-collection tile is removed by sceneTileId, not atlasCoords.
 		requireToolText(t, session, "remove_tileset_tile", map[string]any{
-			"resourcePath": "tiles/set.tres",
+			"resourcePath": set,
 			"sourceId":     1,
 			"sceneTileId":  int(sceneTileID),
 		})
 
-		payload = readTilesetPayload(t, session)
+		payload = readTilesetPayload(t, session, set)
 		tiles, _ = payload.Sources[1]["tiles"].([]any)
 		if len(tiles) != 0 {
 			t.Errorf("scene tiles after removal = %v, want none", tiles)
@@ -351,27 +348,25 @@ func TestTilesetTools(t *testing.T) {
 	})
 
 	t.Run("removes a tile and a source", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedAtlasTexture(t, root)
-		setupTestTileSet(t, session)
+		const set = "tiles/set_remove.tres"
+		setupTestTileSet(t, session, set)
 
 		requireToolText(t, session, "remove_tileset_tile", map[string]any{
-			"resourcePath": "tiles/set.tres",
+			"resourcePath": set,
 			"sourceId":     0,
 			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 		})
-		payload := readTilesetPayload(t, session)
+		payload := readTilesetPayload(t, session, set)
 		tiles, _ := payload.Sources[0]["tiles"].([]any)
 		if len(tiles) != 0 {
 			t.Errorf("tiles = %v, want none after removal", tiles)
 		}
 
 		requireToolText(t, session, "remove_tileset_source", map[string]any{
-			"resourcePath": "tiles/set.tres",
+			"resourcePath": set,
 			"sourceId":     0,
 		})
-		payload = readTilesetPayload(t, session)
+		payload = readTilesetPayload(t, session, set)
 		if len(payload.Sources) != 0 {
 			t.Errorf("sources = %v, want none after removal", payload.Sources)
 		}
@@ -394,14 +389,17 @@ func TestTilesetErrors(t *testing.T) {
 		}, "resourcePath, sourceId, and atlasCoords are required.")
 	})
 
+	// The three engine-backed cases share one warm project and session.
+	root := newProject(t)
+	session := connectProject(t, root)
+	seedAtlasTexture(t, root)
+
 	t.Run("unknown source", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedAtlasTexture(t, root)
-		setupTestTileSet(t, session)
+		const set = "tiles/set_unknown.tres"
+		setupTestTileSet(t, session, set)
 
 		res := callTool(t, session, "add_tileset_tile", map[string]any{
-			"resourcePath": "tiles/set.tres",
+			"resourcePath": set,
 			"sourceId":     9,
 			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
 		})
@@ -412,9 +410,6 @@ func TestTilesetErrors(t *testing.T) {
 	})
 
 	t.Run("missing tileset", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
 		res := callTool(t, session, "read_tileset", map[string]any{"resourcePath": "tiles/missing.tres"})
 		if !res.IsError {
 			t.Fatal("expected an error result")
@@ -423,14 +418,11 @@ func TestTilesetErrors(t *testing.T) {
 	})
 
 	t.Run("not a tileset resource", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
 		requireToolText(t, session, "create_resource", map[string]any{
-			"resourcePath": "resources/mat.tres",
+			"resourcePath": "resources/mat_tileset.tres",
 			"resourceType": "StandardMaterial3D",
 		})
-		res := callTool(t, session, "read_tileset", map[string]any{"resourcePath": "resources/mat.tres"})
+		res := callTool(t, session, "read_tileset", map[string]any{"resourcePath": "resources/mat_tileset.tres"})
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
@@ -446,11 +438,11 @@ type testTilemapPayload struct {
 	UsedCells []map[string]any `json:"usedCells"`
 }
 
-// readTilemapPayload calls read_tilemap and decodes its payload.
-func readTilemapPayload(t *testing.T, session *mcp.ClientSession) testTilemapPayload {
+// readTilemapPayload calls read_tilemap on scenePath and decodes its payload.
+func readTilemapPayload(t *testing.T, session *mcp.ClientSession, scenePath string) testTilemapPayload {
 	t.Helper()
 	text := requireToolText(t, session, "read_tilemap", map[string]any{
-		"scenePath": "scenes/level.tscn",
+		"scenePath": scenePath,
 		"nodePath":  "root/Ground",
 	})
 	var payload testTilemapPayload
@@ -460,33 +452,36 @@ func readTilemapPayload(t *testing.T, session *mcp.ClientSession) testTilemapPay
 	return payload
 }
 
-// setupTilemapScene creates a scene whose Ground node is a TileMapLayer bound to
-// the tileset built by setupTestTileSet.
-func setupTilemapScene(t *testing.T, session *mcp.ClientSession) {
+// setupTilemapScene creates scenePath with a Ground TileMapLayer bound to
+// tileSetPath, the tileset built by setupTestTileSet.
+func setupTilemapScene(t *testing.T, session *mcp.ClientSession, scenePath, tileSetPath string) {
 	t.Helper()
-	requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/level.tscn", "rootNodeType": "Node2D"})
+	requireToolText(t, session, "create_scene", map[string]any{"scenePath": scenePath, "rootNodeType": "Node2D"})
 	requireToolText(t, session, "add_node", map[string]any{
-		"scenePath": "scenes/level.tscn",
+		"scenePath": scenePath,
 		"nodeType":  "TileMapLayer",
 		"nodeName":  "Ground",
 	})
 	requireToolText(t, session, "modify_scene_node", map[string]any{
-		"scenePath":  "scenes/level.tscn",
+		"scenePath":  scenePath,
 		"nodePath":   "root/Ground",
-		"properties": map[string]any{"tile_set": "res://tiles/set.tres"},
+		"properties": map[string]any{"tile_set": "res://" + tileSetPath},
 	})
 }
 
 // TestReadTilemapErrors covers the read tool's engine failure paths.
 func TestReadTilemapErrors(t *testing.T) {
 	t.Parallel()
+	// The two engine-backed cases share one warm session, each with its own
+	// scene; the missing-scene case fails before reaching the engine.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing node", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/level.tscn", "rootNodeType": "Node2D"})
+		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/level_missing_node.tscn", "rootNodeType": "Node2D"})
 
 		res := callTool(t, session, "read_tilemap", map[string]any{
-			"scenePath": "scenes/level.tscn",
+			"scenePath": "scenes/level_missing_node.tscn",
 			"nodePath":  "root/Missing",
 		})
 		if !res.IsError {
@@ -496,17 +491,15 @@ func TestReadTilemapErrors(t *testing.T) {
 	})
 
 	t.Run("node is not a TileMapLayer", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/level.tscn", "rootNodeType": "Node2D"})
+		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/level_not_tilemap.tscn", "rootNodeType": "Node2D"})
 		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/level.tscn",
+			"scenePath": "scenes/level_not_tilemap.tscn",
 			"nodeType":  "Sprite2D",
 			"nodeName":  "Art",
 		})
 
 		res := callTool(t, session, "read_tilemap", map[string]any{
-			"scenePath": "scenes/level.tscn",
+			"scenePath": "scenes/level_not_tilemap.tscn",
 			"nodePath":  "root/Art",
 		})
 		if !res.IsError {
@@ -516,9 +509,6 @@ func TestReadTilemapErrors(t *testing.T) {
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
 		requireToolError(t, session, "read_tilemap", map[string]any{
 			"scenePath": "scenes/missing.tscn",
 			"nodePath":  "root/Ground",

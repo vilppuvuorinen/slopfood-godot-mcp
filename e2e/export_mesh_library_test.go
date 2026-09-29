@@ -58,15 +58,14 @@ func TestExportMeshLibrarySchema(t *testing.T) {
 	}
 }
 
-// seedMeshScene creates a Node3D scene with a mesh-bearing node so
+// seedMeshScene creates a Node3D scene at scenePath with a mesh-bearing node so
 // export_mesh_library has something to export.
-func seedMeshScene(t *testing.T) (string, *mcp.ClientSession) {
+func seedMeshScene(t *testing.T, session *mcp.ClientSession, scenePath string) {
 	t.Helper()
-	root, session := seedScene(t, "scenes/main.tscn", "Node3D")
-	writeE2EFile(t, filepath.Join(root, "box.tres"), boxMeshResource)
+	createScene(t, session, scenePath, "Node3D")
 
 	res := callTool(t, session, "add_node", map[string]any{
-		"scenePath":  "scenes/main.tscn",
+		"scenePath":  scenePath,
 		"nodeType":   "MeshInstance3D",
 		"nodeName":   "Mesh",
 		"properties": map[string]any{"mesh": "res://box.tres"},
@@ -74,19 +73,24 @@ func seedMeshScene(t *testing.T) (string, *mcp.ClientSession) {
 	if res.IsError {
 		t.Fatalf("add_node failed: %s", firstText(t, res))
 	}
-	return root, session
 }
 
 // TestExportMeshLibraryTool drives the real export_mesh_library tool against
 // Godot, including the optional meshItemNames filter.
 func TestExportMeshLibraryTool(t *testing.T) {
 	t.Parallel()
+	// One warm project and session serve all three subtests; each owns its scene.
+	root := newProject(t)
+	session := connectProject(t, root)
+	writeE2EFile(t, filepath.Join(root, "box.tres"), boxMeshResource)
+
 	t.Run("exports a mesh library", func(t *testing.T) {
-		root, session := seedMeshScene(t)
+		const scene = "scenes/main.tscn"
+		seedMeshScene(t, session, scene)
 
 		output := filepath.Join(root, "exported", "meshlib.res")
 		text := requireToolText(t, session, "export_mesh_library", map[string]any{
-			"scenePath":  "scenes/main.tscn",
+			"scenePath":  scene,
 			"outputPath": "exported/meshlib.res",
 		})
 		requirePrefix(t, text, "MeshLibrary exported successfully to: "+output)
@@ -94,11 +98,12 @@ func TestExportMeshLibraryTool(t *testing.T) {
 	})
 
 	t.Run("absolute output path", func(t *testing.T) {
-		_, session := seedMeshScene(t)
+		const scene = "scenes/absolute.tscn"
+		seedMeshScene(t, session, scene)
 
 		output := filepath.Join(t.TempDir(), "nested", "meshlib.res")
 		text := requireToolText(t, session, "export_mesh_library", map[string]any{
-			"scenePath":  "scenes/main.tscn",
+			"scenePath":  scene,
 			"outputPath": output,
 		})
 		requirePrefix(t, text, "MeshLibrary exported successfully to: "+output)
@@ -106,11 +111,12 @@ func TestExportMeshLibraryTool(t *testing.T) {
 	})
 
 	t.Run("specific mesh item names", func(t *testing.T) {
-		root, session := seedMeshScene(t)
+		const scene = "scenes/named.tscn"
+		seedMeshScene(t, session, scene)
 		// A second mesh the filter must exclude, so a filter that silently
 		// exports everything cannot pass.
 		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath":  "scenes/main.tscn",
+			"scenePath":  scene,
 			"nodeType":   "MeshInstance3D",
 			"nodeName":   "Other",
 			"properties": map[string]any{"mesh": "res://box.tres"},
@@ -118,7 +124,7 @@ func TestExportMeshLibraryTool(t *testing.T) {
 
 		output := filepath.Join(root, "exported", "named.tres")
 		text := requireToolText(t, session, "export_mesh_library", map[string]any{
-			"scenePath":     "scenes/main.tscn",
+			"scenePath":     scene,
 			"outputPath":    "exported/named.tres",
 			"meshItemNames": []any{"Mesh"},
 		})
@@ -180,19 +186,24 @@ func TestExportMeshLibraryCollisionAndPreview(t *testing.T) {
 // material carries no albedo texture.
 func TestExportMeshLibraryDescendantAndPreview(t *testing.T) {
 	t.Parallel()
+	// Both subtests share one warm project and session; each owns its scene.
+	root := newProject(t)
+	session := connectProject(t, root)
+	writeE2EFile(t, filepath.Join(root, "box.tres"), boxMeshResource)
+
 	t.Run("finds a mesh on a descendant", func(t *testing.T) {
-		root, session := seedScene(t, "scenes/main.tscn", "Node3D")
-		writeE2EFile(t, filepath.Join(root, "box.tres"), boxMeshResource)
+		const scene = "scenes/descendant.tscn"
+		createScene(t, session, scene, "Node3D")
 
 		// Holder is not itself a mesh; only the descendant search can collect
 		// its MeshInstance3D child.
 		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/main.tscn",
+			"scenePath": scene,
 			"nodeType":  "Node3D",
 			"nodeName":  "Holder",
 		})
 		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath":      "scenes/main.tscn",
+			"scenePath":      scene,
 			"nodeType":       "MeshInstance3D",
 			"nodeName":       "Mesh",
 			"parentNodePath": "root/Holder",
@@ -201,7 +212,7 @@ func TestExportMeshLibraryDescendantAndPreview(t *testing.T) {
 
 		output := filepath.Join(root, "exported", "descendant.tres")
 		text := requireToolText(t, session, "export_mesh_library", map[string]any{
-			"scenePath":  "scenes/main.tscn",
+			"scenePath":  scene,
 			"outputPath": "exported/descendant.tres",
 		})
 		requirePrefix(t, text, "MeshLibrary exported successfully to: "+output)
@@ -211,11 +222,12 @@ func TestExportMeshLibraryDescendantAndPreview(t *testing.T) {
 	})
 
 	t.Run("omits a preview when the mesh has no albedo texture", func(t *testing.T) {
-		root, session := seedMeshScene(t)
+		const scene = "scenes/plain.tscn"
+		seedMeshScene(t, session, scene)
 
 		output := filepath.Join(root, "exported", "plain.tres")
 		requireToolText(t, session, "export_mesh_library", map[string]any{
-			"scenePath":  "scenes/main.tscn",
+			"scenePath":  scene,
 			"outputPath": "exported/plain.tres",
 		})
 		requireNotContains(t, readFile(t, output), "preview")
@@ -267,8 +279,13 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 		}, "Scene file does not exist: missing.tscn")
 	})
 
+	// The engine-backed cases share one warm project and session.
+	root := newProject(t)
+	session := connectProject(t, root)
+	writeE2EFile(t, filepath.Join(root, "box.tres"), boxMeshResource)
+
 	t.Run("no meshes in scene", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/empty.tscn", "Node3D")
+		createScene(t, session, "scenes/empty.tscn", "Node3D")
 
 		res := callTool(t, session, "export_mesh_library", map[string]any{
 			"scenePath":  "scenes/empty.tscn",
@@ -281,7 +298,7 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 	})
 
 	t.Run("output directory failure", func(t *testing.T) {
-		root, session := seedMeshScene(t)
+		seedMeshScene(t, session, "scenes/blocked_dir.tscn")
 
 		// An absolute output path whose ancestor is a regular file makes
 		// make_dir_recursive_absolute fail on any filesystem, unlike an
@@ -291,7 +308,7 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 		writeE2EFile(t, filepath.Join(root, "blocked"), "not a directory\n")
 
 		res := callTool(t, session, "export_mesh_library", map[string]any{
-			"scenePath":  "scenes/main.tscn",
+			"scenePath":  "scenes/blocked_dir.tscn",
 			"outputPath": filepath.Join(root, "blocked", "sub", "meshlib.res"),
 		})
 		if !res.IsError {
@@ -305,18 +322,18 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 	})
 
 	t.Run("save failure", func(t *testing.T) {
-		root, session := seedMeshScene(t)
+		seedMeshScene(t, session, "scenes/save_fail.tscn")
 
 		// A directory already sitting at the output path lets directory
 		// creation succeed but makes the save fail, independent of which
 		// paths the running user can write.
-		if err := os.MkdirAll(filepath.Join(root, "exported", "meshlib.res"), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(root, "exported", "meshlib_savefail.res"), 0o755); err != nil {
 			t.Fatalf("seed output directory: %v", err)
 		}
 
 		res := callTool(t, session, "export_mesh_library", map[string]any{
-			"scenePath":  "scenes/main.tscn",
-			"outputPath": "exported/meshlib.res",
+			"scenePath":  "scenes/save_fail.tscn",
+			"outputPath": "exported/meshlib_savefail.res",
 		})
 		if !res.IsError {
 			t.Fatal("export_mesh_library: expected an error result")

@@ -17,8 +17,8 @@ func TestClearTilemapTool(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
 	seedAtlasTexture(t, root)
-	setupTestTileSet(t, session)
-	setupTilemapScene(t, session)
+	setupTestTileSet(t, session, "tiles/set.tres")
+	setupTilemapScene(t, session, "scenes/level.tscn", "tiles/set.tres")
 
 	for x := range 2 {
 		requireToolText(t, session, "set_tilemap_cell", map[string]any{
@@ -34,7 +34,7 @@ func TestClearTilemapTool(t *testing.T) {
 		"nodePath":  "root/Ground",
 	})
 
-	payload := readTilemapPayload(t, session)
+	payload := readTilemapPayload(t, session, "scenes/level.tscn")
 	if len(payload.UsedCells) != 0 {
 		t.Errorf("usedCells = %v, want none after clear", payload.UsedCells)
 	}

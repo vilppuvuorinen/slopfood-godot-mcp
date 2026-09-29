@@ -17,13 +17,13 @@ const resourceTres = `[gd_resource type="StandardMaterial3D" format=3]
 metallic = 0.5
 `
 
-// seedMaterialRes creates a binary resources/mat.res StandardMaterial3D through
+// seedMaterialRes creates a binary StandardMaterial3D at resourcePath through
 // the engine. read_binary_resource rejects the text .tres form, so a readable fixture
 // must be a binary file the engine wrote.
-func seedMaterialRes(t *testing.T, session *mcp.ClientSession) {
+func seedMaterialRes(t *testing.T, session *mcp.ClientSession, resourcePath string) {
 	t.Helper()
 	requireToolText(t, session, "create_resource", map[string]any{
-		"resourcePath": "resources/mat.res",
+		"resourcePath": resourcePath,
 		"resourceType": "StandardMaterial3D",
 		"properties": map[string]any{
 			"metallic":     0.5,
@@ -67,13 +67,17 @@ func TestReadResourceSchema(t *testing.T) {
 // TestResourceTools drives the real resource tools against Godot.
 func TestResourceTools(t *testing.T) {
 	t.Parallel()
+	// One warm project and session serve every subtest; each owns a distinct
+	// resource path, so a single engine boot covers them all.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("reads a resource", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedMaterialRes(t, session)
+		const path = "resources/read.res"
+		seedMaterialRes(t, session, path)
 
 		text := requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath": "resources/mat.res",
+			"resourcePath": path,
 		})
 		var payload map[string]any
 		if err := json.Unmarshal([]byte(text), &payload); err != nil {
@@ -86,19 +90,18 @@ func TestResourceTools(t *testing.T) {
 	})
 
 	t.Run("reads with a property filter", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedMaterialRes(t, session)
+		const path = "resources/filter.res"
+		seedMaterialRes(t, session, path)
 
 		text := requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath":   "resources/mat.res",
+			"resourcePath":   path,
 			"propertyFilter": []any{"metallic"},
 		})
 		requireContains(t, text, `"metallic": 0.5`)
 		requireNotContains(t, text, `"albedo_color"`)
 
 		text = requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath":   "resources/mat.res",
+			"resourcePath":   path,
 			"propertyFilter": []any{"albedo_*"},
 		})
 		requireContains(t, text, `"albedo_color"`)
@@ -106,12 +109,11 @@ func TestResourceTools(t *testing.T) {
 	})
 
 	t.Run("filters with a single-character wildcard", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedMaterialRes(t, session)
+		const path = "resources/wildcard.res"
+		seedMaterialRes(t, session, path)
 
 		text := requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath":   "resources/mat.res",
+			"resourcePath":   path,
 			"propertyFilter": []any{"albed?_color"},
 		})
 		requireContains(t, text, `"albedo_color"`)
@@ -119,38 +121,33 @@ func TestResourceTools(t *testing.T) {
 	})
 
 	t.Run("filter matching nothing yields no properties", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedMaterialRes(t, session)
+		const path = "resources/none.res"
+		seedMaterialRes(t, session, path)
 
 		text := requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath":   "resources/mat.res",
+			"resourcePath":   path,
 			"propertyFilter": []any{"nonexistent_*"},
 		})
 		requireContains(t, text, `"properties": {}`)
 	})
 
 	t.Run("modifies then re-reads a resource", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-		seedMaterialRes(t, session)
+		const path = "resources/modify.res"
+		seedMaterialRes(t, session, path)
 
 		modifyText := requireToolText(t, session, "modify_resource", map[string]any{
-			"resourcePath": "resources/mat.res",
+			"resourcePath": path,
 			"properties":   map[string]any{"metallic": 0.75},
 		})
 		requirePrefix(t, modifyText, "manage_resource succeeded.")
 
 		readText := requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath": "resources/mat.res",
+			"resourcePath": path,
 		})
 		requireContains(t, readText, `"metallic": 0.75`)
 	})
 
 	t.Run("creates then reads a resource", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
 		createText := requireToolText(t, session, "create_resource", map[string]any{
 			"resourcePath": "materials/red.res",
 			"resourceType": "StandardMaterial3D",
@@ -167,8 +164,6 @@ func TestResourceTools(t *testing.T) {
 	})
 
 	t.Run("rejects a text .tres", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
 
 		res := callTool(t, session, "read_binary_resource", map[string]any{
@@ -185,8 +180,7 @@ func TestResourceTools(t *testing.T) {
 // create/read/modify with the theme item type inference intact.
 func TestResourceTheme(t *testing.T) {
 	t.Parallel()
-	root := newProject(t)
-	session := connectProject(t, root)
+	_, session := sharedResourceSession(t)
 
 	createText := requireToolText(t, session, "create_resource", map[string]any{
 		"resourcePath": "themes/main.res",
@@ -219,8 +213,7 @@ func TestResourceTheme(t *testing.T) {
 // a silently-ignored or mis-typed value fails the test.
 func TestResourceThemeConvertsTypes(t *testing.T) {
 	t.Parallel()
-	root := newProject(t)
-	session := connectProject(t, root)
+	_, session := sharedResourceSession(t)
 
 	requireToolText(t, session, "create_resource", map[string]any{
 		"resourcePath": "themes/panel_box.res",
@@ -288,8 +281,7 @@ func TestResourceThemeConvertsTypes(t *testing.T) {
 // constants are integers and fonts are object references.
 func TestResourceThemeMoreCategories(t *testing.T) {
 	t.Parallel()
-	root := newProject(t)
-	session := connectProject(t, root)
+	_, session := sharedResourceSession(t)
 
 	requireToolText(t, session, "create_resource", map[string]any{
 		"resourcePath": "themes/font.res",
@@ -327,39 +319,37 @@ func TestResourceThemeMoreCategories(t *testing.T) {
 // TestResourceErrors covers the reference's validation and failure messages.
 func TestResourceErrors(t *testing.T) {
 	t.Parallel()
+	// The engine-backed cases share one warm project and session; only "not a
+	// project" needs its own non-project directory.
+	root, session := sharedResourceSession(t)
+
 	t.Run("missing params", func(t *testing.T) {
-		session := connect(t)
 		requireToolError(t, session, "create_resource", map[string]any{}, "resourcePath and resourceType are required.")
 	})
 
 	t.Run("create without resource type", func(t *testing.T) {
-		session := connect(t)
 		requireToolError(t, session, "create_resource", map[string]any{
 			"resourcePath": "materials/red.tres",
 		}, "resourcePath and resourceType are required.")
 	})
 
 	t.Run("modify without properties", func(t *testing.T) {
-		session := connect(t)
 		requireToolError(t, session, "modify_resource", map[string]any{
 			"resourcePath": "materials/red.tres",
 		}, "resourcePath and properties are required.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "read_binary_resource", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "read_binary_resource", map[string]any{
 			"resourcePath": "mat.tres",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("unknown resource type", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
 		res := callTool(t, session, "create_resource", map[string]any{
-			"resourcePath": "materials/red.tres",
+			"resourcePath": "materials/unknown.tres",
 			"resourceType": "NotARealResource",
 		})
 		if !res.IsError {
@@ -369,13 +359,10 @@ func TestResourceErrors(t *testing.T) {
 	})
 
 	t.Run("abstract resource type", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
 		// BaseMaterial3D is a registered Resource subclass that Godot
 		// refuses to instantiate directly.
 		res := callTool(t, session, "create_resource", map[string]any{
-			"resourcePath": "materials/red.tres",
+			"resourcePath": "materials/abstract.tres",
 			"resourceType": "BaseMaterial3D",
 		})
 		if !res.IsError {
@@ -385,12 +372,9 @@ func TestResourceErrors(t *testing.T) {
 	})
 
 	t.Run("non-resource type", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
 		// Node is instantiable, so the failure is the Resource-subclass guard.
 		res := callTool(t, session, "create_resource", map[string]any{
-			"resourcePath": "materials/red.tres",
+			"resourcePath": "materials/node.tres",
 			"resourceType": "Node",
 		})
 		if !res.IsError {
@@ -400,9 +384,6 @@ func TestResourceErrors(t *testing.T) {
 	})
 
 	t.Run("resource not found", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
 		res := callTool(t, session, "read_binary_resource", map[string]any{
 			"resourcePath": "resources/missing.res",
 		})
@@ -413,8 +394,6 @@ func TestResourceErrors(t *testing.T) {
 	})
 
 	t.Run("unloadable resource", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		writeE2EFile(t, filepath.Join(root, "resources", "bad.res"), "this is not a valid resource\n")
 
 		res := callTool(t, session, "read_binary_resource", map[string]any{
@@ -427,11 +406,8 @@ func TestResourceErrors(t *testing.T) {
 	})
 
 	t.Run("invalid property value", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
 		res := callTool(t, session, "create_resource", map[string]any{
-			"resourcePath": "materials/red.tres",
+			"resourcePath": "materials/invalid.tres",
 			"resourceType": "StandardMaterial3D",
 			"properties":   map[string]any{"metallic": "not-a-number"},
 		})
@@ -440,4 +416,13 @@ func TestResourceErrors(t *testing.T) {
 		}
 		requireContains(t, firstText(t, res), "manage_resource failed", "Invalid property value")
 	})
+}
+
+// sharedResourceSession returns a fresh project and a session bound to it, for
+// the resource tests. Each caller uses distinct resource paths, so the tests can
+// share a session with no state collision.
+func sharedResourceSession(t *testing.T) (string, *mcp.ClientSession) {
+	t.Helper()
+	root := newProject(t)
+	return root, connectProject(t, root)
 }

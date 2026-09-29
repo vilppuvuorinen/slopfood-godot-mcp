@@ -62,10 +62,14 @@ func TestRenameSceneNodeErrors(t *testing.T) {
 		}, "Scene file does not exist: missing.tscn")
 	})
 
+	// The engine-backed case below shares one warm project and session.
+	sharedRoot := newProject(t)
+	sharedSession := connectProject(t, sharedRoot)
+
 	t.Run("missing node", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/rename.tscn", "Node2D")
-		res := callTool(t, session, "rename_scene_node", map[string]any{
-			"scenePath": "scenes/rename.tscn",
+		createScene(t, sharedSession, "scenes/rename_missing_node.tscn", "Node2D")
+		res := callTool(t, sharedSession, "rename_scene_node", map[string]any{
+			"scenePath": "scenes/rename_missing_node.tscn",
 			"nodePath":  "root/Missing",
 			"newName":   "Hero",
 		})

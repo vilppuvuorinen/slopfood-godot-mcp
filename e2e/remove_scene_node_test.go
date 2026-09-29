@@ -76,11 +76,15 @@ func TestRemoveSceneNodeErrors(t *testing.T) {
 		}, "Scene file does not exist: missing.tscn")
 	})
 
-	t.Run("missing node", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+	// The engine-backed case below shares one warm project and session.
+	sharedRoot := newProject(t)
+	sharedSession := connectProject(t, sharedRoot)
 
-		res := callTool(t, session, "remove_scene_node", map[string]any{
-			"scenePath": "scenes/main.tscn",
+	t.Run("missing node", func(t *testing.T) {
+		createScene(t, sharedSession, "scenes/errors_missing_node.tscn", "Node2D")
+
+		res := callTool(t, sharedSession, "remove_scene_node", map[string]any{
+			"scenePath": "scenes/errors_missing_node.tscn",
 			"nodePath":  "root/Missing",
 		})
 		if !res.IsError {

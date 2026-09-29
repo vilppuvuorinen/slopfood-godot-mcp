@@ -35,15 +35,16 @@ func TestAttachScriptTool(t *testing.T) {
 // TestAttachScriptErrors covers the reference's validation and failure messages.
 func TestAttachScriptErrors(t *testing.T) {
 	t.Parallel()
+	// The three engine-backed cases share one warm project and session; each
+	// owns its scene and script fixtures.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing paths", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "attach_script", map[string]any{}, "scenePath, nodePath, and scriptPath are required.")
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "attach_script", map[string]any{
 			"scenePath":  "../escape",
 			"nodePath":   "root",
@@ -52,18 +53,16 @@ func TestAttachScriptErrors(t *testing.T) {
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "attach_script", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "attach_script", map[string]any{
 			"scenePath":  "main.tscn",
 			"nodePath":   "root",
 			"scriptPath": "scripts/player.gd",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "attach_script", map[string]any{
 			"scenePath":  "missing.tscn",
 			"nodePath":   "root",
@@ -72,10 +71,11 @@ func TestAttachScriptErrors(t *testing.T) {
 	})
 
 	t.Run("missing script file", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/main.tscn", "Node2D")
+		const scene = "scenes/missing_script.tscn"
+		createScene(t, session, scene, "Node2D")
 
 		res := callTool(t, session, "attach_script", map[string]any{
-			"scenePath":  "scenes/main.tscn",
+			"scenePath":  scene,
 			"nodePath":   "root",
 			"scriptPath": "scripts/missing.gd",
 		})
@@ -86,11 +86,12 @@ func TestAttachScriptErrors(t *testing.T) {
 	})
 
 	t.Run("missing node", func(t *testing.T) {
-		root, session := seedScene(t, "scenes/main.tscn", "Node2D")
+		const scene = "scenes/missing_node.tscn"
+		createScene(t, session, scene, "Node2D")
 		writeE2EFile(t, filepath.Join(root, "scripts", "player.gd"), "extends Node2D\n")
 
 		res := callTool(t, session, "attach_script", map[string]any{
-			"scenePath":  "scenes/main.tscn",
+			"scenePath":  scene,
 			"nodePath":   "root/Missing",
 			"scriptPath": "scripts/player.gd",
 		})
@@ -101,13 +102,14 @@ func TestAttachScriptErrors(t *testing.T) {
 	})
 
 	t.Run("unloadable script", func(t *testing.T) {
-		root, session := seedScene(t, "scenes/main.tscn", "Node2D")
+		const scene = "scenes/unloadable_script.tscn"
+		createScene(t, session, scene, "Node2D")
 		writeE2EFile(t, filepath.Join(root, "scripts", "thing.tres"), resourceTres)
 
 		// A non-.gd resource path resolves but is not a valid script, so the
 		// failure surfaces from the engine's set_script call.
 		res := callTool(t, session, "attach_script", map[string]any{
-			"scenePath":  "scenes/main.tscn",
+			"scenePath":  scene,
 			"nodePath":   "root",
 			"scriptPath": "scripts/thing.tres",
 		})

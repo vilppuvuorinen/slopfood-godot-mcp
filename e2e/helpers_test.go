@@ -427,7 +427,15 @@ func seedScene(t *testing.T, scenePath string, rootNodeType ...string) (string, 
 	t.Helper()
 	root := newProject(t)
 	session := connectProject(t, root)
+	createScene(t, session, scenePath, rootNodeType...)
+	return root, session
+}
 
+// createScene creates scenePath in an existing session, so several tests can
+// share one warm project and engine instead of booting their own. Use unique
+// paths per test when the scenes outlive the call.
+func createScene(t *testing.T, session *mcp.ClientSession, scenePath string, rootNodeType ...string) {
+	t.Helper()
 	args := map[string]any{"scenePath": scenePath}
 	if len(rootNodeType) > 0 {
 		args["rootNodeType"] = rootNodeType[0]
@@ -437,7 +445,6 @@ func seedScene(t *testing.T, scenePath string, rootNodeType ...string) (string, 
 		t.Fatalf("create_scene failed: %s", firstText(t, res))
 	}
 	requirePrefix(t, firstText(t, res), "Scene created successfully at: "+scenePath)
-	return root, session
 }
 
 // runGit runs a git subcommand in dir, failing the test on error. Identity and

@@ -18,16 +18,17 @@ func TestCreateSceneSchema(t *testing.T) {
 // exercising the default and custom root node types.
 func TestCreateSceneTool(t *testing.T) {
 	t.Parallel()
+	// Both subtests share one warm project and session, each with its own scene.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("defaults to Node2D", func(t *testing.T) {
-		root, _ := seedScene(t, "scenes/main.tscn")
+		createScene(t, session, "scenes/main.tscn")
 		scene := readFile(t, filepath.Join(root, "scenes", "main.tscn"))
 		requireContains(t, scene, `type="Node2D"`)
 	})
 
 	t.Run("custom root", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
-
 		requireToolText(t, session, "create_scene", map[string]any{
 			"scenePath":    "level.tscn",
 			"rootNodeType": "Node3D",
@@ -41,23 +42,21 @@ func TestCreateSceneTool(t *testing.T) {
 // TestCreateSceneErrors covers the reference's validation and failure messages.
 func TestCreateSceneErrors(t *testing.T) {
 	t.Parallel()
+	// One warm project and session cover every case except "not a project".
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing paths", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "create_scene", map[string]any{}, "scenePath is required.")
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "create_scene", map[string]any{
 			"scenePath": "../escape",
 		}, "Invalid path.")
 	})
 
 	t.Run("invalid rootNodeType", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "create_scene", map[string]any{
 			"scenePath":    "main.tscn",
 			"rootNodeType": "res://evil.gd",
@@ -65,16 +64,14 @@ func TestCreateSceneErrors(t *testing.T) {
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "create_scene", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "create_scene", map[string]any{
 			"scenePath": "main.tscn",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("abstract rootNodeType", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
-
 		// CanvasItem is a registered ClassDB class Godot refuses to
 		// instantiate.
 		res := callTool(t, session, "create_scene", map[string]any{
