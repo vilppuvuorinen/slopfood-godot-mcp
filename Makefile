@@ -13,14 +13,17 @@ GOLANGCI_LINT ?= $(GO) tool -modfile=$(CURDIR)/$(TOOLS_MOD) golangci-lint
 .PHONY: all
 all: fmt vet test build
 
-# build compiles the server for every release target: the host's arch, then the
-# cross pairs. The portability guard catches Linux-only code (e.g. syscall.Flock)
-# on the push that introduces it rather than at the next release dispatch; vet
-# is what compiles build-tagged *test* files, so a tagged file that does not
-# compile also fails here.
+# build compiles the server for the host arch and cross-compiles the Windows
+# artifact the e2e lanes consume, then compile-checks the other release targets.
+# The portability guard catches Linux-only code (e.g. syscall.Flock) on the push
+# that introduces it rather than at the next release dispatch; vet is what
+# compiles build-tagged *test* files, so a tagged file that does not compile
+# also fails here. CI uploads bin/$(BINARY) and bin/$(BINARY).exe after `make
+# static`, so the e2e lanes download the same binaries this target builds.
 .PHONY: build
 build:
 	$(GO) build $(GOFLAGS) -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY) $(CMD)
+	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build $(GOFLAGS) -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY).exe $(CMD)
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build ./...
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build ./...
 	GOOS=windows $(GO) vet ./...

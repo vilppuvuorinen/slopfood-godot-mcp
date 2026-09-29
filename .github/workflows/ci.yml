@@ -37,7 +37,7 @@ env:
   MIN_GODOT_MINOR: "4.7"
 
 jobs:
-  test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,8 +48,23 @@ jobs:
       - run: go mod download
       # static is the Godot-free half of `make check`: the gofmt gate, vet,
       # lint, race unit tests, and the multi-platform build (host arch plus the
-      # windows/amd64 and darwin/arm64 portability guard).
+      # windows/amd64 and darwin/arm64 portability guard). Its build target also
+      # emits the linux and windows binaries, which both e2e lanes download
+      # instead of compiling their own, so they exercise the same artifact the
+      # release job ships rather than a separately native-built one.
       - run: make static
+      - name: Upload linux server
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-linux-amd64
+          path: bin/slopfood-godot-mcp
+          if-no-files-found: error
+      - name: Upload windows server
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-windows-amd64
+          path: bin/slopfood-godot-mcp.exe
+          if-no-files-found: error
 
   # Discover which minor lines >= MIN_GODOT_MINOR have published releases via
   # the downloader's "minors" subcommand. The release within each line is
@@ -79,7 +94,7 @@ jobs:
           echo "matrix={\"include\":[$include]}" >> "$GITHUB_OUTPUT"
 
   e2e:
-    needs: versions
+    needs: [versions, build]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -105,7 +120,14 @@ jobs:
           scripts/download-godot.py install-latest "${{ matrix.minor }}"
           binary=$(ls "$GITHUB_WORKSPACE"/.godot/"${{ matrix.minor }}"/Godot_v*_linux.x86_64)
           echo "GODOT_PATH=$binary" >> "$GITHUB_ENV"
-      - run: go build -trimpath -o bin/slopfood-godot-mcp ./cmd/slopfood-godot-mcp
+      - name: Download cross-compiled server
+        uses: actions/download-artifact@v4
+        with:
+          name: server-linux-amd64
+          path: bin
+      # Artifacts do not carry the executable bit, so restore it before the
+      # suite execs the binary directly.
+      - run: chmod +x bin/slopfood-godot-mcp
       - name: e2e (Godot ${{ matrix.minor }})
         working-directory: e2e
         env:
@@ -115,28 +137,6 @@ jobs:
           go mod download
           go test -race -parallel 4 -covermode=atomic ./...
 
-  # build-windows cross-compiles the server for Windows on Linux and hands the
-  # artifact to e2e-windows. Testing the cross-compiled binary means the lane
-  # exercises the same kind of artifact the release job publishes, rather than a
-  # separately native-built one. Go is still needed on the Windows runner to
-  # compile and run the e2e test module, which cannot be cross-compiled.
-  build-windows:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-        with:
-          go-version: ${{ env.GO_VERSION }}
-          check-latest: true
-      - run: go mod download
-      - name: Cross-compile server
-        run: CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -o dist/slopfood-godot-mcp.exe ./cmd/slopfood-godot-mcp
-      - uses: actions/upload-artifact@v4
-        with:
-          name: server-windows-amd64
-          path: dist/slopfood-godot-mcp.exe
-          if-no-files-found: error
-
   # e2e-windows exercises the whole runtime on Windows with one Godot build (the
   # newest stable minor line), so the loopback-TCP engine and daemon transports
   # are proven end to end without multiplying Windows build minutes. Only stable
@@ -145,7 +145,7 @@ jobs:
   # It is functional, not the concurrency lane: -race is dropped because the
   # Windows runner has no gcc and the Linux job already covers races.
   e2e-windows:
-    needs: [versions, build-windows]
+    needs: [versions, build]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -210,7 +210,7 @@ jobs:
     # Gated on the dispatch input: pushes never release. It runs after every
     # check, so the tagged commit is one that passed the whole Godot matrix.
     if: ${{ inputs.version != '' }}
-    needs: [test, e2e, e2e-windows]
+    needs: [build, e2e, e2e-windows]
     runs-on: ubuntu-latest
     concurrency:
       group: release
