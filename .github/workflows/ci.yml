@@ -196,6 +196,12 @@ jobs:
             exit 1
           fi
           echo "GODOT_MINOR=$minor" >> "$GITHUB_ENV"
+      # Godot on macOS resolves export templates under the app-support dir, not
+      # XDG; point the installer there.
+      - name: Resolve templates dir
+        run: |
+          set -euo pipefail
+          echo "GODOT_TEMPLATES_DIR=$HOME/Library/Application Support/Godot/export_templates" >> "$GITHUB_ENV"
       # The export e2e builds a Linux ELF, so the Linux templates are needed
       # alongside macOS's own.
       - name: Install Godot ${{ env.GODOT_MINOR }}
