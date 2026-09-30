@@ -351,45 +351,6 @@ func TestSessionSkipsNonFrameStdout(t *testing.T) {
 	}
 }
 
-// TestSessionInvalidateRescans pins the new Invalidate contract: it asks the
-// editor to rescan before the next Run instead of forcing a respawn, so the
-// project-global change is reflected while the same process keeps serving.
-func TestSessionInvalidateRescans(t *testing.T) {
-	shortRuntimeDir(t)
-	ops := filepath.Join(t.TempDir(), "ops")
-	response := `
-        open('` + ops + `', "a").write(req["operation"] + "\n")
-        send(conn, req["id"], True, "out-" + str(req["id"]), "")`
-	f := newSocketSessionFake(t, response)
-	s := NewSession(f.bin, "/ops.gd")
-	defer s.Close()
-	project := t.TempDir()
-
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if got := f.startCount(t); got != 1 {
-		t.Fatalf("starts = %d, want 1", got)
-	}
-	s.Invalidate()
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if got := f.startCount(t); got != 1 {
-		t.Errorf("starts = %d, want 1: Invalidate must rescan, not respawn", got)
-	}
-
-	data, err := os.ReadFile(ops)
-	if err != nil {
-		t.Fatalf("read ops: %v", err)
-	}
-	got := strings.Fields(string(data))
-	want := []string{"op", "reimport_project", "op"}
-	if strings.Join(got, ",") != strings.Join(want, ",") {
-		t.Errorf("operations = %v, want %v", got, want)
-	}
-}
-
 // TestSessionReimportProjectDrivesScan proves the session routes the
 // reimport_project operation straight to the bridge without a respawn, so the
 // warm editor filesystem, not a one-shot --import fork, drives the scan.
@@ -642,7 +603,6 @@ func TestSessionCloseQuitAndFailsRuns(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatalf("second Close: %v", err)
 	}
-	s.Invalidate()
 	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err == nil {
 		t.Fatal("Run after Close succeeded, want an error")
 	}

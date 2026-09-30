@@ -47,8 +47,6 @@ func (s *recordingSession) Run(_ context.Context, project, operation string, par
 	return s.stdout, s.stderr, s.exit, s.err
 }
 
-func (s *recordingSession) Invalidate() {}
-
 func TestReimportProjectSuccess(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

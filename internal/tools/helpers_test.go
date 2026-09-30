@@ -38,9 +38,7 @@ func seedFile(t *testing.T, path, content string) {
 // oneShotSession is a test-only Session that reproduces the one-shot spawn the
 // engine seam used before a warm session existed, so handler tests exercise the
 // seam without a real engine. It keeps every fakeGodotOps shell fake working.
-type oneShotSession struct {
-	invalidated int
-}
+type oneShotSession struct{}
 
 func (s *oneShotSession) Run(ctx context.Context, project, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error) {
 	scriptPath, err := godotops.OperationsScript()
@@ -53,8 +51,6 @@ func (s *oneShotSession) Run(ctx context.Context, project, operation string, par
 	}
 	return stdout, stderr, exitCode, nil
 }
-
-func (s *oneShotSession) Invalidate() { s.invalidated++ }
 
 // callToolArgs invokes a tool handler with the bound project and raw JSON
 // arguments and returns the ToolResult, failing on a transport-style error.

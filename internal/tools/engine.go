@@ -9,11 +9,9 @@ import (
 // its shape: the concrete session (internal/godot's long-lived Session) owns the
 // process and its state, while the per-call Engine below binds it to one call's
 // context. Run takes the call context so the engine honors the queue's
-// cancellation, and Invalidate asks the editor to rescan/reload before the next
-// call instead of forcing a respawn.
+// cancellation.
 type Session interface {
 	Run(ctx context.Context, project, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error)
-	Invalidate()
 }
 
 // engineKey is the context key under which a live engine session is carried,
@@ -58,12 +56,4 @@ func (e *Engine) Run(project, operation string, params map[string]any) (stdout, 
 	// The session already describes the failure the same way a caller expects,
 	// so wrapping here would change its message.
 	return e.session.Run(e.ctx, project, operation, params) //nolint:wrapcheck // session errors are already caller-facing.
-}
-
-// Invalidate asks the editor to rescan/reload before the next call. It is a
-// no-op when no session is installed.
-func (e *Engine) Invalidate() {
-	if e.session != nil {
-		e.session.Invalidate()
-	}
 }

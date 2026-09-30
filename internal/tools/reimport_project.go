@@ -45,7 +45,7 @@ func handleReimportProject(ctx Context, _ json.RawMessage) (any, error) {
 	// no UID logic, and without EditorFileSystem the text saver actively strips
 	// existing `uid=` references. The reconcile is non-destructive, so it leaves
 	// every already-assigned UID and up-to-date artifact untouched. The operation
-	// reconciles through the editor in place, so no Invalidate/respawn is needed.
+	// reconciles through the editor in place, so no respawn is needed.
 	stdout, stderr, exitCode, err := ctx.Run(project, "reimport_project", nil)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.

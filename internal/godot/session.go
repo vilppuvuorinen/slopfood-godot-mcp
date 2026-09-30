@@ -49,10 +49,9 @@ type Session struct {
 	// rather than a constant so same-package tests can set it low.
 	operationCap int
 
-	proc          *sessionProc
-	nextID        int
-	rescanPending bool
-	closed        bool
+	proc   *sessionProc
+	nextID int
+	closed bool
 }
 
 // sessionProc is one engine process plus the goroutines that read its pipes and
@@ -163,10 +162,10 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 		return "", "", 0, err
 	}
 
-	// A project-global change (an explicit Invalidate or a changed fingerprint)
-	// is reconciled by asking the live editor to rescan before the next
-	// operation, rather than by respawning the process. The rescan reuses the
-	// warm engine and the same reimport_project operation the tool layer drives.
+	// A project-global change (a changed fingerprint) is reconciled by asking
+	// the live editor to rescan before the next operation, rather than by
+	// respawning the process. The rescan reuses the warm engine and the same
+	// reimport_project operation the tool layer drives.
 	if s.consumeRescan(project) {
 		if rescanErr := s.runRescanLocked(ctx, p); rescanErr != nil {
 			return "", "", 0, rescanErr
@@ -221,17 +220,8 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 	return frame.Stdout, frame.Stderr, exitCode, nil
 }
 
-// Invalidate marks the running engine's project-global view dirty so the next
-// Run asks the editor to rescan before serving. It never touches the process
-// itself, so it is cheap and safe to call after Close.
-func (s *Session) Invalidate() {
-	s.mu.Lock()
-	s.rescanPending = true
-	s.mu.Unlock()
-}
-
 // Close asks the engine to quit, then kills it and waits for its readers. It is
-// idempotent; a Run after Close fails, and Invalidate remains safe.
+// idempotent; a Run after Close fails.
 func (s *Session) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -301,19 +291,18 @@ func (s *Session) restartNeeded(project string) bool {
 	return p.ops >= s.operationCap
 }
 
-// consumeRescan reports whether a project-global change is pending and clears
-// it. The pending flag covers both an explicit Invalidate and a changed
-// fingerprint: once the editor has rescanned, the flag and the stored
-// fingerprint are current again.
+// consumeRescan reports whether the engine's project-global view is stale and
+// clears the staleness. A changed fingerprint means the running process cached
+// a view that no longer matches disk: once the editor has rescanned, the stored
+// fingerprint is current again.
 func (s *Session) consumeRescan(project string) bool {
 	if s.proc == nil {
 		return false
 	}
 	fingerprint := fingerprintProject(project)
-	if !s.rescanPending && s.proc.fingerprint == fingerprint {
+	if s.proc.fingerprint == fingerprint {
 		return false
 	}
-	s.rescanPending = false
 	s.proc.fingerprint = fingerprint
 	return true
 }
@@ -359,7 +348,6 @@ func (s *Session) ensureStartedLocked(project string) (*sessionProc, error) {
 		return nil, err
 	}
 	s.proc = p
-	s.rescanPending = false
 	return p, nil
 }
 

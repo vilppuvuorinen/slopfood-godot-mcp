@@ -15,8 +15,7 @@ import (
 // to it, so a test can prove a session-eligible handler used the session
 // instead of spawning a separate engine.
 type fakeSession struct {
-	runs        []fakeSessionRun
-	invalidated int
+	runs []fakeSessionRun
 }
 
 type fakeSessionRun struct {
@@ -30,8 +29,6 @@ func (f *fakeSession) Run(_ context.Context, project, operation string, params m
 	return "", "", 0, nil
 }
 
-func (f *fakeSession) Invalidate() { f.invalidated++ }
-
 // TestContextRunRequiresSession confirms the seam requires an installed engine
 // session: with none, Run reports a clear error instead of spawning an engine.
 func TestContextRunRequiresSession(t *testing.T) {
@@ -43,12 +40,10 @@ func TestContextRunRequiresSession(t *testing.T) {
 	if got := err.Error(); !strings.Contains(got, "engine session required") {
 		t.Errorf("err = %q, want the session-required message", got)
 	}
-
-	ctx.Invalidate()
 }
 
 // TestContextWithSessionDelegates confirms an installed session receives the
-// call and its Invalidate, so the handler always reaches the session.
+// call, so the handler always reaches the session.
 func TestContextWithSessionDelegates(t *testing.T) {
 	sess := &fakeSession{}
 	ctx := Context{Context: WithEngine(context.Background(), sess)}
@@ -61,11 +56,6 @@ func TestContextWithSessionDelegates(t *testing.T) {
 	}
 	if got := sess.runs[0]; got.project != "/proj" || got.operation != "read_scene" {
 		t.Errorf("session call = %+v", got)
-	}
-
-	ctx.Invalidate()
-	if sess.invalidated != 1 {
-		t.Errorf("invalidated = %d, want 1", sess.invalidated)
 	}
 }
 
@@ -95,11 +85,10 @@ func TestSessionEligibleHandlerUsesInstalledSession(t *testing.T) {
 	}
 }
 
-// TestAttachScriptReconcilesWithoutInvalidation confirms attach_script routes
-// through the session and does not invalidate it: the bridge reconciles the
-// attached script with the editor filesystem, so a following class-name lookup
-// sees it without a respawn.
-func TestAttachScriptReconcilesWithoutInvalidation(t *testing.T) {
+// TestAttachScriptReconcilesInPlace confirms attach_script routes through the
+// session: the bridge reconciles the attached script with the editor
+// filesystem, so a following class-name lookup sees it without a respawn.
+func TestAttachScriptReconcilesInPlace(t *testing.T) {
 	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
 	root := t.TempDir()
 	makeProject(t, root)
@@ -123,15 +112,11 @@ func TestAttachScriptReconcilesWithoutInvalidation(t *testing.T) {
 	if len(sess.runs) != 1 || sess.runs[0].operation != "attach_script" {
 		t.Fatalf("session runs = %+v", sess.runs)
 	}
-	if sess.invalidated != 0 {
-		t.Errorf("invalidated = %d, want 0: the bridge reconciles in place", sess.invalidated)
-	}
 }
 
 // TestReimportProjectReconcilesSession confirms reimport_project drives the
-// reconcile through the live session's reimport_project operation and does not
-// invalidate it: the bridge reconciles through the editor filesystem in place,
-// so no respawn is needed.
+// reconcile through the live session's reimport_project operation: the bridge
+// reconciles through the editor filesystem in place, so no respawn is needed.
 func TestReimportProjectReconcilesSession(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
@@ -154,8 +139,5 @@ func TestReimportProjectReconcilesSession(t *testing.T) {
 	}
 	if sess.runs[0].project != root {
 		t.Errorf("session project = %q, want %q", sess.runs[0].project, root)
-	}
-	if sess.invalidated != 0 {
-		t.Errorf("invalidated = %d, want 0: the bridge reconciles in place", sess.invalidated)
 	}
 }
