@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"os"
 	"os/exec"
@@ -196,7 +197,7 @@ func (s *Session) recvFrameLocked(ctx context.Context, p *sessionProc, id int) (
 	for {
 		select {
 		case f := <-p.frames:
-			if int(*f.ID) != id {
+			if got, ok := frameID(f); !ok || got != id {
 				s.stopLocked()
 				return nil, fmt.Errorf("engine session: response id %v, want %d", *f.ID, id)
 			}
@@ -205,7 +206,7 @@ func (s *Session) recvFrameLocked(ctx context.Context, p *sessionProc, id int) (
 			// Drain a buffered frame before treating the death as fatal.
 			select {
 			case f := <-p.frames:
-				if int(*f.ID) != id {
+				if got, ok := frameID(f); !ok || got != id {
 					s.stopLocked()
 					return nil, fmt.Errorf("engine session: response id %v, want %d", *f.ID, id)
 				}
@@ -517,6 +518,16 @@ func parseFrame(line string) *responseFrame {
 		return nil
 	}
 	return &f
+}
+
+// frameID converts a frame's numeric id to an int, rejecting a non-integral or
+// non-finite value; parseFrame guarantees the id is non-nil.
+func frameID(f *responseFrame) (int, bool) {
+	raw := *f.ID
+	if math.IsNaN(raw) || math.IsInf(raw, 0) || raw != math.Trunc(raw) {
+		return 0, false
+	}
+	return int(raw), true
 }
 
 func fingerprintProject(project string) projectFingerprint {

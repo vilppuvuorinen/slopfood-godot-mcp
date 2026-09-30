@@ -24,6 +24,8 @@ type Daemon struct {
 	listener Listener
 	conns    map[Connection]struct{}
 	closed   bool
+	// served is set once Serve starts; the idle timeout must be configured before it.
+	served bool
 	// idleTimeout and idleTimer are guarded by mu.
 	idleTimeout time.Duration
 	idleTimer   *time.Timer
@@ -46,11 +48,16 @@ func NewDaemon(server *Server, queue *Queue, listen ListenFunc, addr string) *Da
 	}
 }
 
-// Must be called before Serve.
-func (d *Daemon) SetIdleTimeout(timeout time.Duration) {
+// Must be called before Serve; a call after Serve starts is rejected because the
+// timer is already armed from the previous value.
+func (d *Daemon) SetIdleTimeout(timeout time.Duration) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.served {
+		return errors.New("daemon: idle timeout must be set before Serve")
+	}
 	d.idleTimeout = timeout
+	return nil
 }
 
 func (d *Daemon) ActiveConnections() int {
@@ -78,6 +85,7 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		return errDaemonClosed
 	}
 	d.listener = l
+	d.served = true
 	d.loopWG.Add(1)
 	d.armIdleLocked()
 	d.mu.Unlock()

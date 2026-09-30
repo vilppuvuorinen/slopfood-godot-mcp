@@ -250,7 +250,9 @@ func TestDaemonActiveConnections(t *testing.T) {
 func TestDaemonIdleExit(t *testing.T) {
 	l := NewInProcListener()
 	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
-	d.SetIdleTimeout(10 * time.Millisecond)
+	if err := d.SetIdleTimeout(10 * time.Millisecond); err != nil {
+		t.Fatalf("SetIdleTimeout: %v", err)
+	}
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -275,7 +277,9 @@ func TestDaemonIdleExit(t *testing.T) {
 func TestDaemonConnectionDisarmsIdleTimer(t *testing.T) {
 	l := NewInProcListener()
 	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
-	d.SetIdleTimeout(80 * time.Millisecond)
+	if err := d.SetIdleTimeout(80 * time.Millisecond); err != nil {
+		t.Fatalf("SetIdleTimeout: %v", err)
+	}
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 

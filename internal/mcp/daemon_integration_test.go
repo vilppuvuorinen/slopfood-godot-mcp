@@ -196,7 +196,9 @@ func TestUnixDaemonIdleExitThenRespawn(t *testing.T) {
 	}
 
 	d := NewDaemon(testServer(), nil, func(string) (Listener, error) { return l, nil }, sock)
-	d.SetIdleTimeout(20 * time.Millisecond)
+	if err := d.SetIdleTimeout(20 * time.Millisecond); err != nil {
+		t.Fatalf("SetIdleTimeout: %v", err)
+	}
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 

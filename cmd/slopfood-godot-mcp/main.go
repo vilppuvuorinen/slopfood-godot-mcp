@@ -291,7 +291,9 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 		role.logger.Error("operation queue stuck; shutting down so the daemon can restart", "error", err)
 		daemon.Shutdown()
 	})
-	daemon.SetIdleTimeout(opts.idleTimeout)
+	if err := daemon.SetIdleTimeout(opts.idleTimeout); err != nil {
+		return fmt.Errorf("set idle timeout: %w", err)
+	}
 	defer func() {
 		if cerr := daemon.Close(); cerr != nil {
 			role.logger.Warn("daemon close", "error", cerr)
