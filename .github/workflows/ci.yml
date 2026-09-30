@@ -1,8 +1,8 @@
 name: CI
 
 # Runs on main pushes and workflow_dispatch: `make static` plus e2e across every
-# supported Godot minor line, including dev/beta/rc. A dispatch additionally
-# publishes the staged dist/ binaries as a release tagged with the build version.
+# supported Godot minor line, including dev/beta/rc. Every green run then
+# republishes the staged dist/ binaries as the rolling `latest` release.
 
 on:
   push:
@@ -246,10 +246,10 @@ jobs:
           go mod download
           go test -race -parallel 2 -count=1 ./...
 
+  # Rolling release: publicizes the dist/ files the build job already produced.
+  # Runs on any green run (main pushes and manual dispatches alike) and replaces
+  # the single `latest` release each time; never compiles.
   release:
-    # Manual dispatch only. Publishes the dist/ files the build job already
-    # produced; never compiles.
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: [build, e2e, e2e-windows, e2e-macos]
     runs-on: ubuntu-latest
     concurrency:
@@ -265,13 +265,17 @@ jobs:
         with:
           name: release-dist
           path: dist
-      - name: Publish release
+      - name: Publish latest
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh release create "$VERSION" dist/* \
+          # Asset names embed VERSION, so recreate rather than clobber: this
+          # drops the previous build's files and re-points the tag at HEAD.
+          gh release delete latest --yes --cleanup-tag || true
+          gh release create latest dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
-            --title "$VERSION" \
-            --generate-notes
+            --title "latest ($VERSION)" \
+            --notes "Rolling build of $GITHUB_SHA ($VERSION)." \
+            --latest
