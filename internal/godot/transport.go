@@ -13,7 +13,7 @@ const (
 
 // An explicit choice is returned as-is so a dev override can force either transport; an unrecognized
 // value resolves like auto.
-func resolveTransport(explicit Transport) Transport {
+func ResolveTransport(explicit Transport) Transport {
 	switch explicit {
 	case TransportUDS:
 		return TransportUDS

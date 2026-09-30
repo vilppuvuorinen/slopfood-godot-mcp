@@ -443,12 +443,12 @@ func TestServeDiscover(t *testing.T) {
 	}
 	found := false
 	for _, v := range versions {
-		if v == latestProtocolVersion {
+		if v == protocolVersion20260728 {
 			found = true
 		}
 	}
 	if !found {
-		t.Errorf("supportedVersions = %v, want %s", versions, latestProtocolVersion)
+		t.Errorf("supportedVersions = %v, want %s", versions, protocolVersion20260728)
 	}
 	if result["resultType"] != resultTypeComplete {
 		t.Errorf("resultType = %v", result["resultType"])

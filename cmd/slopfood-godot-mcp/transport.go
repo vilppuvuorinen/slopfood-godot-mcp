@@ -22,17 +22,3 @@ func parseTransport(value string) (godot.Transport, error) {
 		return "", fmt.Errorf("invalid --transport %q: want auto, uds, or tcp", value)
 	}
 }
-
-func resolveTransport(explicit godot.Transport) godot.Transport {
-	switch explicit {
-	case godot.TransportUDS:
-		return godot.TransportUDS
-	case godot.TransportTCP:
-		return godot.TransportTCP
-	case godot.TransportAuto:
-	}
-	if runtime.GOOS == "windows" {
-		return godot.TransportTCP
-	}
-	return godot.TransportUDS
-}

@@ -18,7 +18,7 @@ type daemonEndpoint struct {
 }
 
 func newDaemonEndpoint(root string, explicit godot.Transport) (*daemonEndpoint, error) {
-	transport := resolveTransport(explicit)
+	transport := godot.ResolveTransport(explicit)
 	endpoint := &daemonEndpoint{transport: transport}
 	switch transport {
 	case godot.TransportTCP:

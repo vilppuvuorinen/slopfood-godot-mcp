@@ -44,15 +44,15 @@ func TestResolveTransportAuto(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		want = godot.TransportTCP
 	}
-	if got := resolveTransport(godot.TransportAuto); got != want {
-		t.Errorf("resolveTransport(auto) = %q, want %q", got, want)
+	if got := godot.ResolveTransport(godot.TransportAuto); got != want {
+		t.Errorf("ResolveTransport(auto) = %q, want %q", got, want)
 	}
-	if got := resolveTransport(godot.TransportTCP); got != godot.TransportTCP {
-		t.Errorf("resolveTransport(tcp) = %q, want tcp", got)
+	if got := godot.ResolveTransport(godot.TransportTCP); got != godot.TransportTCP {
+		t.Errorf("ResolveTransport(tcp) = %q, want tcp", got)
 	}
 	if runtime.GOOS != "windows" {
-		if got := resolveTransport(godot.TransportUDS); got != godot.TransportUDS {
-			t.Errorf("resolveTransport(uds) = %q, want uds", got)
+		if got := godot.ResolveTransport(godot.TransportUDS); got != godot.TransportUDS {
+			t.Errorf("ResolveTransport(uds) = %q, want uds", got)
 		}
 	}
 }

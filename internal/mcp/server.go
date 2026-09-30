@@ -15,16 +15,14 @@ import (
 )
 
 // Starting with 2026-07-28 the protocol is stateless: clients use server/discover instead of the initialize handshake.
-const latestProtocolVersion = "2026-07-28"
+const protocolVersion20260728 = "2026-07-28"
 
 // Caps initialize negotiation so a legacy client is never handed a stateless revision.
 const latestLegacyProtocolVersion = "2025-11-25"
 
-const protocolVersion20260728 = "2026-07-28"
-
 // Newest first; 2024-11-05 is kept so older clients still connect.
 var supportedProtocolVersions = []string{
-	"2026-07-28",
+	protocolVersion20260728,
 	"2025-11-25",
 	"2025-06-18",
 	"2025-03-26",

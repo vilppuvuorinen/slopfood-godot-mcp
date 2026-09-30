@@ -300,7 +300,7 @@ func (s *Session) stopLocked() {
 }
 
 func engineLaunch(project string, transport Transport) (args []string, socketPath string, err error) {
-	switch resolveTransport(transport) {
+	switch ResolveTransport(transport) {
 	case TransportTCP:
 		return []string{"--gd-tcp", "127.0.0.1:0"}, "", nil
 	case TransportUDS, TransportAuto:
