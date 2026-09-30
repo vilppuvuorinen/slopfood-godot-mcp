@@ -1,7 +1,7 @@
 #!/usr/bin/env -S godot --headless --script
-# Adapted from tugcantopaloglu/godot-mcp (src/scripts/godot_operations.gd), a
-# fork of Coding-Solo/godot-mcp (both MIT-licensed); most of this file is
-# copied verbatim from those projects.
+# Derived from tugcantopaloglu/godot-mcp (src/scripts/godot_operations.gd), a
+# fork of Coding-Solo/godot-mcp (both MIT-licensed); portions of the handler
+# logic originate there, but the file has been substantially reworked.
 extends SceneTree
 
 const JSON_START = "<<<GODOT_MCP_JSON_START>>>"
