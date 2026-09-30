@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -104,18 +105,42 @@ func (c *engineSocket) writeRequest(payload []byte) error {
 	return nil
 }
 
-// The stream frames one JSON object per newline, with no read-size cap or blank-line terminator.
+// maxFrameBytes caps a single newline-delimited frame so a misbehaving engine
+// cannot grow the read buffer without bound before the delimiter arrives.
+const maxFrameBytes = 16 << 20
+
+// The stream frames one JSON object per newline, with no blank-line terminator.
 func (c *engineSocket) readFrame() (*responseFrame, error) {
 	for {
-		line, err := c.reader.ReadString('\n')
+		line, err := c.readFrameLine()
 		if len(line) > 0 {
-			if f := parseFrame(line); f != nil {
+			if f := parseFrame(string(line)); f != nil {
 				return f, nil
 			}
 		}
 		if err != nil {
 			return nil, fmt.Errorf("engine session: read frame: %w", err)
 		}
+	}
+}
+
+// readFrameLine reads up to a newline or maxFrameBytes; a full internal buffer
+// keeps accumulating until the delimiter or the cap is reached.
+func (c *engineSocket) readFrameLine() ([]byte, error) {
+	var line []byte
+	for {
+		chunk, err := c.reader.ReadSlice('\n')
+		line = append(line, chunk...)
+		if len(line) > maxFrameBytes {
+			return nil, fmt.Errorf("frame exceeds %d bytes", maxFrameBytes)
+		}
+		if err == nil {
+			return line, nil
+		}
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		return line, err //nolint:wrapcheck // readFrame wraps the error for the caller.
 	}
 }
 

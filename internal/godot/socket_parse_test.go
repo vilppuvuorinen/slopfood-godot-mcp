@@ -72,3 +72,24 @@ func TestReadReadinessMalformed(t *testing.T) {
 		t.Fatal("readReadiness accepted a malformed readiness line, want an error")
 	}
 }
+
+func TestReadFrameLineRejectsOversizedFrame(t *testing.T) {
+	payload := strings.Repeat("a", maxFrameBytes+1)
+	socket := &engineSocket{reader: bufio.NewReader(strings.NewReader(payload))}
+	line, err := socket.readFrameLine()
+	if err == nil {
+		t.Fatalf("readFrameLine accepted %d bytes, want an error", len(line))
+	}
+}
+
+func TestReadFrameLineReassemblesPastBuffer(t *testing.T) {
+	payload := strings.Repeat("a", 2048) + "\n"
+	socket := &engineSocket{reader: bufio.NewReaderSize(strings.NewReader(payload), 16)}
+	line, err := socket.readFrameLine()
+	if err != nil {
+		t.Fatalf("readFrameLine: %v", err)
+	}
+	if string(line) != payload {
+		t.Fatalf("readFrameLine returned %d bytes, want %d", len(line), len(payload))
+	}
+}
