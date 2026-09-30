@@ -2,8 +2,18 @@
 
 BINARY := slopfood-godot-mcp
 CMD := ./cmd/slopfood-godot-mcp
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+# VERSION stamps the binary through -X main.version. A local build defaults to a
+# fixed "dev" marker; CI overrides it with the generated YYYY.MM.DD-<sha7>
+# version for the commit it built (see .github/workflows/ci.yml). It is never
+# derived from `git describe`: a release artifact must carry exactly the version
+# the build job chose, and a local binary must be recognizable as a dev build.
+VERSION ?= dev
 LDFLAGS := -s -w -X main.version=$(VERSION)
+
+# DIST is the release staging directory and RELEASE_TARGETS the os/arch pairs
+# `build` cross-compiles into it, matching what the release job publishes.
+DIST := dist
+RELEASE_TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 
 GO ?= go
 GOFLAGS ?=
@@ -13,17 +23,29 @@ GOLANGCI_LINT ?= $(GO) tool -modfile=$(CURDIR)/$(TOOLS_MOD) golangci-lint
 .PHONY: all
 all: fmt vet test build
 
-# build compiles the server for the host arch and cross-compiles the Windows
-# artifact the e2e lanes consume, then compile-checks the other release targets.
-# The portability guard catches Linux-only code (e.g. syscall.Flock) on the push
-# that introduces it rather than at the next release dispatch; vet is what
-# compiles build-tagged *test* files, so a tagged file that does not compile
-# also fails here. CI uploads bin/$(BINARY) and bin/$(BINARY).exe after `make
-# static`, so the e2e lanes download the same binaries this target builds.
+# build cross-compiles every published target into dist/, named
+# <binary>_<version>_<os>_<arch>[.exe], and writes checksums.txt beside them.
+# The release job and both CI e2e lanes consume exactly these files, so what the
+# gate tests is what a release ships. It defines no build tags and no
+# instrumentation: the debug-only devtransport and gdcover tags are reserved for
+# the e2e targets, and any caller that needs extra debug flags passes them
+# through GOFLAGS. The portability guard catches Linux-only code (e.g.
+# syscall.Flock) on the push that introduces it rather than at the next release
+# dispatch; vet is what compiles build-tagged *test* files, so a tagged file
+# that does not compile also fails here.
 .PHONY: build
 build:
-	$(GO) build $(GOFLAGS) -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY) $(CMD)
-	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build $(GOFLAGS) -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY).exe $(CMD)
+	rm -rf '$(DIST)'
+	mkdir -p '$(DIST)'
+	@set -e; for target in $(RELEASE_TARGETS); do \
+		os=$${target%/*}; arch=$${target#*/}; \
+		name='$(BINARY)_$(VERSION)_'$$os'_'$$arch; \
+		if [ "$$os" = windows ]; then name=$$name.exe; fi; \
+		printf 'building %s\n' "$$name"; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch \
+			$(GO) build $(GOFLAGS) -trimpath -ldflags '$(LDFLAGS)' -o '$(DIST)/'$$name $(CMD); \
+	done
+	cd '$(DIST)' && sha256sum -- * > checksums.txt
 	CGO_ENABLED=0 GOOS=windows GOARCH=amd64 $(GO) build ./...
 	CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 $(GO) build ./...
 	GOOS=windows $(GO) vet ./...
@@ -64,16 +86,18 @@ E2E_PARALLEL ?= 4
 # uses its own temp project and runtime dir, so the only shared resource to
 # bound is the engine.
 #
-# The e2e build carries -tags devtransport, unlike `build`/`release`, so the
-# transport override is reachable in the local TCP lane but never in a release
-# binary.
+# The e2e build carries -tags devtransport, unlike `build`, so the transport
+# override is reachable in the local TCP lane but never in a release binary. It
+# is written to a -dev-named path under bin/, separate from the clean dist/
+# matrix `build` produces, so a `make build` artifact stays free of debug flags
+# no matter which targets ran before it.
 #
 # The e2e module has no non-test code, so -covermode here measures nothing; the
 # server is a child process. Use e2e-cover for real coverage of the server.
 .PHONY: e2e
 e2e:
-	$(GO) build $(GOFLAGS) -tags devtransport -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY) $(CMD)
-	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GODOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)' $(GO) test $(GOFLAGS) -parallel $(E2E_PARALLEL) -count=1 ./...
+	$(GO) build $(GOFLAGS) -tags devtransport -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY)-dev $(CMD)
+	cd e2e && XDG_DATA_HOME='$(abspath $(CURDIR)/.godot)' GODOT_MCP_BIN='$(CURDIR)/bin/$(BINARY)-dev' $(GO) test $(GOFLAGS) -parallel $(E2E_PARALLEL) -count=1 ./...
 
 # e2e-cover is e2e with a coverage-instrumented server binary. Building with
 # -cover and pointing every spawned server at a shared GOCOVERDIR makes each
@@ -157,8 +181,10 @@ tidy:
 	cd e2e && $(GO) mod tidy
 
 # static is the half of the gate that needs no Godot: formatting, vet, lint,
-# unit tests, and the multi-platform build. CI runs it in the job that has no
-# engine installed. `check` adds the engine-backed e2e suite.
+# unit tests, and the multi-platform build. The build stages dist/, so the exact
+# binaries the release job publishes are the ones this gate built and the e2e
+# lanes exercised. CI runs it in the job that has no engine installed. `check`
+# adds the engine-backed e2e suite.
 .PHONY: static
 static: fmt-check vet lint test build
 
@@ -169,13 +195,13 @@ check: godot static e2e
 
 .PHONY: clean
 clean:
-	rm -rf bin coverage.out $(E2E_COVERPROFILE) '$(COVERDIR)' $(GDCOVER_PROFILE) $(GDCOVER_VALIDATE_PROFILE) '$(GDCOVERDIR)'
+	rm -rf bin '$(DIST)' coverage.out $(E2E_COVERPROFILE) '$(COVERDIR)' $(GDCOVER_PROFILE) $(GDCOVER_VALIDATE_PROFILE) '$(GDCOVERDIR)'
 
 .PHONY: help
 help:
 	@$(GO) doc -all . >/dev/null 2>&1 || true
 	@printf 'Targets:\n'
-	@printf '  build    compile %s into bin/\n' '$(BINARY)'
+	@printf '  build    cross-compile %s into %s/ with no debug flags (VERSION=%s)\n' '$(BINARY)' '$(DIST)' '$(VERSION)'
 	@printf '  run      run the server (ARGS=...)\n'
 	@printf '  test     run tests with coverage\n'
 	@printf '  godot    download pinned Godot builds (GODOT_TEMPLATES=1 adds export templates)\n'

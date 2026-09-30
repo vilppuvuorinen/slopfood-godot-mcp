@@ -8,19 +8,17 @@ name: CI
 # surfaces early. e2e deliberately does not run on pull requests, where a new
 # upstream release could turn a green PR red for unrelated reasons.
 #
-# A workflow_dispatch that supplies a version additionally tags the resolved
-# commit and publishes cross-compiled binaries as a GitHub Release. To release a
-# commit other than main's tip, select it as the workflow ref when dispatching.
+# The build job stamps every build with a generated version, YYYY.MM.DD-<sha7>,
+# and stages the whole release matrix in dist/. A workflow_dispatch additionally
+# publishes those exact staged binaries as a GitHub Release tagged with that
+# generated version; it never rebuilds, so the release is the artifact the whole
+# gate just tested. To release a commit other than main's tip, select it as the
+# workflow ref when dispatching.
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      version:
-        description: "Version to release, e.g. v1.2.3 (empty runs checks only)"
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -39,31 +37,39 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
           check-latest: true
+      # The version is the build's identity and the release tag: the UTC date
+      # plus the short commit, so a main artifact is traceable to its source and
+      # every push gets a distinct version. It is passed to make, not derived
+      # there, so local builds keep their fixed "dev" marker.
+      - name: Generate version
+        id: version
+        run: |
+          set -euo pipefail
+          version="$(date -u +%Y.%m.%d)-$(git rev-parse --short=7 HEAD)"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - run: go mod download
       # static is the Godot-free half of `make check`: the gofmt gate, vet,
-      # lint, race unit tests, and the multi-platform build (host arch plus the
-      # windows/amd64 and darwin/arm64 portability guard). Its build target also
-      # emits the linux and windows binaries, which both e2e lanes download
-      # instead of compiling their own, so they exercise the same artifact the
-      # release job ships rather than a separately native-built one.
-      - run: make static
-      - name: Upload linux server
+      # lint, race unit tests, and the multi-platform build. The build stages
+      # the whole release matrix in dist/ with the generated version, so the
+      # release job and both e2e lanes download exactly those files rather than
+      # compiling their own. The build target defines no debug tags, so every
+      # uploaded artifact is clean.
+      - run: make static VERSION="${{ steps.version.outputs.version }}"
+      # The release matrix, named with the generated version and checksummed.
+      # The release job publishes exactly these files and never rebuilds.
+      - name: Upload release binaries
         uses: actions/upload-artifact@v4
         with:
-          name: server-linux-amd64
-          path: bin/slopfood-godot-mcp
-          if-no-files-found: error
-      - name: Upload windows server
-        uses: actions/upload-artifact@v4
-        with:
-          name: server-windows-amd64
-          path: bin/slopfood-godot-mcp.exe
+          name: release-dist
+          path: dist/
           if-no-files-found: error
 
   # Discover which minor lines >= MIN_GODOT_MINOR have published releases via
@@ -123,15 +129,15 @@ jobs:
       - name: Download cross-compiled server
         uses: actions/download-artifact@v4
         with:
-          name: server-linux-amd64
-          path: bin
+          name: release-dist
+          path: dist
       # Artifacts do not carry the executable bit, so restore it before the
       # suite execs the binary directly.
-      - run: chmod +x bin/slopfood-godot-mcp
+      - run: chmod +x "dist/slopfood-godot-mcp_${{ needs.build.outputs.version }}_linux_amd64"
       - name: e2e (Godot ${{ matrix.minor }})
         working-directory: e2e
         env:
-          GODOT_MCP_BIN: ${{ github.workspace }}/bin/slopfood-godot-mcp
+          GODOT_MCP_BIN: ${{ github.workspace }}/dist/slopfood-godot-mcp_${{ needs.build.outputs.version }}_linux_amd64
           GODOT_MINOR: ${{ matrix.minor }}
         run: |
           go mod download
@@ -194,22 +200,25 @@ jobs:
       - name: Download cross-compiled server
         uses: actions/download-artifact@v4
         with:
-          name: server-windows-amd64
-          path: bin
+          name: release-dist
+          path: dist
       - name: e2e (Godot ${{ env.GODOT_MINOR }}, windows)
         working-directory: e2e
         shell: pwsh
         env:
-          GODOT_MCP_BIN: ${{ github.workspace }}\bin\slopfood-godot-mcp.exe
+          GODOT_MCP_BIN: ${{ github.workspace }}\dist\slopfood-godot-mcp_${{ needs.build.outputs.version }}_windows_amd64.exe
           GODOT_MINOR: ${{ env.GODOT_MINOR }}
         run: |
           go mod download
           go test -parallel 2 -count=1 ./...
 
   release:
-    # Gated on the dispatch input: pushes never release. It runs after every
-    # check, so the tagged commit is one that passed the whole Godot matrix.
-    if: ${{ inputs.version != '' }}
+    # Manual dispatch only: pushes never release. It runs after every check, so
+    # the tagged commit is one that passed the whole Godot matrix. The version
+    # is the one the build job generated for that commit, and the assets are the
+    # dist/ files it already built and uploaded: this job downloads and
+    # publishes, it never compiles.
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: [build, e2e, e2e-windows]
     runs-on: ubuntu-latest
     concurrency:
@@ -218,46 +227,20 @@ jobs:
     permissions:
       contents: write
     env:
-      VERSION: ${{ inputs.version }}
+      VERSION: ${{ needs.build.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Download release binaries
+        uses: actions/download-artifact@v4
         with:
-          go-version: ${{ env.GO_VERSION }}
-          check-latest: true
-      - name: Validate version
-        run: |
-          set -euo pipefail
-          version="$VERSION"
-          if [[ "$version" != v* ]]; then
-            version="v$version"
-          fi
-          if [[ ! "$version" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
-            echo "::error::invalid version '$VERSION'; expected vMAJOR.MINOR.PATCH" >&2
-            exit 1
-          fi
-          echo "VERSION=$version" >> "$GITHUB_ENV"
-      - name: Build binaries
-        run: |
-          set -euo pipefail
-          mkdir -p dist
-          ldflags="-s -w -X main.version=$VERSION"
-          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
-            os=${target%/*}
-            arch=${target#*/}
-            name="slopfood-godot-mcp_${VERSION}_${os}_${arch}"
-            if [[ "$os" == windows ]]; then
-              name+=".exe"
-            fi
-            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" \
-              go build -trimpath -ldflags "$ldflags" -o "dist/$name" ./cmd/slopfood-godot-mcp
-          done
-          (cd dist && sha256sum -- * | tee checksums.txt)
+          name: release-dist
+          path: dist
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           gh release create "$VERSION" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "$VERSION" \
             --generate-notes
