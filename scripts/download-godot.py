@@ -149,9 +149,11 @@ OS_PROFILES = {
     "macos": OSProfile(
         asset_platform="macos.universal",
         binary_platform="macos.universal",
-        binary_glob="Godot_v*_macos.*",
-        stale_glob="Godot_v*_macos.*",
-        template_glob="templates/version.txt templates/macosx_* templates/macos_*",
+        # The macOS editor unpacks to a Godot.app bundle; the engine executable
+        # lives inside Contents/MacOS (see internal/godot.engineGlobs).
+        binary_glob="Godot.app/Contents/MacOS/Godot",
+        stale_glob="Godot.app",
+        template_glob="templates/version.txt templates/macos*",
     ),
 }
 

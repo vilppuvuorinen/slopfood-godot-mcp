@@ -174,11 +174,77 @@ jobs:
           go mod download
           go test -parallel 2 -count=1 ./...
 
+  # macOS smoke lane: one Godot build (newest stable minor), mirroring the
+  # Windows lane. The editor unpacks to a Godot.app bundle, so GODOT_PATH points
+  # at the executable inside it; -race is kept because the runner ships clang.
+  e2e-macos:
+    needs: [versions, build]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          check-latest: true
+      # Newest stable minor line; --stable keeps dev lines out of this lane.
+      - name: Resolve latest stable minor
+        run: |
+          set -euo pipefail
+          minor=$(python3 scripts/download-godot.py minors --stable "$MIN_GODOT_MINOR" | tail -1)
+          if [ -z "$minor" ]; then
+            echo "::error::no stable Godot releases found for minors >= $MIN_GODOT_MINOR"
+            exit 1
+          fi
+          echo "GODOT_MINOR=$minor" >> "$GITHUB_ENV"
+      # The export e2e builds a Linux ELF, so the Linux templates are needed
+      # alongside macOS's own.
+      - name: Install Godot ${{ env.GODOT_MINOR }}
+        env:
+          GODOT_OS: macos
+          GODOT_VERIFY: "1"
+          GODOT_TEMPLATES: "1"
+          GODOT_TEMPLATE_FILES: "templates/version.txt templates/linux_* templates/macos*"
+        run: |
+          set -euo pipefail
+          python3 scripts/download-godot.py install-latest "$GODOT_MINOR"
+          binary="$GITHUB_WORKSPACE/.godot/$GODOT_MINOR/Godot.app/Contents/MacOS/Godot"
+          if [ ! -x "$binary" ]; then
+            echo "::error::no macOS engine at $binary"
+            exit 1
+          fi
+          echo "GODOT_PATH=$binary" >> "$GITHUB_ENV"
+      - name: Download cross-compiled server
+        uses: actions/download-artifact@v4
+        with:
+          name: release-dist
+          path: dist
+      # Pick the runner's native slice; the staged darwin binaries cover both
+      # arches, and uname reports arm64 or x86_64.
+      - name: Select server binary
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            arm64) goarch=arm64 ;;
+            x86_64) goarch=amd64 ;;
+            *) echo "::error::unsupported arch $(uname -m)"; exit 1 ;;
+          esac
+          binary="$GITHUB_WORKSPACE/dist/slopfood-godot-mcp_${{ needs.build.outputs.version }}_darwin_$goarch"
+          chmod +x "$binary"
+          echo "GODOT_MCP_BIN=$binary" >> "$GITHUB_ENV"
+      - name: e2e (Godot ${{ env.GODOT_MINOR }}, macos)
+        working-directory: e2e
+        env:
+          GODOT_MINOR: ${{ env.GODOT_MINOR }}
+        run: |
+          set -euo pipefail
+          go mod download
+          go test -race -parallel 2 -count=1 ./...
+
   release:
     # Manual dispatch only. Publishes the dist/ files the build job already
     # produced; never compiles.
     if: ${{ github.event_name == 'workflow_dispatch' }}
-    needs: [build, e2e, e2e-windows]
+    needs: [build, e2e, e2e-windows, e2e-macos]
     runs-on: ubuntu-latest
     concurrency:
       group: release
