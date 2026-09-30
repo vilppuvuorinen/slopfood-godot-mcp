@@ -17,7 +17,6 @@ func TestReimportProjectSchema(t *testing.T) {
 	if tool.Description != "Reimport a Godot project by scanning it in the editor, generating .import sidecars and missing resource UIDs" {
 		t.Errorf("description = %q", tool.Description)
 	}
-	// The scan is project-wide, so the tool takes no arguments.
 	required, ok := tool.InputSchema["required"].([]string)
 	if !ok || len(required) != 0 {
 		t.Errorf("required = %v", tool.InputSchema["required"])
@@ -31,9 +30,6 @@ func TestReimportProjectSchema(t *testing.T) {
 	}
 }
 
-// recordingSession is a Session double that records the operation each Run
-// carries and echoes a canned stdout. It proves a handler reached the warm
-// session instead of forking a separate engine.
 type recordingSession struct {
 	runs   []fakeSessionRun
 	stdout string
@@ -74,8 +70,6 @@ func TestReimportProjectSuccess(t *testing.T) {
 	if !strings.Contains(text, "Scanned project sources") {
 		t.Errorf("text = %q, want the session's output", text)
 	}
-	// The scan must reach the warm session's reimport_project operation, which
-	// reconciles through the editor filesystem.
 	if len(sess.runs) != 1 {
 		t.Fatalf("session runs = %+v, want one", sess.runs)
 	}
@@ -143,9 +137,6 @@ func TestReimportProjectScriptFailure(t *testing.T) {
 	}
 }
 
-// TestReimportProjectSessionFailure covers the session itself failing (an engine
-// that never started, a dead socket): the tool reports it with the spawn-style
-// solutions, mirroring the pre-warm --import spawn failure.
 func TestReimportProjectSessionFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

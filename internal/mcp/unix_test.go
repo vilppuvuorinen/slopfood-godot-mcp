@@ -14,9 +14,6 @@ import (
 	"time"
 )
 
-// TestUnixSocketServesProtocol drives the existing line protocol over a real
-// Unix socket: the daemon accepts a connection from net.Dial and answers it on
-// the shared server, exactly as stdio and the in-process backend do.
 func TestUnixSocketServesProtocol(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "daemon.sock")
 	l, err := ListenUnix(sock)
@@ -47,8 +44,6 @@ func TestUnixSocketServesProtocol(t *testing.T) {
 	stopDaemon(t, d, done)
 }
 
-// TestUnixSocketPermissions asserts the socket directory is 0700 and the socket
-// itself 0600, so only the owning user can reach the daemon.
 func TestUnixSocketPermissions(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "nested", "daemon.sock")
 	l, err := ListenUnix(sock)
@@ -69,8 +64,6 @@ func TestUnixSocketPermissions(t *testing.T) {
 	}
 }
 
-// TestUnixSecondListenFails asserts the exclusive lock is the single-instance
-// rule: a second ListenUnix on the same path fails while the first is open.
 func TestUnixSecondListenFails(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "daemon.sock")
 	first, err := ListenUnix(sock)
@@ -86,8 +79,6 @@ func TestUnixSecondListenFails(t *testing.T) {
 	}
 }
 
-// TestUnixReclaimsStaleSocketPath asserts a leftover regular file at the socket
-// path is removed and rebound, the recovery a crash needs.
 func TestUnixReclaimsStaleSocketPath(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "daemon.sock")
 	if err := os.WriteFile(sock, []byte("stale"), 0o600); err != nil {
@@ -101,8 +92,6 @@ func TestUnixReclaimsStaleSocketPath(t *testing.T) {
 	defer func() { _ = l.Close() }()
 }
 
-// TestUnixCloseRemovesSocket asserts Close unlinks the socket path and is
-// idempotent.
 func TestUnixCloseRemovesSocket(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "daemon.sock")
 	l, err := ListenUnix(sock)
@@ -120,8 +109,6 @@ func TestUnixCloseRemovesSocket(t *testing.T) {
 	}
 }
 
-// TestUnixDialWithoutListenerFails asserts a dial with no daemon behind it
-// fails, which is what makes the client spawn one.
 func TestUnixDialWithoutListenerFails(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "missing.sock")
 	conn, err := DialUnix(sock)
@@ -131,10 +118,6 @@ func TestUnixDialWithoutListenerFails(t *testing.T) {
 	}
 }
 
-// TestUnixDisconnectCancelsEngine is the end-to-end disconnect proof: a client
-// closes its Unix-socket connection while a blocking handler runs, and the
-// canceled connection context reaches the handler. The socket lives under a
-// short os.MkdirTemp path so sun_path length limits are never an issue.
 func TestUnixDisconnectCancelsEngine(t *testing.T) {
 	s, started, canceled := blockingServer()
 
@@ -177,9 +160,6 @@ func TestUnixDisconnectCancelsEngine(t *testing.T) {
 	stopDaemon(t, d, done)
 }
 
-// TestUnixPeerIdentity asserts the accepted connection reports the kernel's
-// view of the peer, which for a same-process dial is this process's UID. It
-// skips on platforms whose backend reports peer credentials as unsupported.
 func TestUnixPeerIdentity(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "daemon.sock")
 	l, err := ListenUnix(sock)

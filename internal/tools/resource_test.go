@@ -81,8 +81,6 @@ func TestReadResourceSchema(t *testing.T) {
 	}
 }
 
-// TestReadResourceForwardsPropertyFilter proves a read's propertyFilter reaches
-// the operations script.
 func TestReadResourceForwardsPropertyFilter(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
 	root := t.TempDir()
@@ -98,8 +96,6 @@ func TestReadResourceForwardsPropertyFilter(t *testing.T) {
 	}
 }
 
-// TestModifyResourceFilterIgnoredForMutation proves propertyFilter is a read
-// option: create and modify must not forward it.
 func TestModifyResourceFilterIgnoredForMutation(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
 	root := t.TempDir()

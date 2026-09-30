@@ -6,8 +6,6 @@ import (
 	"testing"
 )
 
-// withCache points the shared script cache at a fresh temp dir for the test and
-// returns the directory materialized scripts land in.
 func withCache(t *testing.T) string {
 	t.Helper()
 	base := t.TempDir()
@@ -53,9 +51,6 @@ func TestMaterializeDistinguishesContent(t *testing.T) {
 	}
 }
 
-// TestMaterializeRepairsIncompleteFile covers a cache file that is somehow not
-// the expected content (for example left behind by an older, non-atomic
-// writer): the next materialize must replace it rather than hand out a bad path.
 func TestMaterializeRepairsIncompleteFile(t *testing.T) {
 	withCache(t)
 	path, err := materialize("demo", "complete\n")
@@ -81,8 +76,6 @@ func TestMaterializeRepairsIncompleteFile(t *testing.T) {
 	}
 }
 
-// TestMaterializeLeavesNoTempFiles guards against a per-process temp file
-// leaking alongside the installed script.
 func TestMaterializeLeavesNoTempFiles(t *testing.T) {
 	dir := withCache(t)
 	if _, err := materialize("demo", "print(1)\n"); err != nil {

@@ -9,11 +9,7 @@ import (
 	"syscall"
 )
 
-// OpenTCPLock opens path with an exclusive share mode (dwShareMode == 0), so
-// the handle is the single-instance rule for the TCP endpoint: only the first
-// opener succeeds, and the OS releases the handle exactly when the process
-// dies, giving hold-till-death semantics with no stale-marker reclaim. It uses
-// the stdlib syscall package, so no external dependency enters go.mod.
+// Opens path with exclusive share mode so only the first opener wins; the OS releases it when the process dies.
 func OpenTCPLock(path string) (io.Closer, error) {
 	if err := ensureEndpointDir(path); err != nil {
 		return nil, err

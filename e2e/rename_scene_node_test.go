@@ -5,7 +5,6 @@ import (
 	"testing"
 )
 
-// TestRenameSceneNodeTool drives the real rename_scene_node tool against Godot.
 func TestRenameSceneNodeTool(t *testing.T) {
 	t.Parallel()
 	root, session := seedScene(t, "scenes/rename.tscn", "Node2D")
@@ -25,11 +24,8 @@ func TestRenameSceneNodeTool(t *testing.T) {
 	requireContains(t, scene, `[node name="Hero"`)
 }
 
-// TestRenameSceneNodeErrors covers validation and engine failure messages.
 func TestRenameSceneNodeErrors(t *testing.T) {
 	t.Parallel()
-	// Every project-backed case shares one warm project and session; only "not a
-	// project" needs its own non-project directory.
 	root := newProject(t)
 	session := connectProject(t, root)
 

@@ -5,11 +5,8 @@ import (
 	"testing"
 )
 
-// TestDuplicateSceneNodeTool drives the real duplicate_scene_node tool against
-// Godot.
 func TestDuplicateSceneNodeTool(t *testing.T) {
 	t.Parallel()
-	// The two subtests share one warm project and session; each owns its scene.
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -49,18 +46,14 @@ func TestDuplicateSceneNodeTool(t *testing.T) {
 			"nodePath":  "root/Parent",
 		})
 
-		// The duplicate's child must be owned back to the scene root, or the
-		// pack step drops it; its parent attribute proves it survived.
+		// The duplicate's child must be owned back to the scene root, or the pack step drops it.
 		scene := readFile(t, filepath.Join(root, "scenes", "duplicate_tree.tscn"))
 		requireContains(t, scene, `[node name="Parent2"`, `parent="Parent2"`)
 	})
 }
 
-// TestDuplicateSceneNodeErrors covers validation and engine failure messages.
 func TestDuplicateSceneNodeErrors(t *testing.T) {
 	t.Parallel()
-	// Every project-backed case shares one warm project and session; only "not a
-	// project" needs its own non-project directory.
 	root := newProject(t)
 	session := connectProject(t, root)
 

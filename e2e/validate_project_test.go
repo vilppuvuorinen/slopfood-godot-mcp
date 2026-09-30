@@ -6,14 +6,11 @@ import (
 	"testing"
 )
 
-// validateProjectPayload is the subset of validate_project's payload the tests
-// assert against.
 type validateProjectPayload struct {
 	Valid  bool     `json:"valid"`
 	Errors []string `json:"errors"`
 }
 
-// TestValidateProjectTool drives the tool through the real engine.
 func TestValidateProjectTool(t *testing.T) {
 	t.Parallel()
 	t.Run("valid project", func(t *testing.T) {

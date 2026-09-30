@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// TestModifySceneNodeTool drives the real modify_scene_node tool against Godot
-// and reads the saved scene back from disk.
 func TestModifySceneNodeTool(t *testing.T) {
 	t.Parallel()
 	root, session := seedScene(t, "scenes/main.tscn", "Node2D")
@@ -30,10 +28,7 @@ func TestModifySceneNodeTool(t *testing.T) {
 	requireContains(t, scene, "position = Vector2(10, 20)", "visible = false")
 }
 
-// TestModifySceneNodeDecodeErrors pins the value-contract decoder's rejection
-// messages for values it cannot turn into the type a property expects. Each
-// case must fail with the specific reason and, because _apply_properties
-// refuses before writing, leave the scene file untouched.
+// Each rejected case must leave the scene file untouched because _apply_properties refuses before writing.
 func TestModifySceneNodeDecodeErrors(t *testing.T) {
 	t.Parallel()
 	root, session := seedScene(t, "scenes/errors.tscn", "Node2D")
@@ -179,12 +174,8 @@ func TestModifySceneNodeDecodeErrors(t *testing.T) {
 	}
 }
 
-// TestModifySceneNodeErrors covers the reference's validation and failure
-// messages.
 func TestModifySceneNodeErrors(t *testing.T) {
 	t.Parallel()
-	// Every project-backed case shares one warm project and session; only "not a
-	// project" needs its own non-project directory.
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -225,7 +216,6 @@ func TestModifySceneNodeErrors(t *testing.T) {
 		const path = "scenes/invalid_property.tscn"
 		createScene(t, session, path, "Node2D")
 
-		// position is a Vector2 slot, so a bare string cannot be decoded.
 		res := callTool(t, session, "modify_scene_node", map[string]any{
 			"scenePath":  path,
 			"nodePath":   "root",

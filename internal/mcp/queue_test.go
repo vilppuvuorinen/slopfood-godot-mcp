@@ -9,13 +9,10 @@ import (
 	"time"
 )
 
-// testQueueTimeout is long enough that no test job reaches it by accident;
-// tests that exercise the timeout use their own short value.
+// Long enough that no test job reaches it by accident.
 const testQueueTimeout = time.Minute
 
-// testQueueStopGrace is how long tests allow a canceled job to return before
-// the queue quarantines; it is generous so a cooperative job is never mistaken
-// for a stuck one. Tests that exercise the grace set q.stopGrace directly.
+// Generous so a cooperative job is never mistaken for a stuck one.
 const testQueueStopGrace = time.Second
 
 func TestQueueReturnsJobResult(t *testing.T) {
@@ -79,8 +76,6 @@ func TestQueueSerializesJobs(t *testing.T) {
 
 func TestQueueConcurrentSubmissions(t *testing.T) {
 	const jobs = 100
-	// Size the backlog for every job so concurrent submissions cannot trip the
-	// overload path this test is not about; overload has its own test.
 	q := NewQueue(jobs, testQueueTimeout)
 	defer q.Close()
 
@@ -222,8 +217,7 @@ func TestQueueTimeoutCancelsThenReleasesSlot(t *testing.T) {
 	q.stopGrace = testQueueStopGrace
 	defer q.Close()
 
-	// The job honors its context, so the cancel the timeout sends makes it
-	// return at once and the worker may reuse the slot.
+	// The job honors its context, so the timeout's cancel lets the worker reuse the slot.
 	if _, err := q.Submit(context.Background(), func(ctx context.Context) (any, error) {
 		<-ctx.Done()
 		return nil, ctx.Err()
@@ -251,10 +245,8 @@ func TestQueueTimeoutCancelsThenReleasesSlot(t *testing.T) {
 	}
 }
 
-// TestQueueTimeoutDoesNotOverlapNextJob pins the join: while a job that ignores
-// its context is still running after its timeout, the worker must not start the
-// job queued behind it. Reusing the slot early is the corruption the queue
-// exists to prevent.
+// While a job that ignores its context is still running after its timeout, the
+// worker must not start the job queued behind it.
 func TestQueueTimeoutDoesNotOverlapNextJob(t *testing.T) {
 	const timeout = 20 * time.Millisecond
 	q := NewQueue(2, timeout)
@@ -288,8 +280,6 @@ func TestQueueTimeoutDoesNotOverlapNextJob(t *testing.T) {
 		secondDone <- err
 	}()
 
-	// Let the timeout fire and cancel the first job. It ignores the cancel, so
-	// the second job must stay queued.
 	time.Sleep(4 * timeout)
 	if secondStarted.Load() {
 		t.Fatal("second job started while the timed-out first job was still running")
@@ -332,8 +322,7 @@ func TestQueueTimeoutCancelsJobContext(t *testing.T) {
 	}
 }
 
-// TestQueueQuarantinesWhenJobWillNotStop covers the last rung of the ladder: a
-// job that ignores its context past the stop grace makes the queue refuse all
+// A job that ignores its context past the stop grace makes the queue refuse all
 // current and future work instead of starting a second writer.
 func TestQueueQuarantinesWhenJobWillNotStop(t *testing.T) {
 	const timeout = 20 * time.Millisecond
@@ -359,8 +348,7 @@ func TestQueueQuarantinesWhenJobWillNotStop(t *testing.T) {
 	}()
 	<-started
 
-	// Queue a second job behind the first so it is already waiting when the
-	// queue quarantines; it must fail rather than run.
+	// Queue a second job behind the first so it is waiting at quarantine time.
 	secondDone := make(chan error, 1)
 	go func() {
 		_, err := q.Submit(context.Background(), func(context.Context) (any, error) {

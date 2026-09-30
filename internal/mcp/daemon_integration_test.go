@@ -17,9 +17,7 @@ import (
 	"time"
 )
 
-// shortSocketPath returns a fresh Unix socket path under a short temp prefix so
-// sun_path's length limit is never an issue, and removes the directory when the
-// test ends.
+// Fresh Unix socket path under a short temp prefix, removed when the test ends.
 func shortSocketPath(t *testing.T) string {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "mcp-it-")
@@ -30,17 +28,12 @@ func shortSocketPath(t *testing.T) string {
 	return filepath.Join(dir, "d.sock")
 }
 
-// toolCallLine is the request line for a no-argument tools/call.
 func toolCallLine(name string) string {
 	return `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"` + name + `"}}`
 }
 
-// TestUnixDaemonConcurrentClientsSerialize is the end-to-end no-lost-update
-// guarantee over a real socket: every connection shares the daemon's one queue,
-// so concurrent clients never run the engine handler at once. The handler
-// deliberately does an unsynchronized read-modify-write on a plain counter; if
-// the daemon let handlers overlap, -race would flag the data race and the final
-// count would be short.
+// The handler does an unsynchronized read-modify-write; if handlers overlapped,
+// -race would flag it and the final count would be short.
 func TestUnixDaemonConcurrentClientsSerialize(t *testing.T) {
 	sock := shortSocketPath(t)
 	l, err := ListenUnix(sock)
@@ -51,10 +44,8 @@ func TestUnixDaemonConcurrentClientsSerialize(t *testing.T) {
 	const calls = 8
 	var counter int // deliberately unsynchronized; the queue must serialize the handlers.
 	var active, maxActive int32
-	// completed carries one token per handler back to the test's goroutine. The
-	// race detector does not treat the socket round trip as a happens-before
-	// edge, so the channel is what orders each handler's counter write before
-	// the test's final read; the handlers' own accesses stay unsynchronized.
+	// The channel orders each handler's counter write before the test's final
+	// read; the socket round trip is not a happens-before edge for -race.
 	completed := make(chan struct{}, calls)
 
 	srv := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -79,8 +70,6 @@ func TestUnixDaemonConcurrentClientsSerialize(t *testing.T) {
 		},
 	})
 
-	// Size the backlog for every call so the overload path is not what this
-	// test measures; overload has its own test.
 	q := NewQueue(calls, testQueueTimeout)
 	d := NewDaemon(srv, q, func(string) (Listener, error) { return l, nil }, sock)
 	done := make(chan error, 1)
@@ -120,12 +109,8 @@ func TestUnixDaemonConcurrentClientsSerialize(t *testing.T) {
 	stopDaemon(t, d, done)
 }
 
-// TestUnixDaemonSaturationReturnsOverload drives the overload path over the
-// wire: with a depth-1 backlog one call runs and a second waits, so a third call
-// finds the queue full and is shed. The depth counts jobs waiting behind the
-// running one, so saturation needs one running plus one waiting before the
-// rejected call; the test asserts the rejection surfaces as an ordinary tool
-// error mentioning ErrQueueFull, not a protocol failure.
+// With a depth-1 backlog one call runs and one waits, so a third is shed as an
+// ordinary tool error rather than a protocol failure.
 func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 	sock := shortSocketPath(t)
 	l, err := ListenUnix(sock)
@@ -161,7 +146,6 @@ func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 		return client
 	}
 
-	// First call occupies the worker.
 	first := dial()
 	writeLine(t, first, toolCallLine("block"))
 	select {
@@ -170,12 +154,10 @@ func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 		t.Fatal("first handler did not start")
 	}
 
-	// Second call fills the one waiting slot.
 	second := dial()
 	writeLine(t, second, toolCallLine("block"))
 	awaitCondition(t, func() bool { return len(q.jobs) == 1 }, "the depth-1 backlog to fill")
 
-	// Third call is shed with the overload error.
 	third := dial()
 	writeLine(t, third, toolCallLine("block"))
 	line, err := bufio.NewReader(third).ReadString('\n')
@@ -200,17 +182,12 @@ func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 		t.Errorf("overload content = %+v, want a message containing %q", resp.Result.Content, ErrQueueFull.Error())
 	}
 
-	// Releasing the blocked connections cancels their handlers so the daemon can
-	// stop promptly.
 	_ = first.Close()
 	_ = second.Close()
 
 	stopDaemon(t, d, done)
 }
 
-// TestUnixDaemonIdleExitThenRespawn asserts an idle daemon unlinks its socket
-// and exits, and that the same path can be bound again afterwards: the next
-// client's spawn is a fresh daemon on a reclaimed path.
 func TestUnixDaemonIdleExitThenRespawn(t *testing.T) {
 	sock := shortSocketPath(t)
 	l, err := ListenUnix(sock)
@@ -231,8 +208,7 @@ func TestUnixDaemonIdleExitThenRespawn(t *testing.T) {
 	case <-time.After(2 * time.Second):
 		t.Fatal("Serve did not return after the idle grace period")
 	}
-	// Close joins the listener cleanup, so the socket removal and lock release
-	// have completed rather than racing Serve's return.
+	// Close joins listener cleanup, so socket removal and lock release are done.
 	if closeErr := d.Close(); closeErr != nil {
 		t.Fatalf("Close: %v", closeErr)
 	}

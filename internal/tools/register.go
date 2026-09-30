@@ -1,4 +1,3 @@
-// Package tools implements the MCP tools exposed by the server.
 package tools
 
 import (
@@ -8,7 +7,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-// Category is a named group of tools selected with the --enable flag.
 type Category string
 
 const (
@@ -25,7 +23,6 @@ const (
 	CategoryTheme   Category = "theme"
 )
 
-// AllCategories lists every category in registration order.
 var AllCategories = []Category{
 	CategoryProject,
 	CategoryExport,
@@ -40,8 +37,6 @@ var AllCategories = []Category{
 	CategoryTheme,
 }
 
-// categoryTools maps each category to the tool constructors it contains. Every
-// tool belongs to exactly one category.
 var categoryTools = map[Category][]func() mcp.Tool{
 	CategoryProject: {
 		getGodotVersion, createProject, validateProject, reimportProject,
@@ -83,14 +78,9 @@ var categoryTools = map[Category][]func() mcp.Tool{
 	},
 }
 
-// DefaultCategories is the set registered when --enable is not passed. It is a
-// copy of AllCategories, not an alias, so a caller can mutate it without
-// disturbing the canonical order.
+// A copy, not an alias, so callers can mutate it without disturbing AllCategories.
 var DefaultCategories = append([]Category(nil), AllCategories...)
 
-// Register adds the tools in the given categories to the server, binding every
-// project-scoped tool to project. The root is fixed for the life of the server,
-// so tools take only project-relative paths and never a project argument.
 func Register(s *mcp.Server, project string, categories ...Category) {
 	for _, category := range categories {
 		for _, newTool := range categoryTools[category] {
@@ -101,9 +91,6 @@ func Register(s *mcp.Server, project string, categories ...Category) {
 	}
 }
 
-// ResolveCategories turns raw --enable values into a category list. Empty input
-// yields DefaultCategories. Each value may be a comma-separated list and "all"
-// expands to every category; unknown names are an error.
 func ResolveCategories(raw []string) ([]Category, error) {
 	if len(raw) == 0 {
 		return append([]Category(nil), DefaultCategories...), nil
@@ -141,7 +128,6 @@ func ResolveCategories(raw []string) ([]Category, error) {
 	return resolved, nil
 }
 
-// knownCategory reports whether category is one of AllCategories.
 func knownCategory(category Category) bool {
 	for _, known := range AllCategories {
 		if known == category {

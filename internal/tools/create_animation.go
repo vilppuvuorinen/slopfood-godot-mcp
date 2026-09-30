@@ -8,8 +8,7 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-// animationLoopModeNames is the tool contract's names for Animation loop modes,
-// shared with the engine bridge in godot_operations.gd.
+// animationLoopModeNames is shared with the engine bridge in godot_operations.gd.
 var animationLoopModeNames = []string{"none", "linear", "pingpong"}
 
 func createAnimation() mcp.Tool {
@@ -84,8 +83,6 @@ func handleCreateAnimation(ctx Context, raw json.RawMessage) (any, error) {
 	})
 }
 
-// addAnimationProperties copies the animation-level fields onto params when the
-// caller supplied them.
 func addAnimationProperties(params map[string]any, length *float64, loopMode string, step *float64) {
 	if length != nil {
 		params["length"] = *length

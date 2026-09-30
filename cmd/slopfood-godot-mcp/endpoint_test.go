@@ -9,8 +9,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 )
 
-// TestParseTransport asserts the flag value maps to a transport and that a
-// platform-incompatible explicit choice and an unknown value are rejected.
 func TestParseTransport(t *testing.T) {
 	cases := []struct {
 		value   string
@@ -41,8 +39,6 @@ func TestParseTransport(t *testing.T) {
 	}
 }
 
-// TestResolveTransportAuto asserts auto resolves to UDS off Windows and TCP on
-// Windows, and an explicit choice is preserved.
 func TestResolveTransportAuto(t *testing.T) {
 	want := godot.TransportUDS
 	if runtime.GOOS == "windows" {
@@ -61,8 +57,6 @@ func TestResolveTransportAuto(t *testing.T) {
 	}
 }
 
-// TestEndpointFactoryUDS asserts auto on a non-Windows host resolves to the UDS
-// endpoint, whose address is the derived socket path.
 func TestEndpointFactoryUDS(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("auto resolves to TCP on Windows")
@@ -81,9 +75,6 @@ func TestEndpointFactoryUDS(t *testing.T) {
 	}
 }
 
-// TestEndpointFactoryTCP asserts the forced TCP endpoint binds before the
-// daemon, publishes its endpoint record, and loses a second bind to the
-// exclusive lock.
 func TestEndpointFactoryTCP(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 
@@ -112,7 +103,6 @@ func TestEndpointFactoryTCP(t *testing.T) {
 		t.Errorf("endpoint record missing after bind: %v", statErr)
 	}
 
-	// A second endpoint for the same project loses to the lock.
 	second, err := newDaemonEndpoint("/tmp/project", godot.TransportTCP)
 	if err != nil {
 		t.Fatalf("second newDaemonEndpoint: %v", err)
@@ -122,9 +112,6 @@ func TestEndpointFactoryTCP(t *testing.T) {
 	}
 }
 
-// TestEndpointFactoryTCPCloseReleasesEndpoint asserts endpoint.close removes
-// the endpoint record after listenFunc binds, so an early return between bind
-// and daemon construction does not leak it.
 func TestEndpointFactoryTCPCloseReleasesEndpoint(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 
@@ -144,8 +131,6 @@ func TestEndpointFactoryTCPCloseReleasesEndpoint(t *testing.T) {
 	}
 }
 
-// TestDaemonChildArgsForwardsTransport asserts --transport is forwarded only
-// when it was actually set, so a release child never sees an unknown flag.
 func TestDaemonChildArgsForwardsTransport(t *testing.T) {
 	base := &options{idleTimeout: 0}
 	if got := daemonChildArgs("/p", base, "/p.log"); containsFlag(got, "--transport") {
@@ -157,7 +142,6 @@ func TestDaemonChildArgsForwardsTransport(t *testing.T) {
 	}
 }
 
-// containsFlag reports whether args contain the named flag.
 func containsFlag(args []string, name string) bool {
 	for _, arg := range args {
 		if arg == name {

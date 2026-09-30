@@ -9,9 +9,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// valueCodecScript exports one property per decoder entry point the shared
-// value-contract fixture does not reach: bare scalars coerced to a declared
-// type, and composite tags whose inner fields exercise the typed-zero fallback.
+// Bare scalars coerced to a declared type, plus composite tags exercising the typed-zero fallback.
 const valueCodecScript = `extends Node2D
 
 @export var string_value: String = ""
@@ -24,8 +22,6 @@ const valueCodecScript = `extends Node2D
 @export var transform_value: Transform3D = Transform3D()
 `
 
-// seedValueCodecScene creates a scene whose root carries valueCodecScript's
-// exported properties and returns the project root and its session.
 func seedValueCodecScene(t *testing.T) (string, *mcp.ClientSession) {
 	t.Helper()
 	root, session := seedScene(t, "scenes/codec.tscn", "Node2D")
@@ -38,8 +34,6 @@ func seedValueCodecScene(t *testing.T) (string, *mcp.ClientSession) {
 	return root, session
 }
 
-// readRootProperties reads scenes/codec.tscn back through read_scene and
-// returns the root node's properties in the tool value contract.
 func readRootProperties(t *testing.T, session *mcp.ClientSession) map[string]any {
 	t.Helper()
 	text := requireToolText(t, session, "read_scene", map[string]any{
@@ -52,10 +46,6 @@ func readRootProperties(t *testing.T, session *mcp.ClientSession) map[string]any
 	return tree.Properties
 }
 
-// TestValueCodecScalarCoercion proves a bare JSON scalar is coerced to the type
-// a property declares. The contract fixture only ever feeds tagged values
-// through an untyped Dictionary, so _convert_value_for_type's String,
-// StringName, NodePath and PackedStringArray arms are otherwise never reached.
 func TestValueCodecScalarCoercion(t *testing.T) {
 	t.Parallel()
 	_, session := seedValueCodecScene(t)
@@ -85,9 +75,6 @@ func TestValueCodecScalarCoercion(t *testing.T) {
 	}
 }
 
-// TestValueCodecDictionaryTag proves the explicit {"$type":"Dictionary"} form a
-// read payload can emit decodes back to the same plain object. The failure side
-// of this branch is already pinned; this is the success side.
 func TestValueCodecDictionaryTag(t *testing.T) {
 	t.Parallel()
 	_, session := seedValueCodecScene(t)
@@ -110,9 +97,6 @@ func TestValueCodecDictionaryTag(t *testing.T) {
 	}
 }
 
-// TestValueCodecGodotTextFallback proves a GodotText whose string var_to_str
-// cannot rebuild falls back to the literal text, so an engine-only value still
-// round-trips as data instead of failing the write.
 func TestValueCodecGodotTextFallback(t *testing.T) {
 	t.Parallel()
 	_, session := seedValueCodecScene(t)
@@ -134,9 +118,6 @@ func TestValueCodecGodotTextFallback(t *testing.T) {
 	}
 }
 
-// TestValueCodecOptionalFieldsDefault proves a tagged value may omit a field
-// that has a defined default: a Color without "a" and a Quaternion without "w"
-// must decode with the missing component set to 1.
 func TestValueCodecOptionalFieldsDefault(t *testing.T) {
 	t.Parallel()
 	_, session := seedValueCodecScene(t)
@@ -162,10 +143,6 @@ func TestValueCodecOptionalFieldsDefault(t *testing.T) {
 	}
 }
 
-// TestValueCodecTypeFailures pins the rejection messages for values that reach
-// the decoder's typed arms but cannot be converted, including the typed-zero
-// fallback _vector_field uses to keep an invalid component out of a composite
-// constructor. Every case must fail before writing, leaving the scene intact.
 func TestValueCodecTypeFailures(t *testing.T) {
 	t.Parallel()
 	root, session := seedValueCodecScene(t)

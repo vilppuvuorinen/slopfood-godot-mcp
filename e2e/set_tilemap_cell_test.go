@@ -2,11 +2,8 @@ package e2e
 
 import "testing"
 
-// TestSetTilemapCellTool drives the real set_tilemap_cell tool against Godot.
 func TestSetTilemapCellTool(t *testing.T) {
 	t.Parallel()
-	// Both subtests share one warm project and session, each with its own
-	// tileset and scene.
 	root := newProject(t)
 	session := connectProject(t, root)
 	seedAtlasTexture(t, root)
@@ -77,11 +74,8 @@ func TestSetTilemapCellTool(t *testing.T) {
 	})
 }
 
-// TestSetTilemapCellErrors covers validation and engine failure messages.
 func TestSetTilemapCellErrors(t *testing.T) {
 	t.Parallel()
-	// The validation-only cases need no project, so they share one engine-free
-	// session.
 	validationSession := connect(t)
 	t.Run("missing params", func(t *testing.T) {
 		requireToolError(t, validationSession, "set_tilemap_cell", map[string]any{},

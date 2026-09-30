@@ -41,8 +41,6 @@ type validateScriptsArgs struct {
 	ScriptPaths []string `json:"scriptPaths"`
 }
 
-// validateScriptCheck is one checked script's result, mirroring the reference
-// server's per-file success object.
 type validateScriptCheck struct {
 	ScriptPath string             `json:"scriptPath"`
 	Checked    bool               `json:"checked"`
@@ -51,15 +49,12 @@ type validateScriptCheck struct {
 	Errors     []scriptDiagnostic `json:"errors"`
 }
 
-// validateScriptSkip is one candidate that was not checked, mirroring the
-// reference server's per-file failure object.
 type validateScriptSkip struct {
 	ScriptPath string `json:"scriptPath"`
 	Checked    bool   `json:"checked"`
 	Error      string `json:"error"`
 }
 
-// validateScriptsReport is the JSON document validate_scripts returns.
 type validateScriptsReport struct {
 	Scope           string `json:"scope"`
 	FileCount       int    `json:"fileCount"`

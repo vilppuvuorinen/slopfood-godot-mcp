@@ -8,11 +8,8 @@ import (
 	"testing"
 )
 
-// TestAddSceneSignalTool drives the real add_scene_signal tool against Godot.
 func TestAddSceneSignalTool(t *testing.T) {
 	t.Parallel()
-	// One warm project and session serve every subtest below; each subtest owns
-	// a distinct scene path, so a single engine boot covers them all.
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -57,8 +54,6 @@ func TestAddSceneSignalTool(t *testing.T) {
 	})
 
 	t.Run("writes the connection to the scene", func(t *testing.T) {
-		// Button carries the "pressed" signal; connecting it must not make the
-		// engine log an error when the saved scene is re-instantiated.
 		createScene(t, session, "scenes/connections.tscn", "Button")
 
 		addText := requireToolText(t, session, "add_scene_signal", map[string]any{
@@ -148,11 +143,8 @@ func TestAddSceneSignalTool(t *testing.T) {
 	})
 }
 
-// TestAddSceneSignalErrors covers the tool's validation messages.
 func TestAddSceneSignalErrors(t *testing.T) {
 	t.Parallel()
-	// Every project-backed case shares one warm project and session; only "not a
-	// project" needs its own non-project directory.
 	root := newProject(t)
 	session := connectProject(t, root)
 

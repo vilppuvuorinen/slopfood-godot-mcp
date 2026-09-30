@@ -8,10 +8,7 @@ import (
 	"os/exec"
 )
 
-// CheckScript runs the GDScript checker on scriptResPath and returns the
-// checker's stdout, stderr, and exit code. Godot logs diagnostics to stderr and
-// can still exit 0 when the target script fails to compile, so a non-zero exit
-// is not returned as an error.
+// Godot logs diagnostics to stderr and can still exit 0 on failure, so a non-zero exit is not an error.
 func CheckScript(ctx context.Context, executable, projectPath, checkerPath, scriptResPath string) (stdout, stderr string, exitCode int, err error) {
 	args := []string{
 		"--headless",
@@ -22,13 +19,8 @@ func CheckScript(ctx context.Context, executable, projectPath, checkerPath, scri
 	return runScript(ctx, executable, args)
 }
 
-// ValidateProject boots the engine against a project with a no-op probe script
-// and returns the engine's stdout, stderr, and exit code separately. Godot
-// parses project.godot during startup and logs a parse error to stderr while
-// still exiting 0 when the file is malformed, so the exit code and stderr are
-// both returned for the caller to combine. The probe script only lets startup
-// run and quits; the operations bridge cannot be used here because it now only
-// speaks its socket transport. Only a failure to start the process is an error.
+// Godot can parse project.godot during startup and report an error on stderr while still exiting 0, so
+// the exit code and stderr are both returned and only a failure to start is an error.
 func ValidateProject(ctx context.Context, executable, projectPath, scriptPath string) (stdout, stderr string, exitCode int, err error) {
 	args := []string{
 		"--headless",
@@ -38,10 +30,7 @@ func ValidateProject(ctx context.Context, executable, projectPath, scriptPath st
 	return runScript(ctx, executable, args)
 }
 
-// runScript runs the executable with args and returns stdout, stderr, and the
-// exit code separately. A non-zero exit is not an error: Godot can report a
-// failure on stderr while still exiting 0, and vice versa, so callers combine
-// both signals.
+// Godot can report a failure on stderr while exiting 0, and vice versa, so callers combine both signals.
 func runScript(ctx context.Context, executable string, args []string) (stdout, stderr string, exitCode int, err error) {
 	cmd := newCommand(ctx, executable, args...)
 	var stdoutBuf, stderrBuf bytes.Buffer

@@ -62,9 +62,6 @@ func handleCreateScene(ctx Context, raw json.RawMessage) (any, error) {
 		return invalidPathResult(), nil
 	}
 
-	// An inherited scene's root is an instance of baseScenePath, so the two root
-	// sources are mutually exclusive; rootNodeType defaults only when neither is
-	// given.
 	rootNodeType := args.RootNodeType
 	baseScenePath := ""
 	if args.BaseScenePath != "" {

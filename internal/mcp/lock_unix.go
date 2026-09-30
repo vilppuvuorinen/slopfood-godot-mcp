@@ -9,12 +9,7 @@ import (
 	"syscall"
 )
 
-// OpenTCPLock takes a non-blocking exclusive flock on path for the TCP
-// endpoint's whole life. It is the Linux/Unix analogue of the Windows
-// zero-share-mode handle: the OS releases the lock exactly when the process
-// dies, so it is both the single-instance rule and the crash cleanup. This
-// branch exists so the dev-build transport override can exercise the TCP
-// endpoint locally; only the Windows branch ships.
+// Takes a non-blocking exclusive flock on path; the OS releases it when the process dies.
 func OpenTCPLock(path string) (io.Closer, error) {
 	if err := ensureEndpointDir(path); err != nil {
 		return nil, err

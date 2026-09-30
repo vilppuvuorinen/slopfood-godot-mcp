@@ -63,11 +63,7 @@ func TestRunOperationCapturesOutputOnNonZeroExit(t *testing.T) {
 	}
 }
 
-// TestRunOperationContextCancelStopsEngine proves the context reaches
-// exec.CommandContext: a canceled context kills the running engine instead of
-// letting it run to completion. RunOperation treats a killed process as an
-// ordinary non-zero engine exit rather than a wrapper failure, so the proof is
-// that the call returns well before the 30s sleep, not with a clean exit.
+// A canceled context must kill the running engine; a killed process surfaces as a non-zero exit, not an error.
 func TestRunOperationContextCancelStopsEngine(t *testing.T) {
 	bin := writeExecutable(t, "exec sleep 30")
 

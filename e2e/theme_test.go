@@ -8,8 +8,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// testThemePayload is the subset of read_theme's payload the tests assert
-// against.
 type testThemePayload struct {
 	Path             string           `json:"path"`
 	DefaultFont      map[string]any   `json:"defaultFont"`
@@ -18,7 +16,6 @@ type testThemePayload struct {
 	Types            []map[string]any `json:"types"`
 }
 
-// themeType finds a type by name in a read_theme payload.
 func (p testThemePayload) themeType(name string) map[string]any {
 	for _, themeType := range p.Types {
 		if themeType["name"] == name {
@@ -28,7 +25,6 @@ func (p testThemePayload) themeType(name string) map[string]any {
 	return nil
 }
 
-// readThemePayload calls read_theme on resourcePath and decodes its payload.
 func readThemePayload(t *testing.T, session *mcp.ClientSession, resourcePath string) testThemePayload {
 	t.Helper()
 	text := requireToolText(t, session, "read_theme", map[string]any{"resourcePath": resourcePath})
@@ -39,9 +35,7 @@ func readThemePayload(t *testing.T, session *mcp.ClientSession, resourcePath str
 	return payload
 }
 
-// seedThemeResources writes the font, icon, and stylebox resources a theme item
-// can reference under prefix. A SystemFont, GradientTexture2D, and StyleBoxFlat
-// need no import step, unlike a raw font or PNG.
+// SystemFont, GradientTexture2D, and StyleBoxFlat need no import step, unlike a raw font or PNG.
 func seedThemeResources(t *testing.T, session *mcp.ClientSession, prefix string) {
 	t.Helper()
 	for name, resourceType := range map[string]string{
@@ -56,11 +50,8 @@ func seedThemeResources(t *testing.T, session *mcp.ClientSession, prefix string)
 	}
 }
 
-// TestThemeTools drives the real theme tools against Godot.
 func TestThemeTools(t *testing.T) {
 	t.Parallel()
-	// One warm project and session serve every subtest; each owns a distinct
-	// theme path, so a single engine boot covers them all.
 	root := newProject(t)
 	session := connectProject(t, root)
 	seedThemeResources(t, session, "themes/shared_")
@@ -216,11 +207,8 @@ func TestThemeTools(t *testing.T) {
 	})
 }
 
-// TestThemeErrors covers the validation and engine failure paths.
 func TestThemeErrors(t *testing.T) {
 	t.Parallel()
-	// The validation-only cases need no project, so they share one engine-free
-	// session.
 	validationSession := connect(t)
 	t.Run("missing params", func(t *testing.T) {
 		requireToolError(t, validationSession, "create_theme", map[string]any{}, "resourcePath is required.")
@@ -242,7 +230,6 @@ func TestThemeErrors(t *testing.T) {
 		}, "resourcePath, themeType, and baseType are required.")
 	})
 
-	// The three engine-backed cases share one warm project and session.
 	root := newProject(t)
 	session := connectProject(t, root)
 

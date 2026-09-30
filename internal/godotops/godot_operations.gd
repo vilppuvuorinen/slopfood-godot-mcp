@@ -7,32 +7,6 @@ extends SceneTree
 const JSON_START = "<<<GODOT_MCP_JSON_START>>>"
 const JSON_END = "<<<GODOT_MCP_JSON_END>>>"
 
-# Bridge contract
-#
-# Every handler has the signature `func <name>(result: Result, params) -> Result`
-# and reports exclusively through the Result it is handed:
-#
-#   - Progress goes in result.stdout: log_info(result, ...) buffers a line. The
-#     driver returns the buffer in the response frame's stdout field. A
-#     structured payload is JSON between JSON_START and JSON_END, which the Go
-#     side extracts with markerJSON; an operation without one reports status
-#     text instead.
-#   - Diagnostics go in result.stderr: log_error(result, ...) buffers a line.
-#     The driver returns it in the frame's stderr field, and the Go side fails
-#     the operation on any stderr line, so nothing benign is written there.
-#   - A handler returns the same Result on success, or result.fail(...) (which
-#     flips ok to false and buffers the reason) on failure. Helpers that report
-#     failure return null/false for their caller to propagate.
-#
-# A handler never calls print()/printerr() and never calls quit(): the driver
-# is the only place that writes the response frame. This keeps a failing handler
-# from leaving a partial payload on the wire.
-
-# Result carries a handler's outcome back to the dispatcher. ok is the exit
-# status; stdout and stderr are buffers the driver emits to the matching
-# standard streams. Handlers write through out()/err() instead of printing, so
-# a failure never leaves half a payload on stdout and the exit code is decided
-# in one place.
 class Result extends RefCounted:
     var ok := true
     var stdout := ""
@@ -44,20 +18,12 @@ class Result extends RefCounted:
     func err(message: String) -> void:
         stderr += message + "\n"
 
-    # Mark the operation failed and return self, so a handler can write
-    # `return result.fail("reason")` from anywhere.
     func fail(message: String = "") -> Result:
         if not message.is_empty():
             err(message)
         ok = false
         return self
 
-# DecodeResult carries the outcome of turning a caller-supplied value into the
-# Variant a property expects. ok is false when the value cannot be decoded,
-# error is the reason, and value is the decoded Variant (or a neutral fallback
-# such as a zero vector, so a composite constructor never receives null). The
-# result travels with the value, so a failure can never be mistaken for a stale
-# one from an earlier decode.
 class DecodeResult extends RefCounted:
     var ok := true
     var error := ""
@@ -86,11 +52,6 @@ func _init():
     else:
         _bind_tcp(endpoint["host"], endpoint["port"])
 
-# _engine_endpoint reads the transport endpoint the Go side passes after the `--`
-# separator. Only the post-`--` form reaches OS.get_cmdline_user_args, so the
-# endpoint never has to survive the engine's own flag parsing. Exactly one of
-# --gd-socket <path> (UDS) or --gd-tcp <host:port> (loopback TCP) is required;
-# the Go side picks the transport, so the bridge stays a dumb server.
 func _engine_endpoint() -> Dictionary:
     var args := OS.get_cmdline_user_args()
     var endpoint := {}
@@ -113,11 +74,6 @@ func _engine_endpoint() -> Dictionary:
             }
     return endpoint
 
-# The socket driver's connection state. _server and _peer are null until an
-# endpoint selects this driver; _recv accumulates bytes per connection until a
-# newline completes a frame, and _authenticated gates every operation behind the
-# readiness token. _transport is "uds" or "tcp", and _endpoint carries the
-# transport-carrying readiness fields (path for UDS; host and port for TCP).
 var _server: SocketServer = null
 var _peer: StreamPeerSocket = null
 var _transport := ""
@@ -126,42 +82,17 @@ var _token := ""
 var _recv := PackedByteArray()
 var _authenticated := false
 
-# Editor readiness state. _filesystem is resolved from EditorInterface on the
-# first _process tick because it is null during _init. _ready_printed guards the
-# single readiness line, _scan_seen records that the initial scan was observed
-# running, and _quit_pending defers an exit requested mid-scan.
 var _filesystem: EditorFileSystem = null
 var _ready_printed := false
 var _scan_seen := false
 var _quit_pending := false
 
-# A full-scan reimport_project cannot answer inside the handler: waiting for
-# is_scanning() to clear there would block _process and starve the very scan
-# thread being waited on. Instead the handler starts scan_sources() and sets
-# _await_scan; the request handler parks that request's id and Result in
-# _deferred_*, and _process sends the response on the first frame after the scan
-# completes. That keeps the main loop iterating (no sleeps) while still gating
-# the response on is_scanning() true->false.
 var _await_scan := false
 var _deferred_id := -1
 var _deferred_result: Result = null
 
-# _reconcile_paths_pending holds paths a mutation just wrote that the editor
-# filesystem may not know yet. A newly created file or directory is invisible to
-# EditorFileSystem.update_file until a scan discovers it, so a reconcile first
-# requests scan_sources() and parks the path here; _process re-applies update_file
-# once the scan clears. A reconcile that needs no scan applies update_file
-# immediately and leaves this empty.
 var _reconcile_paths_pending: PackedStringArray = PackedStringArray()
 
-# _bind_uds binds the UDS backend and records the transport-carrying readiness
-# fields. It binds before anything else so the Go side can dial as soon as it
-# reads the readiness line, then returns from _init: the socket is serviced from
-# _process, the only hook that fires after the main loop starts (a blocking _init
-# would starve EditorFileSystem in editor mode). Readiness is printed from
-# _process rather than here because the editor filesystem does not exist until
-# the main loop runs. The readiness line travels on the parent's private stdout
-# pipe, so the token never passes through argv or the environment.
 func _bind_uds(socket_path: String) -> void:
     # A stale socket or regular file makes listen fail with EINVAL.
     if FileAccess.file_exists(socket_path):
@@ -177,11 +108,6 @@ func _bind_uds(socket_path: String) -> void:
     _endpoint = {"path": socket_path}
     _token = Crypto.new().generate_random_bytes(16).hex_encode()
 
-# _bind_tcp binds the loopback TCP backend with an ephemeral port and records
-# the transport-carrying readiness fields. The Go side passes host:port after
-# `--`, and port 0 asks the OS for an ephemeral port the readiness line then
-# reports. There is no filesystem permission on a loopback port, so the token is
-# the only gate; the Go side passes the same host back on dial.
 func _bind_tcp(host: String, port: int) -> void:
     var server := TCPServer.new()
     var listen_error := server.listen(port, host)
@@ -194,10 +120,6 @@ func _bind_tcp(host: String, port: int) -> void:
     _endpoint = {"host": host, "port": server.get_local_port()}
     _token = Crypto.new().generate_random_bytes(16).hex_encode()
 
-# _process polls the socket once per frame and returns false to keep the main
-# loop iterating. _init returns after binding, so this is the only hook that can
-# service the socket once the main loop starts; a blocking _init would starve
-# EditorFileSystem in editor mode.
 func _process(_delta: float) -> bool:
     if _server == null:
         return false
@@ -216,39 +138,21 @@ func _process(_delta: float) -> bool:
         _recv = PackedByteArray()
         _authenticated = false
     if _peer != null:
-        # A StreamPeerTCP from take_connection is not necessarily connected yet:
-        # poll it until it reaches STATUS_CONNECTED before trusting reads. A UDS
-        # peer is connected already, so this is a no-op there.
+        # A StreamPeerTCP from take_connection may not be connected yet; poll until STATUS_CONNECTED.
         _peer.poll()
         if _transport == "tcp" and _peer.get_status() != StreamPeerSocket.STATUS_CONNECTED:
             return false
         _read_peer()
-    # A reconcile parked paths because it had to start a scan to discover a newly
-    # created file or directory. Once the scan clears, apply update_file to each
-    # path so its .uid/class_name side effects land, then answer the deferred
-    # request. The re-apply is what makes an out-of-band write visible: the first
-    # update_file ran before the scan tracked the path and was a no-op.
     if _reconcile_paths_pending.size() > 0 and (_filesystem == null or not _filesystem.is_scanning()):
         for path in _reconcile_paths_pending:
             _apply_reconcile(path)
         _reconcile_paths_pending = PackedStringArray()
-    # A full-scan reimport_project answers here, on the first frame after its
-    # scan completes, instead of inside the handler (which would block the scan).
     if _deferred_result != null and (_filesystem == null or not _filesystem.is_scanning()):
         _send_socket_response(_deferred_id, _deferred_result.ok, _deferred_result.stdout, _deferred_result.stderr)
         _deferred_result = null
         _deferred_id = -1
     return false
 
-# _filesystem_ready gates the readiness line on the initial editor scan. In
-# runtime mode there is no editor filesystem and the first tick is ready. In
-# editor mode EditorFileSystem is null during _init and live from the first
-# _process, with the initial scan started during editor boot still running.
-# is_scanning() true->false is the only universal completion signal: a
-# change-detecting scan emits filesystem_changed, but a no-change scan emits
-# nothing, so the transition is deterministic. Waiting for it here, with the
-# scan seen running once, puts every operation behind one gate instead of
-# polling per handler.
 func _filesystem_ready() -> bool:
     if not Engine.is_editor_hint():
         return true
@@ -261,18 +165,6 @@ func _filesystem_ready() -> bool:
         return false
     return _scan_seen
 
-# _reconcile_path makes a path a handler just wrote visible to EditorFileSystem,
-# so its UID and global-class side effects are current before the next operation
-# instead of needing a separate rescan or a respawn. Outside editor mode there is
-# no EditorFileSystem and this is a no-op, which keeps the bridge usable if it is
-# ever run as a plain SceneTree. The dispatch is path-aware per the Phase 0.3
-# findings: update_file is synchronous and covers scripts, scenes, and resources
-# (it writes the .uid and registers class_name before returning), but it does not
-# reimport a changed .import, so a source the import system owns goes through
-# reimport_files, which is also synchronous. Neither needs a completion signal.
-#
-# It reconciles a single path; reimport_project reuses it per touched path and
-# only falls back to a full scan when it has none.
 func _reconcile_path(path: String) -> void:
     if not Engine.is_editor_hint() or not path.begins_with("res://"):
         return
@@ -281,22 +173,10 @@ func _reconcile_path(path: String) -> void:
         filesystem = EditorInterface.get_resource_filesystem()
         if filesystem == null:
             return
-    # update_file is synchronous and covers a path the filesystem already tracks.
-    # A path whose parent directory the editor has not scanned (a file created
-    # out of band) is invisible to update_file, so request a scan and re-apply
-    # once it clears; the response is deferred until then. scan_sources() is a
-    # no-op when nothing changed, so an already-tracked path still reconciles in
-    # this same frame and needs no deferral.
     if not _apply_reconcile(path):
         filesystem.scan_sources()
         _reconcile_paths_pending.append(path)
 
-# _apply_reconcile makes one path visible to the editor filesystem and reports
-# whether it took effect. update_file covers scripts, scenes, and resources and
-# writes the .uid and registers class_name before returning; an imported source
-# the import system owns goes through reimport_files, which is also synchronous.
-# A file the filesystem does not track yet is a no-op, so the caller must scan
-# and retry.
 func _apply_reconcile(path: String) -> bool:
     var filesystem := _filesystem
     if filesystem == null:
@@ -307,19 +187,13 @@ func _apply_reconcile(path: String) -> bool:
         filesystem.reimport_files(PackedStringArray([path]))
         return true
     filesystem.update_file(path)
-    # update_file on an untracked path silently no-ops; a tracked script gains
-    # its .uid, which is the observable proof the reconcile took effect.
+    # update_file silently no-ops on an untracked path; a tracked script gains its .uid.
     return not path.ends_with(".gd") or FileAccess.file_exists(path + ".uid")
 
-# _reconcile_paths applies the same per-path reconcile to each touched path, so
-# reimport_project routes every path through the one Phase 6a dispatch.
 func _reconcile_paths(paths: PackedStringArray) -> void:
     for path in paths:
         _reconcile_path(path)
 
-# _read_peer drains every available byte into the per-connection buffer and
-# hands each complete newline-delimited frame to the request handler. A
-# disconnected peer is dropped so the driver keeps serving new connections.
 func _read_peer() -> void:
     var available := _peer.get_available_bytes()
     while available > 0:
@@ -338,11 +212,6 @@ func _read_peer() -> void:
         if not _handle_socket_request(line):
             return
 
-# _handle_socket_request authenticates the first frame on a connection and
-# dispatches every subsequent one. The first frame must carry the token from
-# the readiness line; a missing or wrong token closes the connection before any
-# operation runs. A malformed frame is answered as id -1. Returns false when the
-# connection was dropped.
 func _handle_socket_request(line: String) -> bool:
     var json := JSON.new()
     if json.parse(line) != OK:
@@ -364,14 +233,10 @@ func _handle_socket_request(line: String) -> bool:
         _send_socket_response(-1, false, "", "malformed request: missing id or operation")
         return true
     var id := int(raw_id)
-    # quit is the graceful shutdown the Go side asks for in Close: acknowledge
-    # it so the caller is unblocked, then leave the main loop.
+    # Acknowledge quit so the caller unblocks, then leave the main loop.
     if operation == "quit":
         _send_socket_response(id, true, "", "")
-        # Exiting mid-scan aborts the scan thread and prints an extra warning, so
-        # defer the exit until any running scan has finished. The ObjectDB/RID
-        # leak noise editor exit prints is diagnostics only over the socket
-        # transport, never a result.
+        # Exiting mid-scan aborts the scan thread and prints an extra warning, so defer the exit.
         if Engine.is_editor_hint() and _filesystem != null and _filesystem.is_scanning():
             _quit_pending = true
         else:
@@ -381,11 +246,6 @@ func _handle_socket_request(line: String) -> bool:
     if not (params is Dictionary):
         params = {}
     var result := dispatch(operation, params)
-    # A full-scan reimport_project, or a mutation whose reconcile started a scan
-    # to discover a newly written path, cannot answer inside the handler: waiting
-    # for is_scanning() here would block _process and starve the scan. Park the
-    # id and Result; _process finishes the reconcile and sends the frame once
-    # is_scanning() clears.
     if _await_scan or _reconcile_paths_pending.size() > 0:
         _await_scan = false
         _deferred_id = id
@@ -394,8 +254,6 @@ func _handle_socket_request(line: String) -> bool:
     _send_socket_response(id, result.ok, result.stdout, result.stderr)
     return true
 
-# _send_socket_response writes one newline-delimited response frame carrying a
-# Result's stdout and stderr plus the request id and exit status.
 func _send_socket_response(id: int, ok: bool, stdout: String, stderr: String) -> void:
     if _peer == null:
         return
@@ -407,9 +265,6 @@ func _send_socket_response(id: int, ok: bool, stdout: String, stderr: String) ->
     }) + "\n"
     _peer.put_data(frame.to_utf8_buffer())
 
-# _drop_peer closes and forgets the current connection so the next frame can
-# accept a fresh one, and resets authentication so it must present the token
-# again.
 func _drop_peer() -> void:
     if _peer != null:
         _peer.disconnect_from_host()
@@ -417,10 +272,6 @@ func _drop_peer() -> void:
     _recv = PackedByteArray()
     _authenticated = false
 
-# Turn an operation name and its already-decoded params into a Result by
-# invoking the matching handler. The driver calls it once per request, so
-# handler invocation never depends on argv or JSON parsing and the process does
-# not exit between requests.
 func dispatch(operation, params) -> Result:
     var result := Result.new()
     _temp_nodes.clear()
@@ -428,10 +279,7 @@ func dispatch(operation, params) -> Result:
     log_info(result, "Operation: " + operation)
     log_info(result, "Executing operation: " + operation)
 
-    # A handler returns the Result it was handed (or result.fail(...)). If a
-    # handler hits an unhandled engine error, GDScript stops it and returns
-    # null to the dispatcher, which must not propagate that null: the driver
-    # dereferences the Result to build the response and decide the exit status.
+    # A handler that hits an unhandled engine error returns null; never propagate it to the driver.
     var handler_result = null
     match operation:
         "ping":
@@ -473,9 +321,6 @@ func dispatch(operation, params) -> Result:
             result.ok = false
             handler_result = result
 
-    # A null or wrong-typed return is a handler that aborted on an unhandled
-    # engine error; report it as this operation's failure instead of returning
-    # a value the driver cannot dereference.
     if not (handler_result is Result):
         result.fail("operation failed with an unhandled engine error: " + operation)
     else:
@@ -484,51 +329,26 @@ func dispatch(operation, params) -> Result:
     _free_temp_nodes()
     return result
 
-# Route every resource read through one helper so the bridge has a single place
-# to audit. CACHE_MODE_IGNORE forces a fresh read from disk: the engine is
-# long-lived, so without it a read after an on-disk edit would return the stale
-# cached resource.
+# CACHE_MODE_IGNORE forces a fresh read: the long-lived engine would otherwise serve a stale cached resource.
 func load_resource(path):
     return ResourceLoader.load(path, "", ResourceLoader.CACHE_MODE_IGNORE)
 
-# load_object is load_resource with a type hint, for a caller that wants Godot's
-# own type filtering (and its matching not-a-type failure).
 func load_object(path, type_hint):
     return ResourceLoader.load(path, type_hint, ResourceLoader.CACHE_MODE_IGNORE)
 
-# Temporary nodes instantiated by handlers are tracked in _temp_nodes. dispatch
-# owns this list: it clears it before invoking a handler and frees every entry
-# after the handler returns, success or failure. The nodes are never added to
-# the scene tree, so without this the engine reports ObjectDB/RID leaks at exit.
-# Cleanup is deterministic and does not depend on the SceneTree ticking
-# _process, which a daemon loop blocked on stdin would never do.
+# Temp nodes are never added to the scene tree; without freeing them the engine reports ObjectDB/RID leaks at exit.
 var _temp_nodes = []
 
 func track_temp(node):
     _temp_nodes.append(node)
     return node
 
-# Free every node tracked since the current dispatch began and clear the list.
-# is_instance_valid guards against a handler that already freed a node itself.
 func _free_temp_nodes():
     for node in _temp_nodes:
         if is_instance_valid(node):
             node.free()
     _temp_nodes.clear()
 
-# reimport_project reconciles the project with EditorFileSystem: it materializes
-# missing .import sidecars and .uid sidecars and applies edits to existing ones,
-# without restarting the engine. It prefers the targeted reconcile per touched
-# path (a changed .import goes through reimport_files), and only when it has no
-# touched path does it fall back to a project-wide scan_sources().
-#
-# A full scan cannot complete inside the handler: a no-change scan emits no
-# signal and is_scanning() is true immediately after the call (Phase 0.4), so the
-# only universal completion gate is is_scanning() true->false — but waiting for
-# it here would block _process and starve the scan it waits on. The handler
-# therefore starts scan_sources() and flags _await_scan; _handle_socket_request
-# parks the response and _process sends it once the transition is observed. No
-# sleeps.
 func reimport_project(result: Result, params) -> Result:
     if not Engine.is_editor_hint():
         result.err("reimport_project requires the editor filesystem; run it through the editor session")
@@ -552,35 +372,23 @@ func reimport_project(result: Result, params) -> Result:
     result.out("Scanned project sources")
     return result
 
-# ping is a trivial liveness operation with no side effects. Because readiness
-# is gated on the editor scan, a returned ping also proves the socket round-trip
-# and the filesystem gate both completed.
 func ping(result: Result, _params) -> Result:
     result.out("pong")
     return result
 
-# Logging functions
 func log_info(result: Result, message):
     result.out("[INFO] " + message)
 
 func log_error(result: Result, message):
     result.err("[ERROR] " + message)
 
-# Reduce a Godot virtual path ("res://...") to a project-relative path, so
-# path-valued result fields share the project-relative realm of tool inputs
-# instead of leaking a form the caller must translate. Paths outside res://
-# (for example user://) are returned unchanged.
 func project_relative(path):
     if path.begins_with("res://"):
         return path.substr(6)
     return path
 
-# Get a script by registered class name.
-# Only looks up names via the project's global class registry. Raw paths
-# (e.g. "res://evil.gd") are intentionally not accepted here to prevent
-# arbitrary script instantiation from agent-supplied input.
+# Only the global class registry is consulted; raw paths are rejected to prevent arbitrary script instantiation.
 func get_script_by_name(result: Result, name_of_class):
-    # Search for it in the global class registry if it's a class name
     var global_classes = ProjectSettings.get_global_class_list()
     for global_class in global_classes:
         var found_name_of_class = global_class["class"]
@@ -597,14 +405,12 @@ func get_script_by_name(result: Result, name_of_class):
     result.err("Could not find script for class: " + name_of_class)
     return null
 
-# Instantiate a class by name
 func instantiate_class(result: Result, name_of_class):
     if name_of_class.is_empty():
         result.err("Cannot instantiate class: name is empty")
         return null
     
     var instance = null
-    # Check if it's a built-in class
     if ClassDB.class_exists(name_of_class):
         if ClassDB.can_instantiate(name_of_class):
             instance = ClassDB.instantiate(name_of_class)
@@ -614,7 +420,6 @@ func instantiate_class(result: Result, name_of_class):
             result.err("Class exists but cannot be instantiated: " + name_of_class)
             result.err("This may be an abstract class or interface that cannot be directly instantiated")
     else:
-        # Try to get the script
         var script = get_script_by_name(result, name_of_class)
         if script is GDScript:
             instance = script.new()
@@ -626,13 +431,10 @@ func instantiate_class(result: Result, name_of_class):
         result.err("Failed to instantiate class: " + name_of_class)
     return instance
 
-# Ensure the directory holding a target scene file exists, creating it
-# recursively. Returns false (after buffering the reason) when it cannot be
-# created.
 func _ensure_scene_directory(result: Result, full_scene_path):
     var scene_dir_res = full_scene_path.get_base_dir()
     var scene_dir_abs = ProjectSettings.globalize_path(scene_dir_res)
-    var scene_dir_relative = scene_dir_res.substr(6)  # Remove "res://" prefix
+    var scene_dir_relative = scene_dir_res.substr(6)
     if scene_dir_relative.is_empty():
         return true
     if DirAccess.dir_exists_absolute(scene_dir_abs):
@@ -658,10 +460,7 @@ func _ensure_scene_directory(result: Result, full_scene_path):
         return false
     return true
 
-# Create an inherited scene: a scene whose root node instances another
-# PackedScene. The engine cannot author one at runtime (PackedScene.pack
-# flattens instances), so the minimal file is written directly. base_scene_path
-# may be project-relative or a res:// path.
+# The engine cannot author an inherited scene at runtime (pack flattens instances), so the minimal file is written directly.
 func _create_inherited_scene(result: Result, full_scene_path, base_scene_path):
     var full_base_path = base_scene_path
     if not full_base_path.begins_with("res://"):
@@ -693,30 +492,23 @@ func _create_inherited_scene(result: Result, full_scene_path, base_scene_path):
     _reconcile_path(full_scene_path)
     result.out("Scene created successfully at: " + project_relative(full_scene_path))
 
-# Create a new scene with a specified root node type, or an inherited scene when
-# baseScenePath names another scene.
 func create_scene(result: Result, params) -> Result:
     result.out("Creating scene: " + params.scenePath)
     
-    # Normalize the scene path
     var full_scene_path = params.scenePath
     if not full_scene_path.begins_with("res://"):
         full_scene_path = "res://" + full_scene_path
     if not _ensure_scene_directory(result, full_scene_path):
         return result.fail()
 
-    # An inherited scene's root is an instance of the base scene rather than a
-    # fresh node, so baseScenePath replaces rootNodeType entirely.
     var base_scene_path = str(params.get("baseScenePath", ""))
     if not base_scene_path.is_empty():
         _create_inherited_scene(result, full_scene_path, base_scene_path)
         return result
 
-    # Use traditional if-else statement for better compatibility
-    var root_node_type = "Node2D"  # Default value
+    var root_node_type = "Node2D"
     if params.has("rootNodeType"):
         root_node_type = params.rootNodeType
-    # Create the root node
     var scene_root = track_temp(instantiate_class(result, root_node_type))
     if not scene_root:
         result.err("Failed to instantiate node of type: " + root_node_type)
@@ -725,14 +517,11 @@ func create_scene(result: Result, params) -> Result:
         return result.fail()
     
     scene_root.name = "root"
-    # Pack the scene
     var packed_scene = PackedScene.new()
     var pack_error = packed_scene.pack(scene_root)
     if pack_error == OK:
-        # Save the scene
         var save_error = ResourceSaver.save(packed_scene, full_scene_path)
         if save_error == OK:
-            # Check the scene file was actually written
             var file_exists = FileAccess.file_exists(full_scene_path)
             if file_exists:
                 _reconcile_path(full_scene_path)
@@ -741,7 +530,6 @@ func create_scene(result: Result, params) -> Result:
                 result.err("Failed to create scene: " + params.scenePath)
                 return result.fail()
         else:
-            # Handle specific error codes
             var error_message = "Failed to save scene. Error code: " + str(save_error)
             
             if save_error == ERR_CANT_CREATE:
@@ -761,7 +549,6 @@ func create_scene(result: Result, params) -> Result:
         return result.fail()
     return result
 
-# Add a node to an existing scene
 func add_node(result: Result, params) -> Result:
     result.out("Adding node to scene: " + params.scenePath)
     
@@ -781,8 +568,7 @@ func add_node(result: Result, params) -> Result:
         return result.fail()
     
     var scene_root = track_temp(scene.instantiate())
-    # Use traditional if-else statement for better compatibility
-    var parent_path = "root"  # Default value
+    var parent_path = "root"
     if params.has("parentNodePath"):
         parent_path = params.parentNodePath
     var parent = scene_root
@@ -794,10 +580,7 @@ func add_node(result: Result, params) -> Result:
     var instance_path = str(params.get("instancePath", ""))
     var new_node = null
     if not instance_path.is_empty():
-        # Add an instance of another scene rather than a fresh node. PackedScene
-        # .instantiate() stamps the root's scene_file_path, so packing the parent
-        # records the node as an ExtResource-backed instance instead of
-        # flattening the subtree into the parent scene.
+        # instantiate() stamps the root's scene_file_path, so packing records an ExtResource-backed instance.
         var full_instance_path = instance_path
         if not full_instance_path.begins_with("res://"):
             full_instance_path = "res://" + full_instance_path
@@ -846,81 +629,63 @@ func add_node(result: Result, params) -> Result:
         return result.fail()
     return result
 
-# Export a scene as a MeshLibrary resource
 func export_mesh_library(result: Result, params) -> Result:
     result.out("Exporting MeshLibrary from scene: " + params.scenePath)
     
-    # Ensure the scene path starts with res:// for Godot's resource system
     var full_scene_path = params.scenePath
     if not full_scene_path.begins_with("res://"):
         full_scene_path = "res://" + full_scene_path
     
-    # Project-relative output paths resolve under res://. Absolute host paths
-    # (and user://) are kept as-is so the caller can target a location outside
-    # the project; prefixing those with res:// would produce an invalid path.
+    # Absolute host paths and user:// are kept as-is; prefixing res:// would be invalid.
     var full_output_path = params.outputPath
     if not full_output_path.begins_with("res://") and not full_output_path.begins_with("user://") and not full_output_path.is_absolute_path():
         full_output_path = "res://" + full_output_path
     
-    # Check if the scene file exists
     var file_check = FileAccess.file_exists(full_scene_path)
     if not file_check:
         result.err("Scene file does not exist at: " + full_scene_path)
-        # Get the absolute path for reference
         var absolute_path = ProjectSettings.globalize_path(full_scene_path)
         result.err("Absolute file path that doesn't exist: " + absolute_path)
         return result.fail()
     
-    # Load the scene
     var scene = load_object(full_scene_path, "PackedScene")
     if not scene:
         result.err("Failed to load scene: " + full_scene_path)
         return result.fail()
     
-    # Instance the scene
     var scene_root = track_temp(scene.instantiate())
-    # Create a new MeshLibrary
     var mesh_library = MeshLibrary.new()
-    # Get mesh item names if provided
     var mesh_item_names = params.meshItemNames if params.has("meshItemNames") else []
     var use_specific_items = mesh_item_names.size() > 0
     
-    # Process all child nodes
     var item_id = 0
     for child in scene_root.get_children():
-        # Skip if not using all items and this item is not in the list
         if use_specific_items and not (child.name in mesh_item_names):
             continue
             
-        # Check if the child has a mesh
         var mesh_instance = null
         if child is MeshInstance3D:
             mesh_instance = child
         else:
-            # Try to find a MeshInstance3D in the child's descendants
             for descendant in child.get_children():
                 if descendant is MeshInstance3D:
                     mesh_instance = descendant
                     break
         
         if mesh_instance and mesh_instance.mesh:
-            # Add the mesh to the library
             mesh_library.create_item(item_id)
             mesh_library.set_item_name(item_id, child.name)
             mesh_library.set_item_mesh(item_id, mesh_instance.mesh)
-            # Add collision shape if available
             for collision_child in child.get_children():
                 if collision_child is CollisionShape3D and collision_child.shape:
                     mesh_library.set_item_shapes(item_id, [collision_child.shape])
                     break
             
-            # MeshLibrary previews must be textures. The mesh's albedo texture is
-            # the only texture available at runtime, so use it when present.
+            # MeshLibrary previews must be textures; the albedo texture is the only one available at runtime.
             var preview_texture = _mesh_preview_texture(mesh_instance.mesh)
             if preview_texture:
                 mesh_library.set_item_preview(item_id, preview_texture)
             item_id += 1
-    # Create directory if it doesn't exist
     var output_dir = full_output_path.get_base_dir()
     if full_output_path.begins_with("res://"):
         var dir = DirAccess.open("res://")
@@ -928,8 +693,8 @@ func export_mesh_library(result: Result, params) -> Result:
             result.err("Failed to open res:// directory")
             result.err("DirAccess error: " + str(DirAccess.get_open_error()))
             return result.fail()
-        if output_dir != "res://" and not dir.dir_exists(output_dir.substr(6)):  # Remove "res://" prefix
-            var make_error = dir.make_dir_recursive(output_dir.substr(6))  # Remove "res://" prefix
+        if output_dir != "res://" and not dir.dir_exists(output_dir.substr(6)):
+            var make_error = dir.make_dir_recursive(output_dir.substr(6))
             if make_error != OK:
                 result.err("Failed to create directory: " + output_dir + ", error: " + str(make_error))
                 return result.fail()
@@ -939,11 +704,9 @@ func export_mesh_library(result: Result, params) -> Result:
             result.err("Failed to create directory: " + output_dir + ", error: " + str(make_error))
             return result.fail()
     
-    # Save the mesh library
     if item_id > 0:
         var error = ResourceSaver.save(mesh_library, full_output_path)
         if error == OK:
-            # Verify the file was actually created
             _reconcile_path(full_output_path)
             result.out("MeshLibrary exported successfully with " + str(item_id) + " items to: " + full_output_path)
         else:
@@ -954,9 +717,6 @@ func export_mesh_library(result: Result, params) -> Result:
         return result.fail()
     return result
 
-# Pick a Texture2D to use as a MeshLibrary item preview. MeshLibrary previews
-# require a Texture2D, but meshes are not textures, so fall back to the first
-# albedo texture found on the mesh surfaces and return null when there is none.
 func _mesh_preview_texture(mesh) -> Texture2D:
     if not mesh:
         return null
@@ -966,7 +726,6 @@ func _mesh_preview_texture(mesh) -> Texture2D:
             return material.albedo_texture
     return null
 
-# Read a scene file as a JSON node tree
 func read_scene(result: Result, params) -> Result:
     if not params.has("scenePath"):
         result.err("scenePath is required")
@@ -982,12 +741,7 @@ func read_scene(result: Result, params) -> Result:
         result.err("Scene file does not exist at: " + full_scene_path)
         return result.fail()
 
-    # load() succeeds for any resource, so scenePath can point at a non-scene
-    # such as a .tres. That has no instantiate() and would otherwise die as a
-    # SCRIPT ERROR, so a non-PackedScene is a controlled failure rather than a
-    # degraded raw-text success; read_binary_resource inspects those resources. A null
-    # load is a parse/IO failure whose engine errors already reach stderr, so no
-    # extra stderr line here: it would only duplicate them.
+    # A non-PackedScene is a controlled failure rather than an instantiate() SCRIPT ERROR.
     var scene = load_resource(full_scene_path)
     if scene == null:
         return result.fail()
@@ -1000,9 +754,6 @@ func read_scene(result: Result, params) -> Result:
         result.err("Failed to instantiate scene: " + full_scene_path)
         return result.fail()
 
-    # An optional nodePath roots the returned tree at a descendant instead of
-    # the scene root, so a caller can page into a large scene without pulling
-    # the whole tree into its context.
     var start_node = scene_root
     if params.has("nodePath") and params.nodePath != null and not str(params.nodePath).is_empty():
         var node_path = str(params.nodePath)
@@ -1014,26 +765,17 @@ func read_scene(result: Result, params) -> Result:
                 result.err("Node not found: " + str(params.nodePath))
                 return result.fail()
 
-    # An optional depth limits how many child levels are included below the
-    # start node; -1 (the default) means no limit and 0 returns the node alone.
     var depth = -1
     if params.has("depth") and params.depth != null:
         depth = int(params.depth)
 
     var tree_data = _walk_scene_tree(start_node, depth)
 
-    # An inherited scene's root instances another PackedScene. Instantiating it
-    # resolves every node's scene_file_path, so the in-memory tree alone cannot
-    # tell an inherited scene from a plain one; the raw file is the only signal.
-    # Report it so a caller does not mistake the copied base subtree for local
-    # nodes.
+    # The in-memory tree cannot reveal inheritance; the raw file is the only signal.
     var base_scene_path = _inherited_scene_base(full_scene_path)
     if not base_scene_path.is_empty():
         tree_data["baseScenePath"] = base_scene_path
 
-    # Surface the scene's own [connection] lines alongside the tree so a caller
-    # does not need a separate read just to list signal connections. Inherited
-    # connections live in the base scene and are not repeated here.
     tree_data["connections"] = _scene_connections(FileAccess.get_file_as_string(full_scene_path))
 
     result.out(JSON_START)
@@ -1042,11 +784,6 @@ func read_scene(result: Result, params) -> Result:
 
     return result
 
-# Return the project-relative path of the PackedScene a scene file inherits
-# from, or "" when the file is not an inherited scene. The scene root is the
-# first [node] line and, unlike a child, carries no parent attribute; when it
-# has an instance=ExtResource("id") reference, that id resolves through the
-# file's [ext_resource] entries.
 func _inherited_scene_base(full_scene_path):
     var content = FileAccess.get_file_as_string(full_scene_path)
     if content.is_empty():
@@ -1075,9 +812,7 @@ func _inherited_scene_base(full_scene_path):
         return ""
     return project_relative(str(ext_paths.get(root_instance, "")))
 
-# Read a name="value" attribute from a .tscn block header. The name must start
-# its own attribute (preceded by a space), so an id lookup does not match inside
-# uid=.
+# The name must start its own attribute, so an id lookup does not match inside uid=.
 func _tscn_attr(line, name):
     var marker = name + "=\""
     var start = 0
@@ -1093,11 +828,7 @@ func _tscn_attr(line, name):
             return line.substr(value_start, end - value_start)
         start = at + 1
 
-# Refuse a structural edit that would flatten an inherited scene. The mutators
-# below load, instantiate, and repack with PackedScene.pack(), which cannot
-# re-serialize an inherited root as an instance: it would replace the base
-# reference with a full copy of the base subtree. Returns true when the caller
-# must stop.
+# pack() cannot re-serialize an inherited root as an instance; it would replace the base reference with a full copy.
 func _reject_inherited_scene(result: Result, full_scene_path):
     var base_scene_path = _inherited_scene_base(full_scene_path)
     if base_scene_path.is_empty():
@@ -1107,9 +838,6 @@ func _reject_inherited_scene(result: Result, full_scene_path):
     result.err("Edit the base scene instead, or recreate this scene with create_scene")
     return true
 
-# Walk a scene tree and build a dictionary describing each node. depth is the
-# number of child levels still to include below node: -1 means no limit, 0
-# returns the node without its children.
 func _walk_scene_tree(node, depth := -1) -> Dictionary:
     var info = {
         "name": node.name,
@@ -1150,12 +878,6 @@ func _walk_scene_tree(node, depth := -1) -> Dictionary:
 
     return info
 
-# The tool value contract. A Variant is encoded as JSON-native data where one
-# exists, and as a tagged object {"$type": "...", ...} for engine-only types.
-# _decode_value inverts this exactly, so a value read from a scene or resource
-# can be written back without reinterpretation. Types with no structured
-# mapping are wrapped in the single GodotText escape hatch rather than being
-# handed back as a bare engine string.
 func _variant_to_json(value):
     match typeof(value):
         TYPE_NIL:
@@ -1232,16 +954,10 @@ func _variant_to_json(value):
         _:
             return _godot_text(value)
 
-# _godot_text is the single, named escape hatch for an engine value with no
-# structured mapping (an InputEvent, a callable, a non-finite float, ...). It
-# carries var_to_str output, the engine's own Variant serialization, so it is
-# both complete and reparsable rather than an opaque <Object#id> address.
+# Escape hatch for values with no structured mapping; var_to_str is both complete and reparsable.
 func _godot_text(value):
     return {"$type": "GodotText", "text": var_to_str(value)}
 
-# Set every property, decoding each one first. Returns a DecodeResult carrying
-# the failure reason when a value cannot be decoded, so the caller aborts before
-# writing anything.
 func _apply_properties(target, properties) -> DecodeResult:
     for prop_name in properties:
         var decoded = _convert_property_value(target, prop_name, properties[prop_name])
@@ -1250,18 +966,12 @@ func _apply_properties(target, properties) -> DecodeResult:
         target.set(prop_name, decoded.value)
     return DecodeResult.success(null)
 
-# Convert a caller-supplied value into the type a target property expects. The
-# value must already be in the tool value contract, with a $type tag for any
-# engine-only type; a bare JSON object is a plain Dictionary, never a Vector2.
 func _convert_property_value(target, prop_name, value) -> DecodeResult:
     for prop in target.get_property_list():
         if prop["name"] == prop_name:
             return _convert_value_for_type(prop.get("type", 0), value)
     return _decode_value(value)
 
-# Convert a value to the Godot type identified by a Variant type id. Native
-# JSON scalars are coerced to the property's declared type; engine-only types
-# must arrive as a matching $type object.
 func _convert_value_for_type(type_id, value) -> DecodeResult:
     if value is Dictionary and value.has("$type"):
         return _decode_typed(value)
@@ -1307,10 +1017,6 @@ func _convert_value_for_type(type_id, value) -> DecodeResult:
             return _decode_object(value)
     return _decode_value(value)
 
-# Decode a value with no destination type. Tagged objects dispatch on their
-# $type; plain dictionaries and arrays are decoded recursively so tagged values
-# nested inside them still work. An unrecognized $type is an error, never a
-# silent pass-through.
 func _decode_value(value) -> DecodeResult:
     if value is Dictionary:
         if value.has("$type"):
@@ -1332,8 +1038,6 @@ func _decode_value(value) -> DecodeResult:
         return DecodeResult.success(items)
     return DecodeResult.success(value)
 
-# Decode a tagged value by its $type. Every branch validates its fields and
-# returns a DecodeResult; an unlisted tag is rejected.
 func _decode_typed(value) -> DecodeResult:
     var tag = value.get("$type", "")
     match tag:
@@ -1431,9 +1135,6 @@ func _decode_typed(value) -> DecodeResult:
         "Resource":
             return _decode_resource(value)
         "GodotText":
-            # Best-effort reparsing lets a scene or resource slot accept an
-            # escape-hatch value; a type var_to_str cannot rebuild (an Object)
-            # falls back to the literal text.
             var text = _string_field(value, "text")
             if not text.ok:
                 return text
@@ -1448,17 +1149,12 @@ func _decode_typed(value) -> DecodeResult:
             return DecodeResult.failure("$type Dictionary needs a \"value\" object")
     return DecodeResult.failure("unknown $type: " + str(tag))
 
-# Carry a constructed composite value once every field decoded, or report the
-# last field failure. Evaluating every field before returning mirrors the old
-# shared-error behavior, where a later failure overwrote an earlier one, and the
-# neutral fallback each field carries keeps null out of the constructor.
 func _decoded(decoded, results) -> DecodeResult:
     var failure = _last_failure(results)
     if failure != null:
         return failure
     return DecodeResult.success(decoded)
 
-# The last failing DecodeResult in results, or null when every result succeeded.
 func _last_failure(results):
     var failure = null
     for result in results:
@@ -1466,17 +1162,12 @@ func _last_failure(results):
             failure = result
     return failure
 
-# Decode a nested tagged value, requiring the given tag.
 func _typed_field(value, field, tag) -> DecodeResult:
     var inner = value.get(field, null)
     if inner is Dictionary and inner.get("$type", "") == tag:
         return _decode_typed(inner)
     return DecodeResult.failure("field \"" + field + "\" must be a {\"$type\": \"" + tag + "\"} value")
 
-# Decode a nested Vector field, requiring and converting the given type. On
-# failure it reports and returns that type's zero vector, so a composite
-# constructor is never handed null (which the engine logs as a separate
-# SCRIPT ERROR before the caller's decode error).
 func _vector_field(value, field, type_id) -> DecodeResult:
     var inner = value.get(field, null)
     if inner is Dictionary and inner.has("$type"):
@@ -1488,8 +1179,6 @@ func _vector_field(value, field, type_id) -> DecodeResult:
         return DecodeResult.failure("field \"" + field + "\" has the wrong vector type", _zero_vector(type_id))
     return DecodeResult.failure("field \"" + field + "\" must be a tagged vector value", _zero_vector(type_id))
 
-# The zero value for a Vector Variant type id, returned by _vector_field when
-# a field cannot be decoded.
 func _zero_vector(type_id):
     match type_id:
         TYPE_VECTOR2:
@@ -1506,8 +1195,6 @@ func _zero_vector(type_id):
             return Vector4i.ZERO
     return null
 
-# Decode an object-typed value. A bare res:// or user:// string is sugar for a
-# Resource reference; a tagged Resource or GodotText also decodes.
 func _decode_object(value) -> DecodeResult:
     if value is String:
         if value.begins_with("res://") or value.begins_with("user://"):
@@ -1527,9 +1214,6 @@ func _decode_resource_path(path) -> DecodeResult:
         return DecodeResult.success(res)
     return DecodeResult.failure("failed to load resource: " + path)
 
-# Field readers. Each returns a DecodeResult whose value is a neutral fallback
-# (0.0 or "") on failure, so a composite constructor never receives null; the
-# caller propagates the failure before using the value.
 func _number_field(value, field) -> DecodeResult:
     var raw = value.get(field, null)
     if raw is int or raw is float:
@@ -1550,7 +1234,6 @@ func _string_field(value, field) -> DecodeResult:
 func _tag_label(value) -> String:
     return "$type " + str(value.get("$type", "value"))
 
-# Modify a node's properties in a scene file
 func modify_node(result: Result, params) -> Result:
     if not params.has("scenePath") or not params.has("nodePath") or not params.has("properties"):
         result.err("scenePath, nodePath, and properties are required")
@@ -1575,7 +1258,6 @@ func modify_node(result: Result, params) -> Result:
 
     var scene_root = track_temp(scene.instantiate())
 
-    # Find the target node
     var node_path = params.nodePath
     var target = scene_root
     if node_path != "root" and node_path != ".":
@@ -1587,13 +1269,11 @@ func modify_node(result: Result, params) -> Result:
         result.err("Node not found: " + params.nodePath)
         return result.fail()
 
-    # Set properties with type conversion
     var applied = _apply_properties(target, params.properties)
     if not applied.ok:
         result.err("Invalid property value: " + applied.error)
         return result.fail()
 
-    # Repack and save
     var packed_scene = PackedScene.new()
     var pack_error = packed_scene.pack(scene_root)
     if pack_error != OK:
@@ -1609,7 +1289,6 @@ func modify_node(result: Result, params) -> Result:
     result.out("Node modified successfully in: " + full_scene_path)
     return result
 
-# Remove a node from a scene file
 func remove_node(result: Result, params) -> Result:
     if not params.has("scenePath") or not params.has("nodePath"):
         result.err("scenePath and nodePath are required")
@@ -1634,7 +1313,6 @@ func remove_node(result: Result, params) -> Result:
 
     var scene_root = track_temp(scene.instantiate())
 
-    # Find the target node
     var node_path = params.nodePath
     var target = scene_root
     if node_path != "root" and node_path != ".":
@@ -1652,13 +1330,9 @@ func remove_node(result: Result, params) -> Result:
 
     var removed_name = target.name
     target.get_parent().remove_child(target)
-    # The node is detached from the tracked root, so dispatch's per-dispatch
-    # cleanup cannot reach it through scene_root; track it explicitly rather
-    # than relying on queue_free, which needs a SceneTree tick a daemon loop
-    # blocked on stdin would never run.
+    # The detached node is out of reach of scene_root cleanup, so track it explicitly.
     track_temp(target)
 
-    # Repack and save
     var packed_scene = PackedScene.new()
     var pack_error = packed_scene.pack(scene_root)
     if pack_error != OK:
@@ -1674,7 +1348,6 @@ func remove_node(result: Result, params) -> Result:
     result.out("Node '" + removed_name + "' removed successfully from: " + full_scene_path)
     return result
 
-# List/add/remove signal connections in a scene file
 func manage_scene_signals(result: Result, params) -> Result:
     var scene_path = params.get("scenePath", "")
     var action = params.get("action", "")
@@ -1730,10 +1403,7 @@ func manage_scene_signals(result: Result, params) -> Result:
         _reconcile_path(full_path)
         result.out("Signal connection added: " + conn_line)
     elif action == "remove":
-        # A connection is identified by its signal, source, target, and (when
-        # given) method. Matching on the signal alone would delete every
-        # connection that shares a signal name, so source and target are
-        # required to keep removal precise.
+        # Source and target are required so removal does not match every connection sharing a signal.
         var signal_name = params.get("signalName", "")
         var source_path = params.get("sourcePath", "")
         var target_path = params.get("targetPath", "")
@@ -1773,9 +1443,6 @@ func manage_scene_signals(result: Result, params) -> Result:
         return result.fail()
     return result
 
-# Signal-connection helpers: keep the hand-written [connection] lines safe and
-# resolve the tool's "root/Child" node paths to the scene-relative paths Godot
-# actually stores ("." for the root, "Child" for a child).
 func _connection_field_is_safe(value):
     return not ("\"" in value or "\\" in value or "\n" in value or "\r" in value)
 
@@ -1799,8 +1466,6 @@ func _connection_field(line, field_name):
         return ""
     return line.substr(start, end - start)
 
-# Parse the scene's own [connection] lines out of its text. Shared by read_scene
-# so a reader gets connections with the tree they belong to.
 func _scene_connections(content):
     var connections = []
     for line in content.split("\n"):
@@ -1813,7 +1478,6 @@ func _scene_connections(content):
             })
     return connections
 
-# Rename/duplicate/move nodes within a scene file
 func manage_scene_structure(result: Result, params) -> Result:
     var scene_path = params.get("scenePath", "")
     var action = params.get("action", "rename")
@@ -1870,8 +1534,7 @@ func manage_scene_structure(result: Result, params) -> Result:
             result.err("Cannot move a node into itself or one of its descendants")
             return result.fail()
         target.get_parent().remove_child(target)
-        # Clear the owner before reparenting; keeping the old owner makes the
-        # engine warn that the owner is inconsistent. It is reset below.
+        # Clear the owner before reparenting or the engine warns it is inconsistent.
         target.owner = null
         new_parent.add_child(target, true)
         _set_owner_recursive(target, root)
@@ -1916,7 +1579,6 @@ func _is_ancestor(node, maybe_descendant):
         n = n.get_parent()
     return false
 
-# Attach a script to a node in a scene file
 func attach_script(result: Result, params) -> Result:
     if not params.has("scenePath") or not params.has("nodePath") or not params.has("scriptPath"):
         result.err("scenePath, nodePath, and scriptPath are required")
@@ -1949,7 +1611,6 @@ func attach_script(result: Result, params) -> Result:
 
     var scene_root = track_temp(scene.instantiate())
 
-    # Find the target node
     var node_path = params.nodePath
     var target = scene_root
     if node_path != "root" and node_path != ".":
@@ -1961,10 +1622,7 @@ func attach_script(result: Result, params) -> Result:
         result.err("Node not found: " + params.nodePath)
         return result.fail()
 
-    # Load and attach the script. A path that resolves to a resource that is not
-    # a Script (for example a .tres) must fail here: set_script's own engine
-    # error only reaches process stderr, which is diagnostics only now and no
-    # longer fails the operation.
+    # A non-Script resource must fail here; set_script's engine error only reaches stderr.
     var script = load_object(full_script_path, "Script")
     if not (script is Script):
         result.err("Parameter should be null or a reference to a valid script")
@@ -1972,7 +1630,6 @@ func attach_script(result: Result, params) -> Result:
 
     target.set_script(script)
 
-    # Repack and save
     var packed_scene = PackedScene.new()
     var pack_error = packed_scene.pack(scene_root)
     if pack_error != OK:
@@ -1984,15 +1641,11 @@ func attach_script(result: Result, params) -> Result:
         result.err("Failed to save scene after attaching script: " + str(save_error))
         return result.fail()
 
-    # Reconcile the script as well as the scene: update_file on the script
-    # writes its .uid and registers its class_name synchronously, so a following
-    # class-name lookup sees the newly attached script without a respawn.
     _reconcile_path(full_script_path)
     _reconcile_path(full_scene_path)
     result.out("Script '" + full_script_path + "' attached successfully to node in: " + full_scene_path)
     return result
 
-# Create a resource file (.tres)
 func manage_resource(result: Result, params) -> Result:
     var resource_path = params.get("resourcePath", "")
     var action = params.get("action", "read")
@@ -2070,9 +1723,6 @@ func manage_resource(result: Result, params) -> Result:
     return result
 
 
-# Report whether a property name passes a caller's read filter. An entry
-# matches by exact name or as a wildcard pattern using "*" and "?", so a family
-# such as "level/*" can be selected without listing every key.
 func _matches_property_filter(prop_name, filter) -> bool:
     for entry in filter:
         var pattern = str(entry)
@@ -2081,8 +1731,6 @@ func _matches_property_filter(prop_name, filter) -> bool:
     return false
 
 
-# Load a resource with the shared not-found and load-failure messages. Returns
-# null after flagging the active result failed, so the caller returns it.
 func _load_resource(result: Result, full_path):
     if not ResourceLoader.exists(full_path):
         result.err("Resource not found: " + full_path)
@@ -2096,11 +1744,9 @@ func _load_resource(result: Result, full_path):
     return resource
 
 
-# Save a resource, creating its directory first. Returns false after flagging
-# failure so the caller can bail out instead of reporting a false success.
 func _save_resource(result: Result, resource, full_path) -> bool:
     var dir_path = full_path.get_base_dir()
-    var dir_relative = dir_path.substr(6)  # Remove "res://"
+    var dir_relative = dir_path.substr(6)
     if not dir_relative.is_empty():
         var dir = DirAccess.open("res://")
         if dir and not dir.dir_exists(dir_relative):
@@ -2114,20 +1760,12 @@ func _save_resource(result: Result, resource, full_path) -> bool:
     return true
 
 
-# Apply a caller's properties to a resource. Theme items need their value type
-# inferred from the item path, so Themes go through the theme codec; every other
-# resource uses the plain property decoder.
 func _apply_resource_properties(resource, properties) -> DecodeResult:
     if resource is Theme:
         return _apply_theme_properties(resource, properties)
     return _apply_properties(resource, properties)
 
 
-# Apply a caller's properties map to a Theme with type conversion. Theme items
-# are keyed by composite names such as "Label/colors/font_color", so the value
-# type is derived from the matching property entry when the item already exists
-# and from the key's category when this call creates it. Returns a DecodeResult
-# carrying the failure reason when a value cannot be decoded.
 func _apply_theme_properties(theme, properties) -> DecodeResult:
     for key in properties:
         var decoded = _convert_theme_property(theme, key, properties[key])
@@ -2156,8 +1794,6 @@ func _convert_theme_property(theme, key, value) -> DecodeResult:
         return DecodeResult.success(value)
     return _convert_value_for_type(type_id, value)
 
-# Track type, loop mode, and interpolation names as they appear in the tool
-# contract, mapped to the engine's enum values.
 const ANIMATION_TRACK_TYPES = {
     "value": Animation.TYPE_VALUE,
     "position_3d": Animation.TYPE_POSITION_3D,
@@ -2182,9 +1818,6 @@ const ANIMATION_INTERPOLATIONS = {
     "cubic": Animation.INTERPOLATION_CUBIC,
 }
 
-# Read/create/modify an Animation resource and its tracks. Tracks are not
-# properties, so the generic manage_resource codec cannot touch them; this
-# operation is the dedicated path for animation authoring.
 func manage_animation(result: Result, params) -> Result:
     var resource_path = params.get("resourcePath", "")
     var action = params.get("action", "read")
@@ -2240,8 +1873,6 @@ func manage_animation(result: Result, params) -> Result:
     result.out("Animation " + action + " succeeded: " + full_path)
     return result
 
-# Load an Animation resource with the shared not-found and type checks. Returns
-# null after flagging the active result failed, so the caller returns it.
 func _load_animation(result: Result, full_path):
     if not ResourceLoader.exists(full_path):
         result.err("Animation resource not found: " + full_path)
@@ -2258,7 +1889,6 @@ func _load_animation(result: Result, full_path):
         return null
     return resource
 
-# Apply the animation-level properties length, loopMode, and step when present.
 func _apply_animation_properties(animation, params) -> DecodeResult:
     if params.has("length"):
         var length = params["length"]
@@ -2277,8 +1907,6 @@ func _apply_animation_properties(animation, params) -> DecodeResult:
         animation.step = float(step)
     return DecodeResult.success(null)
 
-# Append a track built from the caller's trackType, trackPath, interpolation,
-# and keys.
 func _add_animation_track(animation, params) -> DecodeResult:
     var type_id = _track_type_id(params.get("trackType", ""))
     if type_id == -1:
@@ -2286,16 +1914,12 @@ func _add_animation_track(animation, params) -> DecodeResult:
     var track_index = animation.add_track(type_id)
     return _configure_animation_track(animation, track_index, params)
 
-# Update an existing track selected by trackIndex.
 func _set_animation_track(animation, params) -> DecodeResult:
     var track_index = _track_index(animation, params)
     if not track_index.ok:
         return track_index
     return _configure_animation_track(animation, track_index.value, params)
 
-# Configure a track's path, interpolation, loop wrap, enabled flag, and keys.
-# A keys list replaces the track's existing keys wholesale, so set is
-# deterministic rather than appending to whatever was there.
 func _configure_animation_track(animation, track_index, params) -> DecodeResult:
     if params.has("trackPath"):
         animation.track_set_path(track_index, NodePath(str(params["trackPath"])))
@@ -2312,7 +1936,6 @@ func _configure_animation_track(animation, track_index, params) -> DecodeResult:
         return _insert_animation_keys(animation, track_index, params["keys"])
     return DecodeResult.success(null)
 
-# Remove the track selected by trackIndex.
 func _remove_animation_track(animation, params) -> DecodeResult:
     var track_index = _track_index(animation, params)
     if not track_index.ok:
@@ -2320,7 +1943,6 @@ func _remove_animation_track(animation, params) -> DecodeResult:
     animation.remove_track(track_index.value)
     return DecodeResult.success(null)
 
-# Resolve and bounds-check the caller's trackIndex.
 func _track_index(animation, params) -> DecodeResult:
     if not params.has("trackIndex"):
         return DecodeResult.failure("trackIndex is required", -1)
@@ -2329,7 +1951,6 @@ func _track_index(animation, params) -> DecodeResult:
         return DecodeResult.failure("trackIndex out of range: " + str(track_index), -1)
     return DecodeResult.success(track_index)
 
-# Replace a track's keys with the caller's list, then insert each one.
 func _insert_animation_keys(animation, track_index, keys) -> DecodeResult:
     if not (keys is Array):
         return DecodeResult.failure("keys must be an array")
@@ -2347,10 +1968,6 @@ func _insert_animation_keys(animation, track_index, keys) -> DecodeResult:
             return inserted
     return DecodeResult.success(null)
 
-# Insert one key, decoding its value for the track's type. Value tracks take a
-# value in the tool value contract, 3D tracks take the matching tagged vector,
-# method tracks take {method, args}, and bezier tracks take a number plus
-# optional inHandle/outHandle offsets.
 func _insert_animation_key(animation, track_index, type_id, time, key) -> DecodeResult:
     var value = key.get("value", null)
     if type_id == Animation.TYPE_VALUE:
@@ -2417,8 +2034,6 @@ func _insert_animation_key(animation, track_index, type_id, time, key) -> Decode
         return DecodeResult.failure("unsupported track type")
     return DecodeResult.success(null)
 
-# Decode a method-track key value, an object with a "method" string and an
-# optional "args" array.
 func _decode_method_key(value) -> DecodeResult:
     if not (value is Dictionary) or not (value.get("method", null) is String):
         return DecodeResult.failure("a method key value must be an object with a \"method\" string")
@@ -2432,7 +2047,6 @@ func _decode_method_key(value) -> DecodeResult:
         args = decoded.value
     return DecodeResult.success({"method": StringName(value["method"]), "args": args})
 
-# Decode a value that must be a tagged object of the given Variant type.
 func _require_tagged_type(value, type_id, label) -> DecodeResult:
     if not (value is Dictionary) or not value.has("$type"):
         return DecodeResult.failure("expected a tagged {\"$type\": ...} value for " + label)
@@ -2443,24 +2057,19 @@ func _require_tagged_type(value, type_id, label) -> DecodeResult:
         return DecodeResult.failure(label + " must be a " + type_string(type_id))
     return decoded
 
-# Decode a Vector2 handle, defaulting to zero when the caller omits it.
 func _animation_vector2_or_zero(value) -> DecodeResult:
     if value == null:
         return DecodeResult.success(Vector2.ZERO)
     return _require_tagged_type(value, TYPE_VECTOR2, "a bezier handle")
 
-# Read a number, reporting a decode failure when it is not numeric.
 func _animation_number(value, label) -> DecodeResult:
     if value is int or value is float:
         return DecodeResult.success(float(value))
     return DecodeResult.failure(label + " must be a number", 0.0)
 
-# Read a number that has a default when the caller omits the field.
 func _animation_number_default(value, label) -> DecodeResult:
     return _animation_number(value, label)
 
-# Decode a resource reference for an audio track value: a res:// path or a
-# tagged Resource.
 func _animation_resource_value(value) -> DecodeResult:
     if value is String:
         return _decode_resource_path(value)
@@ -2468,9 +2077,6 @@ func _animation_resource_value(value) -> DecodeResult:
         return _decode_typed(value)
     return DecodeResult.failure("expected a res:// path or tagged Resource for this track's value")
 
-# Decode an animation-track value: the name of the animation to play, as a bare
-# string or a tagged StringName. Unlike an audio track, the engine stores a
-# StringName here, not a Resource.
 func _animation_string_name(value) -> DecodeResult:
     if value is String:
         return DecodeResult.success(StringName(value))
@@ -2501,8 +2107,6 @@ func _interpolation_name(type_id) -> String:
             return name
     return "linear"
 
-# Emit an Animation resource as a JSON payload: length, loopMode, step, and one
-# object per track with its keys.
 func _read_animation(result: Result, full_path):
     var animation = _load_animation(result, full_path)
     if animation == null:
@@ -2555,13 +2159,6 @@ func _animation_key_to_json(animation, index, type_id, key_index) -> Dictionary:
         key["value"] = _variant_to_json(animation.track_get_key_value(index, key_index))
     return key
 
-# A TileSet's sources, tiles, and per-tile data are not storage properties:
-# they live behind add_source/create_tile/get_tile_data. A TileMapLayer's cell
-# grid is likewise an opaque tile_map_data blob. Neither the generic
-# manage_resource codec nor manage_scene_node's property codec can reach them,
-# so these operations are the dedicated authoring paths, mirroring
-# manage_animation for tracks.
-
 const TILESET_SHAPES = {
     "square": TileSet.TILE_SHAPE_SQUARE,
     "isometric": TileSet.TILE_SHAPE_ISOMETRIC,
@@ -2583,7 +2180,6 @@ const TILESET_OFFSET_AXES = {
     "vertical": TileSet.TILE_OFFSET_AXIS_VERTICAL,
 }
 
-# Read/create/modify a TileSet resource, its sources, and its tiles.
 func manage_tileset(result: Result, params) -> Result:
     var resource_path = params.get("resourcePath", "")
     var action = params.get("action", "read")
@@ -2660,8 +2256,6 @@ func manage_tileset(result: Result, params) -> Result:
     result.out("TileSet " + action + " succeeded: " + full_path)
     return result
 
-# Load a TileSet with the shared not-found and type checks. Returns null after
-# flagging the active result failed, so the caller returns it.
 func _load_tileset(result: Result, full_path):
     if not ResourceLoader.exists(full_path):
         result.err("TileSet resource not found: " + full_path)
@@ -2678,8 +2272,6 @@ func _load_tileset(result: Result, full_path):
         return null
     return resource
 
-# Apply the tileset-level properties tileSize, tileShape, tileLayout,
-# tileOffsetAxis, and uvClipping when present.
 func _apply_tileset_properties(tile_set, params) -> DecodeResult:
     if params.has("tileSize"):
         var size = _require_tagged_type(params["tileSize"], TYPE_VECTOR2I, "tileSize")
@@ -2705,8 +2297,6 @@ func _apply_tileset_properties(tile_set, params) -> DecodeResult:
         tile_set.uv_clipping = bool(params["uvClipping"])
     return DecodeResult.success(null)
 
-# Add an atlas or scenes-collection source to the tileset. An optional sourceId
-# overrides the engine-assigned id; the chosen id is printed for the caller.
 func _add_tileset_source(result: Result, tile_set, params) -> DecodeResult:
     var source_type = str(params.get("sourceType", ""))
     var source = null
@@ -2750,7 +2340,6 @@ func _add_tileset_source(result: Result, tile_set, params) -> DecodeResult:
     result.out("TileSet source added: " + str(source_id))
     return DecodeResult.success(null)
 
-# Remove the source selected by sourceId.
 func _remove_tileset_source(tile_set, params) -> DecodeResult:
     var source_id = _require_source_id(tile_set, params)
     if not source_id.ok:
@@ -2758,7 +2347,6 @@ func _remove_tileset_source(tile_set, params) -> DecodeResult:
     tile_set.remove_source(source_id.value)
     return DecodeResult.success(null)
 
-# Resolve and check the caller's sourceId against the tileset.
 func _require_source_id(tile_set, params) -> DecodeResult:
     if not params.has("sourceId"):
         return DecodeResult.failure("sourceId is required", -1)
@@ -2767,7 +2355,6 @@ func _require_source_id(tile_set, params) -> DecodeResult:
         return DecodeResult.failure("unknown sourceId: " + str(source_id), -1)
     return DecodeResult.success(source_id)
 
-# Resolve a sourceId and require it to name an atlas source.
 func _require_atlas_source(tile_set, params) -> DecodeResult:
     var source_id = _require_source_id(tile_set, params)
     if not source_id.ok:
@@ -2777,8 +2364,6 @@ func _require_atlas_source(tile_set, params) -> DecodeResult:
         return DecodeResult.failure("source " + str(source_id.value) + " is not an atlas source")
     return DecodeResult.success(source)
 
-# Add a tile. An atlas source takes atlasCoords (and optional sizeInAtlas); a
-# scenes-collection source takes the scenePath of the PackedScene to place.
 func _add_tileset_tile(tile_set, params) -> DecodeResult:
     var source_id = _require_source_id(tile_set, params)
     if not source_id.ok:
@@ -2816,8 +2401,6 @@ func _add_tileset_tile(tile_set, params) -> DecodeResult:
         return DecodeResult.success(null)
     return DecodeResult.failure("source " + str(source_id.value) + " has no tiles")
 
-# Remove a tile. An atlas source is addressed by atlasCoords, a scenes-collection
-# source by sceneTileId.
 func _remove_tileset_tile(tile_set, params) -> DecodeResult:
     var source_id = _require_source_id(tile_set, params)
     if not source_id.ok:
@@ -2841,7 +2424,6 @@ func _remove_tileset_tile(tile_set, params) -> DecodeResult:
         return DecodeResult.success(null)
     return DecodeResult.failure("source " + str(source_id.value) + " has no tiles")
 
-# Add an alternative tile to the atlas tile at atlasCoords.
 func _add_tile_alternative(result: Result, tile_set, params) -> DecodeResult:
     var atlas = _require_atlas_source(tile_set, params)
     if not atlas.ok:
@@ -2858,7 +2440,6 @@ func _add_tile_alternative(result: Result, tile_set, params) -> DecodeResult:
     result.out("Tile alternative added: " + str(alternative_id))
     return DecodeResult.success(null)
 
-# Remove the alternative tile selected by alternativeId.
 func _remove_tile_alternative(tile_set, params) -> DecodeResult:
     var atlas = _require_atlas_source(tile_set, params)
     if not atlas.ok:
@@ -2871,8 +2452,6 @@ func _remove_tile_alternative(tile_set, params) -> DecodeResult:
     atlas.value.remove_alternative_tile(coords.value, int(params["alternativeId"]))
     return DecodeResult.success(null)
 
-# Apply caller-supplied properties to the TileData of the tile at atlasCoords.
-# Alt 0 is the tile's base data; pass alternativeId to target another one.
 func _set_tile_data(tile_set, params) -> DecodeResult:
     var atlas = _require_atlas_source(tile_set, params)
     if not atlas.ok:
@@ -2894,8 +2473,6 @@ func _set_tile_data(tile_set, params) -> DecodeResult:
             return applied
     return DecodeResult.success(null)
 
-# Emit a TileSet as a JSON payload: the tileset-level settings and one object
-# per source. An atlas source lists its tiles and each tile's alternatives.
 func _read_tileset(result: Result, full_path):
     var tile_set = _load_tileset(result, full_path)
     if tile_set == null:
@@ -2962,7 +2539,6 @@ func _scenes_source_to_json(source_id, source) -> Dictionary:
         })
     return {"id": source_id, "type": "scenes", "tiles": tiles}
 
-# The storage properties of a TileData, in the tool value contract.
 func _tile_data_properties(tile_data) -> Dictionary:
     var props = {}
     if tile_data == null:
@@ -2972,21 +2548,17 @@ func _tile_data_properties(tile_data) -> Dictionary:
             props[prop["name"]] = tile_data.get(prop["name"])
     return props
 
-# The project-relative path of a resource, or "" when it has none.
 func _source_resource_path(resource) -> String:
     if resource == null or resource.resource_path == "":
         return ""
     return project_relative(resource.resource_path)
 
-# The tool value contract name for an engine enum value.
 func _enum_name(mapping, value) -> String:
     for name in mapping:
         if mapping[name] == value:
             return name
     return "unknown"
 
-# Theme item categories as they appear in the tool contract, mapped to the
-# engine's Theme.DataType values.
 const THEME_ITEM_TYPES = {
     "color": Theme.DATA_TYPE_COLOR,
     "constant": Theme.DATA_TYPE_CONSTANT,
@@ -2996,11 +2568,6 @@ const THEME_ITEM_TYPES = {
     "stylebox": Theme.DATA_TYPE_STYLEBOX,
 }
 
-# Read/create/modify a Theme resource and its types, variations, and items.
-# Theme items are keyed by composite names and variations are not storage
-# properties at all, so the generic manage_resource codec cannot express the
-# full contract; this operation is the dedicated authoring path, mirroring
-# manage_animation for tracks and manage_tileset for sources and tiles.
 func manage_theme(result: Result, params) -> Result:
     var resource_path = params.get("resourcePath", "")
     var action = params.get("action", "read")
@@ -3058,8 +2625,6 @@ func manage_theme(result: Result, params) -> Result:
     result.out("Theme " + action + " succeeded: " + full_path)
     return result
 
-# Load a Theme with the shared not-found and type checks. Returns null after
-# flagging the active result failed, so the caller returns it.
 func _load_theme(result: Result, full_path):
     if not ResourceLoader.exists(full_path):
         result.err("Theme resource not found: " + full_path)
@@ -3076,8 +2641,6 @@ func _load_theme(result: Result, full_path):
         return null
     return resource
 
-# Apply the theme-level defaults defaultFont, defaultFontSize, and
-# defaultBaseScale when present.
 func _apply_theme_defaults(theme, params) -> DecodeResult:
     if params.has("defaultFont"):
         var value = params["defaultFont"]
@@ -3101,7 +2664,6 @@ func _apply_theme_defaults(theme, params) -> DecodeResult:
         theme.default_base_scale = float(scale)
     return DecodeResult.success(null)
 
-# Set one theme item, converting the value to the item category's engine type.
 func _set_theme_item(theme, params) -> DecodeResult:
     var type_id = _theme_item_type_id(params.get("itemType", ""))
     if type_id == -1:
@@ -3112,7 +2674,6 @@ func _set_theme_item(theme, params) -> DecodeResult:
     theme.set_theme_item(type_id, StringName(str(params.get("itemName", ""))), StringName(str(params.get("themeType", ""))), value.value)
     return DecodeResult.success(null)
 
-# Remove one theme item from a type.
 func _clear_theme_item(theme, params) -> DecodeResult:
     var type_id = _theme_item_type_id(params.get("itemType", ""))
     if type_id == -1:
@@ -3120,9 +2681,6 @@ func _clear_theme_item(theme, params) -> DecodeResult:
     theme.clear_theme_item(type_id, StringName(str(params.get("itemName", ""))), StringName(str(params.get("themeType", ""))))
     return DecodeResult.success(null)
 
-# Convert a caller's value to the engine type its item category requires: a
-# tagged Color, an integer for constant/fontSize, or a resource for
-# font/icon/stylebox.
 func _convert_theme_item_value(type_id, value) -> DecodeResult:
     match type_id:
         Theme.DATA_TYPE_COLOR:
@@ -3140,8 +2698,6 @@ func _theme_item_type_id(name) -> int:
         return THEME_ITEM_TYPES[name]
     return -1
 
-# Emit a Theme as a JSON payload: the theme-level defaults and one object per
-# type with its items grouped by category.
 func _read_theme(result: Result, full_path):
     var theme = _load_theme(result, full_path)
     if theme == null:
@@ -3178,9 +2734,6 @@ func _theme_items_to_json(theme, type_id, theme_type) -> Dictionary:
         items[String(name)] = _variant_to_json(theme.get_theme_item(type_id, name, theme_type))
     return items
 
-# Read or edit the cells of a TileMapLayer node in a scene. Cells are not
-# properties (the layer stores them in an opaque tile_map_data blob), so a
-# scene or property codec cannot reach them.
 func manage_tilemap(result: Result, params) -> Result:
     var scene_path = params.get("scenePath", "")
     var action = params.get("action", "read")
@@ -3240,7 +2793,6 @@ func manage_tilemap(result: Result, params) -> Result:
     result.out("TileMap " + action + " succeeded: " + full_path)
     return result
 
-# Place one cell, checking that the node has a tileset that owns sourceId.
 func _set_tilemap_cell(target, params) -> DecodeResult:
     var coords = _require_tagged_type(params.get("coords"), TYPE_VECTOR2I, "coords")
     if not coords.ok:
@@ -3261,7 +2813,6 @@ func _set_tilemap_cell(target, params) -> DecodeResult:
     target.set_cell(coords.value, source_id, atlas_coords.value, alternative_id)
     return DecodeResult.success(null)
 
-# Emit a TileMapLayer's tileset path and used cells, sorted for stable output.
 func _read_tilemap_node(result: Result, target, full_path, node_path):
     var cells = []
     for coords in target.get_used_cells():
@@ -3291,15 +2842,6 @@ func _read_tilemap_node(result: Result, target, full_path, node_path):
     result.out(JSON.stringify(payload))
     result.out(JSON_END)
 
-# Validate that Godot itself loaded project.godot cleanly. ProjectSettings
-# parses project.godot during engine startup, before _init runs; when the file
-# is malformed the engine logs "Error parsing '<path>/project.godot'" to stderr
-# and leaves the affected settings at their defaults. Starting the engine
-# against the project is the whole check, and the caller combines that stderr
-# diagnostic with the exit code, so this operation deliberately does no work of
-# its own and emits no payload for anyone to read.
+# Starting the engine against the project is the whole check; the caller reads the engine's stderr and exit code.
 func validate_project(result: Result, _params) -> Result:
-    # Starting the engine against the project is the whole check; the caller
-    # combines the engine's own stderr diagnostics with the exit code. No work
-    # or payload is produced here.
     return result

@@ -2,8 +2,6 @@ package e2e
 
 import "testing"
 
-// TestEraseTilemapCellTool drives the real erase_tilemap_cell tool against
-// Godot.
 func TestEraseTilemapCellTool(t *testing.T) {
 	t.Parallel()
 	root := newProject(t)
@@ -31,11 +29,8 @@ func TestEraseTilemapCellTool(t *testing.T) {
 	}
 }
 
-// TestEraseTilemapCellErrors covers validation messages.
 func TestEraseTilemapCellErrors(t *testing.T) {
 	t.Parallel()
-	// The validation-only cases need no project, so they share one engine-free
-	// session.
 	session := connect(t)
 	t.Run("missing params", func(t *testing.T) {
 		requireToolError(t, session, "erase_tilemap_cell", map[string]any{},

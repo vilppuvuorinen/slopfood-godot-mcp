@@ -11,9 +11,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-// fakeSession is a live engine session that records the calls the seam routes
-// to it, so a test can prove a session-eligible handler used the session
-// instead of spawning a separate engine.
 type fakeSession struct {
 	runs []fakeSessionRun
 }
@@ -29,8 +26,6 @@ func (f *fakeSession) Run(_ context.Context, project, operation string, params m
 	return "", "", 0, nil
 }
 
-// TestContextRunRequiresSession confirms the seam requires an installed engine
-// session: with none, Run reports a clear error instead of spawning an engine.
 func TestContextRunRequiresSession(t *testing.T) {
 	ctx := Context{Context: context.Background()}
 	_, _, _, err := ctx.Run("/proj", "create_scene", nil)
@@ -42,8 +37,6 @@ func TestContextRunRequiresSession(t *testing.T) {
 	}
 }
 
-// TestContextWithSessionDelegates confirms an installed session receives the
-// call, so the handler always reaches the session.
 func TestContextWithSessionDelegates(t *testing.T) {
 	sess := &fakeSession{}
 	ctx := Context{Context: WithEngine(context.Background(), sess)}
@@ -59,9 +52,6 @@ func TestContextWithSessionDelegates(t *testing.T) {
 	}
 }
 
-// TestSessionEligibleHandlerUsesInstalledSession confirms a handler reaches the
-// session through its context. GODOT_PATH points at a missing binary, so any
-// attempt to spawn a separate engine would fail the call.
 func TestSessionEligibleHandlerUsesInstalledSession(t *testing.T) {
 	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
 	root := t.TempDir()
@@ -85,9 +75,6 @@ func TestSessionEligibleHandlerUsesInstalledSession(t *testing.T) {
 	}
 }
 
-// TestAttachScriptReconcilesInPlace confirms attach_script routes through the
-// session: the bridge reconciles the attached script with the editor
-// filesystem, so a following class-name lookup sees it without a respawn.
 func TestAttachScriptReconcilesInPlace(t *testing.T) {
 	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
 	root := t.TempDir()
@@ -114,9 +101,6 @@ func TestAttachScriptReconcilesInPlace(t *testing.T) {
 	}
 }
 
-// TestReimportProjectReconcilesSession confirms reimport_project drives the
-// reconcile through the live session's reimport_project operation: the bridge
-// reconciles through the editor filesystem in place, so no respawn is needed.
 func TestReimportProjectReconcilesSession(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)

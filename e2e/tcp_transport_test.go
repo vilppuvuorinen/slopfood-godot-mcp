@@ -11,10 +11,7 @@ import (
 	"time"
 )
 
-// requireDevTransport skips the test when the server binary was built without
-// the devtransport tag, so --transport is an unknown flag and the tag-free
-// Linux CI e2e job stays green. Local `make e2e` builds with the tag and runs
-// the TCP lane.
+// Skips when the server binary was built without the devtransport tag.
 func requireDevTransport(t *testing.T) {
 	t.Helper()
 	binary := os.Getenv(binaryEnv)
@@ -27,8 +24,6 @@ func requireDevTransport(t *testing.T) {
 	}
 }
 
-// endpointFile waits until a single TCP endpoint record appears under
-// runtimeDir's daemon directory and returns its path.
 func endpointFile(t *testing.T, runtimeDir string) string {
 	t.Helper()
 	pattern := filepath.Join(runtimeDir, "slopfood-godot-mcp", "*.endpoint")
@@ -47,10 +42,6 @@ func endpointFile(t *testing.T, runtimeDir string) string {
 	return ""
 }
 
-// TestDaemonTCPTransport runs a client, a detached daemon, and the engine over
-// the loopback-TCP transport: the endpoint record appears, tools serve, a
-// second daemon loses to the exclusive lock, and the record is removed on idle
-// exit.
 func TestDaemonTCPTransport(t *testing.T) {
 	t.Parallel()
 	requireDevTransport(t)
@@ -68,9 +59,7 @@ func TestDaemonTCPTransport(t *testing.T) {
 
 	endpoint := endpointFile(t, runtimeDir)
 
-	// A second daemon for the same project cannot bind: the exclusive lock
-	// rejects it, so the process exits non-zero instead of stealing the
-	// endpoint.
+	// The exclusive lock rejects a second daemon for the same project.
 	loser := exec.CommandContext(context.Background(), os.Getenv(binaryEnv), //nolint:gosec // the binary path is supplied by the test harness.
 		daemonSubcommand, "--transport", "tcp", "--project", project, "--enable", "all")
 	loser.Env = append(os.Environ(), "XDG_RUNTIME_DIR="+runtimeDir)
@@ -82,7 +71,6 @@ func TestDaemonTCPTransport(t *testing.T) {
 		t.Errorf("endpoint record missing after a losing spawn: %v", statErr)
 	}
 
-	// A second client joins the same daemon over TCP.
 	joined, err := connectInRuntime(t, runtimeDir, daemonProjectArgs(project, "--transport", "tcp", "--idle-timeout", "1s")...)
 	if err != nil {
 		t.Fatalf("second connect: %v", err)
@@ -105,6 +93,5 @@ func TestDaemonTCPTransport(t *testing.T) {
 	}
 }
 
-// daemonSubcommand mirrors the server's daemon role selector without importing
-// the main package.
+// Mirrors the server's daemon role selector without importing the main package.
 const daemonSubcommand = "daemon"

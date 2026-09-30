@@ -10,10 +10,6 @@ import (
 	"time"
 )
 
-// TestInProcListenerServesProtocol drives the existing line protocol over an
-// in-process connection: the client and the server are the two ends of a
-// connected stream pair, so Serve runs against the listener exactly as it will
-// against an accepted socket.
 func TestInProcListenerServesProtocol(t *testing.T) {
 	l := NewInProcListener()
 	defer l.Close()
@@ -33,7 +29,6 @@ func TestInProcListenerServesProtocol(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		// Serve returns when the stream closes; the error is expected here.
 		_ = testServer().Serve(context.Background(), server, server)
 	}()
 
@@ -53,8 +48,6 @@ func TestInProcListenerServesProtocol(t *testing.T) {
 	<-done
 }
 
-// TestInProcListenerQueuesDials asserts the listener holds several connections
-// dialed ahead of Accept, the way a listening socket queues pending connects.
 func TestInProcListenerQueuesDials(t *testing.T) {
 	l := NewInProcListener()
 	defer l.Close()
@@ -76,8 +69,6 @@ func TestInProcListenerQueuesDials(t *testing.T) {
 	}
 }
 
-// TestInProcListenerAcceptUnblocksOnClose asserts a blocked Accept returns when
-// the listener closes, so daemon shutdown cannot hang on it.
 func TestInProcListenerAcceptUnblocksOnClose(t *testing.T) {
 	l := NewInProcListener()
 	errCh := make(chan error, 1)
@@ -143,9 +134,6 @@ func TestInProcListenerPeerIdentity(t *testing.T) {
 	}
 }
 
-// TestInProcListenerDefaultPeerIsSelf asserts an unconfigured in-process
-// connection reports the current process, since that is the only identity an
-// in-process transport can honestly claim.
 func TestInProcListenerDefaultPeerIsSelf(t *testing.T) {
 	l := NewInProcListener()
 	defer l.Close()
@@ -170,9 +158,6 @@ func TestInProcListenerDefaultPeerIsSelf(t *testing.T) {
 	}
 }
 
-// TestInProcEndpointDialBeforeListenFails asserts a dial that arrives before
-// the daemon opened the endpoint fails, which is what drives the client's
-// connect-or-spawn path.
 func TestInProcEndpointDialBeforeListenFails(t *testing.T) {
 	e := NewInProcEndpoint()
 
@@ -182,8 +167,6 @@ func TestInProcEndpointDialBeforeListenFails(t *testing.T) {
 	}
 }
 
-// TestInProcEndpointListenDialAccept asserts the endpoint's Listen and Dial
-// halves meet on one listener, the in-process rendezvous.
 func TestInProcEndpointListenDialAccept(t *testing.T) {
 	e := NewInProcEndpoint()
 
@@ -225,8 +208,6 @@ func TestInProcEndpointListenDialAccept(t *testing.T) {
 	}
 }
 
-// TestListenInProcFillsListenSeam asserts the in-process backend is usable
-// through the transport-agnostic seam the daemon core will take.
 func TestListenInProcFillsListenSeam(t *testing.T) {
 	var listen ListenFunc = ListenInProc
 	l, err := listen("ignored-address")

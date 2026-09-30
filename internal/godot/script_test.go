@@ -6,8 +6,6 @@ import (
 	"testing"
 )
 
-// TestRunScriptCapturesStreamsSeparately confirms stdout, stderr, and the exit
-// code are not merged, so a caller can combine them.
 func TestRunScriptCapturesStreamsSeparately(t *testing.T) {
 	bin := writeExecutable(t, "echo out\necho 'ERROR: boom' >&2\nexit 0")
 
@@ -26,8 +24,6 @@ func TestRunScriptCapturesStreamsSeparately(t *testing.T) {
 	}
 }
 
-// TestCheckScriptCapturesExitCodeAndStreams confirms a non-zero exit is not a
-// wrapper error and the exit code and streams are all returned.
 func TestCheckScriptCapturesExitCodeAndStreams(t *testing.T) {
 	bin := writeExecutable(t, "echo out\necho 'SCRIPT ERROR: boom' >&2\nexit 1")
 

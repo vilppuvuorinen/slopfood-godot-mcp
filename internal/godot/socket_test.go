@@ -15,8 +15,6 @@ import (
 	"time"
 )
 
-// fakeUDSServer is an in-process Unix-socket server that speaks the bridge's
-// newline-delimited framing, so the client can be exercised without an engine.
 type fakeUDSServer struct {
 	t        *testing.T
 	listener net.Listener
@@ -73,9 +71,6 @@ func (s *fakeUDSServer) close() {
 	}
 }
 
-// TestEngineSocketReadFrameReassemblesPartialReads proves the socket reader
-// survives a frame split across writes and returns multiple frames delivered in
-// one write, with no read-size cap or blank-line terminator.
 func TestEngineSocketReadFrameReassemblesPartialReads(t *testing.T) {
 	server := newFakeUDSServer(t)
 	client, err := dialEngineSocket(context.Background(), server.path, "tok")
@@ -85,7 +80,6 @@ func TestEngineSocketReadFrameReassemblesPartialReads(t *testing.T) {
 	defer client.Close()
 	server.accept()
 
-	// Frame 1 arrives in three pieces; frames 2 and 3 share one write.
 	server.write(`{"id":1,"ok":true,`)
 	server.write(`"stdout":"one","stderr":""}`)
 	server.write("\n")
@@ -113,8 +107,6 @@ func TestEngineSocketReadFrameReassemblesPartialReads(t *testing.T) {
 	}
 }
 
-// TestEngineSocketPresentsTokenOnce proves the client puts the token on the
-// first request frame of a connection and omits it from later frames.
 func TestEngineSocketPresentsTokenOnce(t *testing.T) {
 	server := newFakeUDSServer(t)
 	client, err := dialEngineSocket(context.Background(), server.path, "secret")
@@ -145,9 +137,6 @@ func TestEngineSocketPresentsTokenOnce(t *testing.T) {
 	}
 }
 
-// TestEngineSocketTokenRejectClosesWithoutServing proves a server that rejects
-// the token closes the connection and the client surfaces the failure without
-// receiving a response.
 func TestEngineSocketTokenRejectClosesWithoutServing(t *testing.T) {
 	server := newFakeUDSServer(t)
 	client, err := dialEngineSocket(context.Background(), server.path, "wrong")
@@ -184,8 +173,6 @@ func TestEngineSocketTokenRejectClosesWithoutServing(t *testing.T) {
 	}
 }
 
-// TestEngineSocketMissingToken proves an empty token (the client never presents
-// a matching one) is rejected by a server that requires it.
 func TestEngineSocketMissingToken(t *testing.T) {
 	server := newFakeUDSServer(t)
 	client, err := dialEngineSocket(context.Background(), server.path, "")
@@ -223,9 +210,6 @@ func decodeLine(t *testing.T, line string) map[string]any {
 	return decoded
 }
 
-// TestPrepareSocketDirAndSecureSocket proves the socket directory is created
-// 0700 and a Godot-created 0755 socket is narrowed to 0600, with the stale
-// unlink idempotent.
 func TestPrepareSocketDirAndSecureSocket(t *testing.T) {
 	socketPath := filepath.Join(t.TempDir(), "nested", "engine.sock")
 	if err := prepareSocketDir(socketPath); err != nil {
@@ -239,7 +223,6 @@ func TestPrepareSocketDirAndSecureSocket(t *testing.T) {
 		t.Errorf("socket dir mode = %o, want 700", dirInfo.Mode().Perm())
 	}
 
-	// A regular file stands in for a Godot-created 0755 socket.
 	if err := os.WriteFile(socketPath, nil, 0o600); err != nil { //nolint:gosec // the mode is widened on the next line to model Godot's socket.
 		t.Fatalf("write socket file: %v", err)
 	}
@@ -268,8 +251,6 @@ func TestPrepareSocketDirAndSecureSocket(t *testing.T) {
 	}
 }
 
-// requireSocketGodot returns a usable engine path or skips the test, mirroring
-// the godotops requireGodot helper for the package's socket bridge test.
 func requireSocketGodot(t *testing.T) string {
 	t.Helper()
 	path := Path()
@@ -279,10 +260,6 @@ func requireSocketGodot(t *testing.T) string {
 	return path
 }
 
-// TestSocketSessionDrivesRealBridge is the integration proof: the Go socket
-// session boots the real bridge, reads readiness, secures the socket, serves a
-// create_scene then a read_scene over the socket, and unlinks the socket on
-// close.
 func TestSocketSessionDrivesRealBridge(t *testing.T) {
 	engine := requireSocketGodot(t)
 
@@ -294,8 +271,7 @@ func TestSocketSessionDrivesRealBridge(t *testing.T) {
 		t.Fatalf("bridge script: %v", statErr)
 	}
 
-	// A short runtime dir keeps the derived socket path under the sun_path
-	// limit even when the test's temporary directories are long.
+	// A short runtime dir keeps the derived socket path under the sun_path limit.
 	runtimeDir, mkErr := os.MkdirTemp("", "sgrun")
 	if mkErr != nil {
 		t.Fatalf("mkdir runtime: %v", mkErr)
@@ -319,8 +295,6 @@ func TestSocketSessionDrivesRealBridge(t *testing.T) {
 		t.Fatalf("create_scene exitCode = %d; stderr:\n%s", exitCode, stderr)
 	}
 
-	// The socket exists, is secured 0600, and sits in the 0700 runtime dir while
-	// the session is live.
 	proc := session.proc
 	if proc == nil || proc.socketPath == "" {
 		t.Fatal("session has no live socket path")
@@ -360,9 +334,6 @@ func TestSocketSessionDrivesRealBridge(t *testing.T) {
 	}
 }
 
-// TestSocketSessionDrivesRealBridgeTCP is the TCP integration proof: the Go
-// socket session forces the loopback-TCP transport, boots the real bridge,
-// serves a create_scene then a read_scene, and creates no UDS engine socket.
 func TestSocketSessionDrivesRealBridgeTCP(t *testing.T) {
 	engine := requireSocketGodot(t)
 
@@ -374,8 +345,7 @@ func TestSocketSessionDrivesRealBridgeTCP(t *testing.T) {
 		t.Fatalf("bridge script: %v", statErr)
 	}
 
-	// The runtime dir is where a UDS bind would land; the TCP path must not
-	// create the engine socket under it.
+	// The TCP path must not create a UDS engine socket under the runtime dir.
 	runtimeDir, mkErr := os.MkdirTemp("", "sgtcp")
 	if mkErr != nil {
 		t.Fatalf("mkdir runtime: %v", mkErr)
@@ -399,8 +369,6 @@ func TestSocketSessionDrivesRealBridgeTCP(t *testing.T) {
 		t.Fatalf("create_scene exitCode = %d; stderr:\n%s", exitCode, stderr)
 	}
 
-	// The session dialed TCP, so it has no socket path to unlink and no UDS
-	// engine socket exists on disk.
 	if proc := session.proc; proc == nil || proc.socketPath != "" {
 		t.Fatalf("TCP session socketPath = %q, want empty", proc.socketPath)
 	}
@@ -424,9 +392,6 @@ func TestSocketSessionDrivesRealBridgeTCP(t *testing.T) {
 	}
 }
 
-// fakeTCPServer is an in-process loopback-TCP server that speaks the bridge's
-// newline-delimited framing, so the TCP client path can be exercised without an
-// engine.
 type fakeTCPServer struct {
 	t        *testing.T
 	listener net.Listener
@@ -483,9 +448,6 @@ func (s *fakeTCPServer) close() {
 	}
 }
 
-// TestEngineSocketTCPPresentsTokenOnce proves the TCP client puts the token on
-// the first request frame and omits it from later frames, matching the UDS
-// framing.
 func TestEngineSocketTCPPresentsTokenOnce(t *testing.T) {
 	server := newFakeTCPServer(t)
 	client, err := dialEngineSocketNetwork(context.Background(), "tcp", server.addr(), "secret")
@@ -516,9 +478,6 @@ func TestEngineSocketTCPPresentsTokenOnce(t *testing.T) {
 	}
 }
 
-// TestEngineSocketTCPTokenRejectClosesWithoutServing proves a TCP server that
-// rejects the token closes the connection and the client surfaces the failure
-// without receiving a response.
 func TestEngineSocketTCPTokenRejectClosesWithoutServing(t *testing.T) {
 	server := newFakeTCPServer(t)
 	client, err := dialEngineSocketNetwork(context.Background(), "tcp", server.addr(), "wrong")
@@ -555,14 +514,9 @@ func TestEngineSocketTCPTokenRejectClosesWithoutServing(t *testing.T) {
 	}
 }
 
-// minimalPNG is a 1x1 RGBA PNG, enough for the editor to import as a texture
-// and write an .import sidecar.
 const minimalPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR4nGNgAAIAAAUAAXpeqz8AAAAASUVORK5CYII="
 
-// TestSocketSessionGatesEditorFilesystem is the Phase 5a validation: the real
-// editor server withholds readiness until its initial scan completes, so the
-// first operation is served only after the editor has materialized the sidecars
-// for files already in the project (a script .uid and a texture .import).
+// The real editor withholds readiness until its initial scan writes .uid and .import sidecars.
 func TestSocketSessionGatesEditorFilesystem(t *testing.T) {
 	engine := requireSocketGodot(t)
 
@@ -574,8 +528,7 @@ func TestSocketSessionGatesEditorFilesystem(t *testing.T) {
 		t.Fatalf("bridge script: %v", statErr)
 	}
 
-	// A short runtime dir keeps the derived socket path under the sun_path
-	// limit even when the test's temporary directories are long.
+	// A short runtime dir keeps the derived socket path under the sun_path limit.
 	runtimeDir, mkErr := os.MkdirTemp("", "sgfs")
 	if mkErr != nil {
 		t.Fatalf("mkdir runtime: %v", mkErr)
@@ -605,8 +558,6 @@ func TestSocketSessionGatesEditorFilesystem(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	// ping is the first operation; the session can only serve it after the
-	// editor reported readiness, which the bridge gates on the initial scan.
 	stdout, stderr, exitCode, err := session.Run(ctx, project, "ping", nil)
 	if err != nil {
 		t.Fatalf("ping: %v", err)

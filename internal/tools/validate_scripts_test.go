@@ -8,7 +8,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 )
 
-// validateScriptsDoc mirrors the JSON document validate_scripts returns.
 type validateScriptsDoc struct {
 	Scope           string           `json:"scope"`
 	FileCount       int              `json:"fileCount"`
@@ -17,8 +16,6 @@ type validateScriptsDoc struct {
 	Results         []map[string]any `json:"results"`
 }
 
-// fakeValidateGodot emits a diagnostic whenever the checked res:// path
-// contains "invalid".
 const fakeValidateGodot = `for arg in "$@"; do
   case "$arg" in
     *invalid*)
@@ -62,8 +59,6 @@ func TestValidateScriptsSchema(t *testing.T) {
 	if !ok || scope["type"] != "string" {
 		t.Errorf("scope property = %v", props["scope"])
 	}
-	// The default scope is part of the schema, not only the property prose, so
-	// a schema-driven client does not have to parse the description.
 	if scope["default"] != "changed" {
 		t.Errorf("scope default = %v, want changed", scope["default"])
 	}

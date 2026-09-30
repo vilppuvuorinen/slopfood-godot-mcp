@@ -5,11 +5,8 @@ import (
 	"testing"
 )
 
-// TestRemoveSceneSignalTool drives the real remove_scene_signal tool against
-// Godot.
 func TestRemoveSceneSignalTool(t *testing.T) {
 	t.Parallel()
-	// The three subtests share one warm project and session; each owns its scene.
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -38,8 +35,6 @@ func TestRemoveSceneSignalTool(t *testing.T) {
 	})
 
 	t.Run("removes only the targeted connection", func(t *testing.T) {
-		// Two connections share the "pressed" signal but differ in source and
-		// method; removing one must leave the other untouched.
 		createScene(t, session, "scenes/targeted.tscn", "Button")
 		requireToolText(t, session, "add_node", map[string]any{
 			"scenePath": "scenes/targeted.tscn",
@@ -91,8 +86,6 @@ func TestRemoveSceneSignalTool(t *testing.T) {
 		})
 		connection := `[connection signal="pressed" from="." to="." method="on_pressed"]`
 
-		// The method does not match the stored connection, so removal is a
-		// successful no-op rather than a silent deletion of a sibling.
 		text := requireToolText(t, session, "remove_scene_signal", map[string]any{
 			"scenePath":  "scenes/nomatch.tscn",
 			"signalName": "pressed",
@@ -105,11 +98,8 @@ func TestRemoveSceneSignalTool(t *testing.T) {
 	})
 }
 
-// TestRemoveSceneSignalErrors covers the tool's validation messages.
 func TestRemoveSceneSignalErrors(t *testing.T) {
 	t.Parallel()
-	// Every project-backed case shares one warm project and session; only "not a
-	// project" needs its own non-project directory.
 	root := newProject(t)
 	session := connectProject(t, root)
 

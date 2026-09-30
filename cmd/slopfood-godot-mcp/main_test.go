@@ -7,8 +7,6 @@ import (
 	"testing"
 )
 
-// TestRunVersion asserts both roles answer --version without binding a project
-// or starting a daemon.
 func TestRunVersion(t *testing.T) {
 	for _, args := range [][]string{{"--version"}, {daemonSubcommand, "--version"}} {
 		var stdout, stderr strings.Builder
@@ -21,8 +19,6 @@ func TestRunVersion(t *testing.T) {
 	}
 }
 
-// TestRunRejectsInvalidLogLevel asserts a bad log level fails before any
-// project or signal setup.
 func TestRunRejectsInvalidLogLevel(t *testing.T) {
 	var stdout, stderr strings.Builder
 	if err := run([]string{"--log-level", "loud"}, strings.NewReader(""), &stdout, &stderr); err == nil {
@@ -30,9 +26,6 @@ func TestRunRejectsInvalidLogLevel(t *testing.T) {
 	}
 }
 
-// TestRunRejectsGDDaemonFlag asserts the removed one-shot opt-in is now just an
-// unknown flag: flag.Parse fails, so a stale --gd-daemon invocation cannot
-// silently start a daemon.
 func TestRunRejectsGDDaemonFlag(t *testing.T) {
 	var stdout, stderr strings.Builder
 	args := []string{daemonSubcommand, "--gd-daemon", "--project", t.TempDir()}
@@ -41,8 +34,6 @@ func TestRunRejectsGDDaemonFlag(t *testing.T) {
 	}
 }
 
-// TestResolveProjectPrecedence asserts the flag beats the environment, the
-// environment beats the working directory, and blank values fall through.
 func TestResolveProjectPrecedence(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)
@@ -78,8 +69,6 @@ func TestResolveProjectPrecedence(t *testing.T) {
 	}
 }
 
-// TestEnableValuesAccumulates asserts the repeatable flag appends rather than
-// replacing, which the category resolver depends on.
 func TestEnableValuesAccumulates(t *testing.T) {
 	var e enableValues
 	for _, value := range []string{"scene", "script"} {

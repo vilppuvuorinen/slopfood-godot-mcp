@@ -7,9 +7,7 @@ import (
 	"testing"
 )
 
-// TestCreateProjectTool ports the reference's handleCreateProject behaviors:
-// success, existing-project rejection, and validation. The server is bound to
-// the target directory because create_project creates the bound root itself.
+// The server is bound to the target directory because create_project creates the bound root itself.
 func TestCreateProjectTool(t *testing.T) {
 	t.Parallel()
 	t.Run("creates a project", func(t *testing.T) {
@@ -50,8 +48,6 @@ func TestCreateProjectTool(t *testing.T) {
 	})
 }
 
-// TestCreateProjectDotnetTool covers the .NET branch and, by extension, the
-// reference's dotnet.test.ts helpers (identifier sanitizing, features, csproj).
 func TestCreateProjectDotnetTool(t *testing.T) {
 	t.Parallel()
 	dir := filepath.Join(t.TempDir(), "dotnet")
@@ -82,8 +78,6 @@ func TestCreateProjectDotnetTool(t *testing.T) {
 	)
 }
 
-// TestCreateProjectDotnetIdentifiers ports the toDotnetIdentifier table from
-// the reference's dotnet.test.ts through the observable MCP surface.
 func TestCreateProjectDotnetIdentifiers(t *testing.T) {
 	t.Parallel()
 	tests := []struct {

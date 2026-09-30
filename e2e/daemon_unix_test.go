@@ -9,9 +9,7 @@ import (
 	"testing"
 )
 
-// TestDaemonSocketPermissions asserts the socket is 0600 and its directory 0700,
-// the filesystem gate that keeps another user out alongside the daemon's peer
-// UID check.
+// The socket is 0600 and its directory 0700, the filesystem gate alongside the daemon's peer UID check.
 func TestDaemonSocketPermissions(t *testing.T) {
 	t.Parallel()
 	project := newProject(t)

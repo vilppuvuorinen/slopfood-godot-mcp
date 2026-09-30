@@ -9,15 +9,9 @@ import (
 	"os/exec"
 )
 
-// OperationParams is the JSON object handed to the operations script.
 type OperationParams map[string]any
 
-// Export runs
-// `<executable> --headless --path <project> --export-release|--export-debug
-// <preset> <output>` and returns the captured streams. A non-zero exit is not a
-// wrapper failure: Godot's editor calls quit(EXIT_FAILURE) when the export
-// fails, so the exit code is returned for the caller to interpret. Only a
-// failure to start the process is returned as an error.
+// A non-zero exit is not an error: Godot's editor calls quit(EXIT_FAILURE) when the export fails.
 func Export(ctx context.Context, executable, projectPath, presetName, outputPath string, debug bool) (stdout, stderr string, exitCode int, err error) {
 	exportFlag := "--export-release"
 	if debug {
@@ -48,16 +42,7 @@ func Export(ctx context.Context, executable, projectPath, presetName, outputPath
 	return stdout, stderr, 0, nil
 }
 
-// RunOperation invokes
-// `<executable> --headless --path <project> --script <script> <operation>
-// <params-json>`, mirroring the reference server's executeOperation. It has no
-// production caller: the operations bridge is reached through the session seam.
-// It backs the tools package's test double and the pure Go unit tests, which
-// run it against shell fakes rather than the real bridge.
-//
-// A non-zero exit is not a wrapper failure: the script reports its own exit
-// status, so the exit code is returned for the caller to interpret. Only a
-// failure to start the process is returned as an error.
+// A non-zero exit is not an error: the script reports its own status.
 func RunOperation(ctx context.Context, executable, projectPath, scriptPath, operation string, params OperationParams) (stdout, stderr string, exitCode int, err error) {
 	payload, err := json.Marshal(params)
 	if err != nil {

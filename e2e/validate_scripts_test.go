@@ -6,7 +6,6 @@ import (
 	"testing"
 )
 
-// validateScriptsE2EDoc mirrors the JSON document validate_scripts returns.
 type validateScriptsE2EDoc struct {
 	Scope           string           `json:"scope"`
 	FileCount       int              `json:"fileCount"`
@@ -15,8 +14,6 @@ type validateScriptsE2EDoc struct {
 	Results         []map[string]any `json:"results"`
 }
 
-// TestValidateScriptsTool drives the real validate_scripts tool against Godot.
-// Each subtest binds a session to its own project.
 func TestValidateScriptsTool(t *testing.T) {
 	t.Parallel()
 	t.Run("explicit scriptPaths", func(t *testing.T) {
@@ -62,8 +59,7 @@ func TestValidateScriptsTool(t *testing.T) {
 		seedProject(t, root)
 		session := connectProject(t, root)
 
-		// Outside a work tree the default scope is an explicit error, not a
-		// silent fallback to validating every script.
+		// Outside a work tree the default scope is an error, not a fallback to all scripts.
 		requireToolError(t, session, "validate_scripts", map[string]any{},
 			`Not a git repository (or git is unavailable). Use scope: "all" or pass scriptPaths.`)
 
@@ -91,17 +87,14 @@ func TestValidateScriptsTool(t *testing.T) {
 	})
 
 	t.Run("resolves autoload globals", func(t *testing.T) {
-		// The checker exists so a script referencing a project autoload validates
-		// cleanly; Godot's --check-only mode reports the autoload as an unknown
-		// identifier because it compiles before autoloads are registered.
+		// The checker resolves autoloads; Godot's --check-only reports them as unknown.
 		root := t.TempDir()
 		writeE2EFile(t, filepath.Join(root, "project.godot"),
 			"config_version=5\n\n[autoload]\n\nGameState=\"*res://autoload/game_state.gd\"\n")
 		writeE2EFile(t, filepath.Join(root, "autoload", "game_state.gd"), "extends Node\n")
 		writeE2EFile(t, filepath.Join(root, "scripts", "player.gd"),
 			"extends Node\n\n@onready var state = GameState\n")
-		// A reference to a global that does not exist must still fail, proving
-		// the checker resolves identifiers rather than accepting anything.
+		// A non-existent global must still fail, proving identifiers are resolved.
 		writeE2EFile(t, filepath.Join(root, "scripts", "broken.gd"),
 			"extends Node\n\n@onready var state = NotAnAutoload\n")
 		session := connectProject(t, root)
@@ -147,7 +140,6 @@ func TestValidateScriptsTool(t *testing.T) {
 	})
 }
 
-// TestValidateScriptsErrors covers the reference's validation messages.
 func TestValidateScriptsErrors(t *testing.T) {
 	t.Parallel()
 	t.Run("not a project", func(t *testing.T) {

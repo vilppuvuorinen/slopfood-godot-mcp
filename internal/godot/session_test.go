@@ -14,9 +14,7 @@ import (
 	"time"
 )
 
-// shortRuntimeDir points XDG_RUNTIME_DIR at a short directory for one test, so
-// the derived engine socket path stays under the Linux sun_path limit even
-// though t.TempDir embeds a long test name.
+// Points XDG_RUNTIME_DIR at a short directory so the derived socket path stays under the sun_path limit.
 func shortRuntimeDir(t *testing.T) {
 	t.Helper()
 	dir, err := os.MkdirTemp("", "sess-rt-")
@@ -27,31 +25,19 @@ func shortRuntimeDir(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", dir)
 }
 
-// socketSessionFake is a fake engine process that speaks the bridge's
-// newline-delimited Unix-socket protocol. It records one line per process start
-// in starts, the spawn arguments in args, the engine environment hook value in
-// env, and the quit operation in quit. It prints an engine banner and a
-// non-JSON stdout line before the readiness object, binds the --gd-socket path
-// it was handed, and runs the python snippet response for each request; a quit
-// operation is always answered and recorded before the process exits.
 type socketSessionFake struct {
 	bin    string
 	starts string
 	args   string
 	env    string
 	quit   string
-	// ops records each request line, so a test can assert the operations and
-	// params the session sent without a transport-level response assertion.
-	ops string
+	ops    string
 }
 
-// defaultSocketResponse answers every request by echoing its id in stdout.
 const defaultSocketResponse = `
         send(conn, req["id"], True, "out-" + str(req["id"]), "")`
 
-// newSocketSessionFake writes the fake engine, running response for each
-// request. response is a python snippet inserted in the receive loop with
-// `req`, `conn`, and send() in scope; it must be indented to match the loop.
+// response is a Python snippet run per request with req, conn, and send() in scope.
 func newSocketSessionFake(t *testing.T, response string) *socketSessionFake {
 	t.Helper()
 	dir := t.TempDir()
@@ -117,7 +103,6 @@ PY
 	return f
 }
 
-// startCount returns how many times the fake has been spawned.
 func (f *socketSessionFake) startCount(t *testing.T) int {
 	t.Helper()
 	data, err := os.ReadFile(f.starts)
@@ -148,7 +133,6 @@ func (f *socketSessionFake) envValue(t *testing.T) string {
 	return string(data)
 }
 
-// recordedOps returns the decoded request objects the fake received, in order.
 func (f *socketSessionFake) recordedOps(t *testing.T) []map[string]any {
 	t.Helper()
 	data, err := os.ReadFile(f.ops)
@@ -185,9 +169,6 @@ func (f *socketSessionFake) quitRecorded(t *testing.T) bool {
 	return false
 }
 
-// TestSessionRoundTripFraming proves one socket engine process serves two
-// sequential operations and that the spawn carries the socket args and never
-// --gd-daemon.
 func TestSessionRoundTripFraming(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
@@ -231,9 +212,6 @@ func TestSessionRoundTripFraming(t *testing.T) {
 	}
 }
 
-// TestSessionForcedTCPFraming drives the same fake engine over the loopback-TCP
-// transport, proving the forced transport reaches the bridge as --gd-tcp and no
-// UDS socket path is derived or created.
 func TestSessionForcedTCPFraming(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
@@ -262,9 +240,6 @@ func TestSessionForcedTCPFraming(t *testing.T) {
 	}
 }
 
-// TestSessionFramesRecorded proves the request frames carry the assigned ids and
-// the caller's operation/params, and that nil params marshal to {}. The token
-// the client adds to the first frame is stripped before comparison.
 func TestSessionFramesRecorded(t *testing.T) {
 	shortRuntimeDir(t)
 	reqs := filepath.Join(t.TempDir(), "reqs")
@@ -307,9 +282,6 @@ func TestSessionFramesRecorded(t *testing.T) {
 	}
 }
 
-// TestSessionStderrDiagnosticsOnly proves the deliberate transport change: the
-// process stderr pipe is diagnostics only, and the response frame's stderr is
-// authoritative and returned alone.
 func TestSessionStderrDiagnosticsOnly(t *testing.T) {
 	shortRuntimeDir(t)
 	response := `
@@ -334,8 +306,6 @@ func TestSessionStderrDiagnosticsOnly(t *testing.T) {
 	}
 }
 
-// TestSessionSkipsNonFrameStdout proves the engine banner and a stray non-JSON
-// stdout line are not mistaken for a response; the fake prints both.
 func TestSessionSkipsNonFrameStdout(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
@@ -351,9 +321,6 @@ func TestSessionSkipsNonFrameStdout(t *testing.T) {
 	}
 }
 
-// TestSessionReimportProjectDrivesScan proves the session routes the
-// reimport_project operation straight to the bridge without a respawn, so the
-// warm editor filesystem, not a one-shot --import fork, drives the scan.
 func TestSessionReimportProjectDrivesScan(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
@@ -417,11 +384,7 @@ func TestSessionProjectChangeRestarts(t *testing.T) {
 	}
 }
 
-// TestSessionFingerprintRescans pins the new fingerprint contract: a
-// project.godot change is reconciled by a rescan before the next operation
-// instead of restarting the engine, so the change is reflected while the same
-// process keeps serving. The pre-editor guarantee — a project-global change is
-// reflected before the next operation — is preserved either way.
+// A project.godot change is reconciled by a rescan before the next operation, not a restart.
 func TestSessionFingerprintRescans(t *testing.T) {
 	shortRuntimeDir(t)
 	ops := filepath.Join(t.TempDir(), "ops")
@@ -444,8 +407,7 @@ func TestSessionFingerprintRescans(t *testing.T) {
 		t.Fatalf("starts = %d, want 1", got)
 	}
 
-	// A different size changes the stamp even if the mtime lands in the same
-	// clock tick.
+	// A different size changes the stamp even if the mtime lands in the same clock tick.
 	if err := os.WriteFile(projectFile, []byte("config_version=5\n\n[application]\n"), 0o644); err != nil { //nolint:gosec // test fixture.
 		t.Fatalf("rewrite project.godot: %v", err)
 	}
@@ -467,8 +429,6 @@ func TestSessionFingerprintRescans(t *testing.T) {
 	}
 }
 
-// TestSessionEOFRespawn proves a frame delivered just before the process exits
-// is not lost and that the next Run replaces the dead process.
 func TestSessionEOFRespawn(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse+"\n        sys.exit(0)")
@@ -479,8 +439,6 @@ func TestSessionEOFRespawn(t *testing.T) {
 	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("first Run: %v", err)
 	}
-	// Give the reader a moment to observe EOF so the death is visible to the
-	// next restart decision.
 	time.Sleep(50 * time.Millisecond)
 	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("second Run: %v", err)
@@ -490,12 +448,7 @@ func TestSessionEOFRespawn(t *testing.T) {
 	}
 }
 
-// TestSessionRetriesOnceOnWriteFailure proves the write-failure supervision: a
-// request whose first socket write fails (the process died between the liveness
-// check and the write) respawns the engine once and retries the same frame
-// instead of surfacing the failure. The session is given a process whose socket
-// is already closed, so the write fails deterministically with no live reader to
-// race, and the retry then spawns the fake.
+// A first-write failure (process died between the liveness check and the write) respawns once and retries.
 func TestSessionRetriesOnceOnWriteFailure(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
@@ -529,8 +482,6 @@ func TestSessionRetriesOnceOnWriteFailure(t *testing.T) {
 	}
 }
 
-// TestSessionResponseIDDesyncAborts proves a mismatched response id still kills
-// the process instead of returning the wrong frame.
 func TestSessionResponseIDDesyncAborts(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, `
@@ -547,7 +498,6 @@ func TestSessionResponseIDDesyncAborts(t *testing.T) {
 		t.Errorf("err = %v, want a response-id desync", err)
 	}
 
-	// The desync kills the process; the next Run respawns a healthy one.
 	healthy := newSocketSessionFake(t, defaultSocketResponse)
 	s.executable = healthy.bin
 	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
@@ -555,11 +505,8 @@ func TestSessionResponseIDDesyncAborts(t *testing.T) {
 	}
 }
 
-// TestSessionContextCancelKill proves a canceled request kills the wedged engine
-// promptly and that the session respawns a healthy one afterwards.
 func TestSessionContextCancelKill(t *testing.T) {
 	shortRuntimeDir(t)
-	// The fake accepts the connection but never answers.
 	f := newSocketSessionFake(t, "\n        pass")
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
@@ -583,8 +530,6 @@ func TestSessionContextCancelKill(t *testing.T) {
 	}
 }
 
-// TestSessionCloseQuitAndFailsRuns proves Close asks the bridge to quit
-// gracefully, is idempotent, and makes a later Run fail.
 func TestSessionCloseQuitAndFailsRuns(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
@@ -608,8 +553,6 @@ func TestSessionCloseQuitAndFailsRuns(t *testing.T) {
 	}
 }
 
-// TestSessionAppliesEngineEnv proves the engine environment hook reaches the
-// session-spawned child, mirroring TestRunOperationAppliesEngineEnv.
 func TestSessionAppliesEngineEnv(t *testing.T) {
 	shortRuntimeDir(t)
 	SetEngineEnv(func(env []string) []string {

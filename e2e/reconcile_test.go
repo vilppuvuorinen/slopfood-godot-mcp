@@ -8,10 +8,6 @@ import (
 	"testing"
 )
 
-// TestAttachScriptReconcilesScriptSidecar is the Phase 6a sidecar validation: a
-// script written out of band gains its .uid synchronously during the mutating
-// tool, not on a later rescan. attach_script is the vehicle because it touches
-// the script path as well as the scene it saves.
 func TestAttachScriptReconcilesScriptSidecar(t *testing.T) {
 	t.Parallel()
 	root, session := seedScene(t, "scenes/main.tscn", "Node2D")
@@ -37,11 +33,6 @@ func TestAttachScriptReconcilesScriptSidecar(t *testing.T) {
 	}
 }
 
-// TestAttachScriptRegistersClassName is the Phase 6a acceptance test: after
-// attach_script touches a class_name script, that class is instantiable without
-// a separate rescan or reimport_project. The editor filesystem registration is
-// synchronous, so the following add_node by class name succeeds against the same
-// warm session.
 func TestAttachScriptRegistersClassName(t *testing.T) {
 	t.Parallel()
 	root, session := seedScene(t, "scenes/main.tscn", "Node2D")

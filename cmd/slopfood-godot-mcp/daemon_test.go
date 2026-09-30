@@ -9,8 +9,6 @@ import (
 	"time"
 )
 
-// TestDaemonLogPath asserts the daemon log path is a stable per-project name
-// under the runtime directory, distinct across projects.
 func TestDaemonLogPath(t *testing.T) {
 	runtimeDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
@@ -42,8 +40,6 @@ func TestDaemonLogPath(t *testing.T) {
 	}
 }
 
-// TestOpenDaemonLog asserts the log directory is created 0700, the file 0600,
-// and existing content is appended to rather than truncated.
 func TestOpenDaemonLog(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "logs", "daemon.log")
 
@@ -89,8 +85,6 @@ func TestOpenDaemonLog(t *testing.T) {
 	}
 }
 
-// TestDaemonChildArgs asserts the detached child argv carries the bound project,
-// the log level, the log file, the idle timeout, and every enable value.
 func TestDaemonChildArgs(t *testing.T) {
 	want := []string{
 		daemonSubcommand,
@@ -112,8 +106,6 @@ func TestDaemonChildArgs(t *testing.T) {
 	}
 }
 
-// TestRunDaemonRejectsNegativeIdleTimeout asserts a negative idle timeout fails
-// fast instead of starting a daemon.
 func TestRunDaemonRejectsNegativeIdleTimeout(t *testing.T) {
 	var stdout, stderr strings.Builder
 	if err := run([]string{daemonSubcommand, "--idle-timeout", "-1s"}, strings.NewReader(""), &stdout, &stderr); err == nil {
@@ -121,8 +113,6 @@ func TestRunDaemonRejectsNegativeIdleTimeout(t *testing.T) {
 	}
 }
 
-// TestRunDaemonDetach asserts the detach path resolves the executable and hands
-// the child seam the cleaned project and the derived per-project log path.
 func TestRunDaemonDetach(t *testing.T) {
 	runtimeDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)

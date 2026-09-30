@@ -10,7 +10,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-// projectValidationTimeout bounds the Godot project-load probe.
 const projectValidationTimeout = 30 * time.Second
 
 func validateProject() mcp.Tool {
@@ -36,8 +35,6 @@ func validateProject() mcp.Tool {
 	}
 }
 
-// validateProjectResult is validate_project's payload. errors is always
-// present, empty on success, so the payload pins its shape.
 type validateProjectResult struct {
 	Valid  bool     `json:"valid"`
 	Errors []string `json:"errors"`
@@ -52,10 +49,8 @@ func handleValidateProject(ctx Context, _ json.RawMessage) (any, error) {
 		return notAProjectResult(project), nil
 	}
 
-	// Loading the project through the engine is the whole check. Godot logs a
-	// parse diagnostic to stderr while still exiting 0 when project.godot is
-	// malformed, so validity is reported as structured data rather than through
-	// isError.
+	// Godot logs parse diagnostics to stderr but still exits 0, so validity is
+	// reported as structured data rather than through isError.
 	probeCtx, cancel := context.WithTimeout(ctx, projectValidationTimeout)
 	defer cancel()
 	probe, err := probeProjectWithGodot(probeCtx, project)

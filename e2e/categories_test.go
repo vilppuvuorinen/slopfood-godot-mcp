@@ -2,8 +2,6 @@ package e2e
 
 import "testing"
 
-// TestEnableCategories exercises the --enable category gating over the real
-// stdio surface.
 func TestEnableCategories(t *testing.T) {
 	t.Parallel()
 	t.Run("default registers every category", func(t *testing.T) {

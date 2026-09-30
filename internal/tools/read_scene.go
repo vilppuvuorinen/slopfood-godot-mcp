@@ -92,10 +92,8 @@ func handleReadScene(ctx Context, raw json.RawMessage) (any, error) {
 		), nil
 	}
 
-	// A run that yielded no valid node tree is a failure, not a second success
-	// shape: a non-error result always carries the declared node tree, so a
-	// caller branches only on isError. The raw engine output is kept in the
-	// message so the cause is still inspectable.
+	// A non-error result always carries the declared node tree, so markerless or
+	// invalid output is a failure; the raw output stays in the message.
 	if payload, ok := markerJSON(stdout); ok {
 		if json.Valid([]byte(payload)) {
 			return mcp.JSONResult(payload), nil

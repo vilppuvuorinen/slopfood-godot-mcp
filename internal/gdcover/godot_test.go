@@ -14,9 +14,8 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
 )
 
-// requireGodot returns a usable engine path or skips the test. The unit-test
-// job runs without Godot, so a missing engine is a skip here rather than a
-// failure; the e2e job supplies one via GODOT_PATH.
+// requireGodot returns an engine path or skips the test: the unit-test job runs
+// without Godot, while the e2e job supplies one via GODOT_PATH.
 func requireGodot(t *testing.T) string {
 	t.Helper()
 	path := godot.Path()
@@ -33,7 +32,6 @@ func writeFile(t *testing.T, path, content string) {
 	}
 }
 
-// writeProject creates a minimal Godot project and returns its directory.
 func writeProject(t *testing.T) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -41,13 +39,11 @@ func writeProject(t *testing.T) string {
 	return dir
 }
 
-// readHits parses the one-integer-per-line hit file into a set.
 func readHits(t *testing.T, path string) map[int]bool {
 	t.Helper()
 	return readHitsFile(t, path)
 }
 
-// readHitsFile parses one hit file into a set.
 func readHitsFile(t *testing.T, path string) map[int]bool {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -65,9 +61,8 @@ func readHitsFile(t *testing.T, path string) map[int]bool {
 	return got
 }
 
-// readHitsGlob merges every trace matched by pattern. It lets a test read hits
-// whether the engine wrote the bare GDCOVER_FILE or, under the gdcover build
-// tag, the per-PID path the engine environment hook derives from it.
+// readHitsGlob merges every trace matched by pattern, tolerating the per-PID
+// path the engine derives from GDCOVER_FILE under the gdcover build tag.
 func readHitsGlob(t *testing.T, pattern string) map[int]bool {
 	t.Helper()
 	paths, err := filepath.Glob(pattern)
@@ -83,7 +78,6 @@ func readHitsGlob(t *testing.T, pattern string) map[int]bool {
 	return got
 }
 
-// linesWith returns the 1-based lines of src containing marker.
 func linesWith(src, marker string) []int {
 	lines := make([]int, 0, strings.Count(src, marker))
 	for i, line := range strings.Split(src, "\n") {
@@ -94,7 +88,6 @@ func linesWith(src, marker string) []int {
 	return lines
 }
 
-// lineOf returns the 1-based line of the first occurrence of substr.
 func lineOf(t *testing.T, src, substr string) int {
 	t.Helper()
 	for i, line := range strings.Split(src, "\n") {
@@ -106,8 +99,6 @@ func lineOf(t *testing.T, src, substr string) int {
 	return 0
 }
 
-// runInstrumentedAt runs an instrumented script under a real engine, appending
-// hits to hitsPath, and fails when the engine exits non-zero.
 func runInstrumentedAt(t *testing.T, engine, project, script, hitsPath string) {
 	t.Helper()
 	cmd := exec.CommandContext(context.Background(), engine, //nolint:gosec // engine is the test's own binary.
@@ -118,8 +109,6 @@ func runInstrumentedAt(t *testing.T, engine, project, script, hitsPath string) {
 	}
 }
 
-// runInstrumented writes src to a file, runs it under a real engine, and
-// returns the reported hit lines.
 func runInstrumented(t *testing.T, engine, src string) map[int]bool {
 	t.Helper()
 	dir := t.TempDir()
@@ -130,19 +119,12 @@ func runInstrumented(t *testing.T, engine, src string) map[int]bool {
 	return readHits(t, hits)
 }
 
-// TestInstrumentedScriptsAppendAcrossRuns guards the shared hit trace: every
-// engine run against one GDCOVER_FILE appends to the same file, so a later run
-// must add to the earlier run's hits instead of reopening the file in truncating
-// write mode. A regression here silently shrinks the bridge report to whatever
-// the last engine process happened to execute.
 func TestInstrumentedScriptsAppendAcrossRuns(t *testing.T) {
 	engine := requireGodot(t)
 	dir := t.TempDir()
 	project := writeProject(t)
 	hits := filepath.Join(dir, "hits.txt")
 
-	// The two scripts report different lines ("# first" on line 4, "# second"
-	// on line 6) so a set of hits distinguishes append from truncate.
 	first := `extends SceneTree
 
 func _init():
@@ -188,9 +170,6 @@ func _init():
 	}
 }
 
-// TestInstrumentedScriptReportsHits is the end-to-end proof: instrument a
-// fixture, run it, and check that exactly the lines annotated "# covered" were
-// reported and the "# uncovered" ones were not.
 func TestInstrumentedScriptReportsHits(t *testing.T) {
 	engine := requireGodot(t)
 	src := `extends SceneTree
@@ -228,9 +207,6 @@ func _init():
 	}
 }
 
-// instrumentedOperationsScript materializes the embedded bridge, instruments
-// it, and returns the instrumented path plus the original bytes so reported
-// line numbers can be mapped back.
 func instrumentedOperationsScript(t *testing.T) (path string, original []byte) {
 	t.Helper()
 	originalPath, err := godotops.OperationsScript()
@@ -250,8 +226,6 @@ func instrumentedOperationsScript(t *testing.T) (path string, original []byte) {
 	return instrPath, original
 }
 
-// TestInstrumentedOperationsScriptParses checks the instrumenter against the
-// real bridge: the whole file must still compile.
 func TestInstrumentedOperationsScriptParses(t *testing.T) {
 	engine := requireGodot(t)
 	script, _ := instrumentedOperationsScript(t)
@@ -266,9 +240,6 @@ func TestInstrumentedOperationsScriptParses(t *testing.T) {
 	}
 }
 
-// TestInstrumentedOperationsScriptReportsHits runs a real operation through the
-// instrumented bridge and checks that the dispatch and driver-selection paths
-// report their original lines.
 func TestInstrumentedOperationsScriptReportsHits(t *testing.T) {
 	engine := requireGodot(t)
 	script, original := instrumentedOperationsScript(t)

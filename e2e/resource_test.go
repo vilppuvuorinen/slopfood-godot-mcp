@@ -9,17 +9,13 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// resourceTres is a minimal StandardMaterial3D resource so tests that inspect a
-// hand-written text resource have one.
 const resourceTres = `[gd_resource type="StandardMaterial3D" format=3]
 
 [resource]
 metallic = 0.5
 `
 
-// seedMaterialRes creates a binary StandardMaterial3D at resourcePath through
-// the engine. read_binary_resource rejects the text .tres form, so a readable fixture
-// must be a binary file the engine wrote.
+// read_binary_resource rejects text .tres, so the fixture must be a binary file.
 func seedMaterialRes(t *testing.T, session *mcp.ClientSession, resourcePath string) {
 	t.Helper()
 	requireToolText(t, session, "create_resource", map[string]any{
@@ -32,11 +28,8 @@ func seedMaterialRes(t *testing.T, session *mcp.ClientSession, resourcePath stri
 	})
 }
 
-// TestResourceTools drives the real resource tools against Godot.
 func TestResourceTools(t *testing.T) {
 	t.Parallel()
-	// One warm project and session serve every subtest; each owns a distinct
-	// resource path, so a single engine boot covers them all.
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -144,8 +137,6 @@ func TestResourceTools(t *testing.T) {
 	})
 }
 
-// TestResourceTheme covers the Theme codec handled by the resource tools:
-// create/read/modify with the theme item type inference intact.
 func TestResourceTheme(t *testing.T) {
 	t.Parallel()
 	_, session := sharedResourceSession(t)
@@ -175,10 +166,6 @@ func TestResourceTheme(t *testing.T) {
 	requireContains(t, reReadText, `"type": "Theme"`, `"default_font_size": 20`)
 }
 
-// TestResourceThemeConvertsTypes covers theme properties whose JSON values need
-// conversion: a color sent as a component dictionary, a font size, and a Theme
-// item that references another resource by path. The saved .tres is inspected so
-// a silently-ignored or mis-typed value fails the test.
 func TestResourceThemeConvertsTypes(t *testing.T) {
 	t.Parallel()
 	_, session := sharedResourceSession(t)
@@ -244,9 +231,6 @@ func TestResourceThemeConvertsTypes(t *testing.T) {
 	}
 }
 
-// TestResourceThemeMoreCategories covers the theme item categories whose value
-// type is inferred from the item path rather than an existing property:
-// constants are integers and fonts are object references.
 func TestResourceThemeMoreCategories(t *testing.T) {
 	t.Parallel()
 	_, session := sharedResourceSession(t)
@@ -284,11 +268,8 @@ func TestResourceThemeMoreCategories(t *testing.T) {
 	}
 }
 
-// TestResourceErrors covers the reference's validation and failure messages.
 func TestResourceErrors(t *testing.T) {
 	t.Parallel()
-	// The engine-backed cases share one warm project and session; only "not a
-	// project" needs its own non-project directory.
 	root, session := sharedResourceSession(t)
 
 	t.Run("missing params", func(t *testing.T) {
@@ -327,8 +308,7 @@ func TestResourceErrors(t *testing.T) {
 	})
 
 	t.Run("abstract resource type", func(t *testing.T) {
-		// BaseMaterial3D is a registered Resource subclass that Godot
-		// refuses to instantiate directly.
+		// Godot refuses to instantiate BaseMaterial3D directly.
 		res := callTool(t, session, "create_resource", map[string]any{
 			"resourcePath": "materials/abstract.tres",
 			"resourceType": "BaseMaterial3D",
@@ -386,9 +366,7 @@ func TestResourceErrors(t *testing.T) {
 	})
 }
 
-// sharedResourceSession returns a fresh project and a session bound to it, for
-// the resource tests. Each caller uses distinct resource paths, so the tests can
-// share a session with no state collision.
+// sharedResourceSession returns a fresh project and a session bound to it.
 func sharedResourceSession(t *testing.T) (string, *mcp.ClientSession) {
 	t.Helper()
 	root := newProject(t)

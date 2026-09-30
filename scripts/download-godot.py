@@ -122,15 +122,11 @@ def info(message):
 class OSProfile:
     """Per-platform asset, binary, and template defaults."""
 
-    # Asset-name platform fragment: "linux.<arch>" or "win64.exe"/"macos.universal".
+    # Asset-name fragment, e.g. "linux.{arch}" or "win64.exe".
     asset_platform: str
-    # Binary-name platform fragment used in diagnostics.
     binary_platform: str
-    # Glob matching the engine binary inside the unpacked minor directory.
     binary_glob: str
-    # Glob matching the stale point releases to remove on upgrade.
     stale_glob: str
-    # Default GODOT_TEMPLATE_FILES when the variable is unset.
     template_glob: str
 
 
@@ -145,9 +141,7 @@ OS_PROFILES = {
     "windows": OSProfile(
         asset_platform="win64.exe",
         binary_platform="win64",
-        # The console-subsystem build is preferred: its stdout survives a pipe,
-        # which the readiness line, --version, and diagnostics depend on. The
-        # GUI build is a fallback.
+        # Console build: its stdout survives a pipe.
         binary_glob="Godot_v*_win64_console.exe",
         stale_glob="Godot_v*_win64*.exe",
         template_glob="templates/version.txt templates/windows_*",
@@ -194,10 +188,7 @@ def load_config(manifest=None):
     target_os = os.environ.get("GODOT_OS") or "linux"
     template_files = os.environ.get("GODOT_TEMPLATE_FILES")
     if template_files is None:
-        # Default to the target OS's templates so a per-OS install stays small;
-        # a caller that needs another platform's templates sets the variable
-        # explicitly (the Windows e2e lane adds the Linux ones the export test
-        # needs).
+        # Default to the target OS's templates; override for cross-platform.
         profile = OS_PROFILES.get(target_os)
         template_files = profile.template_glob if profile else ""
     return Config(
@@ -513,8 +504,7 @@ def install_export_templates(version, expected, config):
     else:
         info("skipping checksum: export templates %s" % version)
 
-    # templates/version.txt is authoritative for the directory name; fall back
-    # to the name derived from the release tag when it is missing.
+    # templates/version.txt names the directory; fall back to the tag.
     staging = Path(tempfile.mkdtemp(prefix=".tpz.", dir=str(config.templates_dir)))
     try:
         with zipfile.ZipFile(zip_path) as archive:
@@ -529,7 +519,6 @@ def install_export_templates(version, expected, config):
                 version_dir = packed
                 dest_dir = config.templates_dir / version_dir
 
-            # Optional member filter; unset means the whole templates/ tree.
             patterns = config.template_files.split()
             if patterns:
                 members = [
@@ -588,8 +577,7 @@ def install_build(minor, version, expected, config):
         asset,
     )
 
-    # Existence is a regular file, not X_OK: the execute bit is meaningless on
-    # Windows, where the engine binary is a .exe.
+    # Regular file, not X_OK: the execute bit is meaningless on Windows.
     if config.force != "1" and installed_binary(dest_dir, config).is_file():
         info("already unpacked: %s" % version)
         return
@@ -616,9 +604,7 @@ def install_build(minor, version, expected, config):
     else:
         info("skipping checksum: %s" % version)
 
-    # Drop any older point release already sitting in the shared minor dir. The
-    # glob follows the target OS, so the Linux and Windows builds of a minor
-    # line can coexist without one pruning the other.
+    # Prune older point releases; the OS-scoped glob leaves other OSes alone.
     stale_glob = profile.stale_glob.format(arch=config.arch)
     keep = {installed_binary(dest_dir, config).name}
     for stale in dest_dir.glob(stale_glob):
@@ -660,8 +646,6 @@ def install_entry(minor, version, expected, templates_expected, config, source):
         expected = expected.lower()
     templates_expected = templates_expected.lower()
 
-    # Fill checksums the manifest did not pin from the release manifest for the
-    # tag, so a minor-only entry can still be verified.
     need_engine = config.verify == "1" and not expected
     need_templates = (
         config.verify == "1"

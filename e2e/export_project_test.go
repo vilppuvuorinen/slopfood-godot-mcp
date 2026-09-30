@@ -8,11 +8,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestExportProjectValidation covers the reference's validation messages.
 func TestExportProjectValidation(t *testing.T) {
 	t.Parallel()
-	// The validation-only cases share one warm project and session; only "not a
-	// project" needs its own non-project directory.
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -38,8 +35,7 @@ func TestExportProjectValidation(t *testing.T) {
 	})
 }
 
-// exportPresetLinux is a complete Linux export preset. Godot requires the
-// filter and options keys to be present; an abbreviated preset is rejected.
+// Godot requires the filter and options keys; an abbreviated preset is rejected.
 const exportPresetLinux = `[preset.0]
 
 name="Linux"
@@ -63,12 +59,9 @@ script_export_mode=2
 binary_format/embed_pck=false
 `
 
-// TestExportProjectTool drives a real export. The real export needs installed
-// export templates (scripts/download-godot.py with GODOT_TEMPLATES=1); a missing
-// template fails the suite rather than passing it.
+// Requires installed export templates (scripts/download-godot.py with GODOT_TEMPLATES=1); a missing template fails the suite.
 func TestExportProjectTool(t *testing.T) {
 	t.Parallel()
-	// Both exports share one warm project and session; the two outputs differ.
 	root, session := seedExportProject(t)
 
 	t.Run("release build", func(t *testing.T) {
@@ -107,16 +100,13 @@ func TestExportProjectTool(t *testing.T) {
 	})
 }
 
-// seedExportProject creates a project with a complete Linux preset and an
-// existing output directory, ready for a real export.
 func seedExportProject(t *testing.T) (string, *mcp.ClientSession) {
 	t.Helper()
 	root := newProject(t)
 	session := connectProject(t, root)
 
 	writeE2EFile(t, filepath.Join(root, "export_presets.cfg"), exportPresetLinux)
-	// Godot packs project resources only, so the project needs at least one
-	// file besides project.godot, and it will not create the output directory.
+	// Godot packs project resources only and will not create the output directory.
 	writeE2EFile(t, filepath.Join(root, "main.gd"), "extends Node\n")
 	if err := os.MkdirAll(filepath.Join(root, "build"), 0o755); err != nil {
 		t.Fatalf("mkdir build: %v", err)

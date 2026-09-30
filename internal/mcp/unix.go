@@ -13,18 +13,15 @@ import (
 	"syscall"
 )
 
-// ListenUnix opens a Unix domain socket Listener at addr. It creates the socket
-// directory 0700, takes a non-blocking exclusive flock on addr+".lock" for the
-// listener's whole life, reclaims a stale socket left by a crash, and creates
-// the socket 0600. The lock is the single-instance rule: a second daemon for the
-// same project fails here instead of stealing the address.
+// Creates the socket directory 0700, takes an exclusive flock on addr+".lock"
+// for the listener's life, reclaims a stale socket, and creates the socket 0600.
 func ListenUnix(addr string) (Listener, error) {
 	dir := filepath.Dir(addr)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("create socket directory %q: %w", dir, err)
 	}
-	// MkdirAll leaves a pre-existing directory's mode alone, so tighten it in
-	// case a previous version created it world-readable.
+	// MkdirAll leaves an existing directory's mode alone, so tighten it in case
+	// an older version created it world-readable.
 	if err := os.Chmod(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("tighten socket directory %q: %w", dir, err)
 	}
@@ -38,23 +35,19 @@ func ListenUnix(addr string) (Listener, error) {
 		_ = lock.Close()
 		return nil, fmt.Errorf("secure lock file for %q: %w", addr, chmodErr)
 	}
-	// The file descriptor is a valid *os.File descriptor; int is its native
-	// syscall type.
 	//nolint:gosec // the fd comes from a live *os.File.
 	if flockErr := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); flockErr != nil {
 		_ = lock.Close()
 		return nil, fmt.Errorf("lock %q: another daemon owns the address: %w", addr, flockErr)
 	}
 
-	// A live listener already owns the path: the lock says we are the only lock
-	// holder, so this is a duplicate bind from the same process, not a stale
-	// socket. Refuse without unlinking, which would strand the live listener.
+	// The lock says we are the only holder, so a live listener means a duplicate
+	// bind from this process; refuse without unlinking, which would strand it.
 	if existing, dialErr := net.Dial("unix", addr); dialErr == nil { //nolint:noctx // the dial is a local liveness probe with no context to carry.
 		_ = existing.Close()
 		_ = lock.Close()
 		return nil, fmt.Errorf("listen unix %q: already listening", addr)
 	}
-	// No live listener, so any file at the path is a leftover from a crash.
 	if removeErr := os.Remove(addr); removeErr != nil && !os.IsNotExist(removeErr) {
 		_ = lock.Close()
 		return nil, fmt.Errorf("remove stale socket %q: %w", addr, removeErr)
@@ -78,8 +71,7 @@ func ListenUnix(addr string) (Listener, error) {
 	return &unixListener{ln: unixLn, lock: lock, path: addr}, nil
 }
 
-// DialUnix connects to a Unix domain socket at addr. A failed dial means no
-// daemon is listening yet, which is what drives the client's spawn path.
+// A failed dial means no daemon is listening yet, which drives the spawn path.
 func DialUnix(addr string) (io.ReadWriteCloser, error) {
 	conn, err := net.Dial("unix", addr) //nolint:noctx // the DialFunc seam carries no context; the dial is local and fast.
 	if err != nil {
@@ -88,10 +80,8 @@ func DialUnix(addr string) (io.ReadWriteCloser, error) {
 	return conn, nil
 }
 
-// unixListener is the Unix-socket backend for the Listener seam. It owns the
-// *net.UnixListener, the exclusive lock file that makes it the single daemon
-// for the address, and the socket path, so Close can unlink the socket and
-// release the lock.
+// Owns the listener, the exclusive lock file, and the socket path so Close can
+// unlink the socket and release the lock.
 type unixListener struct {
 	ln   *net.UnixListener
 	lock *os.File
@@ -100,8 +90,6 @@ type unixListener struct {
 	err  error
 }
 
-// Accept blocks until a client connects, returning the accepted connection with
-// its peer identity available.
 func (l *unixListener) Accept() (Connection, error) {
 	conn, err := l.ln.AcceptUnix()
 	if err != nil {
@@ -110,8 +98,7 @@ func (l *unixListener) Accept() (Connection, error) {
 	return &unixConn{UnixConn: conn}, nil
 }
 
-// Close stops accepting, closes the listener, removes the socket path, and
-// releases the lock. It is idempotent and joins any errors it hits.
+// Idempotent; stops accepting, removes the socket path, and releases the lock.
 func (l *unixListener) Close() error {
 	l.once.Do(func() {
 		var errs []error
@@ -129,13 +116,11 @@ func (l *unixListener) Close() error {
 	return l.err
 }
 
-// unixConn is one accepted Unix-socket connection: the byte stream plus the
-// kernel-reported peer identity, delegated to the per-OS helper.
+// One accepted Unix-socket connection with its kernel-reported peer identity.
 type unixConn struct {
 	*net.UnixConn
 }
 
-// PeerIdentity returns the kernel-reported identity of the connected process.
 func (c *unixConn) PeerIdentity() (PeerIdentity, error) {
 	return peerIdentity(c.UnixConn)
 }

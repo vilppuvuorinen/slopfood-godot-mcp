@@ -6,9 +6,7 @@ import (
 	"testing"
 )
 
-// TestRunOperationAppliesEngineEnv proves the engine environment hook reaches
-// the spawned process, which is how the coverage build keys each server's
-// GDScript hit trace by PID.
+// The engine environment hook must reach the spawned process (a coverage build keys hit traces by PID).
 func TestRunOperationAppliesEngineEnv(t *testing.T) {
 	SetEngineEnv(func(env []string) []string {
 		return append(env, "GDCOVER_FILE=keyed/hits.txt")

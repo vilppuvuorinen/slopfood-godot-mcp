@@ -17,45 +17,31 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// binaryEnv is the path to the server binary under test. Build it before
-// running these tests; the test itself never builds anything.
+// binaryEnv is the path to the server binary under test; build it before running these tests.
 const binaryEnv = "GODOT_MCP_BIN"
 
-// connect starts the server binary with every tool category enabled and returns
-// a connected MCP client session. The server binds to the working directory, so
-// this is only for tools that do not touch a project (version and protocol
-// checks, schema inspection). Project-scoped tests use connectProject.
+// connect binds the server to the working directory; project-scoped tests use connectProject.
 func connect(t *testing.T) *mcp.ClientSession {
 	t.Helper()
 	return connectSession(t, nil, "--enable", "all")
 }
 
-// connectProject starts the server binary bound to root, with every tool
-// category enabled.
 func connectProject(t *testing.T, root string) *mcp.ClientSession {
 	t.Helper()
 	return connectSession(t, nil, "--enable", "all", "--project", root)
 }
 
-// connectProjectWithEnv is connectProject with extra environment entries.
 func connectProjectWithEnv(t *testing.T, root string, env ...string) *mcp.ClientSession {
 	t.Helper()
 	return connectSession(t, env, "--enable", "all", "--project", root)
 }
 
-// connectCategories starts the server with exactly the given --enable value.
 func connectCategories(t *testing.T, categories string) *mcp.ClientSession {
 	t.Helper()
 	return connectSession(t, nil, "--enable", categories)
 }
 
-// newRuntimeDir creates a private XDG_RUNTIME_DIR for one e2e session (or a
-// shared one several sessions dial into) and removes it when the test ends.
-//
-// It is a short-prefixed MkdirTemp under the system temp dir rather than
-// t.TempDir: a Unix socket path is capped near 108 bytes, and t.TempDir embeds
-// the (often long) test name, which can push the derived socket path over the
-// limit and make the daemon fail to bind.
+// newRuntimeDir uses a short-prefixed MkdirTemp rather than t.TempDir because Unix socket paths are capped near 108 bytes.
 func newRuntimeDir(t *testing.T) string {
 	t.Helper()
 	runtimeDir, err := os.MkdirTemp("", "slopfood-rt-")
@@ -66,12 +52,7 @@ func newRuntimeDir(t *testing.T) string {
 	return runtimeDir
 }
 
-// sessionEnv returns the child environment and argument list for one e2e
-// session bound to runtimeDir. A private runtime dir per session keeps sessions
-// with different --enable values from sharing a reused per-project daemon and
-// keeps a stale daemon from a previous run from being picked up. It also appends
-// a short idle timeout, so the daemon a session spawns exits soon after the
-// session closes. The caller's args and env slices are not mutated.
+// A private runtime dir keeps sessions from sharing a reused daemon across --enable values or runs; a short idle timeout lets the spawned daemon exit soon.
 func sessionEnv(t *testing.T, runtimeDir string, env, args []string) ([]string, []string) {
 	t.Helper()
 	childEnv := slices.DeleteFunc(slices.Clone(os.Environ()), func(entry string) bool {
@@ -85,8 +66,6 @@ func sessionEnv(t *testing.T, runtimeDir string, env, args []string) ([]string, 
 	return childEnv, childArgs
 }
 
-// connectSession starts the server binary with extra environment entries and
-// command-line arguments and returns a connected MCP client session.
 func connectSession(t *testing.T, env []string, args ...string) *mcp.ClientSession {
 	t.Helper()
 
@@ -112,8 +91,6 @@ func connectSession(t *testing.T, env []string, args ...string) *mcp.ClientSessi
 	return session
 }
 
-// connectWithProtocolVersion starts the server binary and connects with an
-// explicit protocol version so negotiation can be asserted.
 func connectWithProtocolVersion(t *testing.T, protocolVersion string) *mcp.ClientSession {
 	t.Helper()
 
@@ -138,18 +115,9 @@ func connectWithProtocolVersion(t *testing.T, protocolVersion string) *mcp.Clien
 	return session
 }
 
-// defaultInRuntimeIdleTimeout is the --idle-timeout connectInRuntime appends
-// when the caller does not pass one. A test that needs a different grace period
-// passes its own --idle-timeout in args.
 const defaultInRuntimeIdleTimeout = "2s"
 
-// connectInRuntime starts the server binary with XDG_RUNTIME_DIR set to
-// runtimeDir, so several callers can point at one shared daemon, and returns the
-// connected session. Unlike connectSession it returns an error instead of
-// failing the test, so a test can start several concurrently and join their
-// results. A successful session is closed by t.Cleanup; the close error is
-// ignored because a test that kills the daemon behind the session makes the
-// child exit non-zero.
+// connectInRuntime returns an error instead of failing so a test can start several sessions concurrently; the ignored close error covers a test that kills the daemon.
 func connectInRuntime(t *testing.T, runtimeDir string, args ...string) (*mcp.ClientSession, error) {
 	t.Helper()
 
@@ -180,8 +148,6 @@ func connectInRuntime(t *testing.T, runtimeDir string, args ...string) (*mcp.Cli
 	return session, nil
 }
 
-// hasIdleTimeout reports whether args already carry an --idle-timeout flag, so
-// connectInRuntime does not override a caller's value.
 func hasIdleTimeout(args []string) bool {
 	for _, arg := range args {
 		if arg == "--idle-timeout" || arg == "-idle-timeout" ||
@@ -192,17 +158,10 @@ func hasIdleTimeout(args []string) bool {
 	return false
 }
 
-// daemonWaitTimeout bounds the polling helpers that watch detached daemons.
 const daemonWaitTimeout = 15 * time.Second
 
-// daemonPollInterval is how long waitForDaemon sleeps between daemonPIDs polls.
-// Process enumeration is expensive on Windows (a CIM query), so the interval is
-// widened there via the build-tagged override; elsewhere it is short.
 var daemonPollInterval = 100 * time.Millisecond
 
-// waitForDaemon polls until project has exactly want detached daemons, then
-// returns; it fails the test if the count never reaches want before the
-// deadline.
 func waitForDaemon(t *testing.T, project string, want int) {
 	t.Helper()
 	deadline := time.Now().Add(daemonWaitTimeout)
@@ -217,38 +176,17 @@ func waitForDaemon(t *testing.T, project string, want int) {
 	t.Fatalf("daemon count = %d %v, want %d for project %s", len(got), got, want, project)
 }
 
-// waitForNoDaemon polls until project has no detached daemon left.
 func waitForNoDaemon(t *testing.T, project string) {
 	t.Helper()
 	waitForDaemon(t, project, 0)
 }
 
-// daemonExitSeen tracks, per test and project, whether the daemon-exit wait has
-// already been registered. A project that several sessions connect to registers
-// the wait only once, before the first session's close cleanup, so it runs after
-// every session has closed.
 var (
 	daemonExitMu   sync.Mutex
 	daemonExitSeen = map[*testing.T]map[string]struct{}{}
 )
 
-// registerDaemonExitWait registers a cleanup that waits for every detached
-// daemon bound to project to exit before the test's project directory is
-// removed. It is called from connectSession and connectInRuntime, after the
-// project directory's t.TempDir cleanup and before the session's close cleanup,
-// so LIFO runs it after every session has closed and before the directory is
-// removed.
-//
-// A detached daemon keeps its engine running the project until the idle grace
-// expires and the engine quits, longer than the test's own cleanup. The editor
-// engine rewrites .godot/editor while it runs, so on every platform RemoveAll
-// can catch that directory mid-repopulation: its unlinkat(AT_REMOVEDIR) then
-// fails with ENOTEMPTY. Off Windows t.TempDir's removeAll does not retry at all,
-// and on Windows it retries only sharing violations for about two seconds,
-// shorter than the daemon's idle grace plus its graceful engine quit. Polling
-// daemonPIDs until the daemon is gone is the portable fix; because the daemon
-// only exits after its engine has been reaped, it also covers the Windows lock
-// case.
+// registerDaemonExitWait waits for detached daemons to exit before removing the project dir: the engine rewrites .godot/editor while running, so RemoveAll can hit ENOTEMPTY.
 func registerDaemonExitWait(t *testing.T, project string) {
 	t.Helper()
 	if project == "" {
@@ -278,8 +216,6 @@ func registerDaemonExitWait(t *testing.T, project string) {
 	})
 }
 
-// projectArg returns the --project value in args, or "" when the session binds
-// the working directory instead.
 func projectArg(args []string) string {
 	for i, arg := range args {
 		if arg == "--project" && i+1 < len(args) {
@@ -292,8 +228,6 @@ func projectArg(args []string) string {
 	return ""
 }
 
-// listToolsOnce lists a session's tools once and indexes them by name, so a
-// table test can assert many tools without one ListTools round trip per tool.
 func listToolsOnce(t *testing.T, session *mcp.ClientSession) map[string]*mcp.Tool {
 	t.Helper()
 	res, err := session.ListTools(context.Background(), nil)
@@ -307,7 +241,6 @@ func listToolsOnce(t *testing.T, session *mcp.ClientSession) map[string]*mcp.Too
 	return tools
 }
 
-// findTool returns a listed tool by name, failing when it is absent.
 func findTool(t *testing.T, session *mcp.ClientSession, name string) *mcp.Tool {
 	t.Helper()
 	res, err := session.ListTools(context.Background(), nil)
@@ -323,7 +256,6 @@ func findTool(t *testing.T, session *mcp.ClientSession, name string) *mcp.Tool {
 	return nil
 }
 
-// requireToolAbsent fails when a listed tool is present.
 func requireToolAbsent(t *testing.T, session *mcp.ClientSession, name string) {
 	t.Helper()
 	res, err := session.ListTools(context.Background(), nil)
@@ -337,7 +269,6 @@ func requireToolAbsent(t *testing.T, session *mcp.ClientSession, name string) {
 	}
 }
 
-// callTool invokes a tool over the session and fails only on transport errors.
 func callTool(t *testing.T, session *mcp.ClientSession, name string, args map[string]any) *mcp.CallToolResult {
 	t.Helper()
 	res, err := session.CallTool(context.Background(), &mcp.CallToolParams{Name: name, Arguments: args})
@@ -347,8 +278,6 @@ func callTool(t *testing.T, session *mcp.ClientSession, name string, args map[st
 	return res
 }
 
-// requireToolText calls a tool and fails when it reports an error, returning
-// the first text content block.
 func requireToolText(t *testing.T, session *mcp.ClientSession, name string, args map[string]any) string {
 	t.Helper()
 	res := callTool(t, session, name, args)
@@ -358,7 +287,6 @@ func requireToolText(t *testing.T, session *mcp.ClientSession, name string, args
 	return firstText(t, res)
 }
 
-// requireToolError calls a tool and asserts it fails with exactly want.
 func requireToolError(t *testing.T, session *mcp.ClientSession, name string, args map[string]any, want string) {
 	t.Helper()
 	res := callTool(t, session, name, args)
@@ -370,7 +298,6 @@ func requireToolError(t *testing.T, session *mcp.ClientSession, name string, arg
 	}
 }
 
-// firstText returns the first text content block of a tool result.
 func firstText(t *testing.T, res *mcp.CallToolResult) string {
 	t.Helper()
 	if len(res.Content) == 0 {
@@ -383,7 +310,6 @@ func firstText(t *testing.T, res *mcp.CallToolResult) string {
 	return text.Text
 }
 
-// requirePrefix fails unless got starts with want.
 func requirePrefix(t *testing.T, got, want string) {
 	t.Helper()
 	if !strings.HasPrefix(got, want) {
@@ -391,7 +317,6 @@ func requirePrefix(t *testing.T, got, want string) {
 	}
 }
 
-// requireContains fails unless s contains every want.
 func requireContains(t *testing.T, s string, wants ...string) {
 	t.Helper()
 	for _, want := range wants {
@@ -401,7 +326,6 @@ func requireContains(t *testing.T, s string, wants ...string) {
 	}
 }
 
-// requireNotContains fails when s contains unwanted.
 func requireNotContains(t *testing.T, s, unwanted string) {
 	t.Helper()
 	if strings.Contains(s, unwanted) {
@@ -409,8 +333,6 @@ func requireNotContains(t *testing.T, s, unwanted string) {
 	}
 }
 
-// godotMap asserts value is a JSON object and returns it, optionally failing
-// when a required field is missing or the wrong type.
 func godotMap(t *testing.T, value any) map[string]any {
 	t.Helper()
 	obj, ok := value.(map[string]any)
@@ -420,17 +342,12 @@ func godotMap(t *testing.T, value any) map[string]any {
 	return obj
 }
 
-// toolSchema is the subset of a tool's JSON schema the tests assert against.
 type toolSchema struct {
 	Type       string                    `json:"type"`
 	Required   []string                  `json:"required"`
 	Properties map[string]map[string]any `json:"properties"`
 }
 
-// requireSchema looks a listed tool up in tools by name, checks its
-// description, and decodes its input schema, asserting the top-level object
-// type along the way. Reading from a shared tool map lets one ListTools call
-// back many lookups.
 func requireSchema(t *testing.T, tools map[string]*mcp.Tool, name, description string) toolSchema {
 	t.Helper()
 	tool, ok := tools[name]
@@ -455,7 +372,6 @@ func requireSchema(t *testing.T, tools map[string]*mcp.Tool, name, description s
 	return schema
 }
 
-// requireRequired asserts the schema's required fields, in order.
 func (s toolSchema) requireRequired(t *testing.T, want ...string) {
 	t.Helper()
 	if got := strings.Join(s.Required, ","); got != strings.Join(want, ",") {
@@ -463,7 +379,6 @@ func (s toolSchema) requireRequired(t *testing.T, want ...string) {
 	}
 }
 
-// requireProps asserts every key is declared as a property.
 func (s toolSchema) requireProps(t *testing.T, keys ...string) {
 	t.Helper()
 	for _, key := range keys {
@@ -473,7 +388,6 @@ func (s toolSchema) requireProps(t *testing.T, keys ...string) {
 	}
 }
 
-// requireStringProps asserts every key is a string property.
 func (s toolSchema) requireStringProps(t *testing.T, keys ...string) {
 	t.Helper()
 	for _, key := range keys {
@@ -481,7 +395,6 @@ func (s toolSchema) requireStringProps(t *testing.T, keys ...string) {
 	}
 }
 
-// requireType asserts a property has the given JSON type.
 func (s toolSchema) requireType(t *testing.T, key, want string) {
 	t.Helper()
 	if got := s.Properties[key]["type"]; got != want {
@@ -489,7 +402,6 @@ func (s toolSchema) requireType(t *testing.T, key, want string) {
 	}
 }
 
-// requirePropCount asserts the schema declares exactly n properties.
 func (s toolSchema) requirePropCount(t *testing.T, n int) {
 	t.Helper()
 	if len(s.Properties) != n {
@@ -497,14 +409,11 @@ func (s toolSchema) requirePropCount(t *testing.T, n int) {
 	}
 }
 
-// seedProject creates a directory containing a minimal project.godot.
 func seedProject(t *testing.T, dir string) {
 	t.Helper()
 	writeE2EFile(t, filepath.Join(dir, "project.godot"), "config_version=5\n")
 }
 
-// newProject creates a temp directory containing a minimal project.godot and
-// returns it, ready to be bound to a server with connectProject.
 func newProject(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
@@ -512,9 +421,6 @@ func newProject(t *testing.T) string {
 	return root
 }
 
-// seedScene creates scenePath in a fresh project, starts a server bound to that
-// project, and returns the project root and its session. It fails when
-// create_scene fails, which usually means Godot is unavailable.
 func seedScene(t *testing.T, scenePath string, rootNodeType ...string) (string, *mcp.ClientSession) {
 	t.Helper()
 	root := newProject(t)
@@ -523,9 +429,6 @@ func seedScene(t *testing.T, scenePath string, rootNodeType ...string) (string, 
 	return root, session
 }
 
-// createScene creates scenePath in an existing session, so several tests can
-// share one warm project and engine instead of booting their own. Use unique
-// paths per test when the scenes outlive the call.
 func createScene(t *testing.T, session *mcp.ClientSession, scenePath string, rootNodeType ...string) {
 	t.Helper()
 	args := map[string]any{"scenePath": scenePath}
@@ -539,9 +442,7 @@ func createScene(t *testing.T, session *mcp.ClientSession, scenePath string, roo
 	requirePrefix(t, firstText(t, res), "Scene created successfully at: "+scenePath)
 }
 
-// runGit runs a git subcommand in dir, failing the test on error. Identity and
-// config are pinned so the suite does not depend on the developer's git
-// environment.
+// Identity and config are pinned so the suite does not depend on the developer's git environment.
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	base := make([]string, 0, 4+len(args))
@@ -559,8 +460,6 @@ func runGit(t *testing.T, dir string, args ...string) {
 	}
 }
 
-// assertNonEmptyFile fails unless path is a regular file with content, so a
-// tool that reports success without writing an artifact fails the test.
 func assertNonEmptyFile(t *testing.T, path string) {
 	t.Helper()
 	info, err := os.Stat(path)
@@ -572,7 +471,6 @@ func assertNonEmptyFile(t *testing.T, path string) {
 	}
 }
 
-// readFile returns the contents of a file, failing when it cannot be read.
 func readFile(t *testing.T, path string) string {
 	t.Helper()
 	data, err := os.ReadFile(path)
@@ -582,14 +480,11 @@ func readFile(t *testing.T, path string) string {
 	return string(data)
 }
 
-// writeE2EFile writes content to path, creating parent directories as needed.
 func writeE2EFile(t *testing.T, path, content string) {
 	t.Helper()
 	writeFileMode(t, path, content, 0o644)
 }
 
-// writeFileMode writes content to path with an explicit mode, creating parent
-// directories as needed.
 func writeFileMode(t *testing.T, path, content string, mode os.FileMode) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

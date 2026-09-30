@@ -1,5 +1,3 @@
-// Package godotops embeds the GDScript bridge the scene and UID tools drive
-// under `godot --headless --script`, and materializes it for Godot at runtime.
 package godotops
 
 import (
@@ -39,36 +37,17 @@ var (
 	probeErr  error
 )
 
-// userCacheDir is os.UserCacheDir, overridable in tests to keep the shared
-// cache out of the real user cache.
 var userCacheDir = os.UserCacheDir
 
-// ValidateHitsEnv names the environment variable the instrumented validate
-// script reads for its hit trace. OperationsHitsEnv is the same for the
-// operations bridge. They are distinct so that one engine run can attribute
-// hits to the script that emitted them; the coverage build bakes each name into
-// its script's prologue, `make e2e-cover` sets both on every spawned server,
-// and the server keys each value by its own PID so parallel servers never race
-// on one trace.
 const (
 	OperationsHitsEnv = "GDCOVER_FILE"
 	ValidateHitsEnv   = "GDCOVER_VALIDATE_FILE"
 )
 
-// instrumentBridge, when non-nil, rewrites the embedded operations script
-// before it is materialized. A coverage build (the `gdcover` build tag) sets it
-// so the bridge reports line hits; normal builds leave it nil, keeping the
-// instrumenter out of the shipped binary.
 var instrumentBridge func(string) (string, error)
 
-// instrumentValidate, when non-nil, rewrites the embedded validate script
-// before it is materialized, mirroring instrumentBridge for the second embedded
-// script.
 var instrumentValidate func(string) (string, error)
 
-// OperationsScript materializes the embedded godot_operations.gd to a file and
-// returns its path. Godot needs a real path for --script, and the binary is
-// dependency-free so it cannot ship a loose file.
 func OperationsScript() (string, error) {
 	once.Do(func() {
 		content := operationsScript
@@ -85,9 +64,6 @@ func OperationsScript() (string, error) {
 	return path, err
 }
 
-// ValidateScript materializes the embedded validate_script.gd to a file and
-// returns its path. Like OperationsScript, Godot needs a real path for
-// --script.
 func ValidateScript() (string, error) {
 	validateOnce.Do(func() {
 		content := validateScript
@@ -104,11 +80,6 @@ func ValidateScript() (string, error) {
 	return validatePath, validateErr
 }
 
-// ProjectProbeScript materializes the embedded project_probe.gd and returns its
-// path. The probe boots the engine against a project and quits immediately, so
-// project.godot is parsed during startup and the caller can read the engine's
-// stderr and exit code. It exists because validate_project must not go through
-// the operations bridge, which now only speaks its socket transport.
 func ProjectProbeScript() (string, error) {
 	probeOnce.Do(func() {
 		probePath, probeErr = materialize("project_probe", projectProbeScript)
@@ -116,15 +87,6 @@ func ProjectProbeScript() (string, error) {
 	return probePath, probeErr
 }
 
-// materialize writes content to a content-addressed file in the shared script
-// cache and returns its path. Unlike a per-process temp dir the path is stable
-// across processes, so concurrent servers reuse a single copy instead of each
-// leaking its own, and different embedded script versions land in different
-// files rather than overwriting a running server's script.
-//
-// The install is atomic: content is written to a temp file and renamed into
-// place, so a crash can never expose a partial script, and a concurrent writer
-// racing to the same bytes is harmless.
 func materialize(name, content string) (string, error) {
 	dir, err := cacheDir()
 	if err != nil {
@@ -158,8 +120,7 @@ func materialize(name, content string) (string, error) {
 		return "", fmt.Errorf("write %s script: %w", name, err)
 	}
 	if err := os.Rename(tmpName, dst); err != nil {
-		// A concurrent server may have won the race; on Windows that makes
-		// rename fail rather than overwrite. A complete file is a success.
+		// On Windows a lost rename race fails instead of overwriting.
 		if complete(dst, content) {
 			os.Remove(tmpName)
 			return dst, nil
@@ -170,19 +131,11 @@ func materialize(name, content string) (string, error) {
 	return dst, nil
 }
 
-// complete reports whether path already holds exactly content. Content
-// addressing guarantees a present file was renamed into place whole, so a size
-// match is enough to treat it as complete.
 func complete(path, content string) bool {
 	info, err := os.Stat(path)
 	return err == nil && info.Mode().IsRegular() && info.Size() == int64(len(content))
 }
 
-// userToken returns a short, stable, filesystem-safe token scoping the temp
-// fallback cache to the current user. os.Getuid is Unix-only, so the token is a
-// short hash of the home directory on every platform: it is unique enough to
-// keep two users' temp caches apart without the home path's separators and
-// length.
 func userToken() string {
 	home, err := os.UserHomeDir()
 	if err != nil || home == "" {
@@ -192,11 +145,6 @@ func userToken() string {
 	return hex.EncodeToString(sum[:6])
 }
 
-// cacheDir returns the shared, per-user directory that holds materialized
-// scripts. It is stable across processes, so the cache never grows per server,
-// and its contents are only ever added, never removed. That makes it safe for
-// instances to share, including when one exits uncleanly: no server can delete
-// or corrupt a file another is reading.
 func cacheDir() (string, error) {
 	dirs := make([]string, 0, 2)
 	if base, err := userCacheDir(); err == nil {

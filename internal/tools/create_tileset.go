@@ -8,17 +8,14 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-// tilesetShapeNames, tilesetLayoutNames, and tilesetOffsetAxisNames are the
-// tool contract's names for the TileSet engine enums, shared with the bridge in
-// godot_operations.gd.
+// tilesetShapeNames, tilesetLayoutNames, and tilesetOffsetAxisNames are shared
+// with the engine bridge in godot_operations.gd.
 var (
 	tilesetShapeNames      = []string{"square", "isometric", "half_offset_square", "hexagon"}
 	tilesetLayoutNames     = []string{"stacked", "stacked_offset", "stairs_right", "stairs_down", "diamond_right", "diamond_down"}
 	tilesetOffsetAxisNames = []string{"horizontal", "vertical"}
 )
 
-// tilesetPropertiesSchema is the input schema shared by create_tileset and
-// modify_tileset: the tileset-level settings both tools accept.
 func tilesetPropertiesSchema() map[string]any {
 	return map[string]any{
 		"tileSize": godotValueSchema("Tile size in pixels as a Vector2i"),
@@ -100,7 +97,6 @@ func handleCreateTileset(ctx Context, raw json.RawMessage) (any, error) {
 	})
 }
 
-// addTilesetProperties copies the tileset-level fields onto params when present.
 func addTilesetProperties(params map[string]any, tileSize any, tileShape, tileLayout, tileOffsetAxis string, uvClipping *bool) {
 	if tileSize != nil {
 		params["tileSize"] = tileSize

@@ -8,14 +8,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// testTilesetPayload is the subset of read_tileset's payload the tests use.
 type testTilesetPayload struct {
 	Path      string           `json:"path"`
 	TileShape string           `json:"tileShape"`
 	Sources   []map[string]any `json:"sources"`
 }
 
-// readTilesetPayload calls read_tileset on resourcePath and decodes its payload.
 func readTilesetPayload(t *testing.T, session *mcp.ClientSession, resourcePath string) testTilesetPayload {
 	t.Helper()
 	text := requireToolText(t, session, "read_tileset", map[string]any{"resourcePath": resourcePath})
@@ -26,8 +24,6 @@ func readTilesetPayload(t *testing.T, session *mcp.ClientSession, resourcePath s
 	return payload
 }
 
-// tileAlternatives returns the alternatives of the first tile of the first
-// source in a tileset payload.
 func tileAlternatives(t *testing.T, payload testTilesetPayload) []map[string]any {
 	t.Helper()
 	if len(payload.Sources) == 0 {
@@ -53,9 +49,7 @@ func tileAlternatives(t *testing.T, payload testTilesetPayload) []map[string]any
 	return out
 }
 
-// requireExtraAlternative returns the id of the first non-base alternative on
-// the first tile. The base tile is alternative 0, so a freshly added
-// alternative carries a positive id.
+// The base tile is alternative 0, so a fresh alternative carries a positive id.
 func requireExtraAlternative(t *testing.T, payload testTilesetPayload) int {
 	t.Helper()
 	for _, alt := range tileAlternatives(t, payload) {
@@ -67,7 +61,6 @@ func requireExtraAlternative(t *testing.T, payload testTilesetPayload) int {
 	return 0
 }
 
-// seedAtlasTexture writes a Texture2D resource the atlas source can reference.
 // A GradientTexture2D needs no import step, unlike a raw PNG.
 func seedAtlasTexture(t *testing.T, root string) {
 	t.Helper()
@@ -75,7 +68,6 @@ func seedAtlasTexture(t *testing.T, root string) {
 		"[gd_resource type=\"GradientTexture2D\" format=3]\n\n[resource]\nwidth = 64\nheight = 64\n")
 }
 
-// setupTestTileSet creates resourcePath with atlas source 0 holding one tile.
 func setupTestTileSet(t *testing.T, session *mcp.ClientSession, resourcePath string) {
 	t.Helper()
 	requireToolText(t, session, "create_tileset", map[string]any{
@@ -96,11 +88,8 @@ func setupTestTileSet(t *testing.T, session *mcp.ClientSession, resourcePath str
 	})
 }
 
-// TestTilesetTools drives the real tileset tools against Godot.
 func TestTilesetTools(t *testing.T) {
 	t.Parallel()
-	// One warm project and session serve every subtest; each builds its own
-	// tileset (and scene where needed) under a distinct path.
 	root := newProject(t)
 	session := connectProject(t, root)
 	seedAtlasTexture(t, root)
@@ -257,11 +246,8 @@ func TestTilesetTools(t *testing.T) {
 	})
 }
 
-// TestTilesetErrors covers the validation and engine failure paths.
 func TestTilesetErrors(t *testing.T) {
 	t.Parallel()
-	// The validation-only cases need no project, so they share one engine-free
-	// session.
 	validationSession := connect(t)
 	t.Run("missing params", func(t *testing.T) {
 		requireToolError(t, validationSession, "create_tileset", map[string]any{}, "resourcePath is required.")
@@ -274,7 +260,6 @@ func TestTilesetErrors(t *testing.T) {
 		}, "resourcePath, sourceId, and atlasCoords are required.")
 	})
 
-	// The three engine-backed cases share one warm project and session.
 	root := newProject(t)
 	session := connectProject(t, root)
 	seedAtlasTexture(t, root)
@@ -315,7 +300,6 @@ func TestTilesetErrors(t *testing.T) {
 	})
 }
 
-// testTilemapPayload is the subset of read_tilemap's payload the tests use.
 type testTilemapPayload struct {
 	ScenePath string           `json:"scenePath"`
 	NodePath  string           `json:"nodePath"`
@@ -323,7 +307,6 @@ type testTilemapPayload struct {
 	UsedCells []map[string]any `json:"usedCells"`
 }
 
-// readTilemapPayload calls read_tilemap on scenePath and decodes its payload.
 func readTilemapPayload(t *testing.T, session *mcp.ClientSession, scenePath string) testTilemapPayload {
 	t.Helper()
 	text := requireToolText(t, session, "read_tilemap", map[string]any{
@@ -337,8 +320,6 @@ func readTilemapPayload(t *testing.T, session *mcp.ClientSession, scenePath stri
 	return payload
 }
 
-// setupTilemapScene creates scenePath with a Ground TileMapLayer bound to
-// tileSetPath, the tileset built by setupTestTileSet.
 func setupTilemapScene(t *testing.T, session *mcp.ClientSession, scenePath, tileSetPath string) {
 	t.Helper()
 	requireToolText(t, session, "create_scene", map[string]any{"scenePath": scenePath, "rootNodeType": "Node2D"})
@@ -354,11 +335,8 @@ func setupTilemapScene(t *testing.T, session *mcp.ClientSession, scenePath, tile
 	})
 }
 
-// TestReadTilemapErrors covers the read tool's engine failure paths.
 func TestReadTilemapErrors(t *testing.T) {
 	t.Parallel()
-	// The two engine-backed cases share one warm session, each with its own
-	// scene; the missing-scene case fails before reaching the engine.
 	root := newProject(t)
 	session := connectProject(t, root)
 

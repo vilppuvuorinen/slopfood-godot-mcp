@@ -41,9 +41,6 @@ func _init():
 	}
 }
 
-// TestInstrumentSkipsClassLevelAndAnnotations guards the helper's nesting: the
-// injected call is a member of the script, so class-level declarations and
-// annotations that own a declaration must not carry one.
 func TestInstrumentSkipsClassLevelAndAnnotations(t *testing.T) {
 	src := `class_name Foo
 extends Node
@@ -82,9 +79,6 @@ func _ready():
 	}
 }
 
-// TestInstrumentGroupsContinuedLines checks that a statement split across lines
-// is counted once, at its first line, and that no hit is injected inside a
-// bracket or backslash continuation.
 func TestInstrumentGroupsContinuedLines(t *testing.T) {
 	src := `extends Node
 
@@ -134,9 +128,6 @@ func TestInstrumentUsesTabsWhenScriptDoes(t *testing.T) {
 	}
 }
 
-// TestInstrumentEnvNamesItsOutputVariable checks that a custom hit-output
-// variable is baked into the injected helper, so several instrumented scripts
-// writing in the same run keep separate traces. Instrument keeps the default.
 func TestInstrumentEnvNamesItsOutputVariable(t *testing.T) {
 	src := []byte("extends Node\n\nfunc _init():\n    pass\n")
 

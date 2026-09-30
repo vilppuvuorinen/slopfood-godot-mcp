@@ -6,9 +6,6 @@ import (
 	"testing"
 )
 
-// TestProjectHashDeterministic asserts the project hash is stable across calls
-// and distinct between projects, including for an uncleaned path that cleans to
-// the same root.
 func TestProjectHashDeterministic(t *testing.T) {
 	first := ProjectHash("/tmp/project")
 	if again := ProjectHash("/tmp/project"); first != again {
@@ -25,8 +22,6 @@ func TestProjectHashDeterministic(t *testing.T) {
 	}
 }
 
-// TestSocketAndLogPaths asserts both paths share the runtime directory and
-// project hash and carry the expected suffix.
 func TestSocketAndLogPaths(t *testing.T) {
 	runtimeDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
@@ -67,10 +62,6 @@ func TestSocketAndLogPaths(t *testing.T) {
 	}
 }
 
-// TestEngineSocketPath asserts the engine socket shares the runtime directory
-// and project hash, carries the .engine.sock suffix rather than the daemon's
-// .sock, stays distinct across projects, and fits under the Linux sun_path
-// limit when the runtime directory is short.
 func TestEngineSocketPath(t *testing.T) {
 	runtimeDir := "/tmp/sg-runtime"
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
@@ -114,7 +105,6 @@ func TestEngineSocketPath(t *testing.T) {
 	}
 }
 
-// TestRuntimeDirHonorsXDG asserts XDG_RUNTIME_DIR wins when it is set.
 func TestRuntimeDirHonorsXDG(t *testing.T) {
 	runtimeDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", runtimeDir)
@@ -128,8 +118,6 @@ func TestRuntimeDirHonorsXDG(t *testing.T) {
 	}
 }
 
-// TestRuntimeDirFallsBackToCache asserts the user cache directory is used when
-// XDG_RUNTIME_DIR is unset.
 func TestRuntimeDirFallsBackToCache(t *testing.T) {
 	cacheDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", "")

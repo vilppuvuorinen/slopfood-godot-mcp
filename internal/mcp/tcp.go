@@ -16,24 +16,17 @@ import (
 	"time"
 )
 
-// The token prelude is one newline-delimited JSON line the client sends
-// immediately after dialing and the daemon reads before it starts the MCP scan.
-// It is a transport prelude, not an MCP frame, so the MCP stream never sees it.
-// The read is bounded in both time and bytes so a silent client cannot grow the
-// buffer without bound or pin an accept indefinitely.
+// One newline-delimited JSON line sent before the MCP stream; the read is
+// bounded in time and bytes so a silent client cannot pin an accept.
 const (
 	maxTokenPreludeBytes = 4096
 	tokenReadDeadline    = 5 * time.Second
 )
 
-// errTCPTokenRejected reports that a connection's token prelude was missing,
-// malformed, or did not match the daemon's token.
 var errTCPTokenRejected = errors.New("tcp: token rejected")
 
-// endpointRecord is the JSON the daemon publishes after binding and the client
-// reads to dial. It carries the per-spawn token, so the endpoint file must live
-// in the same private runtime directory the Unix socket uses and be written
-// 0600.
+// Published by the daemon and read by the client; carries the token, so it must
+// live in a private directory and be written 0600.
 type endpointRecord struct {
 	Transport string `json:"transport"`
 	Host      string `json:"host"`
@@ -41,9 +34,8 @@ type endpointRecord struct {
 	Token     string `json:"token"`
 }
 
-// ensureEndpointDir creates path's parent directory 0700 and tightens a
-// pre-existing one, mirroring ListenUnix's directory gate: the endpoint file
-// carries the token, so its directory must be private.
+// Creates path's parent 0700 and tightens an existing one, since the endpoint
+// carries the token.
 func ensureEndpointDir(path string) error {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
@@ -55,12 +47,8 @@ func ensureEndpointDir(path string) error {
 	return nil
 }
 
-// TCPListener is the loopback-TCP backend for the Listener and ListenFunc seams.
-// It binds 127.0.0.1:0, generates the per-spawn token, and publishes the
-// endpoint record atomically. It owns the exclusive lock and the endpoint file:
-// Close closes the listener, removes the endpoint file while the lock is still
-// held, then releases the lock, so cleanup has a single owner and no successor
-// can lose the file it just republished.
+// Loopback-TCP backend: binds 127.0.0.1:0, generates the token, and publishes
+// the endpoint record; Close removes the file before releasing the lock.
 type TCPListener struct {
 	ln           net.Listener
 	endpointPath string
@@ -70,13 +58,8 @@ type TCPListener struct {
 	err          error
 }
 
-// ListenTCP opens a loopback-TCP Listener, takes ownership of lock, and
-// publishes endpointPath. addr is ignored: the transport always binds an
-// ephemeral port on 127.0.0.1 so the endpoint record, not a fixed port, is the
-// rendezvous. It creates the runtime directory 0700 and writes the endpoint
-// 0600, mirroring ListenUnix's directory gate. The caller opens the lock
-// separately (OpenTCPLock) so the OS-specific handle lives behind its own
-// build-tagged helper.
+// Binds an ephemeral 127.0.0.1 port and publishes endpointPath; addr is
+// ignored. The caller opens the lock separately so the OS handle stays build-tagged.
 func ListenTCP(_ string, endpointPath string, lock io.Closer) (*TCPListener, error) {
 	if err := ensureEndpointDir(endpointPath); err != nil {
 		return nil, err
@@ -104,8 +87,6 @@ func ListenTCP(_ string, endpointPath string, lock io.Closer) (*TCPListener, err
 	return &TCPListener{ln: ln, endpointPath: endpointPath, lock: lock, token: token}, nil
 }
 
-// Port reports the bound ephemeral port, so an endpoint factory can log or
-// verify it without naming the listener type.
 func (l *TCPListener) Port() int {
 	if addr, ok := l.ln.Addr().(*net.TCPAddr); ok {
 		return addr.Port
@@ -113,8 +94,6 @@ func (l *TCPListener) Port() int {
 	return 0
 }
 
-// Accept blocks until a client connects, returning the connection with its
-// token pre-auth available.
 func (l *TCPListener) Accept() (Connection, error) {
 	conn, err := l.ln.Accept()
 	if err != nil {
@@ -123,9 +102,7 @@ func (l *TCPListener) Accept() (Connection, error) {
 	return &tcpConn{Conn: conn, reader: bufio.NewReader(conn), wantToken: l.token}, nil
 }
 
-// Close stops accepting, closes the listener, removes the endpoint file while
-// the lock is still held, then releases the lock. It is idempotent and joins
-// any errors it hits.
+// Idempotent; removes the endpoint file while the lock is still held, then releases it.
 func (l *TCPListener) Close() error {
 	l.once.Do(func() {
 		var errs []error
@@ -145,9 +122,8 @@ func (l *TCPListener) Close() error {
 	return l.err
 }
 
-// tcpConn is one accepted TCP connection: the byte stream plus the bounded
-// token pre-auth. The buffered reader is shared between Authenticate and Read,
-// so any MCP bytes already buffered behind the token line are not dropped.
+// The buffered reader is shared between Authenticate and Read, so MCP bytes
+// buffered behind the token line are not dropped.
 type tcpConn struct {
 	net.Conn
 	reader        *bufio.Reader
@@ -155,7 +131,6 @@ type tcpConn struct {
 	authenticated bool
 }
 
-// Read drains the shared buffered reader, which Authenticate primed.
 func (c *tcpConn) Read(p []byte) (int, error) {
 	n, err := c.reader.Read(p)
 	if err != nil {
@@ -164,9 +139,8 @@ func (c *tcpConn) Read(p []byte) (int, error) {
 	return n, nil
 }
 
-// Authenticate consumes the token prelude: one newline-delimited JSON line read
-// under a deadline and a fixed byte cap. It returns errTCPTokenRejected for a
-// missing, malformed, or mismatched token, and a read error on failure.
+// Reads one bounded, deadlined token prelude line; returns errTCPTokenRejected
+// for a missing, malformed, or mismatched token.
 func (c *tcpConn) Authenticate() error {
 	_ = c.SetReadDeadline(time.Now().Add(tokenReadDeadline))
 	defer func() { _ = c.SetReadDeadline(time.Time{}) }()
@@ -186,13 +160,10 @@ func (c *tcpConn) Authenticate() error {
 	return nil
 }
 
-// Authenticated reports whether the token prelude was accepted.
 func (c *tcpConn) Authenticated() bool { return c.authenticated }
 
-// PeerIdentity reports errPeerIdentityAbsent: a loopback port exposes no kernel
-// credentials and no filesystem permission gate, so the daemon requires the
-// token pre-auth instead. It is deliberately distinct from
-// errPeerIdentityUnsupported, which would otherwise admit the connection.
+// A loopback port exposes no kernel credentials or filesystem gate, so the
+// daemon requires the token pre-auth instead.
 func (c *tcpConn) PeerIdentity() (PeerIdentity, error) {
 	return PeerIdentity{}, errPeerIdentityAbsent
 }
@@ -204,11 +175,8 @@ func (c *tcpConn) Close() error {
 	return nil
 }
 
-// DialTCP reads the endpoint record at endpointPath, dials the daemon, and
-// sends the token prelude. A missing endpoint file or a failed dial means no
-// daemon is listening yet, which is what drives the client's spawn path. The
-// returned connection is a plain io.ReadWriteCloser; the client's MCP bytes
-// follow the prelude on the same stream.
+// Reads the endpoint record, dials, and sends the token prelude; a missing file
+// or failed dial drives the client's spawn path.
 func DialTCP(endpointPath string) (io.ReadWriteCloser, error) {
 	record, err := readEndpoint(endpointPath)
 	if err != nil {
@@ -231,8 +199,7 @@ func DialTCP(endpointPath string) (io.ReadWriteCloser, error) {
 	return conn, nil
 }
 
-// newSessionToken returns a 128-bit random hex token, regenerated on every
-// spawn and never placed in argv or the environment.
+// 128-bit random hex, regenerated per spawn and never placed in argv or the environment.
 func newSessionToken() (string, error) {
 	buf := make([]byte, 16)
 	if _, err := rand.Read(buf); err != nil {
@@ -241,9 +208,7 @@ func newSessionToken() (string, error) {
 	return hex.EncodeToString(buf), nil
 }
 
-// publishEndpoint writes record to path atomically via temp-file + rename, so a
-// reader never sees a partial record. The file is 0600 because it carries the
-// token.
+// Writes atomically via temp-file + rename; 0600 since it carries the token.
 func publishEndpoint(path string, record endpointRecord) error {
 	data, err := json.Marshal(record)
 	if err != nil {
@@ -277,8 +242,7 @@ func publishEndpoint(path string, record endpointRecord) error {
 	return nil
 }
 
-// readEndpoint reads and decodes the endpoint record at path, mapping a missing
-// file to a dial miss the caller turns into a spawn.
+// A missing file maps to a dial miss the caller turns into a spawn.
 func readEndpoint(path string) (endpointRecord, error) {
 	data, err := os.ReadFile(path) //nolint:gosec // the path is derived from the bound project, not user input.
 	if err != nil {
@@ -291,9 +255,8 @@ func readEndpoint(path string) (endpointRecord, error) {
 	return record, nil
 }
 
-// readBoundedLine reads one newline-terminated line from r, refusing to buffer
-// more than max bytes, so a client that never sends a newline cannot grow the
-// buffer without bound. It returns the line without the trailing newline.
+// Refuses to buffer more than max bytes so a client that never sends a newline
+// cannot grow the buffer without bound.
 func readBoundedLine(r *bufio.Reader, max int) (string, error) {
 	var line []byte
 	for {
@@ -312,7 +275,6 @@ func readBoundedLine(r *bufio.Reader, max int) (string, error) {
 	}
 }
 
-// trimNewline drops a trailing "\n" or "\r\n".
 func trimNewline(line []byte) []byte {
 	line = trimSuffixByte(line, '\n')
 	return trimSuffixByte(line, '\r')
@@ -332,9 +294,7 @@ var (
 	_ TokenConnection = (*tcpConn)(nil)
 )
 
-// PortNamer is implemented by a Listener that binds an ephemeral port and can
-// report it, so an endpoint factory can publish it without naming the concrete
-// listener type.
+// Implemented by a Listener that can report its bound ephemeral port.
 type PortNamer interface {
 	Port() int
 }

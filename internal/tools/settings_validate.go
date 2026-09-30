@@ -10,25 +10,16 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
 )
 
-// projectParseErrorPattern matches the engine diagnostic Godot logs when it
-// fails to parse project.godot during startup, e.g.
-// "ERROR: Error parsing '/path/project.godot' at line 2: Unexpected EOF ...".
-// Godot still exits 0 and loads the remaining defaults, so the diagnostic is
-// the only signal that the file was rejected.
+// Matches the engine's project.godot parse-failure diagnostic; Godot still exits 0.
 var projectParseErrorPattern = regexp.MustCompile(`Error parsing '.+project\.godot'|Couldn't load file '.+project\.godot'`)
 
-// projectSettingsProbe is the result of loading a project through Godot. Stderr
-// carries the engine diagnostics and ExitCode the process exit, which callers
-// combine because a malformed project.godot still exits 0.
 type projectSettingsProbe struct {
 	Stderr   string
 	ExitCode int
 }
 
-// probeProjectWithGodot loads the project through the real Godot engine. It only
-// returns an error when the operations script could not be materialized or
-// Godot could not be started; a project.godot the engine rejects is reported
-// through the probe's stderr.
+// Only fails when the script or engine cannot start; a rejected project.godot
+// is reported through Stderr.
 func probeProjectWithGodot(ctx context.Context, projectPath string) (projectSettingsProbe, error) {
 	scriptPath, err := godotops.ProjectProbeScript()
 	if err != nil {
@@ -41,8 +32,6 @@ func probeProjectWithGodot(ctx context.Context, projectPath string) (projectSett
 	return projectSettingsProbe{Stderr: stderr, ExitCode: exitCode}, nil
 }
 
-// projectParseErrors returns every engine diagnostic line that reports a
-// project.godot parse failure, in stderr order.
 func projectParseErrors(stderr string) []string {
 	var out []string
 	for _, line := range strings.Split(strings.ReplaceAll(stderr, "\r\n", "\n"), "\n") {

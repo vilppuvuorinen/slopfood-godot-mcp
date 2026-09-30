@@ -7,7 +7,6 @@ import (
 	"testing"
 )
 
-// socketPath returns the single Unix socket the daemon bound under runtimeDir.
 func socketPath(t *testing.T, runtimeDir string) string {
 	t.Helper()
 	pattern := filepath.Join(runtimeDir, "slopfood-godot-mcp", "*.sock")

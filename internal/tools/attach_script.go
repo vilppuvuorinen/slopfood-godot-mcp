@@ -79,8 +79,7 @@ func handleAttachScript(ctx Context, raw json.RawMessage) (any, error) {
 		"nodePath":   args.NodePath,
 		"scriptPath": args.ScriptPath,
 	})
-	// The bridge reconciles the attached script and the saved scene with the
-	// editor filesystem, registering the script's class_name synchronously, so a
-	// following class-name lookup sees it without a respawn.
+	// The bridge registers the script's class_name synchronously, so a following
+	// class-name lookup sees it without a respawn.
 	return result, err
 }

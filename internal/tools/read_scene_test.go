@@ -36,8 +36,6 @@ func TestReadSceneSchema(t *testing.T) {
 	}
 }
 
-// TestReadSceneForwardsScopeOptions proves the optional nodePath and depth are
-// handed to the operations script rather than silently dropped.
 func TestReadSceneForwardsScopeOptions(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
 	root := t.TempDir()
@@ -45,9 +43,6 @@ func TestReadSceneForwardsScopeOptions(t *testing.T) {
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
 	result := callToolArgs(t, readScene(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","depth":1}`)
-	// The echo has no JSON markers, so the run is reported as an error; the
-	// error message still carries the echoed command, which is what proves the
-	// options reached the operations script.
 	if !result.IsError {
 		t.Fatalf("expected the markerless echo to fail: %+v", result.Content)
 	}
@@ -121,9 +116,6 @@ func TestReadScenePreservesNestedPropertyValues(t *testing.T) {
 	}
 }
 
-// TestReadSceneNoMarkersIsError covers a run that yields no structured output:
-// a non-error result must always carry the declared node tree, so the fallback
-// is reported as an error instead of a degraded success shape.
 func TestReadSceneNoMarkersIsError(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "plain output"`))
 	root := t.TempDir()
@@ -142,9 +134,6 @@ func TestReadSceneNoMarkersIsError(t *testing.T) {
 	}
 }
 
-// TestReadSceneInvalidJSONIsError covers a run whose markers hold invalid JSON:
-// like the markerless case, it is a failure rather than the raw-text success it
-// once was.
 func TestReadSceneInvalidJSONIsError(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\nnot-json\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()

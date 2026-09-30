@@ -202,16 +202,11 @@ func TestParseSectionNameEscaping(t *testing.T) {
 	}
 }
 
-// TestKeyInjectionRoundTrip proves a name containing quotes and newlines is
-// encoded into a single key and parsed back intact, rather than injecting new
-// config entries.
 func TestKeyInjectionRoundTrip(t *testing.T) {
 	key := "Evil\"\n[application]\nconfig/name=\"pwned"
 	cfg := &Config{}
 	cfg.Set("autoload", key, String("*res://evil.gd"))
 
-	// The literal "[application]" text stays inside the quoted key; it must not
-	// be parsed as a real section.
 	encoded := cfg.Encode()
 
 	parsed, err := Parse(encoded)
@@ -227,8 +222,6 @@ func TestKeyInjectionRoundTrip(t *testing.T) {
 	}
 }
 
-// TestParseValueRoundTrip checks the single-value helpers used by the tools
-// that splice one value into an existing file.
 func TestParseValueRoundTrip(t *testing.T) {
 	tests := []struct {
 		in   string
@@ -255,9 +248,6 @@ func TestParseValueRoundTrip(t *testing.T) {
 	}
 }
 
-// TestOpaqueConstructorRoundTrip proves an unsupported constructor such as
-// Object(InputEventKey, ...) is captured verbatim and re-emitted unchanged,
-// including parentheses and quotes inside its arguments.
 func TestOpaqueConstructorRoundTrip(t *testing.T) {
 	event := `Object(InputEventKey,"resource_name":"a)b\"c","physical_keycode":87,"script":null)`
 	v, err := ParseValue(event)
@@ -271,7 +261,6 @@ func TestOpaqueConstructorRoundTrip(t *testing.T) {
 		t.Errorf("FormatValue = %q, want %q", got, event)
 	}
 
-	// The whole dictionary an input action uses must round-trip too.
 	src := `{"deadzone": 0.5, "events": [` + event + `]}`
 	dict, err := ParseValue(src)
 	if err != nil {

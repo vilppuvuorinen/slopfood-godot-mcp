@@ -19,34 +19,21 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/daemonpath"
 )
 
-// defaultOperationCap bounds how many operations one engine process serves. A
-// long-lived process accumulates state (loaded resources, engine globals), so
-// recycling it after a fixed number of calls keeps that state from growing
-// without bound; the cap is a field so tests can lower it.
+// Recycles the engine after a fixed number of operations so accumulated state cannot grow without bound.
 const defaultOperationCap = 100
 
-// closeQuitTimeout bounds how long Close waits for the bridge to exit after it
-// is asked to quit over the socket. A bridge that ignores the request is then
-// killed; the timeout is only a floor for a wedged process.
+// Bounds how long Close waits for a graceful quit before killing a wedged bridge.
 const closeQuitTimeout = 5 * time.Second
 
-// Session owns at most one long-lived engine process and multiplexes one
-// request at a time over its Unix socket transport. The mcp.Queue is the single
-// serialization point for callers, so Session adds only a mutex to keep its own
-// lifecycle consistent; it must not add another queue, because a second in-flight
-// request would make it impossible to attribute the next frame to a request.
+// Contains no queue of its own: requests are serialized by the caller, so a second in-flight request
+// would make the next frame unattributable.
 type Session struct {
 	mu         sync.Mutex
 	executable string
 	script     string
 
-	// transport selects the bridge's wire transport. It defaults to
-	// TransportAuto, so the engine uses UDS off Windows and TCP on Windows; a
-	// dev build's --transport override can force either.
 	transport Transport
 
-	// operationCap restarts the engine after this many operations. It is a field
-	// rather than a constant so same-package tests can set it low.
 	operationCap int
 
 	proc   *sessionProc
@@ -54,31 +41,23 @@ type Session struct {
 	closed bool
 }
 
-// sessionProc is one engine process plus the goroutines that read its pipes and
-// socket. It deliberately owns a context independent of any request: the queue
-// cancels a job's context as soon as the job returns, so a request-scoped
-// command context would kill the engine after every call.
+// Its context is session-owned: the caller cancels a job's context as soon as the job returns, so a
+// request-scoped context would kill the engine after every call.
 type sessionProc struct {
 	cmd    *exec.Cmd
 	stdout io.ReadCloser
 	stderr io.ReadCloser
 	cancel context.CancelFunc
 
-	// stdoutReader is the single buffered reader over stdout. The readiness line
-	// is read from it before the socket frame reader starts, so any buffered
-	// diagnostics must be drained through the same reader.
+	// The single buffered reader over stdout, shared with the readiness read so buffered diagnostics drain here.
 	stdoutReader *bufio.Reader
 
-	// socket is the Unix socket the bridge bound. Requests and responses travel
-	// over it; the stdout/stderr pipes are diagnostics only.
+	// Requests and responses travel here; the stdout/stderr pipes are diagnostics only.
 	socket     *engineSocket
 	socketPath string
 
-	// done is closed once all readers have stopped, marking the process dead.
-	// It closes after the readers, not on the first EOF, so a frame a reader
-	// delivered just before it stopped is never masked by a sibling pipe
-	// closing first. quit is closed by stop before it kills the process, so a
-	// reader parked on a full delivery channel can leave and not block wg.Wait.
+	// Closed once all readers stop, after them, so a frame delivered just before a reader stopped is not
+	// masked by a sibling pipe closing first.
 	done     chan struct{}
 	doneOnce sync.Once
 	quit     chan struct{}
@@ -97,9 +76,7 @@ type sessionProc struct {
 	fingerprint projectFingerprint
 }
 
-// responseFrame is one bridge response. ID is a pointer because the startup
-// readiness line is a JSON object with no id, and Godot emits ids as JSON
-// numbers that decode to float64.
+// ID is a pointer because the startup readiness line has no id; Godot emits ids as JSON numbers.
 type responseFrame struct {
 	ID     *float64 `json:"id"`
 	OK     bool     `json:"ok"`
@@ -107,32 +84,22 @@ type responseFrame struct {
 	Stderr string   `json:"stderr"`
 }
 
-// fileStamp identifies one project-global file by size and modification time. A
-// missing file is the zero stamp, so appearance and disappearance both change
-// the stamp and trigger a restart.
+// A missing file is the zero stamp, so both appearance and disappearance change the stamp.
 type fileStamp struct {
 	size int64
 	mod  int64
 }
 
-// projectFingerprint is the engine-global file state a running process cached at
-// spawn. A change means the engine's loaded view is stale, so the next call
-// restarts it rather than serving from that stale view.
+// Engine-global file state cached at spawn; a change means the engine's loaded view is stale.
 type projectFingerprint struct {
 	projectGodot fileStamp
 	classCache   fileStamp
 }
 
-// NewSession returns a session that spawns executable's socket driver for the
-// bridge at script. The engine is started lazily by the first Run and uses the
-// platform-default transport (UDS off Windows, TCP on Windows).
 func NewSession(executable, script string) *Session {
 	return NewSessionTransport(executable, script, TransportAuto)
 }
 
-// NewSessionTransport is NewSession with an explicit transport, so the daemon's
-// --transport override can force one for the local-test lane. Auto resolves to
-// the platform default.
 func NewSessionTransport(executable, script string, transport Transport) *Session {
 	return &Session{
 		executable:   executable,
@@ -142,9 +109,6 @@ func NewSessionTransport(executable, script string, transport Transport) *Sessio
 	}
 }
 
-// Run executes one operation against the session's engine, starting or
-// restarting it as needed. The id and frame are attributed under the lock, so
-// the socket reader can assume only one response is ever in flight.
 func (s *Session) Run(ctx context.Context, project, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -162,10 +126,7 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 		return "", "", 0, err
 	}
 
-	// A project-global change (a changed fingerprint) is reconciled by asking
-	// the live editor to rescan before the next operation, rather than by
-	// respawning the process. The rescan reuses the warm engine and the same
-	// reimport_project operation the tool layer drives.
+	// A changed fingerprint is reconciled by a rescan in the warm editor, not a respawn.
 	if s.consumeRescan(project) {
 		if rescanErr := s.runRescanLocked(ctx, p); rescanErr != nil {
 			return "", "", 0, rescanErr
@@ -175,8 +136,7 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 	s.nextID++
 	id := s.nextID
 
-	// nil params must marshal to {} so the bridge's request validation never
-	// sees null and rejects an otherwise valid request.
+	// nil params must marshal to {} so the bridge's validation never sees null.
 	if params == nil {
 		params = map[string]any{}
 	}
@@ -189,9 +149,7 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 	if err != nil {
 		return "", "", 0, fmt.Errorf("engine session: encode request: %w", err)
 	}
-	// The process may have died between the death check above and the write; a
-	// failed write is the same death, so respawn once and retry before treating
-	// it as an error.
+	// A failed write means the process died; respawn once and retry before erroring.
 	if err = p.socket.writeRequest(line); err != nil {
 		s.stopLocked()
 		p, err = s.ensureStartedLocked(project)
@@ -209,9 +167,7 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 		return "", "", 0, err
 	}
 	p.ops++
-	// The engine's view is current as of this operation, so a fingerprint change
-	// observed before it was already reconciled by the rescan above. Restamp so
-	// the next call does not rescan for the same change.
+	// Restamp so the next call does not rescan for the same change.
 	p.fingerprint = fingerprintProject(project)
 
 	if !frame.OK {
@@ -220,8 +176,6 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 	return frame.Stdout, frame.Stderr, exitCode, nil
 }
 
-// Close asks the engine to quit, then kills it and waits for its readers. It is
-// idempotent; a Run after Close fails.
 func (s *Session) Close() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -237,8 +191,7 @@ func (s *Session) Close() error {
 	return nil
 }
 
-// recvFrameLocked waits for the response frame matching id. On any failure it
-// kills and clears the process, so a wedged engine is never reused.
+// On any failure the process is killed and cleared, so a wedged engine is never reused.
 func (s *Session) recvFrameLocked(ctx context.Context, p *sessionProc, id int) (*responseFrame, error) {
 	for {
 		select {
@@ -249,8 +202,7 @@ func (s *Session) recvFrameLocked(ctx context.Context, p *sessionProc, id int) (
 			}
 			return f, nil
 		case <-p.done:
-			// A frame already delivered is not lost when the reader then hits
-			// EOF: drain the buffered frame before treating the death as fatal.
+			// Drain a buffered frame before treating the death as fatal.
 			select {
 			case f := <-p.frames:
 				if int(*f.ID) != id {
@@ -270,11 +222,7 @@ func (s *Session) recvFrameLocked(ctx context.Context, p *sessionProc, id int) (
 	}
 }
 
-// restartNeeded reports whether the current process cannot serve project. Any
-// doubt about liveness (no process, death, changed project, or too many served
-// operations) is resolved by a clean respawn rather than by trying to salvage
-// the process. A dirty project-global view is not a restart: it is reconciled by
-// a rescan (see consumeRescan).
+// A dirty project-global view is not a restart; it is reconciled by a rescan.
 func (s *Session) restartNeeded(project string) bool {
 	p := s.proc
 	if p == nil {
@@ -291,10 +239,6 @@ func (s *Session) restartNeeded(project string) bool {
 	return p.ops >= s.operationCap
 }
 
-// consumeRescan reports whether the engine's project-global view is stale and
-// clears the staleness. A changed fingerprint means the running process cached
-// a view that no longer matches disk: once the editor has rescanned, the stored
-// fingerprint is current again.
 func (s *Session) consumeRescan(project string) bool {
 	if s.proc == nil {
 		return false
@@ -307,10 +251,6 @@ func (s *Session) consumeRescan(project string) bool {
 	return true
 }
 
-// runRescanLocked drives one reimport_project operation through the running
-// engine so a project-global change is visible before the caller's operation.
-// It uses its own request id and frame exchange, distinct from the caller's, and
-// is attributed under the same session lock.
 func (s *Session) runRescanLocked(ctx context.Context, p *sessionProc) error {
 	s.nextID++
 	id := s.nextID
@@ -338,7 +278,6 @@ func (s *Session) runRescanLocked(ctx context.Context, p *sessionProc) error {
 	return nil
 }
 
-// ensureStartedLocked spawns the bridge for project when no process is running.
 func (s *Session) ensureStartedLocked(project string) (*sessionProc, error) {
 	if s.proc != nil {
 		return s.proc, nil
@@ -351,8 +290,6 @@ func (s *Session) ensureStartedLocked(project string) (*sessionProc, error) {
 	return p, nil
 }
 
-// stopLocked tears down the running process and clears it. It is safe to call
-// with no process.
 func (s *Session) stopLocked() {
 	p := s.proc
 	if p == nil {
@@ -362,12 +299,6 @@ func (s *Session) stopLocked() {
 	p.stop()
 }
 
-// engineLaunch is the post-`--` user args an engine spawn needs for the
-// resolved transport, plus any UDS filesystem prep. It branches on the explicit
-// transport, so the TCP branch is portable and only resolving auto inspects
-// GOOS. The UDS branch derives the socket path, creates its 0700 directory, and
-// unlinks a stale socket; the TCP branch passes an ephemeral loopback address
-// and does no filesystem work.
 func engineLaunch(project string, transport Transport) (args []string, socketPath string, err error) {
 	switch resolveTransport(transport) {
 	case TransportTCP:
@@ -385,16 +316,9 @@ func engineLaunch(project string, transport Transport) (args []string, socketPat
 		}
 		return []string{"--gd-socket", socketPath}, socketPath, nil
 	}
-	// Unreachable: resolveTransport returns only TransportUDS or TransportTCP.
 	return nil, "", fmt.Errorf("engine session: unsupported transport %q", transport)
 }
 
-// startSessionProc starts the bridge in socket mode and its reader goroutines.
-// The context is session-owned (see sessionProc) and exists only so cancel can
-// kill the child. It builds the transport's launch args, passes them after the
-// -- separator so they reach OS.get_cmdline_user_args, reads the readiness
-// object from stdout, dials the transport the readiness reports, and narrows a
-// UDS socket to 0600.
 func startSessionProc(executable, script, project string, transport Transport) (*sessionProc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	launchArgs, socketPath, err := engineLaunch(project, transport)
@@ -402,9 +326,7 @@ func startSessionProc(executable, script, project string, transport Transport) (
 		cancel()
 		return nil, err
 	}
-	// Editor entry: --editor (equivalent to -e) makes EditorInterface and
-	// EditorFileSystem live; Phase 0.7 confirmed it is accepted alongside
-	// --script and that user args after -- reach OS.get_cmdline_user_args.
+	// --editor makes EditorInterface and EditorFileSystem live; user args after -- reach OS.get_cmdline_user_args.
 	args := append([]string{"--headless", "--editor", "--path", project, "--script", script, "--"}, launchArgs...)
 
 	cmd := newCommand(ctx, executable, args...)
@@ -462,11 +384,6 @@ func startSessionProc(executable, script, project string, transport Transport) (
 	return p, nil
 }
 
-// dialReady connects to the bridge endpoint the readiness object reports. A
-// UDS readiness dials its path and narrows the socket to 0600; a TCP readiness
-// dials the host and port. socketPath is the UDS path derived before launch,
-// used when the readiness omits it. The returned dialPath is the UDS path to
-// unlink on stop, empty for TCP so stop unlinks nothing.
 func dialReady(ctx context.Context, info *readyInfo, socketPath string) (*engineSocket, string, error) {
 	if info.Transport == "tcp" {
 		address := net.JoinHostPort(info.Host, strconv.Itoa(info.Port))
@@ -491,11 +408,7 @@ func dialReady(ctx context.Context, info *readyInfo, socketPath string) (*engine
 	return socket, dialPath, nil
 }
 
-// stop closes quit before killing the process, so a reader blocked sending on a
-// full channel unblocks instead of holding wg.Wait forever. Only stop calls
-// cmd.Wait, and only after every reader has returned, so Wait cannot close a
-// pipe under an active reader. The socket is closed to unblock its reader and
-// the bound path is unlinked so a respawn starts clean.
+// Closes quit before killing so a reader blocked on a full channel unblocks; only stop calls cmd.Wait, after all readers return.
 func (p *sessionProc) stop() {
 	p.stopOnce.Do(func() {
 		close(p.quit)
@@ -511,9 +424,6 @@ func (p *sessionProc) stop() {
 	})
 }
 
-// shutdown asks the bridge to exit through the quit operation, waits a bounded
-// time for the process to exit, then falls back to the hard stop. The quit frame
-// is best-effort: a dead process or a failed write just falls through to stop.
 func (p *sessionProc) shutdown() {
 	_ = p.socket.writeRequest([]byte(`{"id":0,"operation":"quit","params":{}}`))
 	timer := time.NewTimer(closeQuitTimeout)
@@ -525,10 +435,7 @@ func (p *sessionProc) shutdown() {
 	p.stop()
 }
 
-// readStdout drains the engine process's stdout. The readiness line was already
-// consumed and response frames travel over the socket, so after startup stdout
-// is diagnostics only. Editor exit prints fixed ObjectDB/RID leak ERROR lines
-// here; they are diagnostics, never drained into a result.
+// Editor exit prints fixed ObjectDB/RID leak ERROR lines here; they are diagnostics, never a result.
 func (p *sessionProc) readStdout() {
 	defer p.wg.Done()
 	for {
@@ -540,8 +447,6 @@ func (p *sessionProc) readStdout() {
 	}
 }
 
-// readSocketFrames delivers response frames read from the socket, reusing the
-// frame channel and its id-desync and buffered-drain supervision.
 func (p *sessionProc) readSocketFrames() {
 	defer p.wg.Done()
 	for {
@@ -556,12 +461,7 @@ func (p *sessionProc) readSocketFrames() {
 	}
 }
 
-// readStderr drains the engine process's stderr. It is diagnostics only now: the
-// response frame carries the handler's stderr, so process stderr is logged and
-// never merged into a result or used as a protocol delimiter. Editor exit prints
-// fixed RID/ObjectDB leak WARNING lines here; they are the expected teardown
-// noise, not an operation failure, and prefer the graceful quit path so the
-// scan thread is not aborted mid-scan.
+// Process stderr is diagnostics only: the frame carries the handler's stderr, and editor exit leak warnings are expected.
 func (p *sessionProc) readStderr() {
 	defer p.wg.Done()
 	r := bufio.NewReader(p.stderr)
@@ -586,9 +486,7 @@ func (p *sessionProc) sendFrame(f *responseFrame) bool {
 	}
 }
 
-// noteReadErr records the first reader failure. The done channel is closed
-// separately, once all readers stop, so a delivery made just before one reader
-// stops is never preempted by another pipe closing.
+// Records the first reader failure; done closes separately so a just-made delivery is not preempted.
 func (p *sessionProc) noteReadErr(err error) {
 	p.errOnce.Do(func() {
 		p.errMu.Lock()
@@ -606,8 +504,6 @@ func (p *sessionProc) readErr() error {
 	return p.err
 }
 
-// parseFrame returns the frame when line is a JSON object with an id, and nil
-// for the banner, diagnostics, or any other non-frame output.
 func parseFrame(line string) *responseFrame {
 	trimmed := strings.TrimSpace(line)
 	if !strings.HasPrefix(trimmed, "{") {
@@ -623,8 +519,6 @@ func parseFrame(line string) *responseFrame {
 	return &f
 }
 
-// fingerprintProject stamps the engine-global project files. Missing files are
-// the zero stamp, so both appearance and disappearance compare unequal.
 func fingerprintProject(project string) projectFingerprint {
 	return projectFingerprint{
 		projectGodot: stampFile(filepath.Join(project, "project.godot")),

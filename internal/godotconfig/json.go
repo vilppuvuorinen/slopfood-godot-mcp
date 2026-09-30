@@ -11,15 +11,14 @@ import (
 	"strings"
 )
 
-// The tool value contract. Values cross the MCP boundary as JSON: JSON-native
-// data maps directly, and engine-only types are tagged objects such as
-// {"$type":"Vector2","x":1,"y":2}. DecodeJSONValue is the Go half of the codec;
-// the GDScript half (_variant_to_json) lives in godot_operations.gd. Both are
-// exact inverses, so a value read from Godot can be written back unchanged.
+// The tool value contract: JSON-native data maps directly and engine-only types
+// are tagged objects such as {"$type":"Vector2","x":1,"y":2}. DecodeJSONValue is
+// the Go half of the codec; the GDScript half (_variant_to_json) lives in
+// godot_operations.gd, and the two are exact inverses.
 
 // DecodeJSONValue parses one value in the tool value contract. Numbers keep
-// their JSON spelling, so 1280 is an Int and 1280.0 is a Float. An unknown
-// $type is an error rather than a silent pass-through.
+// their JSON spelling (1280 is Int, 1280.0 is Float); an unknown $type is an
+// error.
 func DecodeJSONValue(raw []byte) (Value, error) {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.UseNumber()
@@ -34,8 +33,6 @@ func DecodeJSONValue(raw []byte) (Value, error) {
 	return FromJSON(v)
 }
 
-// FromJSON converts a decoded JSON value (from encoding/json with UseNumber,
-// or an equivalent tree) into a Value.
 func FromJSON(v any) (Value, error) {
 	switch t := v.(type) {
 	case nil:
@@ -70,7 +67,7 @@ func FromJSON(v any) (Value, error) {
 }
 
 // objectValue maps a JSON object to a tagged engine value or, absent a $type
-// tag, a Dictionary with keys sorted so the encoding is deterministic.
+// tag, a Dictionary with sorted keys.
 func objectValue(obj map[string]any) (Value, error) {
 	if tag, ok := obj["$type"].(string); ok {
 		return taggedValue(tag, obj)
@@ -92,13 +89,8 @@ func objectValue(obj map[string]any) (Value, error) {
 }
 
 // ValueToJSON encodes a Value in the tool value contract, the inverse of
-// DecodeJSONValue: JSON-native data maps directly and engine-only types use a
-// tagged object. The result is a JSON-marshalable tree.
-//
-// Float keeps its decimal spelling (1.0, not 1) because the decoder tells Int
-// from Float by the JSON spelling; a non-finite float uses the GodotText escape
-// hatch, since JSON has no NaN or Infinity. Opaque uses GodotText too, so a
-// constructor the parser only captured verbatim still round-trips.
+// DecodeJSONValue. Float keeps its decimal spelling so the decoder can tell it
+// from an Int; NaN/Inf and Opaque use the GodotText escape hatch.
 func ValueToJSON(v Value) (any, error) {
 	switch t := v.(type) {
 	case nil, Nil:
@@ -142,9 +134,8 @@ func ValueToJSON(v Value) (any, error) {
 	}
 }
 
-// dictionaryToJSON encodes a Dictionary as a JSON object. Dictionary keys are
-// stringified the way the GDScript encoder's str(key) does, so the encoding
-// matches what _variant_to_json produces.
+// dictionaryToJSON stringifies keys the way the GDScript encoder's str(key)
+// does, matching _variant_to_json.
 func dictionaryToJSON(d Dictionary) (map[string]any, error) {
 	out := make(map[string]any, len(d.Entries))
 	for _, e := range d.Entries {
@@ -157,9 +148,6 @@ func dictionaryToJSON(d Dictionary) (map[string]any, error) {
 	return out, nil
 }
 
-// dictionaryKey renders a Dictionary key as a JSON member name. String and
-// StringName keys carry their text unquoted; any other key uses its Godot
-// literal, mirroring str(key).
 func dictionaryKey(v Value) string {
 	switch k := v.(type) {
 	case String:
@@ -171,12 +159,10 @@ func dictionaryKey(v Value) string {
 	}
 }
 
-// godotTextJSON builds the tagged GodotText escape-hatch object.
 func godotTextJSON(text string) map[string]any {
 	return map[string]any{"$type": "GodotText", "text": text}
 }
 
-// numberValue picks Int or Float from the number's JSON spelling.
 func numberValue(n json.Number) (Value, error) {
 	s := n.String()
 	if strings.ContainsAny(s, ".eE") {
@@ -197,11 +183,8 @@ func numberValue(n json.Number) (Value, error) {
 	return Float(f), nil
 }
 
-// ValueContractTags enumerates the engine-only $type tags taggedValue accepts,
-// in the order the conformance fixture introduces them. It is the schema-facing
-// half of the codec: tools build their value-contract description from it, so
-// the advertised tag set stays next to the switch that owns it. Resource is
-// deliberately absent because taggedValue rejects it.
+// ValueContractTags enumerates the engine-only $type tags taggedValue accepts;
+// Resource is deliberately absent because taggedValue rejects it.
 var ValueContractTags = []string{
 	"StringName",
 	"Vector2",
@@ -225,8 +208,8 @@ var ValueContractTags = []string{
 	"GodotText",
 }
 
-// taggedValue builds the Value for a recognized $type. Every constructor is
-// emitted as a numeric Godot literal, the form the ConfigFile parser accepts.
+// taggedValue builds the Value for a recognized $type, emitted as a numeric
+// Godot literal.
 func taggedValue(tag string, obj map[string]any) (Value, error) {
 	switch tag {
 	case "GodotText":
@@ -320,7 +303,6 @@ func taggedValue(tag string, obj map[string]any) (Value, error) {
 	}
 }
 
-// numeric builds a "Name(v1, v2, ...)" constructor from the named fields.
 func numeric(name string, obj map[string]any, ints bool, fields ...string) (Value, error) {
 	parts := make([]string, 0, len(fields))
 	for _, field := range fields {
@@ -333,8 +315,6 @@ func numeric(name string, obj map[string]any, ints bool, fields ...string) (Valu
 	return Opaque(name + "(" + strings.Join(parts, ", ") + ")"), nil
 }
 
-// numericDefaulted is numeric where the last field is optional and defaults to
-// def when absent.
 func numericDefaulted(name string, obj map[string]any, ints bool, def float64, fields ...string) (Value, error) {
 	parts := make([]string, 0, len(fields))
 	for i, field := range fields {
@@ -351,7 +331,6 @@ func numericDefaulted(name string, obj map[string]any, ints bool, def float64, f
 	return Opaque(name + "(" + strings.Join(parts, ", ") + ")"), nil
 }
 
-// composite builds a "Name(all vector components flattened)" constructor.
 func composite(name string, obj map[string]any, ints bool, dim int, fields ...string) (Value, error) {
 	parts, err := compositeText(name, obj, ints, dim, fields...)
 	if err != nil {
@@ -360,8 +339,6 @@ func composite(name string, obj map[string]any, ints bool, dim int, fields ...st
 	return Opaque(name + "(" + strings.Join(parts, ", ") + ")"), nil
 }
 
-// compositeText returns the flattened numeric components of the named vector
-// fields, failing when any is not a tagged vector object with the needed axes.
 func compositeText(name string, obj map[string]any, ints bool, dim int, fields ...string) ([]string, error) {
 	parts := make([]string, 0, dim*len(fields))
 	for _, field := range fields {
@@ -374,8 +351,6 @@ func compositeText(name string, obj map[string]any, ints bool, dim int, fields .
 	return parts, nil
 }
 
-// basisFields flattens a tagged Basis field (three tagged vector axes) into
-// its nine numeric components.
 func basisFields(obj map[string]any, field string) ([]string, error) {
 	inner, ok := obj[field].(map[string]any)
 	if !ok {
@@ -392,7 +367,6 @@ func basisFields(obj map[string]any, field string) ([]string, error) {
 	return parts, nil
 }
 
-// vectorFields flattens one tagged vector field into its numeric components.
 func vectorFields(obj map[string]any, field string, ints bool, dim int) ([]string, error) {
 	inner, ok := obj[field].(map[string]any)
 	if !ok {
@@ -466,9 +440,8 @@ func formatNumber(f float64, asInt bool) string {
 	return formatComponent(f)
 }
 
-// formatComponent writes a vector/color component the way Godot's VariantWriter
-// does: an integral value has no decimal point, so a Vector2 reads as
-// Vector2(1, 2) rather than Vector2(1.0, 2.0).
+// formatComponent writes a vector/color component; an integral value has no
+// decimal point.
 func formatComponent(f float64) string {
 	if math.IsInf(f, 0) || math.IsNaN(f) {
 		return formatFloat(f)

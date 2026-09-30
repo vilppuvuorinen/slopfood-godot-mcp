@@ -1,5 +1,3 @@
-// Command gdcover instruments GDScript for line coverage and turns the hit
-// traces it emits into reports. It backs the Godot half of `make e2e-cover`.
 package main
 
 import (
@@ -114,11 +112,9 @@ func runLCOV(args []string, stdout, stderr io.Writer) error {
 	return nil
 }
 
-// readHits merges every hit trace matched by pattern. A literal path with no
-// matches, or a glob that matches nothing, yields no hits so a run that
-// exercised nothing still produces an empty report. The coverage build keys each
-// server's trace by PID, so pattern is normally a glob such as hits.txt.* and
-// one report merges every server's trace.
+// readHits merges every trace matched by pattern; no matches yields no hits, so a
+// run that exercised nothing still produces an empty report. Pattern is normally a
+// per-PID glob such as hits.txt.*.
 func readHits(pattern string) (map[int]int, error) {
 	paths, err := filepath.Glob(pattern)
 	if err != nil {
@@ -137,7 +133,6 @@ func readHits(pattern string) (map[int]int, error) {
 	return merged, nil
 }
 
-// readHitsFile opens one hit trace, treating a missing file as no hits.
 func readHitsFile(path string) (map[int]int, error) {
 	file, err := os.Open(path) //nolint:gosec // path is operator-provided.
 	if err != nil {

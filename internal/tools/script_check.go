@@ -16,8 +16,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
 )
 
-// scriptDiagnostic is one parsed Godot script error, matching the reference's
-// ScriptDiagnostic shape.
 type scriptDiagnostic struct {
 	Message string `json:"message"`
 	File    string `json:"file,omitempty"`
@@ -25,20 +23,11 @@ type scriptDiagnostic struct {
 }
 
 var (
-	// scriptErrorPattern matches an engine diagnostic line, e.g.
-	// "SCRIPT ERROR: Parse Error: ...".
 	scriptErrorPattern = regexp.MustCompile(`SCRIPT ERROR:\s*(.+?)\s*$`)
-	// parseErrorPrefix is stripped from a diagnostic message.
-	parseErrorPrefix = regexp.MustCompile(`^Parse Error:\s*`)
-	// scriptLocPattern captures the res:// file and line in the location line
-	// that accompanies a diagnostic.
-	scriptLocPattern = regexp.MustCompile(`\((res://.+):(\d+)\)`)
+	parseErrorPrefix   = regexp.MustCompile(`^Parse Error:\s*`)
+	scriptLocPattern   = regexp.MustCompile(`\((res://.+):(\d+)\)`)
 )
 
-// parseGodotScriptDiagnostics extracts script errors from combined Godot
-// output, mirroring the reference's parseGodotScriptDiagnostics. Each
-// diagnostic's file/line is taken from the location line that follows it (or
-// from its own line when the location is inline).
 func parseGodotScriptDiagnostics(output string) []scriptDiagnostic {
 	lines := strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n")
 	diagnostics := make([]scriptDiagnostic, 0)
@@ -68,12 +57,8 @@ func parseGodotScriptDiagnostics(output string) []scriptDiagnostic {
 	return diagnostics
 }
 
-// runGDScriptCheck static-checks scriptFull with the embedded validate_script
-// checker and returns the parsed diagnostics. It only returns an error when the
-// checker could not be materialized, Godot could not be started, or the checker
-// failed without producing a recognizable diagnostic. The engine still exits 0
-// when the target script fails to compile, so the exit code and stderr are
-// combined: diagnostics are parsed from stderr, where Godot logs them.
+// Diagnostics are parsed from stderr: Godot logs SCRIPT ERROR lines but still
+// exits 0 when the target script fails to compile.
 func runGDScriptCheck(ctx context.Context, projectPath, scriptFull string) ([]scriptDiagnostic, error) {
 	rel, err := filepath.Rel(projectPath, scriptFull)
 	if err != nil {
@@ -89,9 +74,6 @@ func runGDScriptCheck(ctx context.Context, projectPath, scriptFull string) ([]sc
 	if err != nil {
 		return nil, fmt.Errorf("run script checker: %w", err)
 	}
-	// Combine the exit code with stderr: Godot logs SCRIPT ERROR lines to
-	// stderr but still exits 0, while a usage/startup failure exits non-zero.
-	// Diagnostics are parsed first; any remaining stderr is unexpected.
 	diagnostics := parseGodotScriptDiagnostics(stderr)
 	for i := range diagnostics {
 		diagnostics[i].File = projectRelativePath(diagnostics[i].File)
@@ -102,8 +84,6 @@ func runGDScriptCheck(ctx context.Context, projectPath, scriptFull string) ([]sc
 	return diagnostics, nil
 }
 
-// collectGdPaths deduplicates .gd paths across git outputs, normalizing
-// backslashes to forward slashes and trimming surrounding whitespace.
 func collectGdPaths(outputs []string) []string {
 	result := make([]string, 0)
 	seen := make(map[string]bool)
@@ -123,10 +103,6 @@ func collectGdPaths(outputs []string) []string {
 	return result
 }
 
-// listChangedGdFiles returns the .gd files git reports as changed (unstaged,
-// staged, or untracked) relative to projectPath. A project that is not a git
-// work tree is an error so the caller can fall back to scope "all" or an
-// explicit scriptPaths list.
 func listChangedGdFiles(ctx context.Context, projectPath string) ([]string, error) {
 	git := func(args ...string) (string, error) {
 		cmd := exec.CommandContext(ctx, "git", append([]string{"-c", "core.quotepath=false", "-C", projectPath}, args...)...) //nolint:gosec // git args are fixed and projectPath is caller-controlled.
@@ -157,9 +133,6 @@ func listChangedGdFiles(ctx context.Context, projectPath string) ([]string, erro
 	return collectGdPaths(outputs), nil
 }
 
-// listAllGdFiles walks projectPath and returns every .gd file relative to the
-// project root with forward slashes, skipping Godot, VCS, dependency, import,
-// and hidden directories.
 func listAllGdFiles(projectPath string) []string {
 	results := make([]string, 0)
 	skipDirs := map[string]bool{

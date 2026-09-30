@@ -7,16 +7,12 @@ import (
 	"os/exec"
 )
 
-// executablePath and startDetachedDaemon are the spawn seams: tests replace them
-// to observe the child command without launching a real process.
+// Spawn seams; tests replace them to observe the child command.
 var (
 	executablePath      = os.Executable
 	startDetachedDaemon = detachDaemon
 )
 
-// daemonChildArgs returns the argv a detached daemon child should run: the
-// daemon subcommand bound to the same project, with the daemon-role options
-// carried over and the log path made explicit.
 func daemonChildArgs(root string, opts *options, logPath string) []string {
 	args := make([]string, 0, 12+2*len(opts.enable))
 	args = append(args,
@@ -26,9 +22,7 @@ func daemonChildArgs(root string, opts *options, logPath string) []string {
 		"--log-file", logPath,
 		"--idle-timeout", opts.idleTimeout.String(),
 	)
-	// Forward --transport only when the user actually set it, so a release
-	// child that does not register the flag is never handed an unknown
-	// argument. It keeps the spawned daemon and its client on one transport.
+	// Forward --transport only when set, so a release child never sees an unknown flag.
 	if opts.transportSet {
 		args = append(args, "--transport", opts.transport)
 	}
@@ -38,10 +32,6 @@ func daemonChildArgs(root string, opts *options, logPath string) []string {
 	return args
 }
 
-// detachDaemon re-execs the binary as a detached daemon child. The child's stdio
-// is the per-project log file, so it has no terminal, and its process group is
-// detached by detachProcAttr on platforms that support it. The parent does not
-// wait for the child: Start then Release leaves it running on its own.
 func detachDaemon(exe, root string, opts *options, logPath string) error {
 	logFile, err := openDaemonLog(logPath)
 	if err != nil {

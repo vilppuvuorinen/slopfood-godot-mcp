@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// TestRemoveSceneNodeTool drives the real remove_scene_node tool against Godot
-// and checks the saved scene no longer references the removed node.
 func TestRemoveSceneNodeTool(t *testing.T) {
 	t.Parallel()
 	root, session := seedScene(t, "scenes/main.tscn", "Node2D")
@@ -25,8 +23,6 @@ func TestRemoveSceneNodeTool(t *testing.T) {
 	requireNotContains(t, readFile(t, filepath.Join(root, "scenes", "main.tscn")), "Player")
 }
 
-// TestRemoveSceneNodeRoot verifies the operations script refuses to remove the
-// scene root and that the refusal surfaces as a failed tool result.
 func TestRemoveSceneNodeRoot(t *testing.T) {
 	t.Parallel()
 	_, session := seedScene(t, "scenes/main.tscn", "Node2D")
@@ -41,11 +37,8 @@ func TestRemoveSceneNodeRoot(t *testing.T) {
 	requireContains(t, firstText(t, res), "remove_node failed", "Failed to remove the root node")
 }
 
-// TestRemoveSceneNodeErrors covers the reference's validation and failure messages.
 func TestRemoveSceneNodeErrors(t *testing.T) {
 	t.Parallel()
-	// Every project-backed case shares one warm project and session; only "not a
-	// project" needs its own non-project directory.
 	root := newProject(t)
 	session := connectProject(t, root)
 

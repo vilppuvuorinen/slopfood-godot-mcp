@@ -15,14 +15,10 @@ import (
 	"time"
 )
 
-// daemonListen returns a ListenFunc handing out l, so a test can dial the
-// daemon through the in-process backend while the daemon still owns the
-// listener's lifecycle.
 func daemonListen(l Listener) ListenFunc {
 	return func(string) (Listener, error) { return l, nil }
 }
 
-// stopDaemon closes the daemon and asserts its accept loop returned cleanly.
 func stopDaemon(t *testing.T, d *Daemon, done <-chan error) {
 	t.Helper()
 	if err := d.Close(); err != nil {
@@ -38,9 +34,6 @@ func stopDaemon(t *testing.T, d *Daemon, done <-chan error) {
 	}
 }
 
-// TestDaemonServesAcceptedConnections drives the line protocol through the
-// accept loop: the daemon accepts an in-process connection and serves it on the
-// shared server, exactly as it will serve an accepted socket.
 func TestDaemonServesAcceptedConnections(t *testing.T) {
 	l := NewInProcListener()
 	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
@@ -67,9 +60,6 @@ func TestDaemonServesAcceptedConnections(t *testing.T) {
 	stopDaemon(t, d, done)
 }
 
-// TestDaemonServeConnectionServesStdio asserts the stdio path is served as one
-// connection to the core: the same line protocol answers it, with no separate
-// stdio code path.
 func TestDaemonServeConnectionServesStdio(t *testing.T) {
 	var out bytes.Buffer
 	conn := NewStdioConn(strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`+"\n"), &out)
@@ -84,8 +74,6 @@ func TestDaemonServeConnectionServesStdio(t *testing.T) {
 	}
 }
 
-// TestDaemonCloseClosesActiveConnections asserts Close tears down a served
-// connection, so a client cannot outlive the daemon that served it.
 func TestDaemonCloseClosesActiveConnections(t *testing.T) {
 	l := NewInProcListener()
 	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
@@ -98,8 +86,6 @@ func TestDaemonCloseClosesActiveConnections(t *testing.T) {
 	}
 	defer client.Close()
 
-	// A round trip proves the daemon accepted and is serving the connection
-	// before Close runs.
 	if _, err := io.WriteString(client, `{"jsonrpc":"2.0","id":1,"method":"ping"}`+"\n"); err != nil {
 		t.Fatalf("write request: %v", err)
 	}
@@ -114,8 +100,6 @@ func TestDaemonCloseClosesActiveConnections(t *testing.T) {
 	}
 }
 
-// TestDaemonSerializesAcrossConnections asserts every connection shares the
-// daemon's one queue, so concurrent clients never run engine work at once.
 func TestDaemonSerializesAcrossConnections(t *testing.T) {
 	srv := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	var active, maxActive int64
@@ -172,8 +156,6 @@ func TestDaemonSerializesAcrossConnections(t *testing.T) {
 	}
 }
 
-// TestDaemonCloseClosesQueue asserts ownership: the queue dies with the daemon,
-// so a later submit is rejected rather than run.
 func TestDaemonCloseClosesQueue(t *testing.T) {
 	queue := NewQueue(1, testQueueTimeout)
 	d := NewDaemon(testServer(), queue, ListenInProc, "")
@@ -186,8 +168,6 @@ func TestDaemonCloseClosesQueue(t *testing.T) {
 	}
 }
 
-// TestDaemonServeAfterCloseFails asserts a closed daemon starts no new work,
-// including dropping a connection offered directly to the core.
 func TestDaemonServeAfterCloseFails(t *testing.T) {
 	d := NewDaemon(testServer(), nil, ListenInProc, "")
 	if err := d.Close(); err != nil {
@@ -204,8 +184,6 @@ func TestDaemonServeAfterCloseFails(t *testing.T) {
 	}
 }
 
-// TestDaemonServeStopsOnContextCancel asserts a canceled context stops the
-// accept loop, so shutdown does not have to wait for Close.
 func TestDaemonServeStopsOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	l := NewInProcListener()
@@ -227,8 +205,6 @@ func TestDaemonServeStopsOnContextCancel(t *testing.T) {
 	}
 }
 
-// awaitCondition polls cond until it holds or a deadline passes, for the
-// asynchronous transitions the accept loop and grace timer make.
 func awaitCondition(t *testing.T, cond func() bool, what string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
@@ -241,8 +217,6 @@ func awaitCondition(t *testing.T, cond func() bool, what string) {
 	t.Fatalf("timed out waiting for %s", what)
 }
 
-// roundTripPing writes a request and reads its response, proving the daemon
-// accepted and is serving the connection.
 func roundTripPing(t *testing.T, client io.ReadWriteCloser) {
 	t.Helper()
 	if _, err := io.WriteString(client, `{"jsonrpc":"2.0","id":1,"method":"ping"}`+"\n"); err != nil {
@@ -253,9 +227,6 @@ func roundTripPing(t *testing.T, client io.ReadWriteCloser) {
 	}
 }
 
-// TestDaemonActiveConnections asserts the daemon accounts for peers: a served
-// connection is counted until it leaves, which is the figure the idle timer
-// watches.
 func TestDaemonActiveConnections(t *testing.T) {
 	l := NewInProcListener()
 	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
@@ -276,8 +247,6 @@ func TestDaemonActiveConnections(t *testing.T) {
 	stopDaemon(t, d, done)
 }
 
-// TestDaemonIdleExit asserts a daemon that never gets a connection shuts itself
-// down after the grace period, the same exit a leftover spawned daemon needs.
 func TestDaemonIdleExit(t *testing.T) {
 	l := NewInProcListener()
 	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
@@ -303,9 +272,6 @@ func TestDaemonIdleExit(t *testing.T) {
 	}
 }
 
-// TestDaemonConnectionDisarmsIdleTimer asserts an attached peer keeps the
-// daemon alive: while a connection is held past the grace period nothing
-// happens, and once it leaves the countdown resumes.
 func TestDaemonConnectionDisarmsIdleTimer(t *testing.T) {
 	l := NewInProcListener()
 	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
@@ -340,8 +306,6 @@ func TestDaemonConnectionDisarmsIdleTimer(t *testing.T) {
 	}
 }
 
-// TestDaemonIdleDisabledByDefault asserts a daemon with no configured idle
-// timeout stays up, so the default behavior is unchanged.
 func TestDaemonIdleDisabledByDefault(t *testing.T) {
 	l := NewInProcListener()
 	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
@@ -356,8 +320,6 @@ func TestDaemonIdleDisabledByDefault(t *testing.T) {
 	stopDaemon(t, d, done)
 }
 
-// TestDaemonShutdownStopsServe asserts the shutdown hook stops the accept loop
-// through the lifetime context, without waiting for Close.
 func TestDaemonShutdownStopsServe(t *testing.T) {
 	l := NewInProcListener()
 	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
@@ -412,9 +374,6 @@ func TestStdioConnAdaptsStreams(t *testing.T) {
 	}
 }
 
-// TestDaemonRejectsUnidentifiedPeer asserts a peer whose transport fails to
-// identify it for any reason other than "unsupported" is closed and never
-// served.
 func TestDaemonRejectsUnidentifiedPeer(t *testing.T) {
 	d := NewDaemon(testServer(), nil, ListenInProc, "")
 	defer func() { _ = d.Close() }()
@@ -428,8 +387,6 @@ func TestDaemonRejectsUnidentifiedPeer(t *testing.T) {
 	}
 }
 
-// TestDaemonRejectsDifferentUser asserts a peer from another UID is closed and
-// never served, the defense in depth over the socket's file mode.
 func TestDaemonRejectsDifferentUser(t *testing.T) {
 	d := NewDaemon(testServer(), nil, ListenInProc, "")
 	defer func() { _ = d.Close() }()
@@ -443,9 +400,6 @@ func TestDaemonRejectsDifferentUser(t *testing.T) {
 	}
 }
 
-// TestDaemonRejectsAbsentPeerWithoutToken asserts a transport with no peer
-// identity and no filesystem gate (TCP) is rejected when its token pre-auth did
-// not succeed, so it cannot fall through to trusting the transport.
 func TestDaemonRejectsAbsentPeerWithoutToken(t *testing.T) {
 	d := NewDaemon(testServer(), nil, ListenInProc, "")
 	defer func() { _ = d.Close() }()
@@ -459,8 +413,6 @@ func TestDaemonRejectsAbsentPeerWithoutToken(t *testing.T) {
 	}
 }
 
-// TestDaemonAllowsAuthenticatedAbsentPeer asserts a TCP connection whose token
-// pre-auth succeeded is admitted despite the absent peer identity.
 func TestDaemonAllowsAuthenticatedAbsentPeer(t *testing.T) {
 	conn := &authConn{
 		fakeConn: fakeConn{in: strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n")},
@@ -468,8 +420,7 @@ func TestDaemonAllowsAuthenticatedAbsentPeer(t *testing.T) {
 	d := NewDaemon(testServer(), nil, ListenInProc, "")
 	defer func() { _ = d.Close() }()
 
-	// ServeConnection does not run the pre-auth hook; authenticate directly to
-	// model a token transport that has already pre-authed.
+	// ServeConnection does not run the pre-auth hook, so authenticate directly.
 	if err := conn.Authenticate(); err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
@@ -481,9 +432,6 @@ func TestDaemonAllowsAuthenticatedAbsentPeer(t *testing.T) {
 	}
 }
 
-// TestDaemonAllowsUnsupportedPeerIdentity asserts a platform that reports peer
-// credentials as unsupported is allowed through, relying on the transport's
-// filesystem permissions instead.
 func TestDaemonAllowsUnsupportedPeerIdentity(t *testing.T) {
 	conn := &fakeConn{
 		in:      strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n"),

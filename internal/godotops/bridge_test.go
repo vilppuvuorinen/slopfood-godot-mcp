@@ -11,9 +11,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 )
 
-// requireGodot returns a usable engine path or skips the test. The unit-test
-// job can run without Godot, so a missing engine is a skip rather than a
-// failure.
 func requireGodot(t *testing.T) string {
 	t.Helper()
 	path := godot.Path()
@@ -23,12 +20,6 @@ func requireGodot(t *testing.T) string {
 	return path
 }
 
-// TestDispatchSurvivesHandlerAbort is the end-to-end guard for the bridge's
-// recovery path: a handler that hits an unhandled engine error returns null
-// instead of its Result, which would make the driver dereference null and leave
-// the operation without a response frame. The operation must instead fail
-// cleanly with exit code 1. read_scene is the vehicle: a non-string scenePath
-// cannot call begins_with, so the handler aborts.
 func TestDispatchSurvivesHandlerAbort(t *testing.T) {
 	engine := requireGodot(t)
 	withCache(t)
@@ -43,7 +34,6 @@ func TestDispatchSurvivesHandlerAbort(t *testing.T) {
 
 	sess := godot.NewSession(engine, script)
 	defer func() { _ = sess.Close() }()
-	// A bounded context keeps a regression from hanging the suite.
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	_, stderr, exitCode, err := sess.Run(ctx, project, "read_scene",

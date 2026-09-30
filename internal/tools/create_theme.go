@@ -8,8 +8,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-// themeDefaultsSchema is the input schema shared by create_theme and
-// modify_theme: the theme-level defaults both tools accept.
 func themeDefaultsSchema() map[string]any {
 	return map[string]any{
 		"defaultFont":      godotValueSchema("Default font as a res:// path or tagged Resource"),
@@ -72,8 +70,6 @@ func handleCreateTheme(ctx Context, raw json.RawMessage) (any, error) {
 	})
 }
 
-// addThemeDefaults copies the theme-level default fields onto params when
-// present.
 func addThemeDefaults(params map[string]any, defaultFont any, defaultFontSize *int, defaultBaseScale any) {
 	if defaultFont != nil {
 		params["defaultFont"] = defaultFont

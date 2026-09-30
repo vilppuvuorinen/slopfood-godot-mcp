@@ -9,9 +9,7 @@ import (
 	"testing"
 )
 
-// fakeConn is an in-memory Connection. Reads come from in and writes go to out,
-// so Serve and the byte pump can be exercised without a socket, and PeerIdentity
-// reports whatever the test configured.
+// In-memory Connection; PeerIdentity reports whatever the test configured.
 type fakeConn struct {
 	in      io.Reader
 	out     bytes.Buffer
@@ -34,9 +32,7 @@ func (c *fakeConn) PeerIdentity() (PeerIdentity, error) {
 	return c.peer, c.peerErr
 }
 
-// authConn is a fake TokenConnection: it wraps a fakeConn, reports the absent
-// peer identity sentinel, and authenticates according to authErr. It models the
-// TCP transport's contract without a socket.
+// Fake TokenConnection modeling the TCP transport's contract without a socket.
 type authConn struct {
 	fakeConn
 	authErr       error
@@ -57,12 +53,9 @@ func (c *authConn) PeerIdentity() (PeerIdentity, error) {
 	return PeerIdentity{}, errPeerIdentityAbsent
 }
 
-// errListenerClosed is the error fakeListener reports once Close has been called.
 var errListenerClosed = errors.New("listener closed")
 
-// fakeListener yields the connections queued on conns until it is closed, after
-// which Accept fails. Closed is checked first so the ordering stays deterministic
-// even when a connection is queued at the same time.
+// Yields queued connections until closed; the closed check comes first for determinism.
 type fakeListener struct {
 	conns  chan Connection
 	closed chan struct{}
@@ -93,9 +86,6 @@ var (
 	_ TokenConnection = (*authConn)(nil)
 )
 
-// TestConnectionServesProtocol asserts a Connection is exactly what Serve
-// consumes: the daemon can run the existing line protocol over the abstraction
-// without knowing it is not stdio.
 func TestConnectionServesProtocol(t *testing.T) {
 	conn := &fakeConn{in: strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n")}
 
@@ -164,8 +154,6 @@ func TestListenerCloseStopsAccept(t *testing.T) {
 	}
 }
 
-// TestListenFuncReturnsListener asserts the listen seam is a function the daemon
-// can hold as a dependency, decoupled from any concrete backend.
 func TestListenFuncReturnsListener(t *testing.T) {
 	l := &fakeListener{conns: make(chan Connection), closed: make(chan struct{})}
 	var gotAddr string

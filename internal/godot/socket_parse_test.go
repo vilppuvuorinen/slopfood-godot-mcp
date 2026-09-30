@@ -36,8 +36,6 @@ func TestParseReadyObject(t *testing.T) {
 	}
 }
 
-// TestParseReadyTCPObject asserts a TCP readiness object carries its host and
-// port instead of a path.
 func TestParseReadyTCPObject(t *testing.T) {
 	line := `{"ready":true,"transport":"tcp","host":"127.0.0.1","port":44444,"token":"cd"}` + "\n"
 	info, err := parseReady(line)

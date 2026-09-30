@@ -7,7 +7,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotconfig"
 )
 
-// hasRequired reports whether schema requires every key.
 func hasRequired(schema map[string]any, keys ...string) bool {
 	required, _ := schema["required"].([]string)
 	for _, key := range keys {
@@ -25,12 +24,6 @@ func hasRequired(schema map[string]any, keys ...string) bool {
 	return true
 }
 
-// TestGodotValueSchemaAdvertisesContract verifies a value slot names the
-// JSON-native types as anyOf branches with single string types, so the value
-// contract is visible without an array-valued top-level type that stricter
-// schema clients reject. It also verifies every value slot appends the shared
-// tag-enumerating contract, so a client learns the engine-only $type tags from
-// the schema alone.
 func TestGodotValueSchemaAdvertisesContract(t *testing.T) {
 	const local = "A value in the tool value contract"
 	schema := godotValueSchema(local)
@@ -60,11 +53,6 @@ func TestGodotValueSchemaAdvertisesContract(t *testing.T) {
 	}
 }
 
-// TestStatusOutputSchemaRequiresEnvelope verifies the status envelope is
-// advertised and required, so a mutation result is never described loosely.
-// It also verifies the success schema omits solutions, which only an error
-// result ever carries, and documents message's meaning through the shared
-// contract.
 func TestStatusOutputSchemaRequiresEnvelope(t *testing.T) {
 	schema := statusOutputSchema(map[string]any{"name": map[string]any{"type": "string"}})
 	if !hasRequired(schema, "success", "message") {
@@ -88,11 +76,6 @@ func TestStatusOutputSchemaRequiresEnvelope(t *testing.T) {
 	}
 }
 
-// TestMutationErrorCarriesStatusEnvelope verifies a failing mutation returns the
-// success/message envelope its outputSchema requires, so a client validating
-// structuredContent finds the required fields instead of an absent body. Errors
-// are spec-permissible without structuredContent, but this keeps the declared
-// schema true.
 func TestMutationErrorCarriesStatusEnvelope(t *testing.T) {
 	tool := removeSceneNode()
 	result := callToolArgs(t, tool, "", "{}")
@@ -114,9 +97,6 @@ func TestMutationErrorCarriesStatusEnvelope(t *testing.T) {
 	}
 }
 
-// TestPayloadOutputSchemaPinsShape verifies a bare payload schema declares its
-// fields and requires every one, while still omitting the status envelope, so
-// a read or list result is described as precisely as a mutation's envelope.
 func TestPayloadOutputSchemaPinsShape(t *testing.T) {
 	schema := payloadOutputSchema(map[string]any{"value": map[string]any{"type": "string"}})
 	required, _ := schema["required"].([]string)

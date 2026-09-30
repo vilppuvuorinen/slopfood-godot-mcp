@@ -10,9 +10,7 @@ import (
 
 const boxMeshResource = "[gd_resource type=\"BoxMesh\" format=3]\n\n[resource]\nsize = Vector3(1, 1, 1)\n"
 
-// The collision/preview fixtures: a BoxMesh whose material carries an albedo
-// texture, plus a BoxShape3D for a CollisionShape3D child. A plain BoxMesh
-// reaches neither branch of export_mesh_library.
+// A plain BoxMesh reaches neither branch of export_mesh_library, so these fixtures add a collision shape and an albedo texture.
 const (
 	gradientTextureResource = `[gd_resource type="GradientTexture2D" format=3]
 
@@ -44,8 +42,6 @@ size = Vector3(1, 1, 1)
 `
 )
 
-// seedMeshScene creates a Node3D scene at scenePath with a mesh-bearing node so
-// export_mesh_library has something to export.
 func seedMeshScene(t *testing.T, session *mcp.ClientSession, scenePath string) {
 	t.Helper()
 	createScene(t, session, scenePath, "Node3D")
@@ -61,11 +57,8 @@ func seedMeshScene(t *testing.T, session *mcp.ClientSession, scenePath string) {
 	}
 }
 
-// TestExportMeshLibraryTool drives the real export_mesh_library tool against
-// Godot, including the optional meshItemNames filter.
 func TestExportMeshLibraryTool(t *testing.T) {
 	t.Parallel()
-	// One warm project and session serve all three subtests; each owns its scene.
 	root := newProject(t)
 	session := connectProject(t, root)
 	writeE2EFile(t, filepath.Join(root, "box.tres"), boxMeshResource)
@@ -99,8 +92,7 @@ func TestExportMeshLibraryTool(t *testing.T) {
 	t.Run("specific mesh item names", func(t *testing.T) {
 		const scene = "scenes/named.tscn"
 		seedMeshScene(t, session, scene)
-		// A second mesh the filter must exclude, so a filter that silently
-		// exports everything cannot pass.
+		// A second mesh the filter must exclude, so an unfiltered export cannot pass.
 		requireToolText(t, session, "add_node", map[string]any{
 			"scenePath":  scene,
 			"nodeType":   "MeshInstance3D",
@@ -123,11 +115,7 @@ func TestExportMeshLibraryTool(t *testing.T) {
 	})
 }
 
-// TestExportMeshLibraryCollisionAndPreview covers the two MeshLibrary features
-// a material-less mesh does not reach: a CollisionShape3D child becomes an item
-// shape, and a mesh whose material carries an albedo texture becomes the item
-// preview. It exports to a .tres so the serialized library can be checked as
-// text instead of through a resource reader that does not exist.
+// Covers a CollisionShape3D child becoming an item shape and an albedo-textured mesh becoming the item preview.
 func TestExportMeshLibraryCollisionAndPreview(t *testing.T) {
 	t.Parallel()
 	root, session := seedScene(t, "scenes/main.tscn", "Node3D")
@@ -166,13 +154,9 @@ func TestExportMeshLibraryCollisionAndPreview(t *testing.T) {
 	)
 }
 
-// TestExportMeshLibraryDescendantAndPreview covers the two mesh-collection
-// branches a direct MeshInstance3D child never reaches: a mesh found on a
-// descendant of a holder node, and the absence of a preview when the mesh's
-// material carries no albedo texture.
+// Covers a mesh found on a descendant holder and the absence of a preview without an albedo texture.
 func TestExportMeshLibraryDescendantAndPreview(t *testing.T) {
 	t.Parallel()
-	// Both subtests share one warm project and session; each owns its scene.
 	root := newProject(t)
 	session := connectProject(t, root)
 	writeE2EFile(t, filepath.Join(root, "box.tres"), boxMeshResource)
@@ -181,8 +165,7 @@ func TestExportMeshLibraryDescendantAndPreview(t *testing.T) {
 		const scene = "scenes/descendant.tscn"
 		createScene(t, session, scene, "Node3D")
 
-		// Holder is not itself a mesh; only the descendant search can collect
-		// its MeshInstance3D child.
+		// Holder is not itself a mesh; only the descendant search can collect its child.
 		requireToolText(t, session, "add_node", map[string]any{
 			"scenePath": scene,
 			"nodeType":  "Node3D",
@@ -220,11 +203,8 @@ func TestExportMeshLibraryDescendantAndPreview(t *testing.T) {
 	})
 }
 
-// TestExportMeshLibraryErrors covers the reference's validation messages.
 func TestExportMeshLibraryErrors(t *testing.T) {
 	t.Parallel()
-	// Every project-backed case shares one warm project and session; only "not a
-	// project" needs its own non-project directory.
 	root := newProject(t)
 	session := connectProject(t, root)
 	writeE2EFile(t, filepath.Join(root, "box.tres"), boxMeshResource)
@@ -279,11 +259,7 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 	t.Run("output directory failure", func(t *testing.T) {
 		seedMeshScene(t, session, "scenes/blocked_dir.tscn")
 
-		// An absolute output path whose ancestor is a regular file makes
-		// make_dir_recursive_absolute fail on any filesystem, unlike an
-		// unwritable path whose result depends on the running user's
-		// privileges. The blocker must be an ancestor, not the immediate
-		// parent: Godot reports OK when a file shadows the final component.
+		// An ancestor file makes make_dir_recursive_absolute fail on any filesystem; a file at the final component is reported OK.
 		writeE2EFile(t, filepath.Join(root, "blocked"), "not a directory\n")
 
 		res := callTool(t, session, "export_mesh_library", map[string]any{
@@ -293,8 +269,7 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 		if !res.IsError {
 			t.Fatal("export_mesh_library: expected an error result")
 		}
-		// The handler reports the directory failure and stops; it must not go on
-		// to attempt the save and report a second, misleading error.
+		// The handler must stop after the directory failure, not attempt a save that reports a second error.
 		text := firstText(t, res)
 		requireContains(t, text, "Failed to export mesh library", "Failed to create directory")
 		requireNotContains(t, text, "Failed to save MeshLibrary")
@@ -303,9 +278,7 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 	t.Run("save failure", func(t *testing.T) {
 		seedMeshScene(t, session, "scenes/save_fail.tscn")
 
-		// A directory already sitting at the output path lets directory
-		// creation succeed but makes the save fail, independent of which
-		// paths the running user can write.
+		// A directory at the output path lets directory creation succeed but makes the save fail.
 		if err := os.MkdirAll(filepath.Join(root, "exported", "meshlib_savefail.res"), 0o755); err != nil {
 			t.Fatalf("seed output directory: %v", err)
 		}

@@ -6,12 +6,7 @@ import (
 	"testing"
 )
 
-// TestAddNodeFromGlobalClass covers the operations script's global-class
-// instantiation path (get_script_by_name followed by script.new()), which a
-// built-in ClassDB node never reaches. The global class registry is populated
-// by an editor filesystem scan, so an --import (driven here by
-// reimport_project) must run after the script is written and before
-// add_node names the class.
+// Global class registration needs an import after the script is written and before add_node.
 func TestAddNodeFromGlobalClass(t *testing.T) {
 	t.Parallel()
 	root := newProject(t)

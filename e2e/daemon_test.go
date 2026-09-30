@@ -9,18 +9,12 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// daemonProjectArgs is the shared --enable/--project prefix the daemon tests
-// pass to connectInRuntime, plus any per-test flags.
 func daemonProjectArgs(project string, extra ...string) []string {
 	args := make([]string, 0, 4+len(extra))
 	args = append(args, "--enable", "all", "--project", project)
 	return append(args, extra...)
 }
 
-// TestDaemonSimultaneousSpawnsYieldOneDaemon starts several thin clients at
-// once against one project and runtime dir, so several race to spawn a daemon.
-// Exactly one must win the lock; the rest connect to it. Closing the sessions
-// lets the daemon idle out.
 func TestDaemonSimultaneousSpawnsYieldOneDaemon(t *testing.T) {
 	t.Parallel()
 	project := newProject(t)
@@ -52,8 +46,6 @@ func TestDaemonSimultaneousSpawnsYieldOneDaemon(t *testing.T) {
 		t.Fatalf("connected %d sessions, want %d", len(sessions), clients)
 	}
 
-	// Every client reached the one daemon, so serving tools/list on all of them
-	// then finding exactly one daemon proves the losers exited.
 	for _, session := range sessions {
 		if _, err := session.ListTools(context.Background(), nil); err != nil {
 			t.Errorf("tools/list: %v", err)
@@ -69,9 +61,6 @@ func TestDaemonSimultaneousSpawnsYieldOneDaemon(t *testing.T) {
 	waitForNoDaemon(t, project)
 }
 
-// TestDaemonStaleSocketReclaimed SIGKILLs the daemon behind a live session,
-// leaving its socket and lock file behind, then starts a new client that must
-// reclaim the stale path and serve normally.
 func TestDaemonStaleSocketReclaimed(t *testing.T) {
 	t.Parallel()
 	project := newProject(t)
@@ -94,8 +83,7 @@ func TestDaemonStaleSocketReclaimed(t *testing.T) {
 	if findErr != nil {
 		t.Fatalf("find process %d: %v", pids[0], findErr)
 	}
-	// SIGKILL skips the daemon's cleanup, leaving the socket and lock file, the
-	// crash a reclaim has to recover from.
+	// SIGKILL skips cleanup, leaving the socket and lock file a reclaim must recover from.
 	if killErr := daemon.Kill(); killErr != nil {
 		t.Fatalf("kill daemon %d: %v", pids[0], killErr)
 	}
@@ -111,9 +99,6 @@ func TestDaemonStaleSocketReclaimed(t *testing.T) {
 	}
 }
 
-// TestDaemonIdleExitAndRespawn asserts a daemon exits after its idle grace
-// period once the last client leaves, and that a new client respawns one on the
-// same path.
 func TestDaemonIdleExitAndRespawn(t *testing.T) {
 	t.Parallel()
 	project := newProject(t)
@@ -140,11 +125,7 @@ func TestDaemonIdleExitAndRespawn(t *testing.T) {
 	}
 }
 
-// TestDaemonConcurrentMutationsNoLostUpdate is the end-to-end lost-update proof:
-// two agents share one daemon and edit the same scene at once. The daemon's one
-// queue serializes the read-modify-write in add_node, so both nodes survive; two
-// independent daemons would each load the original scene and the second save
-// would clobber the first.
+// The daemon's one queue serializes add_node's read-modify-write, so concurrent editors do not lose updates.
 func TestDaemonConcurrentMutationsNoLostUpdate(t *testing.T) {
 	t.Parallel()
 	project := newProject(t)
@@ -160,8 +141,6 @@ func TestDaemonConcurrentMutationsNoLostUpdate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("connect second: %v", err)
 	}
-	// Both sessions must hit the same daemon for the shared queue to be the one
-	// serialization point.
 	waitForDaemon(t, project, 1)
 
 	type result struct {

@@ -5,8 +5,6 @@ import (
 	"testing"
 )
 
-// TestAttachScriptTool drives the real attach_script tool against Godot and
-// checks the saved scene references the attached script.
 func TestAttachScriptTool(t *testing.T) {
 	t.Parallel()
 	root, session := seedScene(t, "scenes/main.tscn", "Node2D")
@@ -22,11 +20,8 @@ func TestAttachScriptTool(t *testing.T) {
 	requireContains(t, scene, "script = ExtResource(", "res://scripts/player.gd")
 }
 
-// TestAttachScriptErrors covers the reference's validation and failure messages.
 func TestAttachScriptErrors(t *testing.T) {
 	t.Parallel()
-	// The three engine-backed cases share one warm project and session; each
-	// owns its scene and script fixtures.
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -96,8 +91,7 @@ func TestAttachScriptErrors(t *testing.T) {
 		createScene(t, session, scene, "Node2D")
 		writeE2EFile(t, filepath.Join(root, "scripts", "thing.tres"), resourceTres)
 
-		// A non-.gd resource path resolves but is not a valid script, so the
-		// failure surfaces from the engine's set_script call.
+		// A non-.gd resource resolves but is not a valid script, so the engine's set_script fails.
 		res := callTool(t, session, "attach_script", map[string]any{
 			"scenePath":  scene,
 			"nodePath":   "root",

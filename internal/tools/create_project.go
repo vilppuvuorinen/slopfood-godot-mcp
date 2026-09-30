@@ -19,8 +19,6 @@ const (
 	// godot4ConfigVersion is the config_version Godot 4.x writes to project.godot.
 	godot4ConfigVersion = 5
 
-	// defaultGodotVersion is written to config/features when the reference
-	// server has no version to go on.
 	defaultGodotVersion = "4.4"
 
 	defaultGodotNetSDKVersion    = "4.4.0"
@@ -127,17 +125,13 @@ var (
 	godotStableVersion    = regexp.MustCompile(`^(\d+)\.(\d+)(?:\.\d+)?\.stable\b`)
 )
 
-// escapeGodotString escapes a value for embedding in a double-quoted Godot
-// config string. Godot's variant parser understands C-style escapes, so
-// backslashes and double quotes are enough to keep the value on one line.
+// escapeGodotString escapes a value for a double-quoted Godot config string.
+// Godot's variant parser understands C-style escapes.
 func escapeGodotString(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s)
 }
 
-// validProjectName reports whether a project name is safe to write into
-// project.godot. Names must be non-blank and free of control characters
-// (including newlines and NUL), which have no place in a single-line config
-// entry and would otherwise allow injection.
+// validProjectName rejects control characters that would allow config injection.
 func validProjectName(name string) bool {
 	if strings.TrimSpace(name) == "" {
 		return false
@@ -150,8 +144,6 @@ func validProjectName(name string) bool {
 	return true
 }
 
-// toDotnetIdentifier turns an arbitrary project name into a valid C#/.NET
-// identifier, replacing invalid characters and escaping a leading digit.
 func toDotnetIdentifier(name string) string {
 	cleaned := dotnetIdentifierChars.ReplaceAllString(name, "_")
 	if cleaned == "" {
@@ -163,8 +155,6 @@ func toDotnetIdentifier(name string) string {
 	return cleaned
 }
 
-// generateGodotProjectFeatures builds the config/features value written to
-// project.godot, adding the "C#" feature for .NET projects.
 func generateGodotProjectFeatures(isDotnet bool, version string) string {
 	if isDotnet {
 		return fmt.Sprintf("PackedStringArray(%q, %q)", version, "C#")
@@ -172,7 +162,6 @@ func generateGodotProjectFeatures(isDotnet bool, version string) string {
 	return fmt.Sprintf("PackedStringArray(%q)", version)
 }
 
-// generateCsprojContent builds a minimal Godot .NET SDK project file.
 func generateCsprojContent(projectName, sdkVersion, targetFramework string) string {
 	rootNamespace := toDotnetIdentifier(projectName)
 	return fmt.Sprintf(`<Project Sdk="Godot.NET.Sdk/%s">
@@ -186,9 +175,6 @@ func generateCsprojContent(projectName, sdkVersion, targetFramework string) stri
 `, sdkVersion, targetFramework, rootNamespace)
 }
 
-// detectGodotNetSDKVersion matches the installed Godot's major.minor to a
-// Godot.NET.Sdk version, falling back to the reference default when Godot is
-// unavailable or reports a non-stable build.
 func detectGodotNetSDKVersion(ctx context.Context) string {
 	out, err := godot.Version(ctx, godot.Path())
 	if err != nil {

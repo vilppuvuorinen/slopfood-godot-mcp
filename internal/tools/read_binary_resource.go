@@ -57,8 +57,7 @@ func handleReadBinaryResource(ctx Context, raw json.RawMessage) (any, error) {
 		return notAProjectResult(project), nil
 	}
 
-	// A .tres is plain text, so the engine round-trip this tool performs adds
-	// nothing a direct read would not: reject it and point at the file itself.
+	// A .tres is plain text; reject it so the caller reads the file directly.
 	if strings.HasSuffix(strings.ToLower(args.ResourcePath), ".tres") {
 		return mcp.ErrorResult(
 			"read_binary_resource reads binary .res resources; "+args.ResourcePath+" is a text .tres file.",

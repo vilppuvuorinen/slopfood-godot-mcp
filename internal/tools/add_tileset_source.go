@@ -8,8 +8,7 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-// tilesetSourceTypeNames are the tool contract's names for TileSet source
-// types, shared with the bridge in godot_operations.gd.
+// tilesetSourceTypeNames is shared with the engine bridge in godot_operations.gd.
 var tilesetSourceTypeNames = []string{"atlas", "scenes"}
 
 func addTilesetSource() mcp.Tool {
@@ -95,7 +94,6 @@ func handleAddTilesetSource(ctx Context, raw json.RawMessage) (any, error) {
 	})
 }
 
-// addTilesetSourceFields copies the source fields onto params when present.
 func addTilesetSourceFields(params map[string]any, sourceID *int, texture, margins, separation, textureRegionSize any, useTexturePadding *bool) {
 	if sourceID != nil {
 		params["sourceId"] = *sourceID

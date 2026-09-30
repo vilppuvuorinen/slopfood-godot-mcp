@@ -1,19 +1,8 @@
 name: CI
 
-# main is the only branch that earns CI: every push and manual dispatch runs the
-# full `make check` surface (gofmt/vet/lint/unit tests) plus the e2e suite fanned
-# out across each supported Godot minor line. The Godot matrix is discovered at
-# run time from upstream's newest published build for every minor at or above
-# MIN_GODOT_MINOR (dev/beta/rc included), so breakage with an upcoming release
-# surfaces early. e2e deliberately does not run on pull requests, where a new
-# upstream release could turn a green PR red for unrelated reasons.
-#
-# The build job stamps every build with a generated version, YYYY.MM.DD-<sha7>,
-# and stages the whole release matrix in dist/. A workflow_dispatch additionally
-# publishes those exact staged binaries as a GitHub Release tagged with that
-# generated version; it never rebuilds, so the release is the artifact the whole
-# gate just tested. To release a commit other than main's tip, select it as the
-# workflow ref when dispatching.
+# Runs on main pushes and workflow_dispatch: `make static` plus e2e across every
+# supported Godot minor line, including dev/beta/rc. A dispatch additionally
+# publishes the staged dist/ binaries as a release tagged with the build version.
 
 on:
   push:
@@ -25,13 +14,12 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  # Pushes supersede each other; a manual release run is never cancelled by a
-  # later push landing on main.
+  # Pushes supersede each other; a manual release is never cancelled.
   cancel-in-progress: ${{ github.event_name == 'push' }}
 
 env:
   GO_VERSION: "1.27.1"
-  # Lowest supported Godot minor line; bump by hand when support is raised.
+  # Lowest supported Godot minor line; bump when support is raised.
   MIN_GODOT_MINOR: "4.7"
 
 jobs:
@@ -45,10 +33,8 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           check-latest: true
-      # The version is the build's identity and the release tag: the UTC date
-      # plus the short commit, so a main artifact is traceable to its source and
-      # every push gets a distinct version. It is passed to make, not derived
-      # there, so local builds keep their fixed "dev" marker.
+      # Version = UTC date + short commit; passed to make so local builds keep
+      # their "dev" marker.
       - name: Generate version
         id: version
         run: |
@@ -56,15 +42,8 @@ jobs:
           version="$(date -u +%Y.%m.%d)-$(git rev-parse --short=7 HEAD)"
           echo "version=$version" >> "$GITHUB_OUTPUT"
       - run: go mod download
-      # static is the Godot-free half of `make check`: the gofmt gate, vet,
-      # lint, race unit tests, and the multi-platform build. The build stages
-      # the whole release matrix in dist/ with the generated version, so the
-      # release job and both e2e lanes download exactly those files rather than
-      # compiling their own. The build target defines no debug tags, so every
-      # uploaded artifact is clean.
       - run: make static VERSION="${{ steps.version.outputs.version }}"
-      # The release matrix, named with the generated version and checksummed.
-      # The release job publishes exactly these files and never rebuilds.
+      # The release job and e2e lanes consume exactly these staged files.
       - name: Upload release binaries
         uses: actions/upload-artifact@v4
         with:
@@ -72,9 +51,7 @@ jobs:
           path: dist/
           if-no-files-found: error
 
-  # Discover which minor lines >= MIN_GODOT_MINOR have published releases via
-  # the downloader's "minors" subcommand. The release within each line is
-  # resolved and installed per e2e job from the minor alone.
+  # Build a matrix of published Godot minor lines >= MIN_GODOT_MINOR.
   versions:
     runs-on: ubuntu-latest
     outputs:
@@ -106,8 +83,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.versions.outputs.matrix) }}
     env:
-      # Godot looks for export templates under $XDG_DATA_HOME/godot/export_templates.
-      # The path must be absolute and free of "..".
+      # Godot resolves export templates under $XDG_DATA_HOME/godot/export_templates.
       XDG_DATA_HOME: ${{ github.workspace }}/.godot
     steps:
       - uses: actions/checkout@v4
@@ -117,8 +93,7 @@ jobs:
           check-latest: true
       - name: Install Godot ${{ matrix.minor }}
         env:
-          # No pinned manifest in CI: checksums come from the godot-builds release
-          # manifest. Only unpack the Linux templates the export test needs.
+          # Verify checksums against the godot-builds release manifest.
           GODOT_VERIFY: "1"
           GODOT_TEMPLATES: "1"
           GODOT_TEMPLATE_FILES: "templates/version.txt templates/linux_*"
@@ -131,8 +106,7 @@ jobs:
         with:
           name: release-dist
           path: dist
-      # Artifacts do not carry the executable bit, so restore it before the
-      # suite execs the binary directly.
+      # Artifacts lose the executable bit; restore it before the suite execs it.
       - run: chmod +x "dist/slopfood-godot-mcp_${{ needs.build.outputs.version }}_linux_amd64"
       - name: e2e (Godot ${{ matrix.minor }})
         working-directory: e2e
@@ -143,13 +117,8 @@ jobs:
           go mod download
           go test -race -parallel 4 -covermode=atomic ./...
 
-  # e2e-windows exercises the whole runtime on Windows with one Godot build (the
-  # newest stable minor line), so the loopback-TCP engine and daemon transports
-  # are proven end to end without multiplying Windows build minutes. Only stable
-  # lines are considered: the Linux matrix chases dev/rc releases on purpose,
-  # but the Windows smoke lane should not hinge on a half-published dev build.
-  # It is functional, not the concurrency lane: -race is dropped because the
-  # Windows runner has no gcc and the Linux job already covers races.
+  # Windows smoke lane: one Godot build (newest stable minor), no -race (the
+  # runner lacks gcc; Linux covers races).
   e2e-windows:
     needs: [versions, build]
     runs-on: windows-latest
@@ -159,18 +128,13 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           check-latest: true
-      # %APPDATA% does not expand in a workflow env: block and the default
-      # Windows shell is PowerShell, so resolve Godot's template root here and
-      # export it for the later steps.
+      # %APPDATA% does not expand in an env: block; resolve it in PowerShell.
       - name: Resolve templates dir
         shell: pwsh
         run: |
           "GODOT_TEMPLATES_DIR=$env:APPDATA\Godot\export_templates" |
             Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      # One Godot version: the newest stable minor line. The downloader's
-      # surface is unchanged; install-latest resolves that line's newest stable
-      # release for GODOT_OS=windows. --stable keeps dev lines (e.g. 4.8-dev7)
-      # out of the Windows lane.
+      # Newest stable minor line; --stable keeps dev lines out of this lane.
       - name: Resolve latest stable minor
         shell: pwsh
         run: |
@@ -181,9 +145,7 @@ jobs:
             exit 1
           }
           "GODOT_MINOR=$latest" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-      # The Linux members are required even on Windows: the export e2e installs
-      # a Linux preset and exports an ELF, so its templates must be present or
-      # TestExportProjectTool fails.
+      # Linux templates are needed even here: the export e2e builds a Linux ELF.
       - name: Install Godot ${{ env.GODOT_MINOR }}
         shell: pwsh
         env:
@@ -213,11 +175,8 @@ jobs:
           go test -parallel 2 -count=1 ./...
 
   release:
-    # Manual dispatch only: pushes never release. It runs after every check, so
-    # the tagged commit is one that passed the whole Godot matrix. The version
-    # is the one the build job generated for that commit, and the assets are the
-    # dist/ files it already built and uploaded: this job downloads and
-    # publishes, it never compiles.
+    # Manual dispatch only. Publishes the dist/ files the build job already
+    # produced; never compiles.
     if: ${{ github.event_name == 'workflow_dispatch' }}
     needs: [build, e2e, e2e-windows]
     runs-on: ubuntu-latest

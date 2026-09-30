@@ -6,9 +6,6 @@ import (
 	"testing"
 )
 
-// fakeGodotOps writes an executable that stands in for Godot in scene and UID
-// tool tests. Its body is a POSIX shell script; it is pointed at with
-// GODOT_PATH so no real engine is needed.
 func fakeGodotOps(t *testing.T, body string) string {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "godot")
@@ -18,8 +15,6 @@ func fakeGodotOps(t *testing.T, body string) string {
 	return path
 }
 
-// TestScriptFailed covers the shared failure check: the exit code and stderr
-// are combined, so an unexpected stderr line fails even on exit 0.
 func TestScriptFailed(t *testing.T) {
 	tests := []struct {
 		name     string

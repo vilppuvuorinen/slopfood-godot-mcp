@@ -11,11 +11,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-// schemaViolation returns a description of the first way value fails to satisfy
-// schema, or "" when it satisfies it. root is the document root, used to
-// resolve $ref pointers. It implements only the JSON Schema keywords the
-// server's tool schemas use, which is enough to prove a runtime result conforms
-// to the schema its tool advertises.
 func schemaViolation(schema, root map[string]any, value any, path string) string {
 	if ref, ok := schema["$ref"].(string); ok {
 		resolved := resolveRef(root, ref)
@@ -107,8 +102,6 @@ func schemaViolation(schema, root map[string]any, value any, path string) string
 	return branchesViolation(schema, root, value, path)
 }
 
-// branchesViolation applies the schema's anyOf/oneOf/allOf keywords, which a
-// value can satisfy without satisfying the sibling keywords.
 func branchesViolation(schema, root map[string]any, value any, path string) string {
 	if branches, ok := schema["anyOf"].([]any); ok {
 		matched := 0
@@ -142,14 +135,11 @@ func branchesViolation(schema, root map[string]any, value any, path string) stri
 	return ""
 }
 
-// asSchema coerces a branch value to a schema, yielding an empty schema for a
-// non-map so a malformed branch constrains nothing.
 func asSchema(branch any) map[string]any {
 	schema, _ := branch.(map[string]any)
 	return schema
 }
 
-// resolveRef follows a local JSON Pointer of the form "#/a/b" from root.
 func resolveRef(root map[string]any, ref string) map[string]any {
 	if !strings.HasPrefix(ref, "#/") {
 		return nil
@@ -169,7 +159,6 @@ func resolveRef(root map[string]any, ref string) map[string]any {
 	return resolved
 }
 
-// matchesSchemaType reports whether value has the JSON type named by want.
 func matchesSchemaType(want string, value any) bool {
 	switch want {
 	case "null":
@@ -197,7 +186,6 @@ func matchesSchemaType(want string, value any) bool {
 	}
 }
 
-// containsStringValue reports whether value equals any enum entry.
 func containsStringValue(enum []string, value any) bool {
 	for _, entry := range enum {
 		if entry == value {
@@ -207,8 +195,6 @@ func containsStringValue(enum []string, value any) bool {
 	return false
 }
 
-// jsonValue normalizes a structuredContent value through JSON, so structs and
-// typed maps become the map[string]any/float64 form the schemas describe.
 func jsonValue(t *testing.T, value any) any {
 	t.Helper()
 	data, err := json.Marshal(value)
@@ -222,8 +208,6 @@ func jsonValue(t *testing.T, value any) any {
 	return normalized
 }
 
-// TestSchemaValidatorRejectsViolations guards the conformance checks: a
-// validator that never reports a violation would make them pass vacuously.
 func TestSchemaValidatorRejectsViolations(t *testing.T) {
 	schema := map[string]any{
 		"type":       "object",
@@ -244,12 +228,6 @@ func TestSchemaValidatorRejectsViolations(t *testing.T) {
 	}
 }
 
-// TestErrorResultMatchesStatusOutputSchema proves the shared error envelope
-// validates against every tool that declares it. A mutation advertises the
-// success/message envelope at the top level, so a client that eagerly validates
-// structuredContent finds the required fields on a failure. A read declares its
-// success payload alone; a read failure is signalled by isError and its envelope
-// is not part of that contract, so it is not checked here.
 func TestErrorResultMatchesStatusOutputSchema(t *testing.T) {
 	envelope := jsonValue(t, mcp.ErrorResult("boom", "try again").StructuredContent)
 	for _, category := range AllCategories {
@@ -265,10 +243,6 @@ func TestErrorResultMatchesStatusOutputSchema(t *testing.T) {
 	}
 }
 
-// TestSuccessResultsMatchOutputSchema drives the engine-free tools and checks
-// each structured result against the schema the tool advertises, so a success
-// payload that drifts from its schema fails a test rather than surfacing to a
-// client that validates eagerly.
 func TestSuccessResultsMatchOutputSchema(t *testing.T) {
 	tests := []struct {
 		name  string

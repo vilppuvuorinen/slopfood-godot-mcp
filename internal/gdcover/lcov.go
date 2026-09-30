@@ -8,15 +8,14 @@ import (
 	"strconv"
 )
 
-// Cover is the measured coverage of one instrumented script.
 type Cover struct {
-	Source string      // path recorded as SF: in the report
-	Lines  []int       // instrumentable lines
-	Hits   map[int]int // line -> execution count
+	Source string // path recorded as SF: in the report
+	Lines  []int
+	Hits   map[int]int
 }
 
-// ParseHits reads a hit trace written by an instrumented script: original line
-// numbers separated by whitespace, one per execution, in the order they ran.
+// ParseHits reads a hit trace: whitespace-separated original line numbers, one
+// per execution.
 func ParseHits(r io.Reader) (map[int]int, error) {
 	hits := map[int]int{}
 	scanner := bufio.NewScanner(r)
@@ -34,7 +33,6 @@ func ParseHits(r io.Reader) (map[int]int, error) {
 	return hits, nil
 }
 
-// HitLines returns how many instrumentable lines ran at least once.
 func (c Cover) HitLines() int {
 	hit := 0
 	for _, line := range c.Lines {
@@ -45,8 +43,8 @@ func (c Cover) HitLines() int {
 	return hit
 }
 
-// Percent returns the covered share of instrumentable lines, 0..100. A script
-// with no instrumentable lines reports 100.
+// Percent returns the covered share of instrumentable lines, 0..100; an empty
+// script reports 100.
 func (c Cover) Percent() float64 {
 	if len(c.Lines) == 0 {
 		return 100
@@ -54,8 +52,8 @@ func (c Cover) Percent() float64 {
 	return 100 * float64(c.HitLines()) / float64(len(c.Lines))
 }
 
-// WriteLCOV writes an LCOV tracefile record. Every instrumentable line is
-// reported, uncovered ones with a zero count.
+// WriteLCOV writes an LCOV tracefile record, reporting uncovered lines with a
+// zero count.
 func (c Cover) WriteLCOV(w io.Writer) error {
 	bw := bufio.NewWriter(w)
 	fmt.Fprintln(bw, "TN:")

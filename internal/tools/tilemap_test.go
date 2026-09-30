@@ -68,7 +68,6 @@ func TestReadTilemapSchema(t *testing.T) {
 	}
 }
 
-// tilemapProject creates a project with a scene the tilemap tools can load.
 func tilemapProject(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()

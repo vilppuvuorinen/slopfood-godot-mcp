@@ -9,23 +9,8 @@
 // text used by project.godot and export_presets.cfg.
 //
 // It is a Go port of the subset of Godot (4.4) needed to round-trip those
-// files. The upstream sources to diff against when syncing are:
-//
-//	core/io/config_file.cpp         ConfigFile::_parse, _internal_save
-//	core/variant/variant_parser.cpp VariantParser::get_token, parse_value,
-//	                                _parse_array, _parse_dictionary,
-//	                                _parse_tag, parse_tag_assign_eof
-//	                                VariantWriter::write
-//	core/string/ustring.cpp         String::c_escape, c_escape_multiline,
-//	                                property_name_encode, num_scientific
-//
-// Supported values: null, bool, int, float, String, StringName, Array,
-// Dictionary and PackedStringArray. Every other Variant constructor
-// (Object, Resource, Vector*, Color, NodePath, RID, Signal, ...) is captured
-// verbatim as an Opaque value so files that contain them (notably the
-// Object(InputEventKey, ...) events in project.godot's [input] section) still
-// round-trip. Opaque is opaque on purpose: its text is never interpreted, only
-// re-emitted.
+// files. Unsupported Variant constructors are captured verbatim as an Opaque
+// value so files that contain them still round-trip.
 package godotconfig
 
 import (
@@ -38,15 +23,14 @@ import (
 	"unicode"
 )
 
-// EscapeString escapes a value for a double-quoted Godot string, mirroring
-// String::c_escape_multiline (core/string/ustring.cpp). Only backslashes and
-// double quotes are escaped; literal newlines are legal inside a quoted string.
+// EscapeString escapes a double-quoted Godot string, mirroring
+// String::c_escape_multiline: only backslashes and double quotes are escaped.
 func EscapeString(s string) string {
 	return strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s)
 }
 
-// EscapeStringFull escapes a value the way String::c_escape does, including
-// control characters. PackedStringArray and StringName use this form.
+// EscapeStringFull escapes like String::c_escape, including control
+// characters; PackedStringArray and StringName use this form.
 func EscapeStringFull(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
@@ -79,8 +63,7 @@ func EscapeStringFull(s string) string {
 	return b.String()
 }
 
-// UnescapeString decodes the escape sequences VariantParser::get_token accepts
-// in a quoted string. It is the inverse of EscapeString/EscapeStringFull.
+// UnescapeString is the inverse of EscapeString/EscapeStringFull.
 func UnescapeString(s string) string {
 	var b strings.Builder
 	b.Grow(len(s))
@@ -130,9 +113,8 @@ func UnescapeString(s string) string {
 	return b.String()
 }
 
-// EncodePropertyName encodes a config key, mirroring String::property_name_encode
-// (core/string/ustring.cpp): keys containing '=', '"', ';', '[', ']', a control
-// character or non-ASCII are quoted and escaped.
+// EncodePropertyName quotes keys containing '=', '"', ';', '[', ']', a control
+// character or non-ASCII, mirroring String::property_name_encode.
 func EncodePropertyName(s string) string {
 	for _, r := range s {
 		if r == '=' || r == '"' || r == ';' || r == '[' || r == ']' || r < 33 || r > 126 {
@@ -142,33 +124,24 @@ func EncodePropertyName(s string) string {
 	return s
 }
 
-// EscapeSectionName escapes a section header, mirroring ConfigFile::_internal_save
-// (core/io/config_file.cpp), which escapes only ']'. A backslash is written
-// literally, and the parser treats the character after any backslash as escaped,
-// so a name ending in a backslash produces a tag whose closing bracket never
-// terminates; Godot itself cannot round-trip such a name. A caller that accepts
-// arbitrary section names must reject that case rather than try to escape it.
+// EscapeSectionName escapes only ']'. A name ending in a backslash cannot
+// round-trip, so a caller that accepts arbitrary section names must reject it.
 func EscapeSectionName(s string) string {
 	return strings.ReplaceAll(s, "]", `\]`)
 }
 
-// UnescapeSectionName reverses EscapeSectionName, mirroring ConfigFile::_parse.
 func UnescapeSectionName(s string) string {
 	return strings.ReplaceAll(s, `\]`, "]")
 }
 
-// Value is one Variant. The set of implementations is closed; use the types
-// below.
 type Value interface {
 	write(b *strings.Builder)
 }
 
-// Nil is the null/nil Variant.
 type Nil struct{}
 
 func (Nil) write(b *strings.Builder) { b.WriteString("null") }
 
-// Bool is the bool Variant.
 type Bool bool
 
 func (v Bool) write(b *strings.Builder) {
@@ -179,21 +152,18 @@ func (v Bool) write(b *strings.Builder) {
 	}
 }
 
-// Int is the int Variant.
 type Int int64
 
 func (v Int) write(b *strings.Builder) {
 	b.WriteString(strconv.FormatInt(int64(v), 10))
 }
 
-// Float is the float Variant.
 type Float float64
 
 func (v Float) write(b *strings.Builder) {
 	b.WriteString(formatFloat(float64(v)))
 }
 
-// String is the String Variant.
 type String string
 
 func (v String) write(b *strings.Builder) {
@@ -202,7 +172,6 @@ func (v String) write(b *strings.Builder) {
 	b.WriteByte('"')
 }
 
-// StringName is the StringName Variant, written as &"...".
 type StringName string
 
 func (v StringName) write(b *strings.Builder) {
@@ -211,7 +180,6 @@ func (v StringName) write(b *strings.Builder) {
 	b.WriteByte('"')
 }
 
-// Array is the Array Variant.
 type Array []Value
 
 func (v Array) write(b *strings.Builder) {
@@ -225,13 +193,11 @@ func (v Array) write(b *strings.Builder) {
 	b.WriteByte(']')
 }
 
-// DictEntry is one key/value pair of a Dictionary.
 type DictEntry struct {
 	Key   Value
 	Value Value
 }
 
-// Dictionary is the Dictionary Variant.
 type Dictionary struct {
 	Entries []DictEntry
 }
@@ -241,10 +207,7 @@ func (v Dictionary) write(b *strings.Builder) {
 		b.WriteString("{}")
 		return
 	}
-	// NOTE: VariantWriter sorts keys with StringLikeVariantOrder
-	// (core/variant/variant.h) before writing. We preserve insertion order;
-	// for string keys this differs only when they are inserted out of lexical
-	// order.
+	// NOTE: VariantWriter sorts keys; we preserve insertion order.
 	b.WriteString("{\n")
 	for i, e := range v.Entries {
 		writeValue(b, e.Key)
@@ -259,7 +222,6 @@ func (v Dictionary) write(b *strings.Builder) {
 	b.WriteString("}")
 }
 
-// PackedStringArray is the PackedStringArray Variant.
 type PackedStringArray []string
 
 func (v PackedStringArray) write(b *strings.Builder) {
@@ -275,10 +237,8 @@ func (v PackedStringArray) write(b *strings.Builder) {
 	b.WriteByte(')')
 }
 
-// Opaque is a Variant constructor the parser does not model, kept as its
-// verbatim source text (for example `Object(InputEventKey,...)`). It is
-// written back unchanged, so parsing and re-serializing a value that contains
-// one never rewrites it.
+// Opaque is an unmodeled Variant constructor kept as verbatim source text and
+// written back unchanged.
 type Opaque string
 
 func (v Opaque) write(b *strings.Builder) { b.WriteString(string(v)) }
@@ -291,10 +251,8 @@ func writeValue(b *strings.Builder, v Value) {
 	v.write(b)
 }
 
-// formatFloat mirrors VariantWriter's float case: rtos_fix (core/variant/
-// variant_parser.cpp) delegates to String::num_scientific, i.e. C printf
-// "%lg" (6 significant digits), then a trailing ".0" is added when the result
-// has no '.', 'e' or 'E'.
+// formatFloat mirrors C printf "%lg" (6 significant digits) plus a trailing
+// ".0" when the result has no '.', 'e' or 'E'.
 func formatFloat(f float64) string {
 	switch {
 	case math.IsNaN(f):
@@ -311,8 +269,8 @@ func formatFloat(f float64) string {
 	return s
 }
 
-// Config is a parsed ConfigFile, preserving section and key order. Keys read
-// before any section header live in the section with an empty name.
+// Config is a parsed ConfigFile preserving section and key order; keys read
+// before any section header use an empty section name.
 type Config struct {
 	Sections []Section
 }
@@ -323,13 +281,11 @@ type Section struct {
 	Keys []KeyValue
 }
 
-// KeyValue is one key/value pair within a Section.
 type KeyValue struct {
 	Key   string
 	Value Value
 }
 
-// Parse reads a ConfigFile document.
 func Parse(data string) (*Config, error) {
 	s := newScanner(data)
 	cfg := &Config{}
@@ -351,7 +307,6 @@ func Parse(data string) (*Config, error) {
 	}
 }
 
-// Encode serializes the Config back to ConfigFile text.
 func (c *Config) Encode() string {
 	var b strings.Builder
 	for i, sec := range c.Sections {
@@ -373,9 +328,8 @@ func (c *Config) Encode() string {
 	return b.String()
 }
 
-// ParseValue parses a single Variant literal, for example `0.5`, `"hi"` or
-// `{"deadzone": 0.5}`. Leading and trailing whitespace and comments are
-// ignored; any other trailing text is an error.
+// ParseValue parses a single Variant literal; trailing content other than
+// whitespace or comments is an error.
 func ParseValue(text string) (Value, error) {
 	s := newScanner(text)
 	tok, err := s.getToken()
@@ -396,8 +350,6 @@ func ParseValue(text string) (Value, error) {
 	return v, nil
 }
 
-// FormatValue serializes a single Variant the way VariantWriter would, without
-// a trailing newline.
 func FormatValue(v Value) string {
 	var b strings.Builder
 	writeValue(&b, v)
@@ -413,7 +365,6 @@ func (c *Config) section(name string) *Section {
 	return nil
 }
 
-// Get returns the value for a section/key pair.
 func (c *Config) Get(section, key string) (Value, bool) {
 	sec := c.section(section)
 	if sec == nil {
@@ -427,10 +378,8 @@ func (c *Config) Get(section, key string) (Value, bool) {
 	return nil, false
 }
 
-// Set stores a value, creating the section and overwriting an existing key.
-//
-// Deviation: ConfigFile::set_value treats a Nil value as "erase this key". We
-// store it instead so that `key=null` survives a parse/encode round trip.
+// Set stores a value, creating the section and overwriting; unlike
+// ConfigFile::set_value, a Nil value is stored so `key=null` round-trips.
 func (c *Config) Set(section, key string, value Value) {
 	sec := c.section(section)
 	if sec == nil {
@@ -446,7 +395,6 @@ func (c *Config) Set(section, key string, value Value) {
 	sec.Keys = append(sec.Keys, KeyValue{Key: key, Value: value})
 }
 
-// Delete removes a key, reporting whether it existed.
 func (c *Config) Delete(section, key string) bool {
 	sec := c.section(section)
 	if sec == nil {
@@ -461,7 +409,6 @@ func (c *Config) Delete(section, key string) bool {
 	return false
 }
 
-// DeleteSection removes a whole section, reporting whether it existed.
 func (c *Config) DeleteSection(section string) bool {
 	for i := range c.Sections {
 		if c.Sections[i].Name == section {
@@ -472,7 +419,6 @@ func (c *Config) DeleteSection(section string) bool {
 	return false
 }
 
-// SectionKeys returns a copy of a section's keys.
 func (c *Config) SectionKeys(section string) []KeyValue {
 	sec := c.section(section)
 	if sec == nil {
@@ -483,7 +429,6 @@ func (c *Config) SectionKeys(section string) []KeyValue {
 	return out
 }
 
-// tokenKind mirrors VariantParser::TokenType (core/variant/variant_parser.h).
 type tokenKind int
 
 const (
@@ -526,8 +471,6 @@ type token struct {
 	isFloat bool
 }
 
-// scanner is a rune stream with one character of pushback, mirroring
-// VariantParser::Stream plus the Stream::saved slot.
 type scanner struct {
 	src      []rune
 	pos      int
@@ -558,7 +501,6 @@ func (s *scanner) unget(c rune) {
 	s.hasSaved = true
 }
 
-// getToken mirrors VariantParser::get_token for the supported subset.
 func (s *scanner) getToken() (token, error) {
 	stringName := false
 	for {
@@ -648,7 +590,6 @@ func (s *scanner) getToken() (token, error) {
 	}
 }
 
-// readNumber mirrors the number branch of VariantParser::get_token.
 func (s *scanner) readNumber(c rune) (token, error) {
 	const (
 		readingInt = iota
@@ -732,7 +673,6 @@ func (s *scanner) readNumber(c rune) (token, error) {
 	return token{kind: tkNumber, i: i}, nil
 }
 
-// readIdentifier mirrors the identifier branch of VariantParser::get_token.
 func (s *scanner) readIdentifier(c rune) token {
 	var b strings.Builder
 	b.WriteRune(c)
@@ -751,8 +691,6 @@ func (s *scanner) readIdentifier(c rune) token {
 	return token{kind: tkIdentifier, text: b.String()}
 }
 
-// parseQuotedString mirrors the string branch of VariantParser::get_token,
-// including \u/\U and UTF-16 surrogate pairs.
 func (s *scanner) parseQuotedString() (string, error) {
 	var b strings.Builder
 	var prev rune
@@ -840,7 +778,6 @@ func (s *scanner) parseQuotedString() (string, error) {
 	return b.String(), nil
 }
 
-// parseValue mirrors VariantParser::parse_value for the supported subset.
 func (s *scanner) parseValue(tok token) (Value, error) {
 	switch tok.kind {
 	case tkCurlyOpen:
@@ -882,7 +819,6 @@ func (s *scanner) parseValue(tok token) (Value, error) {
 	return nil, fmt.Errorf("expected value, got %s", tok.kind)
 }
 
-// parseArray mirrors VariantParser::_parse_array.
 func (s *scanner) parseArray() (Array, error) {
 	arr := Array{}
 	needComma := false
@@ -913,7 +849,6 @@ func (s *scanner) parseArray() (Array, error) {
 	}
 }
 
-// parseDictionary mirrors VariantParser::_parse_dictionary.
 func (s *scanner) parseDictionary() (Dictionary, error) {
 	dict := Dictionary{}
 	atKey := true
@@ -962,7 +897,6 @@ func (s *scanner) parseDictionary() (Dictionary, error) {
 	}
 }
 
-// parsePackedStringArray mirrors the PackedStringArray branch of parse_value.
 func (s *scanner) parsePackedStringArray() (PackedStringArray, error) {
 	open, err := s.getToken()
 	if err != nil {
@@ -1004,10 +938,8 @@ func (s *scanner) parsePackedStringArray() (PackedStringArray, error) {
 	}
 }
 
-// parseConstructor captures an unsupported `Name(...)` Variant constructor as
-// its verbatim source text. It balances nested parentheses and copies quoted
-// strings whole, so `Object(InputEventKey, "resource_name": "a)b", ...)` is
-// captured intact.
+// parseConstructor captures an unsupported Name(...) constructor verbatim,
+// balancing nested parentheses and copying quoted strings whole.
 func (s *scanner) parseConstructor(name string) (Value, error) {
 	open, ok := s.getChar()
 	if !ok || open != '(' {
@@ -1044,8 +976,6 @@ func (s *scanner) parseConstructor(name string) (Value, error) {
 	}
 }
 
-// copyQuoted copies the remainder of a quoted string, starting after its
-// opening quote, into b, including the closing quote.
 func (s *scanner) copyQuoted(b *strings.Builder) error {
 	for {
 		c, ok := s.getChar()
@@ -1073,8 +1003,6 @@ func (s *scanner) copyQuoted(b *strings.Builder) error {
 	}
 }
 
-// parseTagAssignEOF mirrors VariantParser::parse_tag_assign_eof with
-// simple_tag=true. io.EOF reports the end of the document.
 func (s *scanner) parseTagAssignEOF() (string, string, Value, error) {
 	var what strings.Builder
 	for {
@@ -1133,8 +1061,6 @@ func (s *scanner) parseTagAssignEOF() (string, string, Value, error) {
 	}
 }
 
-// parseTagSimple mirrors the simple-tag path of VariantParser::_parse_tag,
-// used for ConfigFile section headers.
 func (s *scanner) parseTagSimple() (string, error) {
 	c, ok := s.getChar()
 	if !ok || c != '[' {

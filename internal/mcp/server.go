@@ -14,24 +14,15 @@ import (
 	"sync"
 )
 
-// latestProtocolVersion is the newest revision this server speaks. Starting
-// with 2026-07-28 the protocol is stateless: clients learn the server's
-// identity and capabilities from server/discover and carry their protocol
-// version and capabilities in each request's _meta instead of running the
-// legacy initialize handshake.
+// Starting with 2026-07-28 the protocol is stateless: clients use server/discover instead of the initialize handshake.
 const latestProtocolVersion = "2026-07-28"
 
-// latestLegacyProtocolVersion is the newest revision that still uses the
-// initialize handshake. It caps initialize negotiation so a legacy client is
-// never handed a stateless revision, which is only reachable via discover.
+// Caps initialize negotiation so a legacy client is never handed a stateless revision.
 const latestLegacyProtocolVersion = "2025-11-25"
 
-// protocolVersion20260728 is the first stateless revision (SEP-2575). Protocol
-// versions are date strings, so they compare meaningfully as strings.
 const protocolVersion20260728 = "2026-07-28"
 
-// supportedProtocolVersions lists every revision this server can negotiate,
-// newest first. 2024-11-05 is kept so older clients still connect.
+// Newest first; 2024-11-05 is kept so older clients still connect.
 var supportedProtocolVersions = []string{
 	"2026-07-28",
 	"2025-11-25",
@@ -40,18 +31,15 @@ var supportedProtocolVersions = []string{
 	"2024-11-05",
 }
 
-// Per-request and per-response _meta keys defined by the stateless model.
 const (
 	metaKeyProtocolVersion    = "io.modelcontextprotocol/protocolVersion"
 	metaKeyClientCapabilities = "io.modelcontextprotocol/clientCapabilities"
 	metaKeyServerInfo         = "io.modelcontextprotocol/serverInfo"
 )
 
-// resultTypeComplete marks a result that needs no further client input. The
-// stateless protocol requires a resultType on every result.
+// The stateless protocol requires a resultType on every result.
 const resultTypeComplete = "complete"
 
-// MCP-specific JSON-RPC error codes allocated by 2026-07-28 (SEP-2575).
 const (
 	codeMethodNotFound             = -32601
 	codeInvalidParams              = -32602
@@ -69,9 +57,7 @@ type Server struct {
 	Instructions string
 	mu           sync.RWMutex
 	tools        map[string]Tool
-	// queue, when set, serializes every tool call. It is the one point that
-	// orders engine-touching work shared by all connections; a nil queue runs
-	// handlers inline, the original single-connection behavior.
+	// queue, when set, serializes tool calls across all connections; nil runs handlers inline.
 	queue   *Queue
 	writeMu sync.Mutex
 }
@@ -86,8 +72,7 @@ type Tool struct {
 	Handler      ToolHandler      `json:"-"`
 }
 
-// ToolAnnotations carries optional hints about a tool. All fields are hints and
-// may be omitted; clients must not rely on them.
+// All fields are hints and may be omitted; clients must not rely on them.
 type ToolAnnotations struct {
 	Title           string `json:"title,omitempty"`
 	ReadOnlyHint    *bool  `json:"readOnlyHint,omitempty"`
@@ -96,14 +81,11 @@ type ToolAnnotations struct {
 	OpenWorldHint   *bool  `json:"openWorldHint,omitempty"`
 }
 
-// Bool returns a pointer to b, for setting the optional annotation hints.
 func Bool(b bool) *bool { return &b }
 
 type ToolHandler func(ctx context.Context, args json.RawMessage) (any, error)
 
-// Content is a single MCP content block. Only the fields relevant to Type are
-// populated: text for "text", data/mimeType for "image" and "audio", and
-// uri/name for "resource_link".
+// Only the fields relevant to Type are populated.
 type Content struct {
 	Type        string `json:"type"`
 	Text        string `json:"text,omitempty"`
@@ -115,9 +97,7 @@ type Content struct {
 	Description string `json:"description,omitempty"`
 }
 
-// ToolResult is a complete tool result. Handlers may return one directly to
-// control the content blocks and isError flag; any other return value is
-// JSON-encoded into a single text block.
+// Handlers may return one directly to control the content blocks and isError.
 type ToolResult struct {
 	Content           []Content      `json:"content"`
 	StructuredContent any            `json:"structuredContent,omitempty"`
@@ -126,13 +106,10 @@ type ToolResult struct {
 	Meta              map[string]any `json:"_meta,omitempty"`
 }
 
-// TextResult builds a successful single-block text result.
 func TextResult(text string) ToolResult {
 	return ToolResult{Content: []Content{{Type: "text", Text: text}}}
 }
 
-// StructuredResult builds a result that carries text plus the structured value
-// returned in the structuredContent field.
 func StructuredResult(text string, value any) ToolResult {
 	return ToolResult{
 		Content:           []Content{{Type: "text", Text: text}},
@@ -140,8 +117,6 @@ func StructuredResult(text string, value any) ToolResult {
 	}
 }
 
-// JSONResult builds a text result from a JSON payload and, when the payload
-// parses, exposes it as structuredContent as well.
 func JSONResult(text string) ToolResult {
 	result := TextResult(text)
 	var value any
@@ -151,28 +126,20 @@ func JSONResult(text string) ToolResult {
 	return result
 }
 
-// ImageContent builds an image content block from base64 data.
 func ImageContent(data, mimeType string) Content {
 	return Content{Type: "image", Data: data, MimeType: mimeType}
 }
 
-// AudioContent builds an audio content block from base64 data.
 func AudioContent(data, mimeType string) Content {
 	return Content{Type: "audio", Data: data, MimeType: mimeType}
 }
 
-// ResourceLinkContent builds a resource_link content block.
 func ResourceLinkContent(uri, name string) Content {
 	return Content{Type: "resource_link", URI: uri, Name: name}
 }
 
-// ErrorResult builds an error result with an optional "Possible solutions"
-// block, mirroring the Coding-Solo reference response shape. structuredContent
-// carries the same success/message envelope a successful mutation result uses,
-// with success false, so a client that eagerly validates structuredContent
-// against a mutation tool's outputSchema finds the required fields instead of
-// no body at all. The envelope is not required by the spec: an error may be
-// signalled by isError alone, but asserting it keeps the declared schema true.
+// Mirrors the Coding-Solo response shape; the structured envelope keeps a
+// declared mutation outputSchema valid even for an error.
 func ErrorResult(message string, possibleSolutions ...string) ToolResult {
 	content := []Content{{Type: "text", Text: message}}
 	structured := map[string]any{"success": false, "message": message}
@@ -181,9 +148,6 @@ func ErrorResult(message string, possibleSolutions ...string) ToolResult {
 		b.WriteString("Possible solutions:\n- ")
 		b.WriteString(strings.Join(possibleSolutions, "\n- "))
 		content = append(content, Content{Type: "text", Text: b.String()})
-		// Carry the solutions in the structured envelope too, so a client that
-		// consumes structuredContent instead of text content still receives
-		// the recovery hints rather than only the failure message.
 		structured["solutions"] = possibleSolutions
 	}
 	return ToolResult{
@@ -217,10 +181,8 @@ type initializeParams struct {
 	ProtocolVersion string `json:"protocolVersion"`
 }
 
-// negotiateLegacyProtocolVersion follows the initialize handshake's version
-// negotiation: echo the client's version when it is a supported legacy
-// revision, otherwise offer the newest legacy revision. Stateless revisions
-// are reached through server/discover, never through initialize.
+// Echoes a supported legacy revision, otherwise offers the newest legacy one;
+// stateless revisions are reached through server/discover.
 func negotiateLegacyProtocolVersion(requested string) string {
 	if requested < protocolVersion20260728 {
 		for _, version := range supportedProtocolVersions {
@@ -232,7 +194,6 @@ func negotiateLegacyProtocolVersion(requested string) string {
 	return latestLegacyProtocolVersion
 }
 
-// isSupportedProtocolVersion reports whether version is one this server speaks.
 func isSupportedProtocolVersion(version string) bool {
 	for _, supported := range supportedProtocolVersions {
 		if supported == version {
@@ -242,20 +203,14 @@ func isSupportedProtocolVersion(version string) bool {
 	return false
 }
 
-// requestMeta is the per-request _meta the stateless protocol carries.
 type requestMeta struct {
-	// modern is true when the request selected the stateless protocol by
-	// declaring protocolVersion >= 2026-07-28.
 	modern bool
-	// version is the declared protocol version, empty on the legacy path.
+	// version is empty on the legacy path.
 	version string
 }
 
-// parseRequestMeta detects whether a request's params select the stateless
-// protocol. It mirrors the reference implementation: a request is legacy
-// unless its _meta carries io.modelcontextprotocol/protocolVersion at a
-// 2026-07-28-or-newer revision, and a stateless request must also declare
-// io.modelcontextprotocol/clientCapabilities.
+// A request is legacy unless its _meta declares protocolVersion >= 2026-07-28,
+// and a stateless request must also declare clientCapabilities.
 func parseRequestMeta(params json.RawMessage) (requestMeta, *rpcError) {
 	if len(params) == 0 {
 		return requestMeta{}, nil
@@ -283,8 +238,6 @@ func parseRequestMeta(params json.RawMessage) (requestMeta, *rpcError) {
 	return requestMeta{modern: true, version: version}, nil
 }
 
-// unsupportedProtocolVersionError builds the SEP-2575 -32022 error whose data
-// advertises the supported revisions so a client can retry with one of them.
 func unsupportedProtocolVersionError(requested string) *rpcError {
 	return &rpcError{
 		Code:    codeUnsupportedProtocolVersion,
@@ -317,25 +270,16 @@ func (s *Server) RegisterTool(t Tool) {
 	s.tools[t.Name] = t
 }
 
-// SetQueue installs the queue that serializes tool calls. With one installed,
-// concurrent calls submit to the same queue and run one at a time, so the
-// serialization a single connection got for free holds across many. A nil
-// queue leaves handlers running inline.
+// With a queue installed, concurrent calls run one at a time; nil runs inline.
 func (s *Server) SetQueue(q *Queue) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.queue = q
 }
 
-// Serve reads newline-delimited JSON-RPC requests from r and writes responses
-// to w, handling one request at a time. The stream is read on its own
-// goroutine so a client disconnect is noticed while a handler is still running:
-// when the reader reaches EOF or an error it cancels the connection context,
-// which propagates through the queue into exec.CommandContext and kills any
-// in-flight engine work. The reader may run ahead of the handler, but the
-// handler still runs one at a time per connection, so a slow client cannot
-// overtake itself and the queue remains the single engine serialization point.
-// Only the Serve goroutine calls write, so responses stay ordered.
+// The reader runs on its own goroutine and cancels the connection context on
+// EOF or read error, so a disconnect kills any in-flight engine work; only the
+// Serve goroutine writes, so responses stay ordered.
 func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -356,8 +300,6 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 				return
 			}
 		}
-		// The stream ended (clean EOF or a read error), so cancel the
-		// connection: a handler still running is killed through its context.
 		cancel()
 		readErr <- scanner.Err()
 	}()
@@ -386,8 +328,7 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 }
 
 func (s *Server) handle(ctx context.Context, req request) (response, bool) {
-	// A request without an id is a JSON-RPC notification: process it but never
-	// send a response, even for unknown methods.
+	// A request without an id is a notification: process it but never respond.
 	if len(req.ID) == 0 {
 		return response{}, false
 	}
@@ -406,8 +347,7 @@ func (s *Server) handle(ctx context.Context, req request) (response, bool) {
 
 	switch req.Method {
 	case "initialize":
-		// initialize is removed in 2026-07-28; stateless clients discover the
-		// server instead. Legacy clients negotiate down to a legacy revision.
+		// initialize is removed in 2026-07-28; stateless clients use server/discover.
 		if meta.modern {
 			resp.Error = methodNotFoundError("initialize")
 			break
@@ -461,14 +401,10 @@ func (s *Server) handle(ctx context.Context, req request) (response, bool) {
 	return resp, true
 }
 
-// capabilities is the server capability set advertised by initialize and
-// server/discover.
 func (s *Server) capabilities() map[string]any {
 	return map[string]any{"tools": map[string]any{}}
 }
 
-// listToolsResult builds the tools/list result. Stateless clients also receive
-// the cache hints every list result carries from 2026-07-28 on.
 func (s *Server) listToolsResult(modern bool) map[string]any {
 	result := map[string]any{"tools": s.listTools()}
 	if modern {
@@ -478,9 +414,6 @@ func (s *Server) listToolsResult(modern bool) map[string]any {
 	return result
 }
 
-// discoverResult implements the SEP-2575 server/discover RPC: without any
-// prior handshake a client learns the supported protocol versions, the server's
-// capabilities and identity, and how to use it.
 func (s *Server) discoverResult() map[string]any {
 	result := map[string]any{
 		"supportedVersions": append([]string(nil), supportedProtocolVersions...),
@@ -494,8 +427,6 @@ func (s *Server) discoverResult() map[string]any {
 	return result
 }
 
-// withStatelessMeta adds the fields every 2026-07-28 result requires: a
-// resultType and the server's identity in _meta. Legacy results are unchanged.
 func (s *Server) withStatelessMeta(result any) any {
 	meta := map[string]any{metaKeyServerInfo: s.info}
 	switch r := result.(type) {
@@ -572,10 +503,8 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 	return TextResult(string(text)), nil
 }
 
-// callHandler runs a tool handler, submitting it to queue when one is
-// installed so every engine-touching call serializes behind the same worker.
-// The handler receives the job's context, so a queue timeout cancels any
-// engine work it started, and its error becomes an ordinary tool error.
+// Submits to queue when installed so engine calls serialize; a queue timeout
+// cancels any engine work the handler started.
 func (s *Server) callHandler(ctx context.Context, queue *Queue, handler ToolHandler, args json.RawMessage) (any, error) {
 	if queue == nil {
 		return handler(ctx, args)

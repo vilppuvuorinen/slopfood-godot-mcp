@@ -78,8 +78,6 @@ func TestServeInitializeFallsBackToLatestLegacy(t *testing.T) {
 	}
 }
 
-// TestServeInitializeNeverStateless asserts a legacy initialize request is
-// never handed a 2026-07-28 revision: that path is only reachable via discover.
 func TestServeInitializeNeverStateless(t *testing.T) {
 	in := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28"}}` + "\n")
 	var out bytes.Buffer
@@ -153,11 +151,7 @@ func TestServeStructuredContent(t *testing.T) {
 	}
 }
 
-// TestErrorResultStructuredContent asserts an error result carries the
-// success/message envelope as structured content alongside isError, so a client
-// that eagerly validates structuredContent against a mutation outputSchema sees
-// the required fields rather than no body. The text block stays the primary
-// message, with any solutions appended after it.
+// The structured envelope keeps a mutation outputSchema valid even for an error.
 func TestErrorResultStructuredContent(t *testing.T) {
 	result := ErrorResult("boom", "try again")
 	if !result.IsError {
@@ -193,9 +187,7 @@ func TestServeToolsCall(t *testing.T) {
 	}
 }
 
-// TestServeToolsCallThroughQueue asserts single-client behavior is unchanged
-// when a queue is installed: the call still runs and returns its result. The
-// input stream is held open until the reply arrives, because a disconnect now
+// The input stream is held open until the reply arrives, since a disconnect
 // cancels an in-flight queued call.
 func TestServeToolsCallThroughQueue(t *testing.T) {
 	s := testServer()
@@ -222,9 +214,7 @@ func TestServeToolsCallThroughQueue(t *testing.T) {
 	}
 }
 
-// blockingServer returns a server whose "block" tool signals started, then
-// blocks until its context is canceled and signals canceled. It is the shared
-// fixture for the disconnect-cancellation tests.
+// A "block" tool signals started then blocks until canceled, then signals canceled.
 func blockingServer() (*Server, <-chan struct{}, <-chan struct{}) {
 	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	started := make(chan struct{})
@@ -243,10 +233,7 @@ func blockingServer() (*Server, <-chan struct{}, <-chan struct{}) {
 	return s, started, canceled
 }
 
-// TestServeCancelsHandlerOnDisconnect asserts that a client disconnect cancels
-// a handler still running: the reader hits EOF and cancels the connection
-// context, which the handler observes, proving the propagation that reaches
-// exec.CommandContext.
+// The reader hits EOF, cancels the connection context, and the handler observes it.
 func TestServeCancelsHandlerOnDisconnect(t *testing.T) {
 	s, started, canceled := blockingServer()
 
@@ -280,10 +267,8 @@ func TestServeCancelsHandlerOnDisconnect(t *testing.T) {
 	}
 }
 
-// TestServeParentContextCancelCancelsHandler asserts daemon shutdown
-// propagates: canceling the context passed to Serve cancels a running handler.
-// The reader is parked in Read, so the stream is closed afterwards to let
-// Serve's reader return; the cancellation itself came from the parent context.
+// The reader is parked in Read, so the stream is closed afterwards to let Serve
+// return; the cancellation itself came from the parent context.
 func TestServeParentContextCancelCancelsHandler(t *testing.T) {
 	s, started, canceled := blockingServer()
 
@@ -321,8 +306,6 @@ func TestServeParentContextCancelCancelsHandler(t *testing.T) {
 	}
 }
 
-// TestCallToolSerializesThroughQueue asserts concurrent tool calls share the
-// one queue and therefore never run two handlers at once.
 func TestCallToolSerializesThroughQueue(t *testing.T) {
 	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	q := NewQueue(64, testQueueTimeout)
@@ -366,8 +349,6 @@ func TestCallToolSerializesThroughQueue(t *testing.T) {
 	}
 }
 
-// TestCallToolQueueTimeoutIsToolError asserts a job that outlives the queue
-// timeout surfaces as an ordinary tool error, not a protocol failure.
 func TestCallToolQueueTimeoutIsToolError(t *testing.T) {
 	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	q := NewQueue(4, 20*time.Millisecond)
@@ -432,11 +413,8 @@ func TestServeNotificationsGetNoResponse(t *testing.T) {
 	}
 }
 
-// modernMeta is the per-request _meta triple a 2026-07-28 client sends.
 const modernMeta = `"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}`
 
-// serveOne runs a single request line through a fresh test server and returns
-// the decoded result map.
 func serveOne(t *testing.T, req string) map[string]any {
 	t.Helper()
 	var out bytes.Buffer
@@ -500,8 +478,6 @@ func TestServeDiscover(t *testing.T) {
 	}
 }
 
-// TestServeDiscoverRequiresStateless asserts the legacy path cannot call
-// server/discover; a legacy client must use initialize.
 func TestServeDiscoverRequiresStateless(t *testing.T) {
 	var out bytes.Buffer
 	in := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"server/discover","params":{}}` + "\n")
@@ -517,8 +493,6 @@ func TestServeDiscoverRequiresStateless(t *testing.T) {
 	}
 }
 
-// TestServeStatelessToolsList asserts a stateless tools/list carries resultType,
-// serverInfo metadata, and the cache hints.
 func TestServeStatelessToolsList(t *testing.T) {
 	result := serveOne(t, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{`+modernMeta+`}}`)
 
@@ -536,8 +510,6 @@ func TestServeStatelessToolsList(t *testing.T) {
 	}
 }
 
-// TestServeLegacyToolsListUnchanged asserts the legacy path gets no stateless
-// decoration.
 func TestServeLegacyToolsListUnchanged(t *testing.T) {
 	result := serveOne(t, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`)
 
@@ -552,8 +524,6 @@ func TestServeLegacyToolsListUnchanged(t *testing.T) {
 	}
 }
 
-// TestServeStatelessToolsCall asserts a stateless tools/call result carries a
-// resultType and serverInfo metadata.
 func TestServeStatelessToolsCall(t *testing.T) {
 	result := serveOne(t, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"echo","arguments":{"message":"hi"},`+modernMeta+`}}`)
 
@@ -565,7 +535,6 @@ func TestServeStatelessToolsCall(t *testing.T) {
 	}
 }
 
-// TestServeStatelessPingRemoved asserts ping is not served on 2026-07-28.
 func TestServeStatelessPingRemoved(t *testing.T) {
 	var out bytes.Buffer
 	in := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"ping","params":{` + modernMeta + `}}` + "\n")
@@ -581,8 +550,6 @@ func TestServeStatelessPingRemoved(t *testing.T) {
 	}
 }
 
-// TestServeStatelessUnsupportedVersion asserts an unknown modern revision gets
-// the -32022 error advertising the supported list.
 func TestServeStatelessUnsupportedVersion(t *testing.T) {
 	var out bytes.Buffer
 	in := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2099-01-01","io.modelcontextprotocol/clientCapabilities":{}}}}` + "\n")
@@ -598,8 +565,6 @@ func TestServeStatelessUnsupportedVersion(t *testing.T) {
 	}
 }
 
-// TestServeStatelessRequiresCapabilities asserts the required _meta
-// clientCapabilities key is enforced.
 func TestServeStatelessRequiresCapabilities(t *testing.T) {
 	var out bytes.Buffer
 	in := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28"}}}` + "\n")

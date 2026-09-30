@@ -29,8 +29,6 @@ func TestValidateProjectSchema(t *testing.T) {
 	}
 }
 
-// TestValidateProjectValid confirms a clean engine load reports valid with no
-// errors rather than a tool error.
 func TestValidateProjectValid(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, ":"))
 
@@ -50,9 +48,6 @@ func TestValidateProjectValid(t *testing.T) {
 	}
 }
 
-// TestValidateProjectReportsParseDiagnostics confirms a malformed project.godot
-// is reported as structured valid:false with the engine's diagnostics, not as
-// isError: Godot logs the diagnostic while still exiting 0.
 func TestValidateProjectReportsParseDiagnostics(t *testing.T) {
 	fake := fakeGodotOps(t, "echo \"ERROR: Error parsing '/proj/project.godot' at line 2\" >&2")
 	t.Setenv(godot.PathEnv, fake)
@@ -77,8 +72,6 @@ func TestValidateProjectReportsParseDiagnostics(t *testing.T) {
 	}
 }
 
-// TestValidateProjectReportsProbeFailure confirms an engine that exits non-zero
-// with no parse diagnostic is reported as invalid rather than silently valid.
 func TestValidateProjectReportsProbeFailure(t *testing.T) {
 	fake := fakeGodotOps(t, "exit 2")
 	t.Setenv(godot.PathEnv, fake)
@@ -100,8 +93,6 @@ func TestValidateProjectReportsProbeFailure(t *testing.T) {
 	}
 }
 
-// TestValidateProjectReportsEngineFailure points GODOT_PATH at a missing binary
-// so the probe cannot start, and asserts the tool reports the failure.
 func TestValidateProjectReportsEngineFailure(t *testing.T) {
 	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
 
@@ -141,8 +132,6 @@ func TestValidateProjectErrors(t *testing.T) {
 	}
 }
 
-// decodeValidateProject returns a validate_project result's payload, parsed
-// from the JSON text the tool emits.
 func decodeValidateProject(t *testing.T, result mcp.ToolResult) map[string]any {
 	t.Helper()
 	var payload map[string]any

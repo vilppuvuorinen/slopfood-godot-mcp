@@ -42,10 +42,6 @@ func TestPathIgnoresBlankEnv(t *testing.T) {
 	}
 }
 
-// TestPathEnvOverrideIsNotCached confirms the local-build cache never masks an
-// explicit GODOT_PATH: the override is consulted on every call, so changing it
-// after a lookup still takes effect and the cache only covers the filesystem
-// walk.
 func TestPathEnvOverrideIsNotCached(t *testing.T) {
 	t.Setenv(PathEnv, "/first/godot")
 	if got := Path(); got != "/first/godot" {

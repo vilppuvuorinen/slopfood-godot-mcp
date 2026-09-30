@@ -56,7 +56,6 @@ func TestResolveCategoriesUnknown(t *testing.T) {
 	}
 }
 
-// registeredToolNames returns the tool names Register adds for the categories.
 func registeredToolNames(t *testing.T, categories ...Category) map[string]bool {
 	t.Helper()
 	server := mcp.NewServer(mcp.ServerInfo{Name: "test"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -107,8 +106,6 @@ func TestRegisterGating(t *testing.T) {
 	}
 }
 
-// TestCategoryToolsUnique verifies every constructor is reachable, no tool is
-// registered twice, and the total matches the registered tool list.
 func TestCategoryToolsUnique(t *testing.T) {
 	seen := make(map[string]bool)
 	for _, category := range AllCategories {
@@ -125,10 +122,7 @@ func TestCategoryToolsUnique(t *testing.T) {
 	}
 }
 
-// schemaOptionalReads are read-only tools whose payload is self-describing, so
-// they deliberately advertise no output schema: structured content plus text is
-// more powerful token for token than a declared schema that can drift from what
-// the handler emits. Every other tool must still advertise one.
+// schemaOptionalReads is the allowlist of self-describing reads with no output schema.
 var schemaOptionalReads = map[string]bool{
 	"read_animation":       true,
 	"read_binary_resource": true,
@@ -139,10 +133,6 @@ var schemaOptionalReads = map[string]bool{
 	"validate_scripts":     true,
 }
 
-// TestToolsAdvertiseMetadata verifies every tool carries the metadata modern
-// clients rely on: a title, behavior annotations, and (except for the
-// self-describing reads) an output schema so structured results can be consumed
-// programmatically.
 func TestToolsAdvertiseMetadata(t *testing.T) {
 	for _, category := range AllCategories {
 		for _, newTool := range categoryTools[category] {
@@ -160,23 +150,6 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 	}
 }
 
-// TestToolAnnotationsMatchBehavior pins every tool's behavior hints to a single
-// stated rule, so a mislabeled or omitted hint cannot survive a change.
-//
-//   - Read-only tools advertise readOnlyHint and never claim to be destructive.
-//   - A writer is destructive unless every effect is the creation of content
-//     that cannot replace what is already there: create_project refuses an
-//     existing project.godot and reimport_project only writes missing sidecars
-//     and regenerated artifacts, so those two are additive; every other writer
-//     can rewrite or delete existing content.
-//   - A writer is idempotent when repeating the identical call leaves the
-//     project unchanged: assignments, guarded inserts, overwrites, and
-//     deletes. Tools whose actions mint new content each call (a node, a
-//     duplicate, a track, a preset, a tileset source or tile) are not
-//     idempotent.
-//
-// Every writer must declare both destructiveHint and idempotentHint, so an
-// omission fails the test rather than silently falling back to a default.
 func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	readOnly := map[string]bool{
 		"get_godot_version":    true,
@@ -262,16 +235,11 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	}
 }
 
-// schemaKeywords mark a map as a JSON Schema node. A node with none of them is
-// a bare annotation, such as a value slot that only carries a description.
 var schemaKeywords = []string{
 	"type", "anyOf", "oneOf", "allOf", "not", "enum", "const",
 	"$ref", "properties", "additionalProperties", "items", "required",
 }
 
-// TestToolsAdvertiseValueTypes verifies no tool describes a value slot with a
-// bare description: every schema node names a type (or an equivalent keyword),
-// so the tool value contract is visible to schema consumers.
 func TestToolsAdvertiseValueTypes(t *testing.T) {
 	for _, category := range AllCategories {
 		for _, newTool := range categoryTools[category] {
@@ -282,8 +250,6 @@ func TestToolsAdvertiseValueTypes(t *testing.T) {
 	}
 }
 
-// assertTypedSchemas walks a schema tree and fails on any map that carries a
-// description without a schema keyword to constrain the value.
 func assertTypedSchemas(t *testing.T, toolName, path string, node any) {
 	t.Helper()
 	switch n := node.(type) {
@@ -311,10 +277,6 @@ func assertTypedSchemas(t *testing.T, toolName, path string, node any) {
 	}
 }
 
-// TestToolsConstrainAdvertisedStatus verifies no tool advertises the success and
-// message envelope loosely. A mutation requires both fields, while an
-// action-routed tool separates them into an anyOf branch so a read or list
-// result is never described as returning the envelope.
 func TestToolsConstrainAdvertisedStatus(t *testing.T) {
 	for _, category := range AllCategories {
 		for _, newTool := range categoryTools[category] {

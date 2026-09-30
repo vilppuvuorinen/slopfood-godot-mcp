@@ -2,18 +2,12 @@ package e2e
 
 import "testing"
 
-// toolSchemaCase pins one tool's description and input surface. The check runs
-// against the tool's decoded schema; every case shares one session's tool list.
 type toolSchemaCase struct {
 	name        string
 	description string
 	check       func(t *testing.T, schema toolSchema)
 }
 
-// TestToolSchemas asserts every tool's description and input schema through one
-// shared server session, so the whole surface is pinned in one place and the
-// suite pays one spawn instead of one per tool. The cases run serially against
-// that session and each failure names the tool it belongs to.
 func TestToolSchemas(t *testing.T) {
 	t.Parallel()
 	tools := listToolsOnce(t, connect(t))

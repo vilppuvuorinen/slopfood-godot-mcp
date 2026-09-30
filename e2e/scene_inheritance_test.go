@@ -8,8 +8,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// inheritedScene is the subset of a read_scene result the inheritance tests
-// assert on.
 type inheritedScene struct {
 	Name          string `json:"name"`
 	Type          string `json:"type"`
@@ -20,9 +18,6 @@ type inheritedScene struct {
 	} `json:"children"`
 }
 
-// seedInheritedScene creates a base scene with one child, then a scene that
-// inherits from it. It returns the project root, the connected session, and the
-// derived scene's project-relative path.
 func seedInheritedScene(t *testing.T, derivedPath string) (string, *mcp.ClientSession) {
 	t.Helper()
 	root := newProject(t)
@@ -44,8 +39,6 @@ func seedInheritedScene(t *testing.T, derivedPath string) (string, *mcp.ClientSe
 	return root, session
 }
 
-// TestSceneInheritanceTool drives create_scene with baseScenePath and read_scene
-// over the resulting inherited scene.
 func TestSceneInheritanceTool(t *testing.T) {
 	t.Parallel()
 	root, session := seedInheritedScene(t, "scenes/derived.tscn")
@@ -74,8 +67,6 @@ func TestSceneInheritanceTool(t *testing.T) {
 	}
 }
 
-// TestInheritedSceneEditsRejected proves every repacking scene mutator refuses
-// an inherited scene instead of silently flattening the base into it.
 func TestInheritedSceneEditsRejected(t *testing.T) {
 	t.Parallel()
 	root, session := seedInheritedScene(t, "scenes/derived.tscn")
@@ -126,18 +117,14 @@ func TestInheritedSceneEditsRejected(t *testing.T) {
 		t.Errorf("derived scene changed:\nbefore:\n%s\nafter:\n%s", before, got)
 	}
 
-	// Reading an inherited scene stays available: it instantiates the base
-	// subtree and reports its own connections, so it is not caught by the guard.
+	// read_scene is not caught by the guard; it instantiates the base subtree.
 	requireContains(t, requireToolText(t, session, "read_scene", map[string]any{
 		"scenePath": "scenes/derived.tscn",
 	}), `"connections"`)
 }
 
-// TestCreateSceneInheritanceErrors covers baseScenePath validation.
 func TestCreateSceneInheritanceErrors(t *testing.T) {
 	t.Parallel()
-	// Every case is engine-free validation, so one warm project and session
-	// covers all of them.
 	root := newProject(t)
 	session := connectProject(t, root)
 

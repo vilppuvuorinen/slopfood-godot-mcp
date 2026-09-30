@@ -1,21 +1,8 @@
 // Package gdcover is a source-to-source instrumenter for GDScript.
 //
-// It exists for the e2e perspective on the embedded bridge: the operations
-// script runs in a child Godot process that Go's own coverage tooling cannot
-// reach, so this package rewrites a GDScript file to report which lines execute.
-// The instrumented script appends one original line number per hit to the file
-// named by the GDCOVER_FILE environment variable and does nothing when that
-// variable is empty, so an uninstrumented environment runs normally.
-//
-// The instrumenter is generic: it understands GDScript rather than the script
-// it is applied to. Statements inside top-level functions are instrumented, and
-// every branch or loop body reports its header line when the body runs. Class
-// level declarations and inner-class bodies are deliberately left alone: the
-// injected helper is a member of the script itself, and a nested class cannot
-// see it.
-//
-// It is a development tool and is not imported by the server, so it never
-// enters the shipped binary.
+// Class-level declarations and inner-class bodies are deliberately left alone:
+// the injected helper is a member of the script itself, and a nested class
+// cannot see it.
 package gdcover
 
 import (
@@ -28,42 +15,26 @@ import (
 	"unicode"
 )
 
-// HitFunc is the name of the helper the instrumented script calls to record a
-// hit. It is exported so tests and reports can recognize injected code.
+// HitFunc is the name of the helper instrumented scripts call to record a hit.
 const HitFunc = "__gdcover_hit"
 
 // FileEnv is the default environment variable that holds the hit output path.
 const FileEnv = "GDCOVER_FILE"
 
-// funcHeader matches a named function declaration. Lambda expressions have no
-// name and are handled as ordinary statements or openers by their context.
 var funcHeader = regexp.MustCompile(`^(?:static\s+)?func\s+[A-Za-z_]\w*\s*\(`)
 
-// Result is an instrumented script plus the original lines that can register a
-// hit, which is what a coverage percentage is measured against.
+// Result is an instrumented script and the lines measured for coverage.
 type Result struct {
 	Source []byte
 	Lines  []int
 }
 
-// Instrument returns a copy of src with line-coverage instrumentation injected,
-// writing hits to the path named by FileEnv.
 func Instrument(src []byte) (Result, error) {
 	return InstrumentEnv(src, FileEnv)
 }
 
 // InstrumentEnv is Instrument with a caller-chosen hit-output environment
-// variable. Distinct variables keep the traces of concurrently instrumented
-// scripts separate, so a run that exercises more than one embedded script can
-// attribute every hit to the script that emitted it.
-//
-// Each executable statement inside a top-level function reports the line it
-// starts on, and the body of every branch or loop reports the line of its
-// header when that body runs. Hits are appended to the file named by fileEnv,
-// one integer per line, in execution order.
-//
-// InstrumentEnv returns an error if src already contains instrumentation, so a
-// second pass cannot double-inject.
+// variable, and returns an error if src is already instrumented.
 func InstrumentEnv(src []byte, fileEnv string) (Result, error) {
 	if bytes.Contains(src, []byte(HitFunc)) {
 		return Result{}, errors.New("gdcover: script is already instrumented")
@@ -177,15 +148,12 @@ func InstrumentEnv(src []byte, fileEnv string) (Result, error) {
 	}, nil
 }
 
-// hit renders an injected call that reports line at the given indentation.
 func hit(indent string, line int) string {
 	return indent + HitFunc + "(" + strconv.Itoa(line) + ")"
 }
 
 // prologue is the helper injected after the script's header declarations. It
-// opens the output file lazily and appends each hit immediately, so hits are
-// preserved even when the script calls quit() partway through. fileEnv names
-// the environment variable that holds the output path.
+// appends each hit immediately so hits survive a quit() partway through.
 func prologue(unit, fileEnv string) []string {
 	return []string{
 		`var __gdcover_path: String = OS.get_environment("` + fileEnv + `")`,
@@ -208,10 +176,8 @@ func prologue(unit, fileEnv string) []string {
 	}
 }
 
-// scanLine strips a physical line's comment and string contents, counts net
-// bracket nesting outside strings, and reports whether the line continues on
-// the next one. inMultiline and the returned multiline state are 0 for no
-// open string, 1 for a """ string, and 2 for a ”' string.
+// scanLine strips a line's comment and string contents and counts net bracket
+// nesting outside strings. Multiline state: 0 none, 1 triple-double, 2 triple-single.
 func scanLine(line string, inMultiline int) (code string, delta int, continued bool, multiline int) {
 	var b strings.Builder
 	state := inMultiline
@@ -279,9 +245,8 @@ func scanLine(line string, inMultiline int) (code string, delta int, continued b
 	return code, delta, continued, state
 }
 
-// headerEnd returns the last index of the leading class_name/extends/comment
-// block, after which the helper is injected. It returns -1 when the file has no
-// such header, in which case the helper goes at the very top.
+// headerEnd returns the last index of the leading header block, or -1 if there
+// is none, in which case the helper goes at the very top.
 func headerEnd(lines []string) int {
 	last := -1
 	for i, line := range lines {
@@ -302,7 +267,6 @@ func headerEnd(lines []string) int {
 	return last
 }
 
-// nextNonBlank returns the first index at or after from whose line is not blank.
 func nextNonBlank(lines []string, from int) int {
 	for i := from; i < len(lines); i++ {
 		if strings.TrimSpace(lines[i]) != "" {
@@ -312,8 +276,6 @@ func nextNonBlank(lines []string, from int) int {
 	return -1
 }
 
-// isTerminator reports whether a statement ends control flow, so an injected
-// call placed after it would be unreachable.
 func isTerminator(code string) bool {
 	switch firstWord(code) {
 	case "return", "break", "continue", "pass":
@@ -323,7 +285,6 @@ func isTerminator(code string) bool {
 	}
 }
 
-// firstWord returns the leading identifier of a code fragment.
 func firstWord(code string) string {
 	code = strings.TrimSpace(code)
 	i := strings.IndexFunc(code, func(r rune) bool {
@@ -335,18 +296,15 @@ func firstWord(code string) string {
 	return code[:i]
 }
 
-// isDeeper reports whether child is nested inside parent.
 func isDeeper(child, parent string) bool {
 	return len(child) > len(parent) && strings.HasPrefix(child, parent)
 }
 
-// leadingWhitespace returns the spaces and tabs that indent a line.
 func leadingWhitespace(line string) string {
 	return line[:len(line)-len(strings.TrimLeft(line, " \t"))]
 }
 
-// detectIndent returns the indentation unit the injected prologue should use so
-// it never mixes tabs and spaces in a file that uses only one of them.
+// detectIndent returns the indentation unit the injected prologue should use.
 func detectIndent(lines []string) string {
 	for _, line := range lines {
 		ws := leadingWhitespace(line)
@@ -360,8 +318,7 @@ func detectIndent(lines []string) string {
 	return "    "
 }
 
-// splitLines splits source into physical lines, dropping a single trailing
-// empty line from a final newline.
+// splitLines splits text into lines, dropping the empty line from a final newline.
 func splitLines(text string) []string {
 	lines := strings.Split(text, "\n")
 	if len(lines) > 0 && lines[len(lines)-1] == "" {

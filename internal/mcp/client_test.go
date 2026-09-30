@@ -15,14 +15,11 @@ import (
 	"time"
 )
 
-// testClientLogger discards log output so a spawn or daemon-loss message in a
-// test does not reach the test output.
 func testClientLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
-// lockedBuffer is a concurrency-safe io.Writer for the pump's stdout: the
-// conn-to-stdout copy writes it while the test reads it.
+// Concurrency-safe io.Writer: the conn-to-stdout copy writes while the test reads.
 type lockedBuffer struct {
 	mu  sync.Mutex
 	buf bytes.Buffer
@@ -40,8 +37,6 @@ func (b *lockedBuffer) String() string {
 	return b.buf.String()
 }
 
-// TestClientConnectsWithoutSpawning asserts the common case dials straight
-// through and never launches a daemon.
 func TestClientConnectsWithoutSpawning(t *testing.T) {
 	var spawns int32
 	dial := func(string) (io.ReadWriteCloser, error) { return &fakeConn{}, nil }
@@ -60,8 +55,6 @@ func TestClientConnectsWithoutSpawning(t *testing.T) {
 	}
 }
 
-// TestClientSpawnsAndPollsWhenDialFails asserts a failed dial launches a daemon
-// and then polls until it accepts, so a racing pair of agents still connects.
 func TestClientSpawnsAndPollsWhenDialFails(t *testing.T) {
 	var dials, spawns int32
 	dial := func(string) (io.ReadWriteCloser, error) {
@@ -87,8 +80,6 @@ func TestClientSpawnsAndPollsWhenDialFails(t *testing.T) {
 	}
 }
 
-// TestClientNoSpawnReturnsDialError asserts a disabled spawn makes the original
-// dial failure visible rather than looping.
 func TestClientNoSpawnReturnsDialError(t *testing.T) {
 	want := errors.New("connection refused")
 	dial := func(string) (io.ReadWriteCloser, error) { return nil, want }
@@ -99,8 +90,6 @@ func TestClientNoSpawnReturnsDialError(t *testing.T) {
 	}
 }
 
-// TestClientSpawnErrorIsReturned asserts a failed spawn aborts the connect
-// instead of polling for a daemon that never started.
 func TestClientSpawnErrorIsReturned(t *testing.T) {
 	want := errors.New("spawn failed")
 	dial := func(string) (io.ReadWriteCloser, error) { return nil, errors.New("refused") }
@@ -112,8 +101,6 @@ func TestClientSpawnErrorIsReturned(t *testing.T) {
 	}
 }
 
-// TestClientConnectStopsOnContextCancel asserts a canceled context ends the
-// post-spawn poll rather than waiting out the deadline.
 func TestClientConnectStopsOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	dial := func(string) (io.ReadWriteCloser, error) { return nil, errors.New("refused") }
@@ -128,10 +115,7 @@ func TestClientConnectStopsOnContextCancel(t *testing.T) {
 	}
 }
 
-// TestClientRunPumpsNotificationsAndReplies drives the whole client against the
-// in-process daemon. A notification (no id) gets no response, so a synchronous
-// relay would hang there; the concurrent pump forwards the next request and its
-// reply anyway.
+// A notification gets no response, so a synchronous relay would hang there.
 func TestClientRunPumpsNotificationsAndReplies(t *testing.T) {
 	endpoint := NewInProcEndpoint()
 	daemon := NewDaemon(testServer(), nil, endpoint.Listen, "inproc")
@@ -169,9 +153,6 @@ func TestClientRunPumpsNotificationsAndReplies(t *testing.T) {
 	}
 }
 
-// TestPumpCopiesBothDirections asserts the pump is a byte pump: bytes written
-// to stdin reach the connection and bytes from the connection reach stdout,
-// with no parsing.
 func TestPumpCopiesBothDirections(t *testing.T) {
 	client, daemonSide := net.Pipe()
 	defer daemonSide.Close()
@@ -204,8 +185,6 @@ func TestPumpCopiesBothDirections(t *testing.T) {
 	}
 }
 
-// TestPumpDaemonLossIsAnError asserts a clean EOF from the daemon is reported as
-// a lost daemon, so the client exits non-zero instead of pretending success.
 func TestPumpDaemonLossIsAnError(t *testing.T) {
 	client, daemonSide := net.Pipe()
 	stdinR, stdinW := io.Pipe()
@@ -221,8 +200,6 @@ func TestPumpDaemonLossIsAnError(t *testing.T) {
 	}
 }
 
-// TestPumpStopsOnContextCancel asserts a canceled context ends the pump even
-// when both streams are idle.
 func TestPumpStopsOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	client, daemonSide := net.Pipe()
@@ -240,8 +217,6 @@ func TestPumpStopsOnContextCancel(t *testing.T) {
 	}
 }
 
-// writeLine writes one newline-terminated line to w, the framing Serve and the
-// pump both use.
 func writeLine(t *testing.T, w io.Writer, line string) {
 	t.Helper()
 	if _, err := io.WriteString(w, line+"\n"); err != nil {

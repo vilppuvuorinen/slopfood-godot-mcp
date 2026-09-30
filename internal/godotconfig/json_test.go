@@ -10,9 +10,7 @@ import (
 	"testing"
 )
 
-// valueContract is the shared conformance fixture: the canonical tagged values
-// both halves of the codec must accept. It lives at the repository root so the
-// e2e suite (a separate module) reads the same bytes.
+// valueContract is the shared conformance fixture, read by the e2e suite too.
 type valueContract struct {
 	Values []struct {
 		Name  string          `json:"name"`
@@ -21,8 +19,7 @@ type valueContract struct {
 	} `json:"values"`
 }
 
-// loadValueContract reads the shared fixture, failing when it is missing or
-// empty so a renamed fixture cannot silently drop the conformance check.
+// loadValueContract reads the shared fixture, failing if it is missing or empty.
 func loadValueContract(t *testing.T) valueContract {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
@@ -44,12 +41,8 @@ func loadValueContract(t *testing.T) valueContract {
 	return contract
 }
 
-// TestValueContractGoHalf pins the Go half of the codec against the shared
-// conformance fixture: every tagged value DecodeJSONValue accepts must format
-// to the fixture's Godot literal, and that literal must parse back to itself.
-// e2e/value_contract_test.go runs the same entries through the GDScript half,
-// so a change to one decoder that the other does not follow fails here or
-// there.
+// TestValueContractGoHalf pins the Go half against the shared fixture; the e2e
+// suite runs the same entries through the GDScript half.
 func TestValueContractGoHalf(t *testing.T) {
 	for _, entry := range loadValueContract(t).Values {
 		t.Run(entry.Name, func(t *testing.T) {
@@ -71,9 +64,6 @@ func TestValueContractGoHalf(t *testing.T) {
 	}
 }
 
-// TestValueToJSONEncoding pins the JSON each Value encodes to. Floats keep a
-// decimal point so the decoder does not read an integral Float back as an Int,
-// and engine-only types use their tagged form.
 func TestValueToJSONEncoding(t *testing.T) {
 	tests := []struct {
 		name string
@@ -112,9 +102,6 @@ func TestValueToJSONEncoding(t *testing.T) {
 	}
 }
 
-// TestValueToJSONRoundTrip checks that encoding a Value and decoding it again
-// yields a Value that serializes identically, so reads and writes share one
-// contract.
 func TestValueToJSONRoundTrip(t *testing.T) {
 	values := []Value{
 		Nil{},
@@ -148,11 +135,6 @@ func TestValueToJSONRoundTrip(t *testing.T) {
 	}
 }
 
-// TestValueContractTagsMatchDecoder pins the exported ValueContractTags list,
-// which schema consumers read, to the decoder: every advertised tag is
-// recognized by taggedValue, and the conformance fixture introduces no tag the
-// list does not advertise. A tag added to the switch without the list (or the
-// reverse) then fails here rather than silently leaving the schema stale.
 func TestValueContractTagsMatchDecoder(t *testing.T) {
 	advertised := map[string]bool{}
 	for _, tag := range ValueContractTags {
@@ -170,8 +152,6 @@ func TestValueContractTagsMatchDecoder(t *testing.T) {
 	}
 }
 
-// collectTypeTags returns every $type tag named anywhere in a JSON value, so a
-// fixture tag no schema advertises is caught.
 func collectTypeTags(t *testing.T, raw json.RawMessage) []string {
 	t.Helper()
 	var tree any

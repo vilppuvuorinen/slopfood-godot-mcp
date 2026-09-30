@@ -11,9 +11,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 )
 
-// TestSessionDrivesRealBridge proves the Go long-lived session and the real
-// bridge daemon driver fit together: one engine process serves a create_scene
-// followed by a read_scene, and the second response reflects the first.
 func TestSessionDrivesRealBridge(t *testing.T) {
 	engine := requireGodot(t)
 	withCache(t)

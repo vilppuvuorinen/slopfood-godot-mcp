@@ -8,17 +8,15 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-// animationTrackTypeNames and animationInterpolationNames are the tool
-// contract's names for Animation track types and interpolation, shared with the
+// animationTrackTypeNames and animationInterpolationNames are shared with the
 // engine bridge in godot_operations.gd.
 var (
 	animationTrackTypeNames     = []string{"value", "position_3d", "rotation_3d", "scale_3d", "blend_shape", "method", "bezier", "audio", "animation"}
 	animationInterpolationNames = []string{"nearest", "linear", "cubic"}
 )
 
-// animationKeySchema describes one keyframe in a track's keys array. A value is
-// optional in the schema because a key can carry a null value, but every other
-// field is decoded per track type by the engine bridge.
+// A key's value is optional because it can be null; every other field is decoded
+// per track type by the engine bridge.
 func animationKeySchema() map[string]any {
 	return map[string]any{
 		"type":        "object",
@@ -118,8 +116,6 @@ func handleAddAnimationTrack(ctx Context, raw json.RawMessage) (any, error) {
 	})
 }
 
-// addAnimationTrackFields copies the optional track fields onto params when the
-// caller supplied them.
 func addAnimationTrackFields(params map[string]any, trackPath, interpolation string, keys []map[string]any) {
 	if trackPath != "" {
 		params["trackPath"] = trackPath

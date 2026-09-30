@@ -5,11 +5,8 @@ import (
 	"testing"
 )
 
-// TestCreateSceneTool drives the real create_scene tool against Godot,
-// exercising the default and custom root node types.
 func TestCreateSceneTool(t *testing.T) {
 	t.Parallel()
-	// Both subtests share one warm project and session, each with its own scene.
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -30,10 +27,8 @@ func TestCreateSceneTool(t *testing.T) {
 	})
 }
 
-// TestCreateSceneErrors covers the reference's validation and failure messages.
 func TestCreateSceneErrors(t *testing.T) {
 	t.Parallel()
-	// One warm project and session cover every case except "not a project".
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -63,8 +58,7 @@ func TestCreateSceneErrors(t *testing.T) {
 	})
 
 	t.Run("abstract rootNodeType", func(t *testing.T) {
-		// CanvasItem is a registered ClassDB class Godot refuses to
-		// instantiate.
+		// CanvasItem is a registered ClassDB class Godot refuses to instantiate.
 		res := callTool(t, session, "create_scene", map[string]any{
 			"scenePath":    "abstract.tscn",
 			"rootNodeType": "CanvasItem",
@@ -80,9 +74,7 @@ func TestCreateSceneErrors(t *testing.T) {
 	})
 }
 
-// TestCreateSceneFailsWithoutGodot points GODOT_PATH at a missing binary and
-// asserts the reference's generic failure message and solutions. It uses its
-// own session so the shared environment is untouched.
+// GODOT_PATH points at a missing binary; its own session keeps the shared environment untouched.
 func TestCreateSceneFailsWithoutGodot(t *testing.T) {
 	t.Parallel()
 	root := newProject(t)

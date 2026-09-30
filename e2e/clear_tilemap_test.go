@@ -2,7 +2,6 @@ package e2e
 
 import "testing"
 
-// TestClearTilemapTool drives the real clear_tilemap tool against Godot.
 func TestClearTilemapTool(t *testing.T) {
 	t.Parallel()
 	root := newProject(t)
@@ -31,7 +30,6 @@ func TestClearTilemapTool(t *testing.T) {
 	}
 }
 
-// TestClearTilemapErrors covers validation messages.
 func TestClearTilemapErrors(t *testing.T) {
 	t.Parallel()
 	session := connect(t)

@@ -8,11 +8,9 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-// themeItemTypeNames are the tool contract's names for the Theme item
-// categories, shared with the engine bridge in godot_operations.gd.
+// Item categories shared with the engine bridge in godot_operations.gd.
 var themeItemTypeNames = []string{"color", "constant", "font", "fontSize", "icon", "stylebox"}
 
-// themeItemTypeSchema describes the item category a theme item belongs to.
 func themeItemTypeSchema() map[string]any {
 	return map[string]any{
 		"type":        "string",

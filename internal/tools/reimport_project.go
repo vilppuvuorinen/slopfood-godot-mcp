@@ -14,9 +14,7 @@ func reimportProject() mcp.Tool {
 		Description: "Reimport a Godot project by scanning it in the editor, generating .import sidecars and missing resource UIDs",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
-			"type": "object",
-			// The scan is project-wide; there is no per-resource apply, so the
-			// tool takes no arguments and applies every pending .import edit.
+			"type":        "object",
 			"description": "Runs the editor filesystem scan, which materializes .import sidecars for new sources and applies edits to existing ones.",
 			"properties":  map[string]any{},
 			"required":    []string{},
@@ -38,14 +36,8 @@ func handleReimportProject(ctx Context, _ json.RawMessage) (any, error) {
 		return notAProjectResult(project), nil
 	}
 
-	// The editor session's reimport_project operation drives EditorFileSystem:
-	// it materializes missing `.import` sidecars and `.uid` sidecars, registers
-	// class_name scripts, and reapplies edited `.import` files, all in the warm
-	// engine. Resaving resources at runtime cannot do it: ResourceSaver.save has
-	// no UID logic, and without EditorFileSystem the text saver actively strips
-	// existing `uid=` references. The reconcile is non-destructive, so it leaves
-	// every already-assigned UID and up-to-date artifact untouched. The operation
-	// reconciles through the editor in place, so no respawn is needed.
+	// Drives EditorFileSystem: ResourceSaver has no UID logic, and the text
+	// saver strips existing uid= references without it.
 	stdout, stderr, exitCode, err := ctx.Run(project, "reimport_project", nil)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.

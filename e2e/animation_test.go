@@ -8,8 +8,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// testAnimationPayload is the subset of read_animation's payload the tests
-// assert against.
 type testAnimationPayload struct {
 	Path     string `json:"path"`
 	Length   float64
@@ -18,7 +16,6 @@ type testAnimationPayload struct {
 	Tracks   []map[string]any `json:"tracks"`
 }
 
-// readAnimationPayload calls read_animation on resourcePath and decodes its payload.
 func readAnimationPayload(t *testing.T, session *mcp.ClientSession, resourcePath string) testAnimationPayload {
 	t.Helper()
 	text := requireToolText(t, session, "read_animation", map[string]any{"resourcePath": resourcePath})
@@ -29,7 +26,6 @@ func readAnimationPayload(t *testing.T, session *mcp.ClientSession, resourcePath
 	return payload
 }
 
-// createTestAnimation seeds resourcePath through create_animation.
 func createTestAnimation(t *testing.T, session *mcp.ClientSession, resourcePath string) {
 	t.Helper()
 	requireToolText(t, session, "create_animation", map[string]any{
@@ -38,12 +34,8 @@ func createTestAnimation(t *testing.T, session *mcp.ClientSession, resourcePath 
 	})
 }
 
-// TestAnimationTools drives the real animation tools against Godot.
 func TestAnimationTools(t *testing.T) {
 	t.Parallel()
-	// Every subtest below runs serially against this one warm project and
-	// session, so the suite pays for a single engine boot instead of nine. Each
-	// subtest owns a distinct resource path so the shared state never collides.
 	root := newProject(t)
 	session := connectProject(t, root)
 
@@ -298,10 +290,7 @@ func TestAnimationTools(t *testing.T) {
 		if second["value"] != float64(2.5) {
 			t.Errorf("second bezier value = %v, want 2.5", second["value"])
 		}
-		// The first key supplies handles and the second omits them, so both
-		// decode arms of the handle reader run. Godot's bezier insert does not
-		// retain handle offsets in supported builds, so only the emitted shape
-		// is pinned here.
+		// Godot's bezier insert does not retain handle offsets in supported builds, so only the emitted shape is pinned.
 		for _, key := range []map[string]any{first, second} {
 			for _, field := range []string{"inHandle", "outHandle"} {
 				if handle, _ := key[field].(map[string]any); handle["$type"] != "Vector2" {
@@ -315,10 +304,7 @@ func TestAnimationTools(t *testing.T) {
 		const path = "anims/audio.tres"
 		createTestAnimation(t, session, path)
 
-		// An animation track's value is the name of the animation to play,
-		// decoded as a StringName; an audio track's value is a resource
-		// reference. Each track carries two keys, one bare and one tagged, so
-		// both decode arms run.
+		// Animation values decode as StringName and audio values as resource references; each track carries a bare and a tagged key so both arms run.
 		requireToolText(t, session, "add_animation_track", map[string]any{
 			"resourcePath": path,
 			"trackType":    "animation",
@@ -367,8 +353,6 @@ func TestAnimationTools(t *testing.T) {
 	})
 }
 
-// firstKeyValue returns the "value" of a track's first key, failing when the
-// track has no keys.
 func firstKeyValue(t *testing.T, track map[string]any) any {
 	t.Helper()
 	values := keyValues(t, track)
@@ -378,7 +362,6 @@ func firstKeyValue(t *testing.T, track map[string]any) any {
 	return values[0]
 }
 
-// keyValues returns the "value" of every key on a track, in key order.
 func keyValues(t *testing.T, track map[string]any) []any {
 	t.Helper()
 	keys, _ := track["keys"].([]any)
@@ -393,11 +376,8 @@ func keyValues(t *testing.T, track map[string]any) []any {
 	return out
 }
 
-// TestAnimationErrors covers the validation and engine failure paths.
 func TestAnimationErrors(t *testing.T) {
 	t.Parallel()
-	// The validation-only cases need no project, so they share one engine-free
-	// session.
 	validationSession := connect(t)
 	t.Run("missing params", func(t *testing.T) {
 		requireToolError(t, validationSession, "create_animation", map[string]any{}, "resourcePath is required.")
@@ -415,8 +395,6 @@ func TestAnimationErrors(t *testing.T) {
 		}, "The modify_animation tool requires at least one of: length, loopMode, step.")
 	})
 
-	// The three engine-backed cases below share one warm project and session;
-	// each uses a distinct path, so one engine boot covers all of them.
 	root := newProject(t)
 	session := connectProject(t, root)
 

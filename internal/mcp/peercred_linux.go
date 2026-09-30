@@ -8,9 +8,8 @@ import (
 	"syscall"
 )
 
-// peerIdentity returns the Linux kernel's SO_PEERCRED identity for the process
-// on the other end of conn: its effective UID and PID. The kernel fills the
-// credentials at connect time, so a peer cannot forge them.
+// SO_PEERCRED identity for the process on the other end; the kernel fills it at
+// connect time, so a peer cannot forge it.
 func peerIdentity(conn *net.UnixConn) (PeerIdentity, error) {
 	raw, err := conn.SyscallConn()
 	if err != nil {

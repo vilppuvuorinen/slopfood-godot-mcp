@@ -8,9 +8,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/daemonpath"
 )
 
-// daemonLogPath derives the per-project daemon log path from the shared
-// daemonpath resolver, so the log and the socket agree on the runtime
-// directory and the project hash.
 func daemonLogPath(root string) (string, error) {
 	path, err := daemonpath.LogPath(root)
 	if err != nil {
@@ -19,9 +16,7 @@ func daemonLogPath(root string) (string, error) {
 	return path, nil
 }
 
-// openDaemonLog creates the log's parent directory if needed and opens the log
-// for appending. The directory is 0700 and the file 0600, so only the owning
-// user can read a daemon's log.
+// Creates the log directory 0700 and opens the log 0600 append-only, so only the owning user can read it.
 func openDaemonLog(path string) (*os.File, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("create log directory for %q: %w", path, err)
