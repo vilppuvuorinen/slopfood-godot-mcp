@@ -8,7 +8,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -240,15 +239,19 @@ var (
 // so LIFO runs it after every session has closed and before the directory is
 // removed.
 //
-// On Windows a daemon keeps the project's files open until it exits, and
-// t.TempDir's cleanup retries the resulting sharing violation for only about
-// two seconds, shorter than the daemon's idle grace plus its graceful engine
-// quit. Polling daemonPIDs is the portable replacement for depending on the
-// filesystem to report that lock. Off Windows unlinking an open file is
-// allowed, so the wait is unnecessary and skipped.
+// A detached daemon keeps its engine running the project until the idle grace
+// expires and the engine quits, longer than the test's own cleanup. The editor
+// engine rewrites .godot/editor while it runs, so on every platform RemoveAll
+// can catch that directory mid-repopulation: its unlinkat(AT_REMOVEDIR) then
+// fails with ENOTEMPTY. Off Windows t.TempDir's removeAll does not retry at all,
+// and on Windows it retries only sharing violations for about two seconds,
+// shorter than the daemon's idle grace plus its graceful engine quit. Polling
+// daemonPIDs until the daemon is gone is the portable fix; because the daemon
+// only exits after its engine has been reaped, it also covers the Windows lock
+// case.
 func registerDaemonExitWait(t *testing.T, project string) {
 	t.Helper()
-	if project == "" || runtime.GOOS != "windows" {
+	if project == "" {
 		return
 	}
 	daemonExitMu.Lock()
