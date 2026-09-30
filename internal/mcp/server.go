@@ -276,8 +276,10 @@ func (s *Server) SetQueue(q *Queue) {
 }
 
 // The reader runs on its own goroutine and cancels the connection context on
-// EOF or read error, so a disconnect kills any in-flight engine work; only the
-// Serve goroutine writes, so responses stay ordered.
+// EOF or read error, so a disconnect kills any in-flight work. Each id-bearing
+// request is handled on its own goroutine so a notification (notably
+// notifications/cancelled) is still processed while one is running; the shared
+// writer serializes the responses, which clients match by id.
 func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -302,6 +304,9 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 		readErr <- scanner.Err()
 	}()
 
+	inflight := newInflightRequests()
+	var handlers sync.WaitGroup
+
 	for line := range lines {
 		if len(line) == 0 {
 			continue
@@ -311,36 +316,97 @@ func (s *Server) Serve(ctx context.Context, r io.Reader, w io.Writer) error {
 			s.logger.Warn("malformed request", "error", err)
 			continue
 		}
-		resp, ok := s.handle(ctx, req)
-		if !ok {
+		// A request without an id is a notification: process it but never respond.
+		if len(req.ID) == 0 {
+			s.handleNotification(req, inflight)
 			continue
 		}
-		if err := s.write(w, resp); err != nil {
-			return err
-		}
+		id := strings.TrimSpace(string(req.ID))
+		reqCtx, reqCancel := context.WithCancel(ctx)
+		inflight.add(id, reqCancel)
+		handlers.Add(1)
+		go func(reqCtx context.Context, req request, id string, reqCancel context.CancelFunc) {
+			defer handlers.Done()
+			defer inflight.remove(id)
+			defer reqCancel()
+			if err := s.write(w, s.handle(reqCtx, req)); err != nil {
+				s.logger.Debug("write response", "error", err)
+				cancel()
+			}
+		}(reqCtx, req, id, reqCancel)
 	}
+
+	handlers.Wait()
 	if err := <-readErr; err != nil {
 		return fmt.Errorf("read input: %w", err)
 	}
 	return nil
 }
 
-func (s *Server) handle(ctx context.Context, req request) (response, bool) {
-	// A request without an id is a notification: process it but never respond.
-	if len(req.ID) == 0 {
-		return response{}, false
+// Notifications get no response; the only one that needs action is
+// notifications/cancelled, which cancels the matching in-flight request.
+func (s *Server) handleNotification(req request, inflight *inflightRequests) {
+	if req.Method != "notifications/cancelled" || len(req.Params) == 0 {
+		return
 	}
+	var params struct {
+		RequestID json.RawMessage `json:"requestId"`
+	}
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		s.logger.Debug("invalid cancellation notification", "error", err)
+		return
+	}
+	if len(params.RequestID) == 0 {
+		return
+	}
+	inflight.cancel(strings.TrimSpace(string(params.RequestID)))
+}
 
+// inflightRequests tracks the requests being served on one connection so a
+// cancellation notification can stop the matching one. Registration and
+// cancellation run on the read loop, removal on the handler goroutine, so every
+// access is mutex-guarded.
+type inflightRequests struct {
+	mu      sync.Mutex
+	cancels map[string]context.CancelFunc
+}
+
+func newInflightRequests() *inflightRequests {
+	return &inflightRequests{cancels: make(map[string]context.CancelFunc)}
+}
+
+func (r *inflightRequests) add(id string, cancel context.CancelFunc) {
+	r.mu.Lock()
+	r.cancels[id] = cancel
+	r.mu.Unlock()
+}
+
+func (r *inflightRequests) remove(id string) {
+	r.mu.Lock()
+	delete(r.cancels, id)
+	r.mu.Unlock()
+}
+
+func (r *inflightRequests) cancel(id string) {
+	r.mu.Lock()
+	cancel := r.cancels[id]
+	r.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+func (s *Server) handle(ctx context.Context, req request) response {
 	resp := response{JSONRPC: "2.0", ID: req.ID}
 
 	meta, metaErr := parseRequestMeta(req.Params)
 	if metaErr != nil {
 		resp.Error = metaErr
-		return resp, true
+		return resp
 	}
 	if meta.modern && !isSupportedProtocolVersion(meta.version) {
 		resp.Error = unsupportedProtocolVersionError(meta.version)
-		return resp, true
+		return resp
 	}
 
 	switch req.Method {
@@ -396,7 +462,7 @@ func (s *Server) handle(ctx context.Context, req request) (response, bool) {
 		resp.Result = s.withStatelessMeta(resp.Result)
 	}
 
-	return resp, true
+	return resp
 }
 
 func (s *Server) capabilities() map[string]any {

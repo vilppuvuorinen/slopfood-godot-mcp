@@ -413,6 +413,41 @@ func TestServeNotificationsGetNoResponse(t *testing.T) {
 	}
 }
 
+// A notifications/cancelled for an in-flight request cancels it without a disconnect.
+func TestServeCancellationNotificationStopsHandler(t *testing.T) {
+	s, started, canceled := blockingServer()
+
+	inR, inW := io.Pipe()
+	var out lockedBuffer
+	done := make(chan error, 1)
+	go func() { done <- s.Serve(context.Background(), inR, &out) }()
+
+	writeLine(t, inW, `{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"block"}}`)
+	select {
+	case <-started:
+	case <-time.After(2 * time.Second):
+		t.Fatal("handler did not start")
+	}
+
+	writeLine(t, inW, `{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":7}}`)
+	select {
+	case <-canceled:
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancellation notification did not cancel the handler")
+	}
+
+	awaitCondition(t, func() bool { return strings.Contains(out.String(), "context canceled") }, "the cancellation reply")
+	_ = inW.Close()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Serve: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Serve did not return after the stream closed")
+	}
+}
+
 const modernMeta = `"_meta":{"io.modelcontextprotocol/protocolVersion":"2026-07-28","io.modelcontextprotocol/clientCapabilities":{}}`
 
 func serveOne(t *testing.T, req string) map[string]any {
