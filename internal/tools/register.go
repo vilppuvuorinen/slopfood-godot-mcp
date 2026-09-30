@@ -58,7 +58,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		setTilemapCell, eraseTilemapCell, clearTilemap, readTilemap,
 	},
 	CategoryScript: {
-		attachScript, validateScripts,
+		attachScript, validateScripts, runScript,
 	},
 	CategoryAssets: {
 		createResource, modifyResource, readBinaryResource,

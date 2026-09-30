@@ -250,6 +250,11 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireStringProps(t, "scenePath", "nodePath", "newName")
 			schema.requirePropCount(t, 3)
 		}},
+		{"run_script", "Run a GDScript in the live editor session and return its output", func(t *testing.T, schema toolSchema) {
+			schema.requireRequired(t, "script")
+			schema.requireStringProps(t, "script")
+			schema.requirePropCount(t, 1)
+		}},
 		{"set_animation_track", "Set an existing Animation track's path, interpolation, and keys", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "resourcePath", "trackIndex")
 			schema.requireStringProps(t, "resourcePath", "trackPath", "interpolation")

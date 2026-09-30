@@ -16,6 +16,7 @@ func TestEnableCategories(t *testing.T) {
 			"add_scene_signal",  // signals
 			"set_tilemap_cell",  // tilemap
 			"attach_script",     // script
+			"run_script",        // script
 			"create_resource",   // assets
 			"create_animation",  // animation
 			"create_tileset",    // tileset
@@ -69,6 +70,7 @@ func TestEnableCategories(t *testing.T) {
 			"add_scene_signal",  // signals
 			"set_tilemap_cell",  // tilemap
 			"attach_script",     // script
+			"run_script",        // script
 			"create_resource",   // assets
 			"create_animation",  // animation
 			"create_tileset",    // tileset

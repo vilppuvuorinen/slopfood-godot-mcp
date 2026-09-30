@@ -7,6 +7,10 @@ extends SceneTree
 const JSON_START = "<<<GODOT_MCP_JSON_START>>>"
 const JSON_END = "<<<GODOT_MCP_JSON_END>>>"
 
+# Caps how many print/error lines a run_script call captures so a chatty script
+# cannot grow the frame without bound.
+const RUN_SCRIPT_LOG_LIMIT := 2000
+
 class Result extends RefCounted:
     var ok := true
     var stdout := ""
@@ -40,6 +44,30 @@ class DecodeResult extends RefCounted:
         result.error = message
         result.value = fallback
         return result
+
+# Captures the print()/push_error() output a run_script target emits while it
+# executes; the engine's default logger still forwards each line to the process
+# streams, so this only observes.
+class ScriptRunLogger extends Logger:
+    var messages := PackedStringArray()
+    var errors := []
+    var limit := 0
+
+    func _log_message(message: String, _error: bool) -> void:
+        if limit > 0 and messages.size() >= limit:
+            return
+        messages.append(message.trim_suffix("\n"))
+
+    func _log_error(function: String, file: String, line: int, code: String, rationale: String, _editor_notify: bool, _error_type: int, _script_backtraces) -> void:
+        if limit > 0 and errors.size() >= limit:
+            return
+        errors.append({
+            "function": function,
+            "file": file,
+            "line": line,
+            "code": code,
+            "rationale": rationale,
+        })
 
 func _init():
     var endpoint := _engine_endpoint()
@@ -302,6 +330,8 @@ func dispatch(operation, params) -> Result:
             handler_result = manage_scene_signals(result, params)
         "attach_script":
             handler_result = attach_script(result, params)
+        "run_script":
+            handler_result = run_script(result, params)
         "reimport_project":
             handler_result = reimport_project(result, params)
         "manage_resource":
@@ -1644,6 +1674,73 @@ func attach_script(result: Result, params) -> Result:
     _reconcile_path(full_script_path)
     _reconcile_path(full_scene_path)
     result.out("Script '" + full_script_path + "' attached successfully to node in: " + full_scene_path)
+    return result
+
+# Compiles the caller's source in-memory and runs it inside the live editor
+# session. The engine default logger still prints to stdout; ScriptRunLogger
+# observes the same stream so logs and errors can be returned in the frame.
+func run_script(result: Result, params) -> Result:
+    if not params.has("script") or not (params.script is String):
+        result.err("script is required")
+        return result.fail()
+    var source: String = params.script
+    if source.strip_edges().is_empty():
+        result.err("script is empty")
+        return result.fail()
+
+    # The editor refuses to instantiate a non-@tool script, so force tool mode
+    # unless the caller already opted in.
+    var injected_tool := not source.contains("@tool")
+    if injected_tool:
+        source = "@tool\n" + source
+
+    var logger := ScriptRunLogger.new()
+    logger.limit = RUN_SCRIPT_LOG_LIMIT
+    OS.add_logger(logger)
+
+    var compiled := false
+    var value = null
+    var serialized = null
+    var script := GDScript.new()
+    script.source_code = source
+    # An in-memory script has no resource path, so reload() is the only parse;
+    # parse failures surface through the logger's _log_error.
+    var reload_error := script.reload()
+    if reload_error == OK and script.can_instantiate():
+        compiled = true
+        var instance = script.new()
+        if instance == null:
+            compiled = false
+            result.err("script did not instantiate")
+        else:
+            # run() is the value-returning entry; _initialize() lets a
+            # SceneTree-shaped script run as Godot would with --script.
+            if instance.has_method("run"):
+                value = instance.call("run")
+            elif instance.has_method("_initialize"):
+                instance.call("_initialize")
+            serialized = _variant_to_json(value)
+            # A non-RefCounted instance (Node, SceneTree) would otherwise leak.
+            if not (instance is RefCounted):
+                instance.free()
+
+    OS.remove_logger(logger)
+
+    # The injected @tool line shifts every line in the in-memory script by one;
+    # report diagnostics against the caller's source instead.
+    if injected_tool:
+        for captured in logger.errors:
+            if str(captured.get("file", "")).begins_with("gdscript://") and int(captured.get("line", 0)) > 0:
+                captured["line"] = int(captured["line"]) - 1
+
+    result.out(JSON_START)
+    result.out(JSON.stringify({
+        "compiled": compiled,
+        "result": serialized,
+        "logs": Array(logger.messages),
+        "errors": logger.errors,
+    }))
+    result.out(JSON_END)
     return result
 
 func manage_resource(result: Result, params) -> Result:
