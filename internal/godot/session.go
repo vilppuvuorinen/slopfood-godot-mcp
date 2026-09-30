@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/daemonpath"
@@ -25,6 +26,10 @@ const defaultOperationCap = 100
 
 // Bounds how long Close waits for a graceful quit before killing a wedged bridge.
 const closeQuitTimeout = 5 * time.Second
+
+// After the graceful quit window, a session whose operation will not return is
+// force-killed so the daemon can still exit to be restarted.
+const closeKillGrace = 2 * time.Second
 
 // Contains no queue of its own: requests are serialized by the caller, so a second in-flight request
 // would make the next frame unattributable.
@@ -40,6 +45,12 @@ type Session struct {
 	proc   *sessionProc
 	nextID int
 	closed bool
+
+	// procRef mirrors proc so Close can kill the engine without taking mu, which
+	// a stuck operation may hold. closeTimeout is the production default, a
+	// field so tests can shrink it.
+	procRef      atomic.Pointer[sessionProc]
+	closeTimeout time.Duration
 }
 
 // Its context is session-owned: the caller cancels a job's context as soon as the job returns, so a
@@ -107,6 +118,7 @@ func NewSessionTransport(executable, script string, transport Transport) *Sessio
 		script:       script,
 		transport:    transport,
 		operationCap: defaultOperationCap,
+		closeTimeout: closeQuitTimeout + closeKillGrace,
 	}
 }
 
@@ -177,19 +189,49 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 	return frame.Stdout, frame.Stderr, exitCode, nil
 }
 
+// Close stops the engine, waiting up to closeTimeout for the graceful path. If
+// an operation holds the session lock and will not return (the queue's stuck-job
+// path), the engine is killed out of band so the daemon can still exit.
 func (s *Session) Close() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.closed {
-		return nil
-	}
-	s.closed = true
-	p := s.proc
-	s.proc = nil
-	if p != nil {
-		p.shutdown()
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.closed {
+			return
+		}
+		s.closed = true
+		p := s.proc
+		s.proc = nil
+		s.procRef.Store(nil)
+		if p != nil {
+			p.shutdown()
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(s.closeTimeout):
+		s.kill()
 	}
 	return nil
+}
+
+// kill force-stops the engine without taking the session lock, so a stuck
+// operation cannot keep the daemon alive. The process kill is idempotent and
+// safe alongside a concurrent p.stop.
+func (s *Session) kill() {
+	p := s.procRef.Load()
+	if p == nil {
+		return
+	}
+	p.cancel()
+	if p.socket != nil {
+		_ = p.socket.Close()
+	}
+	if p.cmd.Process != nil {
+		_ = p.cmd.Process.Kill()
+	}
 }
 
 // On any failure the process is killed and cleared, so a wedged engine is never reused.
@@ -288,6 +330,7 @@ func (s *Session) ensureStartedLocked(project string) (*sessionProc, error) {
 		return nil, err
 	}
 	s.proc = p
+	s.procRef.Store(p)
 	return p, nil
 }
 
@@ -297,6 +340,7 @@ func (s *Session) stopLocked() {
 		return
 	}
 	s.proc = nil
+	s.procRef.Store(nil)
 	p.stop()
 }
 
@@ -426,7 +470,9 @@ func (p *sessionProc) stop() {
 }
 
 func (p *sessionProc) shutdown() {
-	_ = p.socket.writeRequest([]byte(`{"id":0,"operation":"quit","params":{}}`))
+	if p.socket != nil {
+		_ = p.socket.writeRequest([]byte(`{"id":0,"operation":"quit","params":{}}`))
+	}
 	timer := time.NewTimer(closeQuitTimeout)
 	defer timer.Stop()
 	select {

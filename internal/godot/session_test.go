@@ -530,6 +530,49 @@ func TestSessionContextCancelKill(t *testing.T) {
 	}
 }
 
+// A stuck operation holding the session lock must not keep Close from returning:
+// past the grace period the engine is force-killed.
+func TestSessionCloseBoundedWhenLocked(t *testing.T) {
+	s := NewSession("godot", "/ops.gd")
+	s.closeTimeout = 50 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "sleep", "60") //nolint:gosec // test-controlled fixed command.
+	if err := cmd.Start(); err != nil {
+		t.Skipf("start sleep: %v", err)
+	}
+	p := &sessionProc{cmd: cmd, cancel: cancel, done: make(chan struct{}), quit: make(chan struct{})}
+	s.proc = p
+	s.procRef.Store(p)
+
+	waited := make(chan error, 1)
+	go func() { waited <- cmd.Wait(); close(p.done) }()
+
+	s.mu.Lock()
+	start := time.Now()
+	closed := make(chan struct{})
+	go func() { _ = s.Close(); close(closed) }()
+
+	select {
+	case <-closed:
+	case <-time.After(2 * time.Second):
+		s.mu.Unlock()
+		t.Fatal("Close blocked while an operation held the session lock")
+	}
+	if elapsed := time.Since(start); elapsed < s.closeTimeout {
+		t.Errorf("Close returned after %s, want at least the %s grace", elapsed, s.closeTimeout)
+	}
+
+	select {
+	case <-waited:
+	case <-time.After(2 * time.Second):
+		s.mu.Unlock()
+		t.Fatal("the engine process was not killed")
+	}
+	s.mu.Unlock()
+}
+
 func TestSessionCloseQuitAndFailsRuns(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
