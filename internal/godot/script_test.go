@@ -24,12 +24,12 @@ func TestRunScriptCapturesStreamsSeparately(t *testing.T) {
 	}
 }
 
-func TestCheckScriptCapturesExitCodeAndStreams(t *testing.T) {
+func TestCheckScriptsCapturesExitCodeAndStreams(t *testing.T) {
 	bin := writeExecutable(t, "echo out\necho 'SCRIPT ERROR: boom' >&2\nexit 1")
 
-	stdout, stderr, exitCode, err := CheckScript(context.Background(), bin, "/proj", "/checker.gd", "res://player.gd")
+	stdout, stderr, exitCode, err := CheckScripts(context.Background(), bin, "/proj", "/checker.gd", []string{"res://player.gd"})
 	if err != nil {
-		t.Fatalf("CheckScript: %v, want nil", err)
+		t.Fatalf("CheckScripts: %v, want nil", err)
 	}
 	if exitCode != 1 {
 		t.Errorf("exitCode = %d, want 1", exitCode)
@@ -39,5 +39,20 @@ func TestCheckScriptCapturesExitCodeAndStreams(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "SCRIPT ERROR: boom") || strings.Contains(stderr, "out") {
 		t.Errorf("stderr = %q", stderr)
+	}
+}
+
+func TestCheckScriptsForwardsEveryPath(t *testing.T) {
+	bin := writeExecutable(t, `printf '%s\n' "$@"`)
+
+	stdout, _, _, err := CheckScripts(context.Background(), bin, "/proj", "/checker.gd",
+		[]string{"res://a.gd", "res://nested/b.gd"})
+	if err != nil {
+		t.Fatalf("CheckScripts: %v", err)
+	}
+	for _, want := range []string{"--script", "/checker.gd", "res://a.gd", "res://nested/b.gd"} {
+		if !strings.Contains(stdout, want) {
+			t.Errorf("stdout = %q, missing %q", stdout, want)
+		}
 	}
 }

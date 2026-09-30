@@ -8,14 +8,17 @@ import (
 	"os/exec"
 )
 
-// Godot logs diagnostics to stderr and can still exit 0 on failure, so a non-zero exit is not an error.
-func CheckScript(ctx context.Context, executable, projectPath, checkerPath, scriptResPath string) (stdout, stderr string, exitCode int, err error) {
-	args := []string{
+// CheckScripts runs the checker over every target in one engine process. The
+// checker brackets each target with a marker so the caller can attribute the
+// diagnostics on stderr to the script being loaded.
+func CheckScripts(ctx context.Context, executable, projectPath, checkerPath string, scriptResPaths []string) (stdout, stderr string, exitCode int, err error) {
+	args := make([]string, 0, 5+len(scriptResPaths))
+	args = append(args,
 		"--headless",
 		"--path", projectPath,
 		"--script", checkerPath,
-		scriptResPath,
-	}
+	)
+	args = append(args, scriptResPaths...)
 	return runScript(ctx, executable, args)
 }
 

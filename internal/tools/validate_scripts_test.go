@@ -16,16 +16,22 @@ type validateScriptsDoc struct {
 	Results         []map[string]any `json:"results"`
 }
 
-const fakeValidateGodot = `for arg in "$@"; do
+const fakeValidateGodot = `status=0
+for arg in "$@"; do
   case "$arg" in
-    *invalid*)
-      echo 'SCRIPT ERROR: Parse Error: Unexpected token' >&2
-      echo '    at: (res://invalid.gd:3)' >&2
-      exit 1
+    *.gd)
+      echo "<<<GODOT_MCP_VALIDATE:$arg>>>" >&2
+      case "$arg" in
+        *invalid*)
+          echo 'SCRIPT ERROR: Parse Error: Unexpected token' >&2
+          echo '    at: (res://invalid.gd:3)' >&2
+          status=1
+          ;;
+      esac
       ;;
   esac
 done
-exit 0`
+exit $status`
 
 func decodeValidateScripts(t *testing.T, text string) validateScriptsDoc {
 	t.Helper()

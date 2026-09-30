@@ -28,16 +28,41 @@ var (
 	scriptLocPattern   = regexp.MustCompile(`\((res://.+):(\d+)\)`)
 )
 
-func parseGodotScriptDiagnostics(output string) []scriptDiagnostic {
+const (
+	scriptMarkerPrefix = "<<<GODOT_MCP_VALIDATE:"
+	scriptMarkerSuffix = ">>>"
+)
+
+// Matches the checker's per-target marker lines so they do not count as
+// unexpected stderr on an otherwise clean run.
+var scriptMarkerPattern = regexp.MustCompile(regexp.QuoteMeta(scriptMarkerPrefix) + `.*` + regexp.QuoteMeta(scriptMarkerSuffix))
+
+func parseScriptMarker(line string) (string, bool) {
+	trimmed := strings.TrimSpace(line)
+	if !strings.HasPrefix(trimmed, scriptMarkerPrefix) || !strings.HasSuffix(trimmed, scriptMarkerSuffix) {
+		return "", false
+	}
+	return strings.TrimSuffix(strings.TrimPrefix(trimmed, scriptMarkerPrefix), scriptMarkerSuffix), true
+}
+
+// parseGodotScriptDiagnosticGroups parses one checker run's stderr into
+// diagnostics keyed by project-relative script path. Each load is bracketed by a
+// marker line, so a diagnostic is attributed to the script being loaded even
+// when the engine prints no location for it.
+func parseGodotScriptDiagnosticGroups(output string) map[string][]scriptDiagnostic {
+	groups := make(map[string][]scriptDiagnostic)
 	lines := strings.Split(strings.ReplaceAll(output, "\r\n", "\n"), "\n")
-	diagnostics := make([]scriptDiagnostic, 0)
-	for i, line := range lines {
-		match := scriptErrorPattern.FindStringSubmatch(line)
+	current := ""
+	for i := 0; i < len(lines); i++ {
+		if target, ok := parseScriptMarker(lines[i]); ok {
+			current = projectRelativePath(target)
+			continue
+		}
+		match := scriptErrorPattern.FindStringSubmatch(lines[i])
 		if match == nil {
 			continue
 		}
-		message := parseErrorPrefix.ReplaceAllString(match[1], "")
-		diagnostic := scriptDiagnostic{Message: message}
+		diagnostic := scriptDiagnostic{Message: parseErrorPrefix.ReplaceAllString(match[1], "")}
 		for _, j := range []int{i + 1, i} {
 			if j >= len(lines) {
 				continue
@@ -46,42 +71,48 @@ func parseGodotScriptDiagnostics(output string) []scriptDiagnostic {
 			if loc == nil {
 				continue
 			}
-			diagnostic.File = loc[1]
+			diagnostic.File = projectRelativePath(loc[1])
 			if n, err := strconv.Atoi(loc[2]); err == nil {
 				diagnostic.Line = n
 			}
 			break
 		}
-		diagnostics = append(diagnostics, diagnostic)
+		if current == "" {
+			continue
+		}
+		if diagnostic.File == "" {
+			diagnostic.File = current
+		}
+		groups[current] = append(groups[current], diagnostic)
 	}
-	return diagnostics
+	return groups
 }
 
 // Diagnostics are parsed from stderr: Godot logs SCRIPT ERROR lines but still
-// exits 0 when the target script fails to compile.
-func runGDScriptCheck(ctx context.Context, projectPath, scriptFull string) ([]scriptDiagnostic, error) {
-	rel, err := filepath.Rel(projectPath, scriptFull)
-	if err != nil {
-		return nil, fmt.Errorf("resolve script path: %w", err)
+// exits 0 when a target script fails to compile. Every path is checked in one
+// engine process, so a batch costs a single engine startup instead of one per
+// file.
+func runGDScriptChecks(ctx context.Context, projectPath string, scriptRelPaths []string) (map[string][]scriptDiagnostic, error) {
+	if len(scriptRelPaths) == 0 {
+		return map[string][]scriptDiagnostic{}, nil
 	}
-	scriptRes := resScheme + filepath.ToSlash(rel)
-
 	checkerPath, err := godotops.ValidateScript()
 	if err != nil {
 		return nil, fmt.Errorf("materialize validate script: %w", err)
 	}
-	_, stderr, exitCode, err := godot.CheckScript(ctx, godot.Path(), projectPath, checkerPath, scriptRes)
+	resPaths := make([]string, 0, len(scriptRelPaths))
+	for _, rel := range scriptRelPaths {
+		resPaths = append(resPaths, resScheme+filepath.ToSlash(rel))
+	}
+	_, stderr, exitCode, err := godot.CheckScripts(ctx, godot.Path(), projectPath, checkerPath, resPaths)
 	if err != nil {
 		return nil, fmt.Errorf("run script checker: %w", err)
 	}
-	diagnostics := parseGodotScriptDiagnostics(stderr)
-	for i := range diagnostics {
-		diagnostics[i].File = projectRelativePath(diagnostics[i].File)
-	}
-	if len(diagnostics) == 0 && scriptFailed(exitCode, stderr) {
+	groups := parseGodotScriptDiagnosticGroups(stderr)
+	if len(groups) == 0 && scriptFailed(exitCode, stderr, scriptMarkerPattern) {
 		return nil, fmt.Errorf("script checker failed (exit %d): %s", exitCode, strings.TrimSpace(stderr))
 	}
-	return diagnostics, nil
+	return groups, nil
 }
 
 func collectGdPaths(outputs []string) []string {

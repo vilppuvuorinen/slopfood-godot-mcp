@@ -122,23 +122,29 @@ func handleValidateScripts(ctx Context, raw json.RawMessage) (any, error) {
 	}
 
 	filesWithErrors := 0
-	for _, rel := range toCheck {
-		diagnostics, checkErr := runGDScriptCheck(ctx, project, filepath.Join(project, rel))
-		if checkErr != nil {
-			results = append(results, validateScriptSkip{ScriptPath: rel, Checked: false, Error: checkErr.Error()})
+	groups, batchErr := runGDScriptChecks(ctx, project, toCheck)
+	if batchErr != nil {
+		for _, rel := range toCheck {
+			results = append(results, validateScriptSkip{ScriptPath: rel, Checked: false, Error: batchErr.Error()})
 			allChecked = false
-			continue
 		}
-		if len(diagnostics) > 0 {
-			filesWithErrors++
+	} else {
+		for _, rel := range toCheck {
+			diagnostics := groups[rel]
+			if diagnostics == nil {
+				diagnostics = []scriptDiagnostic{}
+			}
+			if len(diagnostics) > 0 {
+				filesWithErrors++
+			}
+			results = append(results, validateScriptCheck{
+				ScriptPath: rel,
+				Checked:    true,
+				Valid:      len(diagnostics) == 0,
+				ErrorCount: len(diagnostics),
+				Errors:     diagnostics,
+			})
 		}
-		results = append(results, validateScriptCheck{
-			ScriptPath: rel,
-			Checked:    true,
-			Valid:      len(diagnostics) == 0,
-			ErrorCount: len(diagnostics),
-			Errors:     diagnostics,
-		})
 	}
 
 	report := validateScriptsReport{
