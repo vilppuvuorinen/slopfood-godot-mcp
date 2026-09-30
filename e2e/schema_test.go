@@ -286,12 +286,9 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireRequired(t)
 			schema.requirePropCount(t, 0)
 		}},
-		{"validate_scripts", "Batch-check GDScript files (git-changed by default, or all)", func(t *testing.T, schema toolSchema) {
+		{"validate_scripts", "Validate every GDScript file in the project", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t)
-			schema.requireProps(t, "scope", "scriptPaths")
-			schema.requireStringProps(t, "scope")
-			schema.requireType(t, "scriptPaths", "array")
-			schema.requirePropCount(t, 2)
+			schema.requirePropCount(t, 0)
 		}},
 	}
 

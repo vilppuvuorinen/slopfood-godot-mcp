@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -440,24 +439,6 @@ func createScene(t *testing.T, session *mcp.ClientSession, scenePath string, roo
 		t.Fatalf("create_scene failed: %s", firstText(t, res))
 	}
 	requirePrefix(t, firstText(t, res), "Scene created successfully at: "+scenePath)
-}
-
-// Identity and config are pinned so the suite does not depend on the developer's git environment.
-func runGit(t *testing.T, dir string, args ...string) {
-	t.Helper()
-	base := make([]string, 0, 4+len(args))
-	base = append(base, "-c", "core.quotepath=false", "-C", dir)
-	cmd := exec.CommandContext(context.Background(), "git", append(base, args...)...) //nolint:gosec // the path and args are test-controlled.
-	cmd.Env = append(os.Environ(),
-		"GIT_AUTHOR_NAME=e2e", "GIT_AUTHOR_EMAIL=e2e@example.com",
-		"GIT_COMMITTER_NAME=e2e", "GIT_COMMITTER_EMAIL=e2e@example.com",
-		"GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_SYSTEM="+os.DevNull,
-	)
-	var stderr bytes.Buffer
-	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		t.Fatalf("git %v: %v\n%s", args, err, stderr.String())
-	}
 }
 
 func assertNonEmptyFile(t *testing.T, path string) {

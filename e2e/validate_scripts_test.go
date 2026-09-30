@@ -7,31 +7,36 @@ import (
 )
 
 type validateScriptsE2EDoc struct {
-	Scope           string           `json:"scope"`
 	FileCount       int              `json:"fileCount"`
 	FilesWithErrors int              `json:"filesWithErrors"`
 	AllValid        bool             `json:"allValid"`
 	Results         []map[string]any `json:"results"`
 }
 
+func e2eResultByPath(t *testing.T, doc validateScriptsE2EDoc, path string) map[string]any {
+	t.Helper()
+	for _, result := range doc.Results {
+		if result["scriptPath"] == path {
+			return result
+		}
+	}
+	t.Fatalf("no result for %q in %+v", path, doc.Results)
+	return nil
+}
+
 func TestValidateScriptsTool(t *testing.T) {
 	t.Parallel()
-	t.Run("explicit scriptPaths", func(t *testing.T) {
+	t.Run("reports valid and broken scripts", func(t *testing.T) {
 		root := t.TempDir()
 		seedProject(t, root)
 		writeE2EFile(t, filepath.Join(root, "scripts", "valid.gd"), "extends Node\n")
 		writeE2EFile(t, filepath.Join(root, "scripts", "invalid.gd"), "extends Node\n\nfunc broken(\n")
 		session := connectProject(t, root)
 
-		text := requireToolText(t, session, "validate_scripts", map[string]any{
-			"scriptPaths": []string{"scripts/valid.gd", "scripts/invalid.gd"},
-		})
+		text := requireToolText(t, session, "validate_scripts", map[string]any{})
 		var doc validateScriptsE2EDoc
 		if err := json.Unmarshal([]byte(text), &doc); err != nil {
 			t.Fatalf("unmarshal %q: %v", text, err)
-		}
-		if doc.Scope != "explicit" {
-			t.Errorf("scope = %q", doc.Scope)
 		}
 		if doc.FileCount != 2 || doc.FilesWithErrors != 1 || doc.AllValid {
 			t.Errorf("fileCount=%d filesWithErrors=%d allValid=%v", doc.FileCount, doc.FilesWithErrors, doc.AllValid)
@@ -39,50 +44,19 @@ func TestValidateScriptsTool(t *testing.T) {
 		if len(doc.Results) != 2 {
 			t.Fatalf("results = %+v", doc.Results)
 		}
-		if got := doc.Results[0]["valid"]; got != true {
-			t.Errorf("valid.gd result = %+v", doc.Results[0])
+		if got := e2eResultByPath(t, doc, "scripts/valid.gd")["valid"]; got != true {
+			t.Errorf("valid.gd valid = %v, want true", got)
 		}
-		if got := doc.Results[1]["valid"]; got != false {
-			t.Errorf("invalid.gd result = %+v", doc.Results[1])
+		invalid := e2eResultByPath(t, doc, "scripts/invalid.gd")
+		if invalid["valid"] != false {
+			t.Errorf("invalid.gd result = %+v", invalid)
 		}
-		errors, ok := doc.Results[1]["errors"].([]any)
+		errors, ok := invalid["errors"].([]any)
 		if !ok || len(errors) == 0 {
-			t.Fatalf("invalid.gd errors = %+v", doc.Results[1]["errors"])
+			t.Fatalf("invalid.gd errors = %+v", invalid["errors"])
 		}
 		if got := errors[0].(map[string]any)["file"]; got != "scripts/invalid.gd" {
 			t.Errorf("diagnostic file = %v, want the project-relative scripts/invalid.gd", got)
-		}
-	})
-
-	t.Run("scope changed by default", func(t *testing.T) {
-		root := t.TempDir()
-		seedProject(t, root)
-		session := connectProject(t, root)
-
-		// Outside a work tree the default scope is an error, not a fallback to all scripts.
-		requireToolError(t, session, "validate_scripts", map[string]any{},
-			`Not a git repository (or git is unavailable). Use scope: "all" or pass scriptPaths.`)
-
-		writeE2EFile(t, filepath.Join(root, "committed.gd"), "extends Node\n")
-		runGit(t, root, "init", "-q")
-		runGit(t, root, "add", "committed.gd")
-		runGit(t, root, "commit", "-q", "-m", "baseline")
-		// Untracked, so it is one of the three change classes git reports.
-		writeE2EFile(t, filepath.Join(root, "changed.gd"), "extends Node\n")
-
-		text := requireToolText(t, session, "validate_scripts", map[string]any{})
-		var doc validateScriptsE2EDoc
-		if err := json.Unmarshal([]byte(text), &doc); err != nil {
-			t.Fatalf("unmarshal %q: %v", text, err)
-		}
-		if doc.Scope != "changed" {
-			t.Errorf("scope = %q, want changed", doc.Scope)
-		}
-		if doc.FileCount != 1 || !doc.AllValid {
-			t.Errorf("fileCount=%d allValid=%v, want 1/true", doc.FileCount, doc.AllValid)
-		}
-		if len(doc.Results) != 1 || doc.Results[0]["scriptPath"] != "changed.gd" {
-			t.Errorf("results = %+v, want only the untracked changed.gd", doc.Results)
 		}
 	})
 
@@ -99,44 +73,43 @@ func TestValidateScriptsTool(t *testing.T) {
 			"extends Node\n\n@onready var state = NotAnAutoload\n")
 		session := connectProject(t, root)
 
-		text := requireToolText(t, session, "validate_scripts", map[string]any{
-			"scriptPaths": []string{"scripts/player.gd", "scripts/broken.gd"},
-		})
+		text := requireToolText(t, session, "validate_scripts", map[string]any{})
 		var doc validateScriptsE2EDoc
 		if err := json.Unmarshal([]byte(text), &doc); err != nil {
 			t.Fatalf("unmarshal %q: %v", text, err)
 		}
-		if doc.FileCount != 2 || doc.FilesWithErrors != 1 || doc.AllValid {
+		if doc.FileCount != 3 || doc.FilesWithErrors != 1 || doc.AllValid {
 			t.Errorf("fileCount=%d filesWithErrors=%d allValid=%v", doc.FileCount, doc.FilesWithErrors, doc.AllValid)
 		}
-		if got := doc.Results[0]["valid"]; got != true {
-			t.Errorf("player.gd result = %+v, want valid", doc.Results[0])
+		if got := e2eResultByPath(t, doc, "autoload/game_state.gd")["valid"]; got != true {
+			t.Errorf("game_state.gd valid = %v, want true", got)
 		}
-		if got := doc.Results[1]["valid"]; got != false {
-			t.Errorf("broken.gd result = %+v, want invalid", doc.Results[1])
+		if got := e2eResultByPath(t, doc, "scripts/player.gd")["valid"]; got != true {
+			t.Errorf("player.gd valid = %v, want true", got)
+		}
+		if got := e2eResultByPath(t, doc, "scripts/broken.gd")["valid"]; got != false {
+			t.Errorf("broken.gd valid = %v, want false", got)
 		}
 	})
 
-	t.Run("scope all", func(t *testing.T) {
+	t.Run("skips engine and dependency directories", func(t *testing.T) {
 		root := t.TempDir()
 		seedProject(t, root)
 		writeE2EFile(t, filepath.Join(root, "a.gd"), "extends Node\n")
 		writeE2EFile(t, filepath.Join(root, "nested", "b.gd"), "extends Node\n")
+		writeE2EFile(t, filepath.Join(root, "node_modules", "dep.gd"), "extends Node\n\nfunc broken(\n")
 		session := connectProject(t, root)
 
-		text := requireToolText(t, session, "validate_scripts", map[string]any{
-			"scope": "all",
-		})
+		text := requireToolText(t, session, "validate_scripts", map[string]any{})
 		var doc validateScriptsE2EDoc
 		if err := json.Unmarshal([]byte(text), &doc); err != nil {
 			t.Fatalf("unmarshal %q: %v", text, err)
 		}
-		if doc.Scope != "all" {
-			t.Errorf("scope = %q", doc.Scope)
-		}
 		if doc.FileCount != 2 || doc.FilesWithErrors != 0 || !doc.AllValid {
 			t.Errorf("fileCount=%d filesWithErrors=%d allValid=%v", doc.FileCount, doc.FilesWithErrors, doc.AllValid)
 		}
+		e2eResultByPath(t, doc, "a.gd")
+		e2eResultByPath(t, doc, "nested/b.gd")
 	})
 }
 

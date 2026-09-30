@@ -3,13 +3,13 @@ package tools
 import (
 	"encoding/json"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 )
 
 type validateScriptsDoc struct {
-	Scope           string           `json:"scope"`
 	FileCount       int              `json:"fileCount"`
 	FilesWithErrors int              `json:"filesWithErrors"`
 	AllValid        bool             `json:"allValid"`
@@ -42,12 +42,23 @@ func decodeValidateScripts(t *testing.T, text string) validateScriptsDoc {
 	return doc
 }
 
+func resultByPath(t *testing.T, doc validateScriptsDoc, path string) map[string]any {
+	t.Helper()
+	for _, result := range doc.Results {
+		if result["scriptPath"] == path {
+			return result
+		}
+	}
+	t.Fatalf("no result for %q in %+v", path, doc.Results)
+	return nil
+}
+
 func TestValidateScriptsSchema(t *testing.T) {
 	tool := validateScripts()
 	if tool.Name != "validate_scripts" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Batch-check GDScript files (git-changed by default, or all)" {
+	if tool.Description != "Validate every GDScript file in the project" {
 		t.Errorf("description = %q", tool.Description)
 	}
 	if tool.InputSchema["type"] != "object" {
@@ -58,23 +69,12 @@ func TestValidateScriptsSchema(t *testing.T) {
 		t.Errorf("required = %v", tool.InputSchema["required"])
 	}
 	props, ok := tool.InputSchema["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("properties = %T", tool.InputSchema["properties"])
-	}
-	scope, ok := props["scope"].(map[string]any)
-	if !ok || scope["type"] != "string" {
-		t.Errorf("scope property = %v", props["scope"])
-	}
-	if scope["default"] != "changed" {
-		t.Errorf("scope default = %v, want changed", scope["default"])
-	}
-	scriptPaths, ok := props["scriptPaths"].(map[string]any)
-	if !ok || scriptPaths["type"] != "array" {
-		t.Errorf("scriptPaths property = %v", props["scriptPaths"])
+	if !ok || len(props) != 0 {
+		t.Errorf("properties = %v, want none", tool.InputSchema["properties"])
 	}
 }
 
-func TestValidateScriptsExplicit(t *testing.T) {
+func TestValidateScriptsReportsBrokenAndValid(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, fakeValidateGodot))
 
 	root := t.TempDir()
@@ -82,33 +82,29 @@ func TestValidateScriptsExplicit(t *testing.T) {
 	seedFile(t, filepath.Join(root, "valid.gd"), "extends Node\n")
 	seedFile(t, filepath.Join(root, "invalid.gd"), "extends Node\nfunc b(\n")
 
-	result := callToolArgs(t, validateScripts(), root, `{"scriptPaths":["valid.gd","invalid.gd"]}`)
+	result := callToolArgs(t, validateScripts(), root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
 	doc := decodeValidateScripts(t, result.Content[0].Text)
-	if doc.Scope != "explicit" {
-		t.Errorf("scope = %q", doc.Scope)
-	}
 	if doc.FileCount != 2 || doc.FilesWithErrors != 1 || doc.AllValid {
 		t.Errorf("fileCount=%d filesWithErrors=%d allValid=%v", doc.FileCount, doc.FilesWithErrors, doc.AllValid)
 	}
 	if len(doc.Results) != 2 {
 		t.Fatalf("results = %+v", doc.Results)
 	}
-	valid := doc.Results[0]
-	if valid["scriptPath"] != "valid.gd" || valid["checked"] != true || valid["valid"] != true {
+
+	valid := resultByPath(t, doc, "valid.gd")
+	if valid["checked"] != true || valid["valid"] != true {
 		t.Errorf("valid result = %+v", valid)
 	}
 	if errors, ok := valid["errors"].([]any); !ok || len(errors) != 0 {
 		t.Errorf("valid errors = %+v", valid["errors"])
 	}
-	invalid := doc.Results[1]
-	if invalid["scriptPath"] != "invalid.gd" || invalid["checked"] != true || invalid["valid"] != false {
+
+	invalid := resultByPath(t, doc, "invalid.gd")
+	if invalid["checked"] != true || invalid["valid"] != false || invalid["errorCount"] != float64(1) {
 		t.Errorf("invalid result = %+v", invalid)
-	}
-	if invalid["errorCount"] != float64(1) {
-		t.Errorf("errorCount = %v", invalid["errorCount"])
 	}
 	errors, ok := invalid["errors"].([]any)
 	if !ok || len(errors) != 1 {
@@ -123,7 +119,7 @@ func TestValidateScriptsExplicit(t *testing.T) {
 	}
 }
 
-func TestValidateScriptsScopeAll(t *testing.T) {
+func TestValidateScriptsWalksProject(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, fakeValidateGodot))
 
 	root := t.TempDir()
@@ -136,65 +132,31 @@ func TestValidateScriptsScopeAll(t *testing.T) {
 	seedFile(t, filepath.Join(root, ".import", "f.gd"), "extends Node\n")
 	seedFile(t, filepath.Join(root, ".hidden", "g.gd"), "extends Node\n")
 
-	result := callToolArgs(t, validateScripts(), root, `{"scope":"all"}`)
+	result := callToolArgs(t, validateScripts(), root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
 	doc := decodeValidateScripts(t, result.Content[0].Text)
-	if doc.Scope != "all" {
-		t.Errorf("scope = %q", doc.Scope)
-	}
 	if doc.FileCount != 2 || doc.FilesWithErrors != 0 || !doc.AllValid {
 		t.Errorf("fileCount=%d filesWithErrors=%d allValid=%v", doc.FileCount, doc.FilesWithErrors, doc.AllValid)
 	}
-	if len(doc.Results) != 2 {
-		t.Fatalf("results = %+v", doc.Results)
-	}
-	if doc.Results[0]["scriptPath"] != "a.gd" || doc.Results[1]["scriptPath"] != "nested/b.gd" {
-		t.Errorf("paths = %v, %v", doc.Results[0]["scriptPath"], doc.Results[1]["scriptPath"])
-	}
+	resultByPath(t, doc, "a.gd")
+	resultByPath(t, doc, "nested/b.gd")
 }
 
-func TestValidateScriptsChangedOutsideGit(t *testing.T) {
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, validateScripts(), root, `{}`)
-	if !result.IsError {
-		t.Fatalf("expected an error result: %+v", result.Content)
-	}
-	want := `Not a git repository (or git is unavailable). Use scope: "all" or pass scriptPaths.`
-	if result.Content[0].Text != want {
-		t.Errorf("message = %q, want %q", result.Content[0].Text, want)
-	}
-}
-
-func TestValidateScriptsExplicitSkips(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, fakeValidateGodot))
+func TestValidateScriptsEngineFailure(t *testing.T) {
+	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
 
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "valid.gd"), "extends Node\n")
 
-	result := callToolArgs(t, validateScripts(), root, `{"scriptPaths":["notes.txt","missing.gd","../escape.gd","valid.gd"]}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
+	result := callToolArgs(t, validateScripts(), root, `{}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
 	}
-	doc := decodeValidateScripts(t, result.Content[0].Text)
-	if doc.FileCount != 4 || doc.FilesWithErrors != 0 || doc.AllValid {
-		t.Errorf("fileCount=%d filesWithErrors=%d allValid=%v", doc.FileCount, doc.FilesWithErrors, doc.AllValid)
-	}
-	if got := doc.Results[0]["error"]; got != "Not a valid .gd path" {
-		t.Errorf("notes.txt error = %v", got)
-	}
-	if got := doc.Results[1]["error"]; got != "Script does not exist" {
-		t.Errorf("missing.gd error = %v", got)
-	}
-	if got := doc.Results[2]["error"]; got != "Not a valid .gd path" {
-		t.Errorf("escape.gd error = %v", got)
-	}
-	if got := doc.Results[3]["checked"]; got != true {
-		t.Errorf("valid.gd checked = %v", got)
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to validate scripts:") {
+		t.Errorf("message = %q", result.Content[0].Text)
 	}
 }
 
@@ -217,16 +179,6 @@ func TestValidateScriptsErrors(t *testing.T) {
 		root := t.TempDir()
 		result := callToolArgs(t, validateScripts(), root, `{}`)
 		if !result.IsError || result.Content[0].Text != "Not a valid Godot project: "+root {
-			t.Fatalf("result = %+v", result.Content)
-		}
-	})
-
-	t.Run("invalid scope", func(t *testing.T) {
-		root := t.TempDir()
-		makeProject(t, root)
-		result := callToolArgs(t, validateScripts(), root, `{"scope":"bogus"}`)
-		want := `Invalid scope "bogus". Use "changed" or "all", or pass scriptPaths.`
-		if !result.IsError || result.Content[0].Text != want {
 			t.Fatalf("result = %+v", result.Content)
 		}
 	})

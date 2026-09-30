@@ -1,12 +1,9 @@
 package tools
 
 import (
-	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -115,55 +112,8 @@ func runGDScriptChecks(ctx context.Context, projectPath string, scriptRelPaths [
 	return groups, nil
 }
 
-func collectGdPaths(outputs []string) []string {
-	result := make([]string, 0)
-	seen := make(map[string]bool)
-	for _, out := range outputs {
-		for _, rawLine := range strings.Split(strings.ReplaceAll(out, "\r\n", "\n"), "\n") {
-			filePath := strings.ReplaceAll(strings.TrimSpace(rawLine), "\\", "/")
-			if !strings.HasSuffix(strings.ToLower(filePath), ".gd") {
-				continue
-			}
-			if seen[filePath] {
-				continue
-			}
-			seen[filePath] = true
-			result = append(result, filePath)
-		}
-	}
-	return result
-}
-
-func listChangedGdFiles(ctx context.Context, projectPath string) ([]string, error) {
-	git := func(args ...string) (string, error) {
-		cmd := exec.CommandContext(ctx, "git", append([]string{"-c", "core.quotepath=false", "-C", projectPath}, args...)...) //nolint:gosec // git args are fixed and projectPath is caller-controlled.
-		var stdout bytes.Buffer
-		cmd.Stdout = &stdout
-		if err := cmd.Run(); err != nil {
-			return "", fmt.Errorf("run git: %w", err)
-		}
-		return stdout.String(), nil
-	}
-
-	if _, err := git("rev-parse", "--is-inside-work-tree"); err != nil {
-		return nil, errors.New(`Not a git repository (or git is unavailable). Use scope: "all" or pass scriptPaths.`) //nolint:staticcheck // user-facing message mirrors the reference server.
-	}
-
-	outputs := make([]string, 0, 3)
-	for _, args := range [][]string{
-		{"diff", "--name-only", "--relative"},
-		{"diff", "--name-only", "--relative", "--cached"},
-		{"ls-files", "--others", "--exclude-standard"},
-	} {
-		out, err := git(args...)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to list changed files: %w", err) //nolint:staticcheck // user-facing message mirrors the reference server.
-		}
-		outputs = append(outputs, out)
-	}
-	return collectGdPaths(outputs), nil
-}
-
+// listAllGdFiles walks the project for every regular .gd file, skipping the
+// engine, VCS, and dependency directories that never hold authored scripts.
 func listAllGdFiles(projectPath string) []string {
 	results := make([]string, 0)
 	skipDirs := map[string]bool{
