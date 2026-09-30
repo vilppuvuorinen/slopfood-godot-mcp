@@ -1,6 +1,9 @@
 package e2e
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+)
 
 func TestSetTilemapCellTool(t *testing.T) {
 	t.Parallel()
@@ -48,11 +51,14 @@ func TestSetTilemapCellTool(t *testing.T) {
 		setupTestTileSet(t, session, set)
 		setupTilemapScene(t, session, scene, set)
 
-		requireToolText(t, session, "add_tileset_alternative", map[string]any{
-			"resourcePath": set,
-			"sourceId":     0,
-			"atlasCoords":  map[string]any{"$type": "Vector2i", "x": 0, "y": 0},
-		})
+		requireRunScript(t, session, fmt.Sprintf(`extends RefCounted
+
+func run():
+	var tile_set: TileSet = load("res://%s")
+	var source := tile_set.get_source(0)
+	source.create_alternative_tile(Vector2i(0, 0))
+	return ResourceSaver.save(tile_set, "res://%s")
+`, set, set))
 		alternativeID := requireExtraAlternative(t, readTilesetPayload(t, session, set))
 
 		requireToolText(t, session, "set_tilemap_cell", map[string]any{

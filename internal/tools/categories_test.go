@@ -117,8 +117,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 50 {
-		t.Errorf("registered %d tools, want 50", len(seen))
+	if len(seen) != 41 {
+		t.Errorf("registered %d tools, want 41", len(seen))
 	}
 }
 
@@ -177,7 +177,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"create_resource":            true,
 		"create_scene":               true,
 		"create_theme":               true,
-		"create_tileset":             true,
 		"erase_tilemap_cell":         true,
 		"export_mesh_library":        true,
 		"export_project":             true,
@@ -185,22 +184,17 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"modify_resource":            true,
 		"modify_scene_node":          true,
 		"modify_theme":               true,
-		"modify_tileset":             true,
 		"move_scene_node":            true,
 		"reimport_project":           true,
 		"remove_animation_track":     true,
 		"remove_scene_node":          true,
 		"remove_scene_signal":        true,
 		"remove_theme_type":          true,
-		"remove_tileset_alternative": true,
-		"remove_tileset_source":      true,
-		"remove_tileset_tile":        true,
 		"rename_scene_node":          true,
 		"set_animation_track":        true,
 		"set_theme_item":             true,
 		"set_theme_type_variation":   true,
 		"set_tilemap_cell":           true,
-		"set_tileset_tile_data":      true,
 	}
 	for _, category := range AllCategories {
 		for _, newTool := range categoryTools[category] {

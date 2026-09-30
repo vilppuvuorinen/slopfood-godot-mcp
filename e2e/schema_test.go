@@ -29,28 +29,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireStringProps(t, "scenePath", "signalName", "sourcePath", "targetPath", "method")
 			schema.requirePropCount(t, 5)
 		}},
-		{"add_tileset_alternative", "Add an alternative tile to a TileSet atlas tile", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "sourceId", "atlasCoords")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requireType(t, "sourceId", "integer")
-			schema.requireType(t, "alternativeId", "integer")
-			schema.requirePropCount(t, 4)
-		}},
-		{"add_tileset_source", "Add an atlas or scenes-collection source to a TileSet", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "sourceType")
-			schema.requireStringProps(t, "resourcePath", "sourceType")
-			schema.requireType(t, "sourceId", "integer")
-			schema.requireType(t, "useTexturePadding", "boolean")
-			schema.requirePropCount(t, 8)
-		}},
-		{"add_tileset_tile", "Add a tile to a TileSet source", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "sourceId")
-			schema.requireStringProps(t, "resourcePath", "scenePath")
-			schema.requireType(t, "sourceId", "integer")
-			schema.requireType(t, "sceneTileId", "integer")
-			schema.requireType(t, "displayPlaceholder", "boolean")
-			schema.requirePropCount(t, 7)
-		}},
 		{"attach_script", "Attach a GDScript to a scene node (headless)", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath", "scriptPath")
 			schema.requireStringProps(t, "scenePath", "nodePath", "scriptPath")
@@ -99,12 +77,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireType(t, "defaultFontSize", "integer")
 			schema.requireType(t, "defaultBaseScale", "number")
 			schema.requirePropCount(t, 4)
-		}},
-		{"create_tileset", "Create a TileSet resource", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath")
-			schema.requireStringProps(t, "resourcePath", "tileShape", "tileLayout", "tileOffsetAxis")
-			schema.requireType(t, "uvClipping", "boolean")
-			schema.requirePropCount(t, 6)
 		}},
 		{"duplicate_scene_node", "Duplicate a node within a .tscn scene", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath")
@@ -156,12 +128,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireType(t, "defaultFontSize", "integer")
 			schema.requireType(t, "defaultBaseScale", "number")
 			schema.requirePropCount(t, 4)
-		}},
-		{"modify_tileset", "Set a TileSet resource's tile size, shape, layout, and UV clipping", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath")
-			schema.requireStringProps(t, "resourcePath", "tileShape", "tileLayout", "tileOffsetAxis")
-			schema.requireType(t, "uvClipping", "boolean")
-			schema.requirePropCount(t, 6)
 		}},
 		{"move_scene_node", "Move a node to a new parent in a .tscn scene", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath", "newParentPath")
@@ -225,26 +191,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireStringProps(t, "resourcePath", "themeType")
 			schema.requirePropCount(t, 2)
 		}},
-		{"remove_tileset_alternative", "Remove an alternative tile from a TileSet atlas tile", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "sourceId", "atlasCoords", "alternativeId")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requireType(t, "sourceId", "integer")
-			schema.requireType(t, "alternativeId", "integer")
-			schema.requirePropCount(t, 4)
-		}},
-		{"remove_tileset_source", "Remove a source from a TileSet", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "sourceId")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requireType(t, "sourceId", "integer")
-			schema.requirePropCount(t, 2)
-		}},
-		{"remove_tileset_tile", "Remove a tile from a TileSet source", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "sourceId")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requireType(t, "sourceId", "integer")
-			schema.requireType(t, "sceneTileId", "integer")
-			schema.requirePropCount(t, 4)
-		}},
 		{"rename_scene_node", "Rename a node in a .tscn scene", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath", "newName")
 			schema.requireStringProps(t, "scenePath", "nodePath", "newName")
@@ -278,14 +224,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireType(t, "sourceId", "integer")
 			schema.requireType(t, "alternativeTile", "integer")
 			schema.requirePropCount(t, 6)
-		}},
-		{"set_tileset_tile_data", "Set properties on a TileSet atlas tile's data", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "sourceId", "atlasCoords", "properties")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requireType(t, "sourceId", "integer")
-			schema.requireType(t, "alternativeId", "integer")
-			schema.requireType(t, "properties", "object")
-			schema.requirePropCount(t, 5)
 		}},
 		{"validate_project", "Load project.godot with the Godot engine and report whether it parsed", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t)

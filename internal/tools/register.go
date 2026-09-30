@@ -68,9 +68,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		removeAnimationTrack, readAnimation,
 	},
 	CategoryTileset: {
-		createTileset, modifyTileset, addTilesetSource, removeTilesetSource,
-		addTilesetTile, removeTilesetTile, addTilesetAlternative,
-		removeTilesetAlternative, setTilesetTileData, readTileset,
+		readTileset,
 	},
 	CategoryTheme: {
 		createTheme, modifyTheme, removeThemeType, setThemeTypeVariation,

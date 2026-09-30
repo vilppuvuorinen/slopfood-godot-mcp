@@ -19,7 +19,7 @@ func TestEnableCategories(t *testing.T) {
 			"run_script",        // script
 			"create_resource",   // assets
 			"create_animation",  // animation
-			"create_tileset",    // tileset
+			"read_tileset",      // tileset
 			"create_theme",      // theme
 		} {
 			findTool(t, session, name)
@@ -46,11 +46,11 @@ func TestEnableCategories(t *testing.T) {
 	t.Run("animation, tileset, and theme are independent", func(t *testing.T) {
 		animation := connectCategories(t, "animation")
 		findTool(t, animation, "create_animation")
-		requireToolAbsent(t, animation, "create_tileset")
+		requireToolAbsent(t, animation, "read_tileset")
 		requireToolAbsent(t, animation, "create_theme")
 
 		tileset := connectCategories(t, "tileset")
-		findTool(t, tileset, "create_tileset")
+		findTool(t, tileset, "read_tileset")
 		requireToolAbsent(t, tileset, "create_animation")
 
 		theme := connectCategories(t, "theme")
@@ -73,7 +73,7 @@ func TestEnableCategories(t *testing.T) {
 			"run_script",        // script
 			"create_resource",   // assets
 			"create_animation",  // animation
-			"create_tileset",    // tileset
+			"read_tileset",      // tileset
 			"create_theme",      // theme
 		} {
 			findTool(t, session, name)
