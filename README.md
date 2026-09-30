@@ -1,12 +1,29 @@
 # slopfood-godot-mcp
 
-A headless Godot MCP server written in Go. It follows the approach set out by
-Coding-Solo and its forks: it stays deliberately narrow and does only the things
-that cannot be done with plain text edits, leaving everything else to the
-caller's own tools.
+A headless Godot MCP server written in Go. It is derived from
+[Coding-Solo/godot-mcp](https://github.com/Coding-Solo/godot-mcp) and
+[tugcantopaloglu/godot-mcp](https://github.com/tugcantopaloglu/godot-mcp): the
+operations bridge is a substantially reworked version of that lineage's
+GDScript, and the rest is a Go rewrite. See `THIRD_PARTY_NOTICES` for the
+licenses.
 
-It stays zero-dependency, using only the Go standard library.
+What it does differently from upstream:
 
-It is tested against Godot 4.7.x and forward, on Linux only. Portability is not
-ruled out, but it is not a high priority: non-Linux builds are untested and
-serve only to keep further platform dependencies from creeping in.
+- **Godot matrix.** CI builds and tests against every published minor from 4.7
+  forward, including dev/beta/rc, rather than a single pinned version.
+- **Linux, Windows, and macOS.** All three run the e2e suite in CI.
+- **Editor session as the engine binding.** One long-lived editor-mode Godot
+  process per bound project, reached over a Unix domain socket (loopback TCP on
+  Windows). That process both serves operations and owns `EditorFileSystem`, so
+  imports, `.uid` sidecars, and the global class cache are reconciled by the
+  same engine that serves the edits. No one-shot engine spawn per call.
+- **Narrower toolset.** It exposes only operations that cannot be done with
+  plain text edits: scene, node, signal, tilemap, tileset, theme, animation,
+  resource, script, and export mutation, plus validation and reimport.
+  Upstream's runtime tools (`run_project`, `stop_project`, `get_debug_output`,
+  `launch_editor`) are not present.
+- **No runtime dependencies.** The server is built from the Go standard library
+  only.
+
+This project is slop at heart. It was assembled quickly, it is tailored to its
+author's workflow, and it has not been audited.
