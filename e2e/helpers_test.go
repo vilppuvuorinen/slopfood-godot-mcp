@@ -339,15 +339,6 @@ func requireNotContains(t *testing.T, s, unwanted string) {
 	}
 }
 
-func godotMap(t *testing.T, value any) map[string]any {
-	t.Helper()
-	obj, ok := value.(map[string]any)
-	if !ok {
-		t.Fatalf("value = %#v, want an object", value)
-	}
-	return obj
-}
-
 type toolSchema struct {
 	Type       string                    `json:"type"`
 	Required   []string                  `json:"required"`

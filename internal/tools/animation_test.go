@@ -64,97 +64,6 @@ func TestModifyAnimationSchema(t *testing.T) {
 	}
 }
 
-func TestAddAnimationTrackSchema(t *testing.T) {
-	tool := addAnimationTrack()
-	if tool.Name != "add_animation_track" {
-		t.Errorf("name = %q", tool.Name)
-	}
-	if tool.Description != "Append a track to an Animation resource" {
-		t.Errorf("description = %q", tool.Description)
-	}
-	if !hasRequired(tool.InputSchema, "resourcePath", "trackType") {
-		t.Errorf("required = %v", tool.InputSchema["required"])
-	}
-	props, ok := tool.InputSchema["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("properties = %T", tool.InputSchema["properties"])
-	}
-	wantTypes := map[string]string{
-		"resourcePath":  "string",
-		"trackType":     "string",
-		"trackPath":     "string",
-		"interpolation": "string",
-		"keys":          "array",
-	}
-	for key, want := range wantTypes {
-		prop, propOK := props[key].(map[string]any)
-		if !propOK || prop["type"] != want {
-			t.Errorf("property %q = %v, want %s", key, props[key], want)
-		}
-	}
-	trackType, _ := props["trackType"].(map[string]any)
-	enum, _ := trackType["enum"].([]string)
-	if strings.Join(enum, ",") != "value,position_3d,rotation_3d,scale_3d,blend_shape,method,bezier,audio,animation" {
-		t.Errorf("trackType enum = %v", trackType["enum"])
-	}
-	interpolation, _ := props["interpolation"].(map[string]any)
-	enum, _ = interpolation["enum"].([]string)
-	if strings.Join(enum, ",") != "nearest,linear,cubic" {
-		t.Errorf("interpolation enum = %v", interpolation["enum"])
-	}
-}
-
-func TestSetAnimationTrackSchema(t *testing.T) {
-	tool := setAnimationTrack()
-	if tool.Name != "set_animation_track" {
-		t.Errorf("name = %q", tool.Name)
-	}
-	if tool.Description != "Set an existing Animation track's path, interpolation, and keys" {
-		t.Errorf("description = %q", tool.Description)
-	}
-	if !hasRequired(tool.InputSchema, "resourcePath", "trackIndex") {
-		t.Errorf("required = %v", tool.InputSchema["required"])
-	}
-	props, ok := tool.InputSchema["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("properties = %T", tool.InputSchema["properties"])
-	}
-	wantTypes := map[string]string{
-		"resourcePath":  "string",
-		"trackIndex":    "integer",
-		"trackPath":     "string",
-		"interpolation": "string",
-		"keys":          "array",
-	}
-	for key, want := range wantTypes {
-		prop, propOK := props[key].(map[string]any)
-		if !propOK || prop["type"] != want {
-			t.Errorf("property %q = %v, want %s", key, props[key], want)
-		}
-	}
-}
-
-func TestRemoveAnimationTrackSchema(t *testing.T) {
-	tool := removeAnimationTrack()
-	if tool.Name != "remove_animation_track" {
-		t.Errorf("name = %q", tool.Name)
-	}
-	if tool.Description != "Remove a track from an Animation resource" {
-		t.Errorf("description = %q", tool.Description)
-	}
-	if !hasRequired(tool.InputSchema, "resourcePath", "trackIndex") {
-		t.Errorf("required = %v", tool.InputSchema["required"])
-	}
-	props, ok := tool.InputSchema["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("properties = %T", tool.InputSchema["properties"])
-	}
-	prop, propOK := props["trackIndex"].(map[string]any)
-	if !propOK || prop["type"] != "integer" {
-		t.Errorf("trackIndex = %v, want integer", props["trackIndex"])
-	}
-}
-
 func TestReadAnimationSchema(t *testing.T) {
 	tool := readAnimation()
 	if tool.Name != "read_animation" {
@@ -198,49 +107,6 @@ func TestModifyAnimationForwardsProperties(t *testing.T) {
 	for _, want := range []string{`"action":"modify"`, `"length":3`, `"loopMode":"pingpong"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
-		}
-	}
-}
-
-func TestAddAnimationTrackForwardsTrack(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, addAnimationTrack(), root, `{"resourcePath":"anims/walk.tres","trackType":"value","trackPath":"Sprite2D:position","interpolation":"cubic","keys":[{"time":0,"value":{"$type":"Vector2","x":0,"y":0}}]}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	text := result.Content[0].Text
-	for _, want := range []string{`"action":"add"`, `"trackType":"value"`, `"trackPath":"Sprite2D:position"`, `"interpolation":"cubic"`, `"keys":[`} {
-		if !strings.Contains(text, want) {
-			t.Errorf("text = %q, want it to contain %q", text, want)
-		}
-	}
-}
-
-func TestSetAndRemoveAnimationTrackForwardIndex(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-
-	set := callToolArgs(t, setAnimationTrack(), root, `{"resourcePath":"anims/walk.tres","trackIndex":2,"trackPath":"root:x"}`)
-	if set.IsError {
-		t.Fatalf("unexpected set error: %+v", set.Content)
-	}
-	for _, want := range []string{`"action":"set"`, `"trackIndex":2`} {
-		if !strings.Contains(set.Content[0].Text, want) {
-			t.Errorf("set text = %q, want it to contain %q", set.Content[0].Text, want)
-		}
-	}
-
-	remove := callToolArgs(t, removeAnimationTrack(), root, `{"resourcePath":"anims/walk.tres","trackIndex":1}`)
-	if remove.IsError {
-		t.Fatalf("unexpected remove error: %+v", remove.Content)
-	}
-	for _, want := range []string{`"action":"remove"`, `"trackIndex":1`} {
-		if !strings.Contains(remove.Content[0].Text, want) {
-			t.Errorf("remove text = %q, want it to contain %q", remove.Content[0].Text, want)
 		}
 	}
 }
@@ -297,9 +163,6 @@ func TestAnimationValidation(t *testing.T) {
 		{name: "create missing resource path", tool: createAnimation, args: `{}`, want: "resourcePath is required."},
 		{name: "modify missing resource path", tool: modifyAnimation, args: `{}`, want: "resourcePath is required."},
 		{name: "modify without properties", tool: modifyAnimation, project: root, args: `{"resourcePath":"anim.tres"}`, want: "The modify_animation tool requires at least one of: length, loopMode, step."},
-		{name: "add missing track type", tool: addAnimationTrack, project: root, args: `{"resourcePath":"anim.tres"}`, want: "resourcePath and trackType are required."},
-		{name: "set missing track index", tool: setAnimationTrack, project: root, args: `{"resourcePath":"anim.tres"}`, want: "resourcePath and trackIndex are required."},
-		{name: "remove missing track index", tool: removeAnimationTrack, project: root, args: `{"resourcePath":"anim.tres"}`, want: "resourcePath and trackIndex are required."},
 		{name: "read missing resource path", tool: readAnimation, project: root, args: `{}`, want: "resourcePath is required."},
 		{name: "invalid project path", tool: readAnimation, project: "../escape", args: `{"resourcePath":"anim.tres"}`, want: "Invalid path."},
 		{name: "invalid resource path", tool: readAnimation, project: root, args: `{"resourcePath":"../escape.tres"}`, want: "Invalid path."},

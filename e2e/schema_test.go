@@ -13,12 +13,6 @@ func TestToolSchemas(t *testing.T) {
 	tools := listToolsOnce(t, connect(t))
 
 	cases := []toolSchemaCase{
-		{"add_animation_track", "Append a track to an Animation resource", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "trackType")
-			schema.requireStringProps(t, "resourcePath", "trackType", "trackPath", "interpolation")
-			schema.requireType(t, "keys", "array")
-			schema.requirePropCount(t, 5)
-		}},
 		{"add_node", "Add a built-in node or a scene instance to an existing scene (rewrites the .tscn file)", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodeName")
 			schema.requireProps(t, "scenePath", "parentNodePath", "nodeType", "instancePath", "nodeName", "properties")
@@ -170,12 +164,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireRequired(t)
 			schema.requirePropCount(t, 0)
 		}},
-		{"remove_animation_track", "Remove a track from an Animation resource", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "trackIndex")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requireType(t, "trackIndex", "integer")
-			schema.requirePropCount(t, 2)
-		}},
 		{"remove_scene_node", "Remove a node from a scene file (headless)", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath")
 			schema.requireStringProps(t, "scenePath", "nodePath")
@@ -200,13 +188,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireRequired(t, "script")
 			schema.requireStringProps(t, "script")
 			schema.requirePropCount(t, 1)
-		}},
-		{"set_animation_track", "Set an existing Animation track's path, interpolation, and keys", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "trackIndex")
-			schema.requireStringProps(t, "resourcePath", "trackPath", "interpolation")
-			schema.requireType(t, "trackIndex", "integer")
-			schema.requireType(t, "keys", "array")
-			schema.requirePropCount(t, 5)
 		}},
 		{"set_theme_item", "Set a Theme item on a type", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "resourcePath", "themeType", "itemType", "itemName", "value")

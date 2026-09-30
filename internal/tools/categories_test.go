@@ -117,8 +117,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 41 {
-		t.Errorf("registered %d tools, want 41", len(seen))
+	if len(seen) != 38 {
+		t.Errorf("registered %d tools, want 38", len(seen))
 	}
 }
 
@@ -186,12 +186,10 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"modify_theme":               true,
 		"move_scene_node":            true,
 		"reimport_project":           true,
-		"remove_animation_track":     true,
 		"remove_scene_node":          true,
 		"remove_scene_signal":        true,
 		"remove_theme_type":          true,
 		"rename_scene_node":          true,
-		"set_animation_track":        true,
 		"set_theme_item":             true,
 		"set_theme_type_variation":   true,
 		"set_tilemap_cell":           true,
