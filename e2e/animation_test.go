@@ -396,21 +396,21 @@ func keyValues(t *testing.T, track map[string]any) []any {
 // TestAnimationErrors covers the validation and engine failure paths.
 func TestAnimationErrors(t *testing.T) {
 	t.Parallel()
+	// The validation-only cases need no project, so they share one engine-free
+	// session.
+	validationSession := connect(t)
 	t.Run("missing params", func(t *testing.T) {
-		session := connect(t)
-		requireToolError(t, session, "create_animation", map[string]any{}, "resourcePath is required.")
+		requireToolError(t, validationSession, "create_animation", map[string]any{}, "resourcePath is required.")
 	})
 
 	t.Run("add without a track type", func(t *testing.T) {
-		session := connect(t)
-		requireToolError(t, session, "add_animation_track", map[string]any{
+		requireToolError(t, validationSession, "add_animation_track", map[string]any{
 			"resourcePath": "anim.tres",
 		}, "resourcePath and trackType are required.")
 	})
 
 	t.Run("modify without properties", func(t *testing.T) {
-		session := connect(t)
-		requireToolError(t, session, "modify_animation", map[string]any{
+		requireToolError(t, validationSession, "modify_animation", map[string]any{
 			"resourcePath": "anim.tres",
 		}, "The modify_animation tool requires at least one of: length, loopMode, step.")
 	})

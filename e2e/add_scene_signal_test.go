@@ -151,14 +151,17 @@ func TestAddSceneSignalTool(t *testing.T) {
 // TestAddSceneSignalErrors covers the tool's validation messages.
 func TestAddSceneSignalErrors(t *testing.T) {
 	t.Parallel()
+	// Every project-backed case shares one warm project and session; only "not a
+	// project" needs its own non-project directory.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing params", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "add_scene_signal", map[string]any{},
 			"scenePath, signalName, sourcePath, targetPath, and method are required.")
 	})
 
 	t.Run("missing method", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "add_scene_signal", map[string]any{
 			"scenePath":  "main.tscn",
 			"signalName": "pressed",
@@ -168,19 +171,18 @@ func TestAddSceneSignalErrors(t *testing.T) {
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "add_scene_signal", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "add_scene_signal", map[string]any{
 			"scenePath":  "main.tscn",
 			"signalName": "pressed",
 			"sourcePath": "root",
 			"targetPath": "root",
 			"method":     "on_pressed",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "add_scene_signal", map[string]any{
 			"scenePath":  "missing.tscn",
 			"signalName": "pressed",

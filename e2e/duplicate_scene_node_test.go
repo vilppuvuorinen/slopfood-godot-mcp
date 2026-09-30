@@ -59,23 +59,26 @@ func TestDuplicateSceneNodeTool(t *testing.T) {
 // TestDuplicateSceneNodeErrors covers validation and engine failure messages.
 func TestDuplicateSceneNodeErrors(t *testing.T) {
 	t.Parallel()
+	// Every project-backed case shares one warm project and session; only "not a
+	// project" needs its own non-project directory.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing params", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "duplicate_scene_node", map[string]any{},
 			"scenePath and nodePath are required.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "duplicate_scene_node", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "duplicate_scene_node", map[string]any{
 			"scenePath": "main.tscn",
 			"nodePath":  "root",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "duplicate_scene_node", map[string]any{
 			"scenePath": "missing.tscn",
 			"nodePath":  "root",
@@ -83,7 +86,7 @@ func TestDuplicateSceneNodeErrors(t *testing.T) {
 	})
 
 	t.Run("duplicate root", func(t *testing.T) {
-		_, session := seedScene(t, "scenes/structure.tscn", "Node2D")
+		createScene(t, session, "scenes/structure.tscn", "Node2D")
 		res := callTool(t, session, "duplicate_scene_node", map[string]any{
 			"scenePath": "scenes/structure.tscn",
 			"nodePath":  "root",

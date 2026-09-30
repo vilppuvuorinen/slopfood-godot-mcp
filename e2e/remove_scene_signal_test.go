@@ -108,14 +108,17 @@ func TestRemoveSceneSignalTool(t *testing.T) {
 // TestRemoveSceneSignalErrors covers the tool's validation messages.
 func TestRemoveSceneSignalErrors(t *testing.T) {
 	t.Parallel()
+	// Every project-backed case shares one warm project and session; only "not a
+	// project" needs its own non-project directory.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing params", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "remove_scene_signal", map[string]any{},
 			"scenePath, signalName, sourcePath, and targetPath are required.")
 	})
 
 	t.Run("missing signal", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "remove_scene_signal", map[string]any{
 			"scenePath":  "main.tscn",
 			"sourcePath": "root",
@@ -124,18 +127,17 @@ func TestRemoveSceneSignalErrors(t *testing.T) {
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "remove_scene_signal", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "remove_scene_signal", map[string]any{
 			"scenePath":  "main.tscn",
 			"signalName": "released",
 			"sourcePath": "root",
 			"targetPath": "root",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "remove_scene_signal", map[string]any{
 			"scenePath":  "missing.tscn",
 			"signalName": "released",

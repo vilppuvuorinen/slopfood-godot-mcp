@@ -34,14 +34,15 @@ func TestEraseTilemapCellTool(t *testing.T) {
 // TestEraseTilemapCellErrors covers validation messages.
 func TestEraseTilemapCellErrors(t *testing.T) {
 	t.Parallel()
+	// The validation-only cases need no project, so they share one engine-free
+	// session.
+	session := connect(t)
 	t.Run("missing params", func(t *testing.T) {
-		session := connect(t)
 		requireToolError(t, session, "erase_tilemap_cell", map[string]any{},
 			"scenePath and nodePath are required.")
 	})
 
 	t.Run("missing coords", func(t *testing.T) {
-		session := connect(t)
 		requireToolError(t, session, "erase_tilemap_cell", map[string]any{
 			"scenePath": "scenes/level.tscn",
 			"nodePath":  "root/Ground",

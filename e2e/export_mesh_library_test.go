@@ -223,15 +223,17 @@ func TestExportMeshLibraryDescendantAndPreview(t *testing.T) {
 // TestExportMeshLibraryErrors covers the reference's validation messages.
 func TestExportMeshLibraryErrors(t *testing.T) {
 	t.Parallel()
+	// Every project-backed case shares one warm project and session; only "not a
+	// project" needs its own non-project directory.
+	root := newProject(t)
+	session := connectProject(t, root)
+	writeE2EFile(t, filepath.Join(root, "box.tres"), boxMeshResource)
+
 	t.Run("missing params", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "export_mesh_library", map[string]any{}, "scenePath and outputPath are required.")
 	})
 
 	t.Run("invalid path", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "export_mesh_library", map[string]any{
 			"scenePath":  "../escape",
 			"outputPath": "exported/meshlib.res",
@@ -239,8 +241,6 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 	})
 
 	t.Run("parent output path", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "export_mesh_library", map[string]any{
 			"scenePath":  "scenes/main.tscn",
 			"outputPath": "../escape.res",
@@ -248,27 +248,20 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "export_mesh_library", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "export_mesh_library", map[string]any{
 			"scenePath":  "scenes/main.tscn",
 			"outputPath": "exported/meshlib.res",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "export_mesh_library", map[string]any{
 			"scenePath":  "missing.tscn",
 			"outputPath": "exported/meshlib.res",
 		}, "Scene file does not exist: missing.tscn")
 	})
-
-	// The engine-backed cases share one warm project and session.
-	root := newProject(t)
-	session := connectProject(t, root)
-	writeE2EFile(t, filepath.Join(root, "box.tres"), boxMeshResource)
 
 	t.Run("no meshes in scene", func(t *testing.T) {
 		createScene(t, session, "scenes/empty.tscn", "Node3D")

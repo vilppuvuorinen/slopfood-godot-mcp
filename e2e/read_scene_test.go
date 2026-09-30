@@ -263,28 +263,30 @@ func TestReadSceneGroups(t *testing.T) {
 // TestReadSceneErrors covers the reference's validation and failure messages.
 func TestReadSceneErrors(t *testing.T) {
 	t.Parallel()
+	// Every project-backed case shares one warm project and session; only "not a
+	// project" needs its own non-project directory.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing paths", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "read_scene", map[string]any{}, "scenePath is required.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "read_scene", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "read_scene", map[string]any{
 			"scenePath": "main.tscn",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "read_scene", map[string]any{
 			"scenePath": "missing.tscn",
 		}, "Scene file does not exist: missing.tscn")
 	})
 
 	t.Run("negative depth", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "read_scene", map[string]any{
 			"scenePath": "main.tscn",
 			"depth":     -1,

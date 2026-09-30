@@ -260,14 +260,15 @@ func TestTilesetTools(t *testing.T) {
 // TestTilesetErrors covers the validation and engine failure paths.
 func TestTilesetErrors(t *testing.T) {
 	t.Parallel()
+	// The validation-only cases need no project, so they share one engine-free
+	// session.
+	validationSession := connect(t)
 	t.Run("missing params", func(t *testing.T) {
-		session := connect(t)
-		requireToolError(t, session, "create_tileset", map[string]any{}, "resourcePath is required.")
+		requireToolError(t, validationSession, "create_tileset", map[string]any{}, "resourcePath is required.")
 	})
 
 	t.Run("addAlternative without atlas coords", func(t *testing.T) {
-		session := connect(t)
-		requireToolError(t, session, "add_tileset_alternative", map[string]any{
+		requireToolError(t, validationSession, "add_tileset_alternative", map[string]any{
 			"resourcePath": "tiles/set.tres",
 			"sourceId":     0,
 		}, "resourcePath, sourceId, and atlasCoords are required.")

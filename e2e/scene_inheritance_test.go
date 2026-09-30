@@ -136,8 +136,12 @@ func TestInheritedSceneEditsRejected(t *testing.T) {
 // TestCreateSceneInheritanceErrors covers baseScenePath validation.
 func TestCreateSceneInheritanceErrors(t *testing.T) {
 	t.Parallel()
+	// Every case is engine-free validation, so one warm project and session
+	// covers all of them.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("both root sources", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "create_scene", map[string]any{
 			"scenePath":     "derived.tscn",
 			"rootNodeType":  "Node2D",
@@ -146,7 +150,6 @@ func TestCreateSceneInheritanceErrors(t *testing.T) {
 	})
 
 	t.Run("missing base scene", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "create_scene", map[string]any{
 			"scenePath":     "derived.tscn",
 			"baseScenePath": "scenes/missing.tscn",
@@ -154,7 +157,6 @@ func TestCreateSceneInheritanceErrors(t *testing.T) {
 	})
 
 	t.Run("invalid base path", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "create_scene", map[string]any{
 			"scenePath":     "derived.tscn",
 			"baseScenePath": "../escape.tscn",

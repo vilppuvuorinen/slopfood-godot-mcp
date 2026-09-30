@@ -219,14 +219,15 @@ func TestThemeTools(t *testing.T) {
 // TestThemeErrors covers the validation and engine failure paths.
 func TestThemeErrors(t *testing.T) {
 	t.Parallel()
+	// The validation-only cases need no project, so they share one engine-free
+	// session.
+	validationSession := connect(t)
 	t.Run("missing params", func(t *testing.T) {
-		session := connect(t)
-		requireToolError(t, session, "create_theme", map[string]any{}, "resourcePath is required.")
+		requireToolError(t, validationSession, "create_theme", map[string]any{}, "resourcePath is required.")
 	})
 
 	t.Run("setItem without a value", func(t *testing.T) {
-		session := connect(t)
-		requireToolError(t, session, "set_theme_item", map[string]any{
+		requireToolError(t, validationSession, "set_theme_item", map[string]any{
 			"resourcePath": "themes/main.tres",
 			"themeType":    "Label",
 			"itemType":     "color",
@@ -235,8 +236,7 @@ func TestThemeErrors(t *testing.T) {
 	})
 
 	t.Run("setTypeVariation without a base type", func(t *testing.T) {
-		session := connect(t)
-		requireToolError(t, session, "set_theme_type_variation", map[string]any{
+		requireToolError(t, validationSession, "set_theme_type_variation", map[string]any{
 			"resourcePath": "themes/main.tres",
 			"themeType":    "CustomButton",
 		}, "resourcePath, themeType, and baseType are required.")

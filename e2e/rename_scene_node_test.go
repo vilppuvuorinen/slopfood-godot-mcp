@@ -28,24 +28,27 @@ func TestRenameSceneNodeTool(t *testing.T) {
 // TestRenameSceneNodeErrors covers validation and engine failure messages.
 func TestRenameSceneNodeErrors(t *testing.T) {
 	t.Parallel()
+	// Every project-backed case shares one warm project and session; only "not a
+	// project" needs its own non-project directory.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing params", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "rename_scene_node", map[string]any{},
 			"scenePath, nodePath, and newName are required.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "rename_scene_node", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "rename_scene_node", map[string]any{
 			"scenePath": "main.tscn",
 			"nodePath":  "root",
 			"newName":   "Hero",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "rename_scene_node", map[string]any{
 			"scenePath": "missing.tscn",
 			"nodePath":  "root",
@@ -53,13 +56,9 @@ func TestRenameSceneNodeErrors(t *testing.T) {
 		}, "Scene file does not exist: missing.tscn")
 	})
 
-	// The engine-backed case below shares one warm project and session.
-	sharedRoot := newProject(t)
-	sharedSession := connectProject(t, sharedRoot)
-
 	t.Run("missing node", func(t *testing.T) {
-		createScene(t, sharedSession, "scenes/rename_missing_node.tscn", "Node2D")
-		res := callTool(t, sharedSession, "rename_scene_node", map[string]any{
+		createScene(t, session, "scenes/rename_missing_node.tscn", "Node2D")
+		res := callTool(t, session, "rename_scene_node", map[string]any{
 			"scenePath": "scenes/rename_missing_node.tscn",
 			"nodePath":  "root/Missing",
 			"newName":   "Hero",

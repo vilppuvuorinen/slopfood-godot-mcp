@@ -80,15 +80,16 @@ func TestSetTilemapCellTool(t *testing.T) {
 // TestSetTilemapCellErrors covers validation and engine failure messages.
 func TestSetTilemapCellErrors(t *testing.T) {
 	t.Parallel()
+	// The validation-only cases need no project, so they share one engine-free
+	// session.
+	validationSession := connect(t)
 	t.Run("missing params", func(t *testing.T) {
-		session := connect(t)
-		requireToolError(t, session, "set_tilemap_cell", map[string]any{},
+		requireToolError(t, validationSession, "set_tilemap_cell", map[string]any{},
 			"scenePath and nodePath are required.")
 	})
 
 	t.Run("missing coords", func(t *testing.T) {
-		session := connect(t)
-		requireToolError(t, session, "set_tilemap_cell", map[string]any{
+		requireToolError(t, validationSession, "set_tilemap_cell", map[string]any{
 			"scenePath": "scenes/level.tscn",
 			"nodePath":  "root/Ground",
 		}, "coords, sourceId, and atlasCoords are required.")

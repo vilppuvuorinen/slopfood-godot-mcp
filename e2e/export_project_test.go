@@ -11,16 +11,17 @@ import (
 // TestExportProjectValidation covers the reference's validation messages.
 func TestExportProjectValidation(t *testing.T) {
 	t.Parallel()
+	// The validation-only cases share one warm project and session; only "not a
+	// project" needs its own non-project directory.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing params", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "export_project", map[string]any{},
 			"presetName and outputPath are required.")
 	})
 
 	t.Run("invalid output path", func(t *testing.T) {
-		root := newProject(t)
-		session := connectProject(t, root)
 		requireToolError(t, session, "export_project", map[string]any{
 			"presetName": "Linux",
 			"outputPath": "../escape",
@@ -28,12 +29,12 @@ func TestExportProjectValidation(t *testing.T) {
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "export_project", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "export_project", map[string]any{
 			"presetName": "Linux",
 			"outputPath": "build/game.x86_64",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 }
 

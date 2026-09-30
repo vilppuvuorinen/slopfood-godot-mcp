@@ -44,36 +44,35 @@ func TestRemoveSceneNodeRoot(t *testing.T) {
 // TestRemoveSceneNodeErrors covers the reference's validation and failure messages.
 func TestRemoveSceneNodeErrors(t *testing.T) {
 	t.Parallel()
+	// Every project-backed case shares one warm project and session; only "not a
+	// project" needs its own non-project directory.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing paths", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "remove_scene_node", map[string]any{}, "scenePath and nodePath are required.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "remove_scene_node", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "remove_scene_node", map[string]any{
 			"scenePath": "main.tscn",
 			"nodePath":  "root/Player",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "remove_scene_node", map[string]any{
 			"scenePath": "missing.tscn",
 			"nodePath":  "root/Player",
 		}, "Scene file does not exist: missing.tscn")
 	})
 
-	// The engine-backed case below shares one warm project and session.
-	sharedRoot := newProject(t)
-	sharedSession := connectProject(t, sharedRoot)
-
 	t.Run("missing node", func(t *testing.T) {
-		createScene(t, sharedSession, "scenes/errors_missing_node.tscn", "Node2D")
+		createScene(t, session, "scenes/errors_missing_node.tscn", "Node2D")
 
-		res := callTool(t, sharedSession, "remove_scene_node", map[string]any{
+		res := callTool(t, session, "remove_scene_node", map[string]any{
 			"scenePath": "scenes/errors_missing_node.tscn",
 			"nodePath":  "root/Missing",
 		})

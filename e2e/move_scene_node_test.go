@@ -30,35 +30,33 @@ func TestMoveSceneNodeTool(t *testing.T) {
 // TestMoveSceneNodeErrors covers validation and engine failure messages.
 func TestMoveSceneNodeErrors(t *testing.T) {
 	t.Parallel()
+	// Every project-backed case shares one warm project and session; only "not a
+	// project" needs its own non-project directory.
+	root := newProject(t)
+	session := connectProject(t, root)
+
 	t.Run("missing params", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "move_scene_node", map[string]any{},
 			"scenePath, nodePath, and newParentPath are required.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
-		root := t.TempDir()
-		session := connectProject(t, root)
-		requireToolError(t, session, "move_scene_node", map[string]any{
+		notProject := t.TempDir()
+		notProjectSession := connectProject(t, notProject)
+		requireToolError(t, notProjectSession, "move_scene_node", map[string]any{
 			"scenePath":     "main.tscn",
 			"nodePath":      "root",
 			"newParentPath": "root/World",
-		}, "Not a valid Godot project: "+root)
+		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		session := connectProject(t, newProject(t))
 		requireToolError(t, session, "move_scene_node", map[string]any{
 			"scenePath":     "missing.tscn",
 			"nodePath":      "root",
 			"newParentPath": "root/World",
 		}, "Scene file does not exist: missing.tscn")
 	})
-
-	// The three engine-backed cases share one warm session, each with its own
-	// scene, so a single boot covers them.
-	root := newProject(t)
-	session := connectProject(t, root)
 
 	t.Run("move root", func(t *testing.T) {
 		const path = "scenes/move_root.tscn"
