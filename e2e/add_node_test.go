@@ -6,16 +6,6 @@ import (
 	"testing"
 )
 
-// TestAddNodeSchema ports the reference's tool-definition expectations for
-// add_node over the real stdio surface.
-func TestAddNodeSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "add_node", "Add a built-in node or a scene instance to an existing scene (rewrites the .tscn file)")
-	schema.requireRequired(t, "scenePath", "nodeName")
-	schema.requireProps(t, "scenePath", "parentNodePath", "nodeType", "instancePath", "nodeName", "properties")
-	schema.requireType(t, "properties", "object")
-}
-
 // TestAddNodeTool drives the real add_node tool against Godot.
 func TestAddNodeTool(t *testing.T) {
 	t.Parallel()

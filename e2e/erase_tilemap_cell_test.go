@@ -2,15 +2,6 @@ package e2e
 
 import "testing"
 
-// TestEraseTilemapCellSchema pins the tool's input surface.
-func TestEraseTilemapCellSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "erase_tilemap_cell", "Erase a tile from a TileMapLayer node in a scene")
-	schema.requireRequired(t, "scenePath", "nodePath", "coords")
-	schema.requireStringProps(t, "scenePath", "nodePath")
-	schema.requirePropCount(t, 3)
-}
-
 // TestEraseTilemapCellTool drives the real erase_tilemap_cell tool against
 // Godot.
 func TestEraseTilemapCellTool(t *testing.T) {

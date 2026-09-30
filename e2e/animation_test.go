@@ -8,68 +8,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestCreateAnimationSchema pins the create tool's input surface.
-func TestCreateAnimationSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "create_animation", "Create an Animation resource")
-	schema.requireRequired(t, "resourcePath")
-	schema.requireStringProps(t, "resourcePath", "loopMode")
-	schema.requireType(t, "length", "number")
-	schema.requireType(t, "step", "number")
-	schema.requirePropCount(t, 4)
-}
-
-// TestModifyAnimationSchema pins the modify tool's input surface.
-func TestModifyAnimationSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "modify_animation", "Set an Animation resource's length, loop mode, or step")
-	schema.requireRequired(t, "resourcePath")
-	schema.requireStringProps(t, "resourcePath", "loopMode")
-	schema.requireType(t, "length", "number")
-	schema.requireType(t, "step", "number")
-	schema.requirePropCount(t, 4)
-}
-
-// TestAddAnimationTrackSchema pins the add-track tool's input surface.
-func TestAddAnimationTrackSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "add_animation_track", "Append a track to an Animation resource")
-	schema.requireRequired(t, "resourcePath", "trackType")
-	schema.requireStringProps(t, "resourcePath", "trackType", "trackPath", "interpolation")
-	schema.requireType(t, "keys", "array")
-	schema.requirePropCount(t, 5)
-}
-
-// TestSetAnimationTrackSchema pins the set-track tool's input surface.
-func TestSetAnimationTrackSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "set_animation_track", "Set an existing Animation track's path, interpolation, and keys")
-	schema.requireRequired(t, "resourcePath", "trackIndex")
-	schema.requireStringProps(t, "resourcePath", "trackPath", "interpolation")
-	schema.requireType(t, "trackIndex", "integer")
-	schema.requireType(t, "keys", "array")
-	schema.requirePropCount(t, 5)
-}
-
-// TestRemoveAnimationTrackSchema pins the remove-track tool's input surface.
-func TestRemoveAnimationTrackSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "remove_animation_track", "Remove a track from an Animation resource")
-	schema.requireRequired(t, "resourcePath", "trackIndex")
-	schema.requireStringProps(t, "resourcePath")
-	schema.requireType(t, "trackIndex", "integer")
-	schema.requirePropCount(t, 2)
-}
-
-// TestReadAnimationSchema pins the read-only animation tool's input surface.
-func TestReadAnimationSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "read_animation", "Read Animation resources and their tracks")
-	schema.requireRequired(t, "resourcePath")
-	schema.requireStringProps(t, "resourcePath")
-	schema.requirePropCount(t, 1)
-}
-
 // testAnimationPayload is the subset of read_animation's payload the tests
 // assert against.
 type testAnimationPayload struct {

@@ -7,16 +7,6 @@ import (
 	"testing"
 )
 
-// TestCreateProjectSchema ports the reference's tool-definitions test: the
-// schema must require projectName and expose the dotnet flag.
-func TestCreateProjectSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "create_project", "Create a new Godot project from scratch")
-	schema.requireRequired(t, "projectName")
-	schema.requireProps(t, "projectName", "dotnet")
-	schema.requireType(t, "dotnet", "boolean")
-}
-
 // TestCreateProjectTool ports the reference's handleCreateProject behaviors:
 // success, existing-project rejection, and validation. The server is bound to
 // the target directory because create_project creates the bound root itself.

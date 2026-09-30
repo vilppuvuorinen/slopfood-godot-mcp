@@ -5,15 +5,6 @@ import (
 	"testing"
 )
 
-// TestDuplicateSceneNodeSchema pins the tool's input surface.
-func TestDuplicateSceneNodeSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "duplicate_scene_node", "Duplicate a node within a .tscn scene")
-	schema.requireRequired(t, "scenePath", "nodePath")
-	schema.requireStringProps(t, "scenePath", "nodePath")
-	schema.requirePropCount(t, 2)
-}
-
 // TestDuplicateSceneNodeTool drives the real duplicate_scene_node tool against
 // Godot.
 func TestDuplicateSceneNodeTool(t *testing.T) {

@@ -5,15 +5,6 @@ import (
 	"testing"
 )
 
-// TestRemoveSceneSignalSchema pins the tool's input surface.
-func TestRemoveSceneSignalSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "remove_scene_signal", "Remove a signal connection from a .tscn scene")
-	schema.requireRequired(t, "scenePath", "signalName", "sourcePath", "targetPath")
-	schema.requireStringProps(t, "scenePath", "signalName", "sourcePath", "targetPath", "method")
-	schema.requirePropCount(t, 5)
-}
-
 // TestRemoveSceneSignalTool drives the real remove_scene_signal tool against
 // Godot.
 func TestRemoveSceneSignalTool(t *testing.T) {

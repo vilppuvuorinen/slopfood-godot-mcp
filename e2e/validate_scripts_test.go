@@ -15,18 +15,6 @@ type validateScriptsE2EDoc struct {
 	Results         []map[string]any `json:"results"`
 }
 
-// TestValidateScriptsSchema ports the reference's tool-definition expectations
-// for validate_scripts over the real stdio surface.
-func TestValidateScriptsSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "validate_scripts", "Batch-check GDScript files (git-changed by default, or all)")
-	schema.requireRequired(t)
-	schema.requireProps(t, "scope", "scriptPaths")
-	schema.requireStringProps(t, "scope")
-	schema.requireType(t, "scriptPaths", "array")
-	schema.requirePropCount(t, 2)
-}
-
 // TestValidateScriptsTool drives the real validate_scripts tool against Godot.
 // Each subtest binds a session to its own project.
 func TestValidateScriptsTool(t *testing.T) {

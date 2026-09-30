@@ -5,16 +5,6 @@ import (
 	"testing"
 )
 
-// TestRemoveSceneNodeSchema ports the reference's tool-definition expectations
-// for remove_scene_node over the real stdio surface.
-func TestRemoveSceneNodeSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "remove_scene_node", "Remove a node from a scene file (headless)")
-	schema.requireRequired(t, "scenePath", "nodePath")
-	schema.requireStringProps(t, "scenePath", "nodePath")
-	schema.requirePropCount(t, 2)
-}
-
 // TestRemoveSceneNodeTool drives the real remove_scene_node tool against Godot
 // and checks the saved scene no longer references the removed node.
 func TestRemoveSceneNodeTool(t *testing.T) {

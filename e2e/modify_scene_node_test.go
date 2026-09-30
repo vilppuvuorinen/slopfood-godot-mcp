@@ -5,17 +5,6 @@ import (
 	"testing"
 )
 
-// TestModifySceneNodeSchema ports the reference's tool-definition expectations
-// for modify_scene_node over the real stdio surface.
-func TestModifySceneNodeSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "modify_scene_node", "Modify node properties in a scene file (headless)")
-	schema.requireRequired(t, "scenePath", "nodePath", "properties")
-	schema.requireStringProps(t, "scenePath", "nodePath")
-	schema.requireType(t, "properties", "object")
-	schema.requirePropCount(t, 3)
-}
-
 // TestModifySceneNodeTool drives the real modify_scene_node tool against Godot
 // and reads the saved scene back from disk.
 func TestModifySceneNodeTool(t *testing.T) {

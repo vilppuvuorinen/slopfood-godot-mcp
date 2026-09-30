@@ -220,6 +220,21 @@ func waitForNoDaemon(t *testing.T, project string) {
 	waitForDaemon(t, project, 0)
 }
 
+// listToolsOnce lists a session's tools once and indexes them by name, so a
+// table test can assert many tools without one ListTools round trip per tool.
+func listToolsOnce(t *testing.T, session *mcp.ClientSession) map[string]*mcp.Tool {
+	t.Helper()
+	res, err := session.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("list tools: %v", err)
+	}
+	tools := make(map[string]*mcp.Tool, len(res.Tools))
+	for _, tool := range res.Tools {
+		tools[tool.Name] = tool
+	}
+	return tools
+}
+
 // findTool returns a listed tool by name, failing when it is absent.
 func findTool(t *testing.T, session *mcp.ClientSession, name string) *mcp.Tool {
 	t.Helper()
@@ -340,11 +355,16 @@ type toolSchema struct {
 	Properties map[string]map[string]any `json:"properties"`
 }
 
-// requireSchema finds a listed tool, checks its description, and decodes its
-// input schema, asserting the top-level object type along the way.
-func requireSchema(t *testing.T, name, description string) toolSchema {
+// requireSchema looks a listed tool up in tools by name, checks its
+// description, and decodes its input schema, asserting the top-level object
+// type along the way. Reading from a shared tool map lets one ListTools call
+// back many lookups.
+func requireSchema(t *testing.T, tools map[string]*mcp.Tool, name, description string) toolSchema {
 	t.Helper()
-	tool := findTool(t, connect(t), name)
+	tool, ok := tools[name]
+	if !ok {
+		t.Fatalf("tool %q not listed", name)
+	}
 	if tool.Description != description {
 		t.Errorf("%s description = %q, want %q", name, tool.Description, description)
 	}

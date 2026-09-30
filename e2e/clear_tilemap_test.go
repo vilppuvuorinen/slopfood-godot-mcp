@@ -2,15 +2,6 @@ package e2e
 
 import "testing"
 
-// TestClearTilemapSchema pins the tool's input surface.
-func TestClearTilemapSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "clear_tilemap", "Clear every cell on a TileMapLayer node in a scene")
-	schema.requireRequired(t, "scenePath", "nodePath")
-	schema.requireStringProps(t, "scenePath", "nodePath")
-	schema.requirePropCount(t, 2)
-}
-
 // TestClearTilemapTool drives the real clear_tilemap tool against Godot.
 func TestClearTilemapTool(t *testing.T) {
 	t.Parallel()

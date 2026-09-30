@@ -2,17 +2,6 @@ package e2e
 
 import "testing"
 
-// TestSetTilemapCellSchema pins the tool's input surface.
-func TestSetTilemapCellSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "set_tilemap_cell", "Place a tile on a TileMapLayer node in a scene")
-	schema.requireRequired(t, "scenePath", "nodePath", "coords", "sourceId", "atlasCoords")
-	schema.requireStringProps(t, "scenePath", "nodePath")
-	schema.requireType(t, "sourceId", "integer")
-	schema.requireType(t, "alternativeTile", "integer")
-	schema.requirePropCount(t, 6)
-}
-
 // TestSetTilemapCellTool drives the real set_tilemap_cell tool against Godot.
 func TestSetTilemapCellTool(t *testing.T) {
 	t.Parallel()

@@ -13,14 +13,6 @@ type validateProjectPayload struct {
 	Errors []string `json:"errors"`
 }
 
-// TestValidateProjectSchema pins the tool's input and output surface.
-func TestValidateProjectSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "validate_project", "Load project.godot with the Godot engine and report whether it parsed")
-	schema.requireRequired(t)
-	schema.requirePropCount(t, 0)
-}
-
 // TestValidateProjectTool drives the tool through the real engine.
 func TestValidateProjectTool(t *testing.T) {
 	t.Parallel()

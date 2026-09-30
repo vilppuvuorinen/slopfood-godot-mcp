@@ -8,15 +8,6 @@ import (
 	"testing"
 )
 
-// TestAddSceneSignalSchema pins the tool's input surface.
-func TestAddSceneSignalSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "add_scene_signal", "Add a signal connection in a .tscn scene")
-	schema.requireRequired(t, "scenePath", "signalName", "sourcePath", "targetPath", "method")
-	schema.requireStringProps(t, "scenePath", "signalName", "sourcePath", "targetPath", "method")
-	schema.requirePropCount(t, 5)
-}
-
 // TestAddSceneSignalTool drives the real add_scene_signal tool against Godot.
 func TestAddSceneSignalTool(t *testing.T) {
 	t.Parallel()

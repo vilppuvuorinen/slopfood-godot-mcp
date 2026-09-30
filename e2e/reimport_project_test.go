@@ -7,14 +7,6 @@ import (
 	"testing"
 )
 
-// TestReimportProjectSchema pins the project-wide scan tool's input surface.
-func TestReimportProjectSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "reimport_project", "Reimport a Godot project by scanning it in the editor, generating .import sidecars and missing resource UIDs")
-	schema.requireRequired(t)
-	schema.requirePropCount(t, 0)
-}
-
 // TestReimportProjectTool drives the real reimport_project tool against Godot. It
 // verifies the two properties the scan must have: it generates a missing .uid
 // sidecar for an un-UID'd script, and it leaves existing UIDs (a scene's own

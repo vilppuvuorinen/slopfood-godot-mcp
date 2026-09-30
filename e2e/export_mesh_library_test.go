@@ -44,20 +44,6 @@ size = Vector3(1, 1, 1)
 `
 )
 
-// TestExportMeshLibrarySchema ports the reference's tool-definition
-// expectations for export_mesh_library over the real stdio surface.
-func TestExportMeshLibrarySchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "export_mesh_library", "Export a scene as a MeshLibrary resource")
-	schema.requireRequired(t, "scenePath", "outputPath")
-	schema.requireType(t, "meshItemNames", "array")
-
-	items, ok := schema.Properties["meshItemNames"]["items"].(map[string]any)
-	if !ok || items["type"] != "string" {
-		t.Errorf("meshItemNames items = %v", schema.Properties["meshItemNames"]["items"])
-	}
-}
-
 // seedMeshScene creates a Node3D scene at scenePath with a mesh-bearing node so
 // export_mesh_library has something to export.
 func seedMeshScene(t *testing.T, session *mcp.ClientSession, scenePath string) {

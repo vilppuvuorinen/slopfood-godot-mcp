@@ -5,15 +5,6 @@ import (
 	"testing"
 )
 
-// TestRenameSceneNodeSchema pins the tool's input surface.
-func TestRenameSceneNodeSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "rename_scene_node", "Rename a node in a .tscn scene")
-	schema.requireRequired(t, "scenePath", "nodePath", "newName")
-	schema.requireStringProps(t, "scenePath", "nodePath", "newName")
-	schema.requirePropCount(t, 3)
-}
-
 // TestRenameSceneNodeTool drives the real rename_scene_node tool against Godot.
 func TestRenameSceneNodeTool(t *testing.T) {
 	t.Parallel()

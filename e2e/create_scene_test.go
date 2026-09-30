@@ -5,15 +5,6 @@ import (
 	"testing"
 )
 
-// TestCreateSceneSchema ports the reference's tool-definition expectations for
-// create_scene over the real stdio surface.
-func TestCreateSceneSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "create_scene", "Create a new Godot scene file")
-	schema.requireRequired(t, "scenePath")
-	schema.requireStringProps(t, "scenePath", "rootNodeType")
-}
-
 // TestCreateSceneTool drives the real create_scene tool against Godot,
 // exercising the default and custom root node types.
 func TestCreateSceneTool(t *testing.T) {

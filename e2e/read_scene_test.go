@@ -17,17 +17,6 @@ type sceneNode struct {
 	Children   []sceneNode    `json:"children"`
 }
 
-// TestReadSceneSchema ports the reference's tool-definition expectations for
-// read_scene over the real stdio surface.
-func TestReadSceneSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "read_scene", "Read scene file as JSON node tree, including signal connections (headless)")
-	schema.requireRequired(t, "scenePath")
-	schema.requireStringProps(t, "scenePath", "nodePath")
-	schema.requireType(t, "depth", "integer")
-	schema.requirePropCount(t, 3)
-}
-
 // TestReadSceneTool drives the real read_scene tool against Godot and parses
 // the returned JSON node tree.
 func TestReadSceneTool(t *testing.T) {

@@ -32,38 +32,6 @@ func seedMaterialRes(t *testing.T, session *mcp.ClientSession, resourcePath stri
 	})
 }
 
-// TestCreateResourceSchema ports the tool-definition expectations for
-// create_resource over the real stdio surface.
-func TestCreateResourceSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "create_resource", "Create a .tres/.res resource file")
-	schema.requireRequired(t, "resourcePath", "resourceType")
-	schema.requireStringProps(t, "resourcePath", "resourceType")
-	schema.requireType(t, "properties", "object")
-	schema.requirePropCount(t, 3)
-}
-
-// TestModifyResourceSchema ports the tool-definition expectations for
-// modify_resource over the real stdio surface.
-func TestModifyResourceSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "modify_resource", "Set properties on a .tres/.res resource file")
-	schema.requireRequired(t, "resourcePath", "properties")
-	schema.requireStringProps(t, "resourcePath")
-	schema.requireType(t, "properties", "object")
-	schema.requirePropCount(t, 2)
-}
-
-// TestReadResourceSchema ports the read-only resource tool's expectations.
-func TestReadResourceSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "read_binary_resource", "Read engine-decoded binary .res resource files (text .tres files are read directly)")
-	schema.requireRequired(t, "resourcePath")
-	schema.requireStringProps(t, "resourcePath")
-	schema.requireType(t, "propertyFilter", "array")
-	schema.requirePropCount(t, 2)
-}
-
 // TestResourceTools drives the real resource tools against Godot.
 func TestResourceTools(t *testing.T) {
 	t.Parallel()

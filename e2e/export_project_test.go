@@ -8,17 +8,6 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// TestExportProjectSchema ports the reference's tool-definition expectations
-// for export_project over the real stdio surface.
-func TestExportProjectSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "export_project", "Export a Godot project using a preset")
-	schema.requireRequired(t, "presetName", "outputPath")
-	schema.requirePropCount(t, 3)
-	schema.requireStringProps(t, "presetName", "outputPath")
-	schema.requireType(t, "debug", "boolean")
-}
-
 // TestExportProjectValidation covers the reference's validation messages.
 func TestExportProjectValidation(t *testing.T) {
 	t.Parallel()

@@ -5,15 +5,6 @@ import (
 	"testing"
 )
 
-// TestMoveSceneNodeSchema pins the tool's input surface.
-func TestMoveSceneNodeSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "move_scene_node", "Move a node to a new parent in a .tscn scene")
-	schema.requireRequired(t, "scenePath", "nodePath", "newParentPath")
-	schema.requireStringProps(t, "scenePath", "nodePath", "newParentPath")
-	schema.requirePropCount(t, 3)
-}
-
 // TestMoveSceneNodeTool drives the real move_scene_node tool against Godot.
 func TestMoveSceneNodeTool(t *testing.T) {
 	t.Parallel()

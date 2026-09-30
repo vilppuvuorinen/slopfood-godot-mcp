@@ -5,16 +5,6 @@ import (
 	"testing"
 )
 
-// TestAttachScriptSchema ports the reference's tool-definition expectations for
-// attach_script over the real stdio surface.
-func TestAttachScriptSchema(t *testing.T) {
-	t.Parallel()
-	schema := requireSchema(t, "attach_script", "Attach a GDScript to a scene node (headless)")
-	schema.requireRequired(t, "scenePath", "nodePath", "scriptPath")
-	schema.requireStringProps(t, "scenePath", "nodePath", "scriptPath")
-	schema.requirePropCount(t, 3)
-}
-
 // TestAttachScriptTool drives the real attach_script tool against Godot and
 // checks the saved scene references the attached script.
 func TestAttachScriptTool(t *testing.T) {
