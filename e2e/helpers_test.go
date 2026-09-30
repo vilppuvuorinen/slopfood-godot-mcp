@@ -8,8 +8,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -95,6 +97,7 @@ func connectSession(t *testing.T, env []string, args ...string) *mcp.ClientSessi
 	}
 
 	cmdEnv, cmdArgs := sessionEnv(t, newRuntimeDir(t), env, args)
+	registerDaemonExitWait(t, projectArg(cmdArgs))
 	cmd := exec.CommandContext(context.Background(), binary, cmdArgs...) //nolint:gosec // the binary path is supplied by the test harness.
 	cmd.Env = cmdEnv
 	client := mcp.NewClient(&mcp.Implementation{Name: "slopfood-godot-mcp-e2e", Version: "0.0.1"}, nil)
@@ -165,6 +168,7 @@ func connectInRuntime(t *testing.T, runtimeDir string, args ...string) (*mcp.Cli
 	if !hasIdleTimeout(childArgs) {
 		childArgs = append(childArgs, "--idle-timeout", defaultInRuntimeIdleTimeout)
 	}
+	registerDaemonExitWait(t, projectArg(childArgs))
 
 	cmd := exec.CommandContext(context.Background(), binary, childArgs...) //nolint:gosec // the binary path is supplied by the test harness.
 	cmd.Env = childEnv
@@ -218,6 +222,71 @@ func waitForDaemon(t *testing.T, project string, want int) {
 func waitForNoDaemon(t *testing.T, project string) {
 	t.Helper()
 	waitForDaemon(t, project, 0)
+}
+
+// daemonExitSeen tracks, per test and project, whether the daemon-exit wait has
+// already been registered. A project that several sessions connect to registers
+// the wait only once, before the first session's close cleanup, so it runs after
+// every session has closed.
+var (
+	daemonExitMu   sync.Mutex
+	daemonExitSeen = map[*testing.T]map[string]struct{}{}
+)
+
+// registerDaemonExitWait registers a cleanup that waits for every detached
+// daemon bound to project to exit before the test's project directory is
+// removed. It is called from connectSession and connectInRuntime, after the
+// project directory's t.TempDir cleanup and before the session's close cleanup,
+// so LIFO runs it after every session has closed and before the directory is
+// removed.
+//
+// On Windows a daemon keeps the project's files open until it exits, and
+// t.TempDir's cleanup retries the resulting sharing violation for only about
+// two seconds, shorter than the daemon's idle grace plus its graceful engine
+// quit. Polling daemonPIDs is the portable replacement for depending on the
+// filesystem to report that lock. Off Windows unlinking an open file is
+// allowed, so the wait is unnecessary and skipped.
+func registerDaemonExitWait(t *testing.T, project string) {
+	t.Helper()
+	if project == "" || runtime.GOOS != "windows" {
+		return
+	}
+	daemonExitMu.Lock()
+	projects := daemonExitSeen[t]
+	if projects == nil {
+		projects = map[string]struct{}{}
+		daemonExitSeen[t] = projects
+	}
+	if _, seen := projects[project]; seen {
+		daemonExitMu.Unlock()
+		return
+	}
+	projects[project] = struct{}{}
+	daemonExitMu.Unlock()
+
+	t.Cleanup(func() {
+		daemonExitMu.Lock()
+		delete(daemonExitSeen[t], project)
+		if len(daemonExitSeen[t]) == 0 {
+			delete(daemonExitSeen, t)
+		}
+		daemonExitMu.Unlock()
+		waitForNoDaemon(t, project)
+	})
+}
+
+// projectArg returns the --project value in args, or "" when the session binds
+// the working directory instead.
+func projectArg(args []string) string {
+	for i, arg := range args {
+		if arg == "--project" && i+1 < len(args) {
+			return args[i+1]
+		}
+		if value, ok := strings.CutPrefix(arg, "--project="); ok {
+			return value
+		}
+	}
+	return ""
 }
 
 // listToolsOnce lists a session's tools once and indexes them by name, so a
