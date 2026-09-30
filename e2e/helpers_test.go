@@ -40,10 +40,17 @@ func connectCategories(t *testing.T, categories string) *mcp.ClientSession {
 	return connectSession(t, nil, "--enable", categories)
 }
 
-// newRuntimeDir uses a short-prefixed MkdirTemp rather than t.TempDir because Unix socket paths are capped near 108 bytes.
+// newRuntimeDir builds directly under /tmp rather than os.TempDir: Unix socket
+// paths are capped near 104 bytes on macOS and its per-user TMPDIR under
+// /var/folders is long enough that the derived socket overflows the cap. On
+// Windows /tmp is absent and the empty base falls back to os.TempDir.
 func newRuntimeDir(t *testing.T) string {
 	t.Helper()
-	runtimeDir, err := os.MkdirTemp("", "slopfood-rt-")
+	base := ""
+	if info, err := os.Stat("/tmp"); err == nil && info.IsDir() {
+		base = "/tmp"
+	}
+	runtimeDir, err := os.MkdirTemp(base, "slopfood-rt-")
 	if err != nil {
 		t.Fatalf("create runtime dir: %v", err)
 	}
