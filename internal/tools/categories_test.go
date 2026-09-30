@@ -117,8 +117,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 38 {
-		t.Errorf("registered %d tools, want 38", len(seen))
+	if len(seen) != 33 {
+		t.Errorf("registered %d tools, want 33", len(seen))
 	}
 }
 
@@ -167,32 +167,27 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"reimport_project": true,
 	}
 	idempotent := map[string]bool{
-		"add_scene_signal":           true,
-		"attach_script":              true,
-		"clear_theme_item":           true,
-		"clear_theme_type_variation": true,
-		"clear_tilemap":              true,
-		"create_animation":           true,
-		"create_project":             true,
-		"create_resource":            true,
-		"create_scene":               true,
-		"create_theme":               true,
-		"erase_tilemap_cell":         true,
-		"export_mesh_library":        true,
-		"export_project":             true,
-		"modify_animation":           true,
-		"modify_resource":            true,
-		"modify_scene_node":          true,
-		"modify_theme":               true,
-		"move_scene_node":            true,
-		"reimport_project":           true,
-		"remove_scene_node":          true,
-		"remove_scene_signal":        true,
-		"remove_theme_type":          true,
-		"rename_scene_node":          true,
-		"set_theme_item":             true,
-		"set_theme_type_variation":   true,
-		"set_tilemap_cell":           true,
+		"add_scene_signal":    true,
+		"attach_script":       true,
+		"clear_tilemap":       true,
+		"create_animation":    true,
+		"create_project":      true,
+		"create_resource":     true,
+		"create_scene":        true,
+		"create_theme":        true,
+		"erase_tilemap_cell":  true,
+		"export_mesh_library": true,
+		"export_project":      true,
+		"modify_animation":    true,
+		"modify_resource":     true,
+		"modify_scene_node":   true,
+		"modify_theme":        true,
+		"move_scene_node":     true,
+		"reimport_project":    true,
+		"remove_scene_node":   true,
+		"remove_scene_signal": true,
+		"rename_scene_node":   true,
+		"set_tilemap_cell":    true,
 	}
 	for _, category := range AllCategories {
 		for _, newTool := range categoryTools[category] {

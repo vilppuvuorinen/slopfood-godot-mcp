@@ -70,8 +70,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		readTileset,
 	},
 	CategoryTheme: {
-		createTheme, modifyTheme, removeThemeType, setThemeTypeVariation,
-		clearThemeTypeVariation, setThemeItem, clearThemeItem, readTheme,
+		createTheme, modifyTheme, readTheme,
 	},
 }
 

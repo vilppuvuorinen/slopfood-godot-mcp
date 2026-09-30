@@ -2201,15 +2201,6 @@ func _enum_name(mapping, value) -> String:
             return name
     return "unknown"
 
-const THEME_ITEM_TYPES = {
-    "color": Theme.DATA_TYPE_COLOR,
-    "constant": Theme.DATA_TYPE_CONSTANT,
-    "font": Theme.DATA_TYPE_FONT,
-    "fontSize": Theme.DATA_TYPE_FONT_SIZE,
-    "icon": Theme.DATA_TYPE_ICON,
-    "stylebox": Theme.DATA_TYPE_STYLEBOX,
-}
-
 func manage_theme(result: Result, params) -> Result:
     var resource_path = params.get("resourcePath", "")
     var action = params.get("action", "read")
@@ -2236,31 +2227,14 @@ func manage_theme(result: Result, params) -> Result:
     if theme == null:
         return result
 
-    match action:
-        "modify":
-            var modified = _apply_theme_defaults(theme, params)
-            if not modified.ok:
-                result.err("Invalid theme property: " + modified.error)
-                return result.fail()
-        "removeType":
-            theme.remove_type(StringName(str(params.get("themeType", ""))))
-        "setTypeVariation":
-            theme.set_type_variation(StringName(str(params.get("themeType", ""))), StringName(str(params.get("baseType", ""))))
-        "clearTypeVariation":
-            theme.clear_type_variation(StringName(str(params.get("themeType", ""))))
-        "setItem":
-            var set_item = _set_theme_item(theme, params)
-            if not set_item.ok:
-                result.err("Invalid theme item: " + set_item.error)
-                return result.fail()
-        "clearItem":
-            var clear_item = _clear_theme_item(theme, params)
-            if not clear_item.ok:
-                result.err("Invalid theme item: " + clear_item.error)
-                return result.fail()
-        _:
-            result.err("Unknown manage_theme action: " + action)
+    if action == "modify":
+        var modified = _apply_theme_defaults(theme, params)
+        if not modified.ok:
+            result.err("Invalid theme property: " + modified.error)
             return result.fail()
+    else:
+        result.err("Unknown manage_theme action: " + action)
+        return result.fail()
 
     if not _save_resource(result, theme, full_path):
         return result
@@ -2305,40 +2279,6 @@ func _apply_theme_defaults(theme, params) -> DecodeResult:
             return DecodeResult.failure("defaultBaseScale must be a number")
         theme.default_base_scale = float(scale)
     return DecodeResult.success(null)
-
-func _set_theme_item(theme, params) -> DecodeResult:
-    var type_id = _theme_item_type_id(params.get("itemType", ""))
-    if type_id == -1:
-        return DecodeResult.failure("unknown itemType: " + str(params.get("itemType", "")))
-    var value = _convert_theme_item_value(type_id, params.get("value", null))
-    if not value.ok:
-        return value
-    theme.set_theme_item(type_id, StringName(str(params.get("itemName", ""))), StringName(str(params.get("themeType", ""))), value.value)
-    return DecodeResult.success(null)
-
-func _clear_theme_item(theme, params) -> DecodeResult:
-    var type_id = _theme_item_type_id(params.get("itemType", ""))
-    if type_id == -1:
-        return DecodeResult.failure("unknown itemType: " + str(params.get("itemType", "")))
-    theme.clear_theme_item(type_id, StringName(str(params.get("itemName", ""))), StringName(str(params.get("themeType", ""))))
-    return DecodeResult.success(null)
-
-func _convert_theme_item_value(type_id, value) -> DecodeResult:
-    match type_id:
-        Theme.DATA_TYPE_COLOR:
-            return _require_tagged_type(value, TYPE_COLOR, "a color item value")
-        Theme.DATA_TYPE_CONSTANT, Theme.DATA_TYPE_FONT_SIZE:
-            return _convert_value_for_type(TYPE_INT, value)
-        Theme.DATA_TYPE_FONT, Theme.DATA_TYPE_ICON, Theme.DATA_TYPE_STYLEBOX:
-            if value is String and not value.begins_with("res://") and not value.begins_with("user://"):
-                value = "res://" + value
-            return _convert_value_for_type(TYPE_OBJECT, value)
-    return DecodeResult.failure("unsupported item type")
-
-func _theme_item_type_id(name) -> int:
-    if THEME_ITEM_TYPES.has(name):
-        return THEME_ITEM_TYPES[name]
-    return -1
 
 func _read_theme(result: Result, full_path):
     var theme = _load_theme(result, full_path)

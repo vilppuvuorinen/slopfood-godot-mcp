@@ -28,16 +28,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireStringProps(t, "scenePath", "nodePath", "scriptPath")
 			schema.requirePropCount(t, 3)
 		}},
-		{"clear_theme_item", "Clear a Theme item from a type", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "themeType", "itemType", "itemName")
-			schema.requireStringProps(t, "resourcePath", "themeType", "itemType", "itemName")
-			schema.requirePropCount(t, 4)
-		}},
-		{"clear_theme_type_variation", "Clear a Theme type variation", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "themeType")
-			schema.requireStringProps(t, "resourcePath", "themeType")
-			schema.requirePropCount(t, 2)
-		}},
 		{"clear_tilemap", "Clear every cell on a TileMapLayer node in a scene", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath")
 			schema.requireStringProps(t, "scenePath", "nodePath")
@@ -174,11 +164,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireStringProps(t, "scenePath", "signalName", "sourcePath", "targetPath", "method")
 			schema.requirePropCount(t, 5)
 		}},
-		{"remove_theme_type", "Remove a type from a Theme", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "themeType")
-			schema.requireStringProps(t, "resourcePath", "themeType")
-			schema.requirePropCount(t, 2)
-		}},
 		{"rename_scene_node", "Rename a node in a .tscn scene", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath", "newName")
 			schema.requireStringProps(t, "scenePath", "nodePath", "newName")
@@ -188,16 +173,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireRequired(t, "script")
 			schema.requireStringProps(t, "script")
 			schema.requirePropCount(t, 1)
-		}},
-		{"set_theme_item", "Set a Theme item on a type", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "themeType", "itemType", "itemName", "value")
-			schema.requireStringProps(t, "resourcePath", "themeType", "itemType", "itemName")
-			schema.requirePropCount(t, 5)
-		}},
-		{"set_theme_type_variation", "Set a Theme type variation and its base type", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "themeType", "baseType")
-			schema.requireStringProps(t, "resourcePath", "themeType", "baseType")
-			schema.requirePropCount(t, 3)
 		}},
 		{"set_tilemap_cell", "Place a tile on a TileMapLayer node in a scene", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath", "coords", "sourceId", "atlasCoords")
