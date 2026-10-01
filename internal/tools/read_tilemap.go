@@ -62,12 +62,10 @@ func handleReadTilemap(ctx Context, raw json.RawMessage) (any, error) {
 	params := map[string]any{
 		"scenePath": args.ScenePath,
 		"nodePath":  args.NodePath,
-		"action":    "read",
 	}
 	fields := map[string]any{
 		"scenePath": args.ScenePath,
 		"nodePath":  args.NodePath,
-		"action":    "read",
 	}
-	return runHeadlessOperation(ctx, project, "manage_tilemap", params, fields)
+	return runHeadlessOperation(ctx, project, "read_tilemap", params, fields)
 }

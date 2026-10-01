@@ -52,11 +52,9 @@ func handleReadTileset(ctx Context, raw json.RawMessage) (any, error) {
 
 	params := map[string]any{
 		"resourcePath": args.ResourcePath,
-		"action":       "read",
 	}
 	fields := map[string]any{
 		"resourcePath": args.ResourcePath,
-		"action":       "read",
 	}
-	return runHeadlessOperation(ctx, project, "manage_tileset", params, fields)
+	return runHeadlessOperation(ctx, project, "read_tileset", params, fields)
 }

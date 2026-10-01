@@ -47,7 +47,7 @@ func TestThemeErrors(t *testing.T) {
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
-		requireContains(t, firstText(t, res), "manage_theme failed", "Theme resource not found")
+		requireContains(t, firstText(t, res), "read_theme failed", "Theme resource not found")
 	})
 
 	t.Run("not a theme resource", func(t *testing.T) {
@@ -56,6 +56,6 @@ func TestThemeErrors(t *testing.T) {
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
-		requireContains(t, firstText(t, res), "manage_theme failed", "Not a Theme resource")
+		requireContains(t, firstText(t, res), "read_theme failed", "Not a Theme resource")
 	})
 }

@@ -51,7 +51,7 @@ func TestReadThemeReadSuccessFallback(t *testing.T) {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
 	text := result.Content[0].Text
-	for _, want := range []string{`"action":"read"`, `"resourcePath":"themes/main.tres"`} {
+	for _, want := range []string{`read_theme`, `"resourcePath":"themes/main.tres"`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
@@ -97,7 +97,7 @@ func TestThemeScriptFailure(t *testing.T) {
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
-	if !strings.HasPrefix(result.Content[0].Text, "manage_theme failed: ") {
+	if !strings.HasPrefix(result.Content[0].Text, "read_theme failed: ") {
 		t.Errorf("message = %q", result.Content[0].Text)
 	}
 	if len(result.Content) != 2 || !strings.HasPrefix(result.Content[1].Text, "Possible solutions:") {

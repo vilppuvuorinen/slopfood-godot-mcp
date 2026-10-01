@@ -50,7 +50,7 @@ func TestReadTilemapScriptFailure(t *testing.T) {
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
-	if !strings.HasPrefix(result.Content[0].Text, "manage_tilemap failed: ") {
+	if !strings.HasPrefix(result.Content[0].Text, "read_tilemap failed: ") {
 		t.Errorf("message = %q", result.Content[0].Text)
 	}
 }

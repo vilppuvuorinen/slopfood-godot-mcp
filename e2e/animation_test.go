@@ -35,7 +35,7 @@ func TestAnimationErrors(t *testing.T) {
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
-		requireContains(t, firstText(t, res), "manage_animation failed", "Animation resource not found")
+		requireContains(t, firstText(t, res), "read_animation failed", "Animation resource not found")
 	})
 
 	t.Run("not an animation resource", func(t *testing.T) {
@@ -44,6 +44,6 @@ func TestAnimationErrors(t *testing.T) {
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
-		requireContains(t, firstText(t, res), "manage_animation failed", "Not an Animation resource")
+		requireContains(t, firstText(t, res), "read_animation failed", "Not an Animation resource")
 	})
 }

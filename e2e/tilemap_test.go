@@ -143,7 +143,7 @@ func TestReadTilemapErrors(t *testing.T) {
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
-		requireContains(t, firstText(t, res), "manage_tilemap failed", "Node not found")
+		requireContains(t, firstText(t, res), "read_tilemap failed", "Node not found")
 	})
 
 	t.Run("node is not a TileMapLayer", func(t *testing.T) {
@@ -161,7 +161,7 @@ func TestReadTilemapErrors(t *testing.T) {
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
-		requireContains(t, firstText(t, res), "manage_tilemap failed", "Node is not a TileMapLayer")
+		requireContains(t, firstText(t, res), "read_tilemap failed", "Node is not a TileMapLayer")
 	})
 
 	t.Run("missing scene", func(t *testing.T) {

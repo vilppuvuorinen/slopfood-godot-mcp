@@ -52,11 +52,9 @@ func handleReadTheme(ctx Context, raw json.RawMessage) (any, error) {
 
 	params := map[string]any{
 		"resourcePath": args.ResourcePath,
-		"action":       "read",
 	}
 	fields := map[string]any{
 		"resourcePath": args.ResourcePath,
-		"action":       "read",
 	}
-	return runHeadlessOperation(ctx, project, "manage_theme", params, fields)
+	return runHeadlessOperation(ctx, project, "read_theme", params, fields)
 }

@@ -332,16 +332,16 @@ func dispatch(operation, params) -> Result:
             handler_result = run_script(result, params)
         "rescan_project":
             handler_result = rescan_project(result, params)
-        "manage_resource":
-            handler_result = manage_resource(result, params)
-        "manage_animation":
-            handler_result = manage_animation(result, params)
-        "manage_tileset":
-            handler_result = manage_tileset(result, params)
-        "manage_theme":
-            handler_result = manage_theme(result, params)
-        "manage_tilemap":
-            handler_result = manage_tilemap(result, params)
+        "read_resource":
+            handler_result = read_resource(result, params)
+        "read_animation":
+            handler_result = read_animation(result, params)
+        "read_tileset":
+            handler_result = read_tileset(result, params)
+        "read_theme":
+            handler_result = read_theme(result, params)
+        "read_tilemap":
+            handler_result = read_tilemap(result, params)
         "validate_project":
             handler_result = validate_project(result, params)
         _:
@@ -1629,34 +1629,29 @@ func run_script(result: Result, params) -> Result:
     result.out(JSON_END)
     return result
 
-func manage_resource(result: Result, params) -> Result:
+func read_resource(result: Result, params) -> Result:
     var resource_path = params.get("resourcePath", "")
-    var action = params.get("action", "read")
     var full_path = resource_path
     if not full_path.begins_with("res://"):
         full_path = "res://" + full_path
 
-    if action == "read":
-        var resource = _load_resource(result, full_path)
-        if resource == null:
-            return result
-        var filter = params.get("propertyFilter", [])
-        if filter is String:
-            filter = [filter]
-        var has_filter = filter is Array and filter.size() > 0
-        var props = {}
-        for prop in resource.get_property_list():
-            if prop["usage"] & PROPERTY_USAGE_STORAGE:
-                var prop_name = prop["name"]
-                if has_filter and not _matches_property_filter(prop_name, filter):
-                    continue
-                props[prop_name] = _variant_to_json(resource.get(prop_name))
-        result.out(JSON_START)
-        result.out(JSON.stringify({"type": resource.get_class(), "path": project_relative(full_path), "properties": props}))
-        result.out(JSON_END)
-    else:
-        result.err("Unknown manage_resource action: " + action)
-        return result.fail()
+    var resource = _load_resource(result, full_path)
+    if resource == null:
+        return result
+    var filter = params.get("propertyFilter", [])
+    if filter is String:
+        filter = [filter]
+    var has_filter = filter is Array and filter.size() > 0
+    var props = {}
+    for prop in resource.get_property_list():
+        if prop["usage"] & PROPERTY_USAGE_STORAGE:
+            var prop_name = prop["name"]
+            if has_filter and not _matches_property_filter(prop_name, filter):
+                continue
+            props[prop_name] = _variant_to_json(resource.get(prop_name))
+    result.out(JSON_START)
+    result.out(JSON.stringify({"type": resource.get_class(), "path": project_relative(full_path), "properties": props}))
+    result.out(JSON_END)
     return result
 
 
@@ -1704,15 +1699,6 @@ const ANIMATION_INTERPOLATIONS = {
     "cubic": Animation.INTERPOLATION_CUBIC,
 }
 
-func manage_animation(result: Result, params) -> Result:
-    var resource_path = params.get("resourcePath", "")
-    var full_path = resource_path
-    if not full_path.begins_with("res://"):
-        full_path = "res://" + full_path
-
-    _read_animation(result, full_path)
-    return result
-
 func _load_animation(result: Result, full_path):
     if not ResourceLoader.exists(full_path):
         result.err("Animation resource not found: " + full_path)
@@ -1747,10 +1733,15 @@ func _interpolation_name(type_id) -> String:
             return name
     return "linear"
 
-func _read_animation(result: Result, full_path):
+func read_animation(result: Result, params) -> Result:
+    var resource_path = params.get("resourcePath", "")
+    var full_path = resource_path
+    if not full_path.begins_with("res://"):
+        full_path = "res://" + full_path
+
     var animation = _load_animation(result, full_path)
     if animation == null:
-        return
+        return result
     var tracks = []
     for index in range(animation.get_track_count()):
         tracks.append(_animation_track_to_json(animation, index))
@@ -1764,6 +1755,7 @@ func _read_animation(result: Result, full_path):
     result.out(JSON_START)
     result.out(JSON.stringify(payload))
     result.out(JSON_END)
+    return result
 
 func _animation_track_to_json(animation, index) -> Dictionary:
     var type_id = animation.track_get_type(index)
@@ -1820,15 +1812,6 @@ const TILESET_OFFSET_AXES = {
     "vertical": TileSet.TILE_OFFSET_AXIS_VERTICAL,
 }
 
-func manage_tileset(result: Result, params) -> Result:
-    var resource_path = params.get("resourcePath", "")
-    var full_path = resource_path
-    if not full_path.begins_with("res://"):
-        full_path = "res://" + full_path
-
-    _read_tileset(result, full_path)
-    return result
-
 func _load_tileset(result: Result, full_path):
     if not ResourceLoader.exists(full_path):
         result.err("TileSet resource not found: " + full_path)
@@ -1845,10 +1828,15 @@ func _load_tileset(result: Result, full_path):
         return null
     return resource
 
-func _read_tileset(result: Result, full_path):
+func read_tileset(result: Result, params) -> Result:
+    var resource_path = params.get("resourcePath", "")
+    var full_path = resource_path
+    if not full_path.begins_with("res://"):
+        full_path = "res://" + full_path
+
     var tile_set = _load_tileset(result, full_path)
     if tile_set == null:
-        return
+        return result
     var sources = []
     for index in range(tile_set.get_source_count()):
         sources.append(_tileset_source_to_json(tile_set, tile_set.get_source_id(index)))
@@ -1864,6 +1852,7 @@ func _read_tileset(result: Result, full_path):
     result.out(JSON_START)
     result.out(JSON.stringify(payload))
     result.out(JSON_END)
+    return result
 
 func _tileset_source_to_json(tile_set, source_id) -> Dictionary:
     var source = tile_set.get_source(source_id)
@@ -1931,15 +1920,6 @@ func _enum_name(mapping, value) -> String:
             return name
     return "unknown"
 
-func manage_theme(result: Result, params) -> Result:
-    var resource_path = params.get("resourcePath", "")
-    var full_path = resource_path
-    if not full_path.begins_with("res://"):
-        full_path = "res://" + full_path
-
-    _read_theme(result, full_path)
-    return result
-
 func _load_theme(result: Result, full_path):
     if not ResourceLoader.exists(full_path):
         result.err("Theme resource not found: " + full_path)
@@ -1956,10 +1936,15 @@ func _load_theme(result: Result, full_path):
         return null
     return resource
 
-func _read_theme(result: Result, full_path):
+func read_theme(result: Result, params) -> Result:
+    var resource_path = params.get("resourcePath", "")
+    var full_path = resource_path
+    if not full_path.begins_with("res://"):
+        full_path = "res://" + full_path
+
     var theme = _load_theme(result, full_path)
     if theme == null:
-        return
+        return result
     var types = []
     for type_name in theme.get_type_list():
         types.append(_theme_type_to_json(theme, type_name))
@@ -1973,6 +1958,7 @@ func _read_theme(result: Result, full_path):
     result.out(JSON_START)
     result.out(JSON.stringify(payload))
     result.out(JSON_END)
+    return result
 
 func _theme_type_to_json(theme, type_name) -> Dictionary:
     return {
@@ -1992,7 +1978,7 @@ func _theme_items_to_json(theme, type_id, theme_type) -> Dictionary:
         items[String(name)] = _variant_to_json(theme.get_theme_item(type_id, name, theme_type))
     return items
 
-func manage_tilemap(result: Result, params) -> Result:
+func read_tilemap(result: Result, params) -> Result:
     var scene_path = params.get("scenePath", "")
     var node_path = str(params.get("nodePath", ""))
     var full_path = scene_path
@@ -2015,10 +2001,6 @@ func manage_tilemap(result: Result, params) -> Result:
         result.err("Node is not a TileMapLayer: " + node_path)
         return result.fail()
 
-    _read_tilemap_node(result, target, full_path, node_path)
-    return result
-
-func _read_tilemap_node(result: Result, target, full_path, node_path):
     var cells = []
     for coords in target.get_used_cells():
         cells.append({
@@ -2046,6 +2028,7 @@ func _read_tilemap_node(result: Result, target, full_path, node_path):
     result.out(JSON_START)
     result.out(JSON.stringify(payload))
     result.out(JSON_END)
+    return result
 
 # Starting the engine against the project is the whole check; the caller reads the engine's stderr and exit code.
 func validate_project(result: Result, _params) -> Result:

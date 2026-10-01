@@ -67,14 +67,12 @@ func handleReadBinaryResource(ctx Context, raw json.RawMessage) (any, error) {
 
 	params := map[string]any{
 		"resourcePath": args.ResourcePath,
-		"action":       "read",
 	}
 	if len(args.PropertyFilter) > 0 {
 		params["propertyFilter"] = args.PropertyFilter
 	}
 	fields := map[string]any{
 		"resourcePath": args.ResourcePath,
-		"action":       "read",
 	}
-	return runHeadlessOperation(ctx, project, "manage_resource", params, fields)
+	return runHeadlessOperation(ctx, project, "read_resource", params, fields)
 }

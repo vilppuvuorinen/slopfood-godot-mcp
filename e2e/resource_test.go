@@ -319,7 +319,7 @@ func TestResourceErrors(t *testing.T) {
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
-		requireContains(t, firstText(t, res), "manage_resource failed", "Resource not found: res://resources/missing.res")
+		requireContains(t, firstText(t, res), "read_resource failed", "Resource not found: res://resources/missing.res")
 	})
 
 	t.Run("unloadable resource", func(t *testing.T) {
@@ -331,7 +331,7 @@ func TestResourceErrors(t *testing.T) {
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
-		requireContains(t, firstText(t, res), "manage_resource failed", "Failed to load resource: res://resources/bad.res")
+		requireContains(t, firstText(t, res), "read_resource failed", "Failed to load resource: res://resources/bad.res")
 	})
 }
 
