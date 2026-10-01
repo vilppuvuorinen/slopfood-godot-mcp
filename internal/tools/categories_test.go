@@ -25,7 +25,6 @@ func TestResolveCategories(t *testing.T) {
 		{name: "all expands", raw: []string{"all"}, want: AllCategories},
 		{name: "comma separated", raw: []string{"scene,script"}, want: []Category{CategoryScene, CategoryScript}},
 		{name: "assets category", raw: []string{"assets"}, want: []Category{CategoryAssets}},
-		{name: "signals category", raw: []string{"signals"}, want: []Category{CategorySignals}},
 		{name: "tilemap category", raw: []string{"tilemap"}, want: []Category{CategoryTilemap}},
 		{name: "animation category", raw: []string{"animation"}, want: []Category{CategoryAnim}},
 		{name: "tileset category", raw: []string{"tileset"}, want: []Category{CategoryTileset}},
@@ -48,8 +47,8 @@ func TestResolveCategories(t *testing.T) {
 }
 
 func TestResolveCategoriesUnknown(t *testing.T) {
-	// "resources" was renamed to "assets"; it is no longer a valid name.
-	for _, raw := range [][]string{{"bogus"}, {"all,bogus"}, {"project,nope"}, {"resources"}} {
+	// "resources" was renamed to "assets"; "signals" was dropped with its tools.
+	for _, raw := range [][]string{{"bogus"}, {"all,bogus"}, {"project,nope"}, {"resources"}, {"signals"}} {
 		if _, err := ResolveCategories(raw); err == nil {
 			t.Errorf("ResolveCategories(%v) = nil error, want an error", raw)
 		}
@@ -117,8 +116,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 33 {
-		t.Errorf("registered %d tools, want 33", len(seen))
+	if len(seen) != 31 {
+		t.Errorf("registered %d tools, want 31", len(seen))
 	}
 }
 
@@ -167,7 +166,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"reimport_project": true,
 	}
 	idempotent := map[string]bool{
-		"add_scene_signal":    true,
 		"attach_script":       true,
 		"clear_tilemap":       true,
 		"create_animation":    true,
@@ -185,7 +183,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"move_scene_node":     true,
 		"reimport_project":    true,
 		"remove_scene_node":   true,
-		"remove_scene_signal": true,
 		"rename_scene_node":   true,
 		"set_tilemap_cell":    true,
 	}

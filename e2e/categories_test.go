@@ -13,7 +13,6 @@ func TestEnableCategories(t *testing.T) {
 			"export_project",    // export
 			"create_scene",      // scene
 			"add_node",          // node
-			"add_scene_signal",  // signals
 			"set_tilemap_cell",  // tilemap
 			"attach_script",     // script
 			"run_script",        // script
@@ -67,7 +66,6 @@ func TestEnableCategories(t *testing.T) {
 			"export_project",    // export
 			"create_scene",      // scene
 			"add_node",          // node
-			"add_scene_signal",  // signals
 			"set_tilemap_cell",  // tilemap
 			"attach_script",     // script
 			"run_script",        // script

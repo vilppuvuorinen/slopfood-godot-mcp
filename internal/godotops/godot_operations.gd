@@ -326,8 +326,6 @@ func dispatch(operation, params) -> Result:
             handler_result = remove_node(result, params)
         "manage_scene_structure":
             handler_result = manage_scene_structure(result, params)
-        "manage_scene_signals":
-            handler_result = manage_scene_signals(result, params)
         "attach_script":
             handler_result = attach_script(result, params)
         "run_script":
@@ -1377,113 +1375,6 @@ func remove_node(result: Result, params) -> Result:
     _reconcile_path(full_scene_path)
     result.out("Node '" + removed_name + "' removed successfully from: " + full_scene_path)
     return result
-
-func manage_scene_signals(result: Result, params) -> Result:
-    var scene_path = params.get("scenePath", "")
-    var action = params.get("action", "")
-    var full_path = scene_path
-    if not full_path.begins_with("res://"):
-        full_path = "res://" + full_path
-
-    if not FileAccess.file_exists(full_path):
-        result.err("Scene not found: " + full_path)
-        return result.fail()
-
-    var content = FileAccess.get_file_as_string(full_path)
-
-    if action == "add":
-        var signal_name = params.get("signalName", "")
-        var source_path = params.get("sourcePath", "")
-        var target_path = params.get("targetPath", "")
-        var method = params.get("method", "")
-        for field in [signal_name, source_path, target_path, method]:
-            if field.is_empty():
-                result.err("signal_name, source_path, target_path, and method are required for add")
-                return result.fail()
-            if not _connection_field_is_safe(field):
-                result.err("Signal connection fields cannot contain quotes, backslashes, or newlines")
-                return result.fail()
-
-        var scene = load_object(full_path, "PackedScene") as PackedScene
-        if scene == null:
-            result.err("Failed to load scene: " + full_path)
-            return result.fail()
-        var scene_root = track_temp(scene.instantiate())
-        if scene_root == null:
-            result.err("Failed to instantiate scene: " + full_path)
-            return result.fail()
-        if _resolve_scene_node(scene_root, source_path) == null:
-            result.err("Source node not found: " + source_path)
-            return result.fail()
-        if _resolve_scene_node(scene_root, target_path) == null:
-            result.err("Target node not found: " + target_path)
-            return result.fail()
-
-        var from_path = _connection_node_path(source_path)
-        var to_path = _connection_node_path(target_path)
-        var conn_line = '[connection signal="%s" from="%s" to="%s" method="%s"]' % [signal_name, from_path, to_path, method]
-        for line in content.split("\n"):
-            if line.strip_edges() == conn_line:
-                result.out("Signal connection already exists: " + conn_line)
-                return result
-        content += "\n" + conn_line + "\n"
-        var file = FileAccess.open(full_path, FileAccess.WRITE)
-        file.store_string(content)
-        file.close()
-        _reconcile_path(full_path)
-        result.out("Signal connection added: " + conn_line)
-    elif action == "remove":
-        # Source and target are required so removal does not match every connection sharing a signal.
-        var signal_name = params.get("signalName", "")
-        var source_path = params.get("sourcePath", "")
-        var target_path = params.get("targetPath", "")
-        var method = params.get("method", "")
-        for field in [signal_name, source_path, target_path]:
-            if field.is_empty():
-                result.err("signal_name, source_path, and target_path are required for remove")
-                return result.fail()
-
-        var from_path = _connection_node_path(source_path)
-        var to_path = _connection_node_path(target_path)
-        var lines = content.split("\n")
-        var new_lines = []
-        var removed = 0
-        for line in lines:
-            if line.begins_with("[connection") \
-                    and _connection_field(line, "signal") == signal_name \
-                    and _connection_field(line, "from") == from_path \
-                    and _connection_field(line, "to") == to_path \
-                    and (method.is_empty() or _connection_field(line, "method") == method):
-                removed += 1
-                continue
-            new_lines.append(line)
-        if removed == 0:
-            result.out("No matching signal connection removed")
-            return result
-        var file = FileAccess.open(full_path, FileAccess.WRITE)
-        if file == null:
-            result.err("Failed to open scene for writing: " + full_path)
-            return result.fail()
-        file.store_string("\n".join(new_lines))
-        file.close()
-        _reconcile_path(full_path)
-        result.out("Signal connection removed: %d" % [removed])
-    else:
-        result.err("Unknown manage_scene_signals action: " + action)
-        return result.fail()
-    return result
-
-func _connection_field_is_safe(value):
-    return not ("\"" in value or "\\" in value or "\n" in value or "\r" in value)
-
-func _connection_node_path(tool_path):
-    if tool_path == "" or tool_path == "root" or tool_path == ".":
-        return "."
-    if tool_path.begins_with("root/"):
-        return tool_path.substr(5)
-    if tool_path.begins_with("./"):
-        return tool_path.substr(2)
-    return tool_path
 
 func _connection_field(line, field_name):
     var marker = field_name + '="'

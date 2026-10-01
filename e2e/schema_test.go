@@ -18,11 +18,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireProps(t, "scenePath", "parentNodePath", "nodeType", "instancePath", "nodeName", "properties")
 			schema.requireType(t, "properties", "object")
 		}},
-		{"add_scene_signal", "Add a signal connection in a .tscn scene", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath", "signalName", "sourcePath", "targetPath", "method")
-			schema.requireStringProps(t, "scenePath", "signalName", "sourcePath", "targetPath", "method")
-			schema.requirePropCount(t, 5)
-		}},
 		{"attach_script", "Attach a GDScript to a scene node (headless)", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath", "scriptPath")
 			schema.requireStringProps(t, "scenePath", "nodePath", "scriptPath")
@@ -158,11 +153,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireRequired(t, "scenePath", "nodePath")
 			schema.requireStringProps(t, "scenePath", "nodePath")
 			schema.requirePropCount(t, 2)
-		}},
-		{"remove_scene_signal", "Remove a signal connection from a .tscn scene", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath", "signalName", "sourcePath", "targetPath")
-			schema.requireStringProps(t, "scenePath", "signalName", "sourcePath", "targetPath", "method")
-			schema.requirePropCount(t, 5)
 		}},
 		{"rename_scene_node", "Rename a node in a .tscn scene", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath", "newName")

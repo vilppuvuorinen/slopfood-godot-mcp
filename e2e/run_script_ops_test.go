@@ -1,6 +1,8 @@
 package e2e
 
 import (
+	"encoding/json"
+	"path/filepath"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -141,4 +143,71 @@ func run():
 			t.Errorf("types = %v, want CustomButton based on Button", payload.Types)
 		}
 	})
+}
+
+type testSceneConnection struct {
+	Signal string `json:"signal"`
+	From   string `json:"from"`
+	To     string `json:"to"`
+	Method string `json:"method"`
+}
+
+func readSceneConnections(t *testing.T, session *mcp.ClientSession, scenePath string) []testSceneConnection {
+	t.Helper()
+	text := requireToolText(t, session, "read_scene", map[string]any{"scenePath": scenePath})
+	var payload struct {
+		Connections []testSceneConnection `json:"connections"`
+	}
+	if err := json.Unmarshal([]byte(text), &payload); err != nil {
+		t.Fatalf("decode read_scene: %v\n%s", err, text)
+	}
+	return payload.Connections
+}
+
+// TestRunScriptSceneSignals smoke tests the signal connections the removed
+// add_scene_signal/remove_scene_signal tools used to wrap. The scripts edit the
+// scene through the live editor session and the result is read back from the
+// file and with read_scene, so a bridge change that breaks editor-mode scene
+// mutation fails here.
+func TestRunScriptSceneSignals(t *testing.T) {
+	t.Parallel()
+	root := newProject(t)
+	session := connectProject(t, root)
+	createScene(t, session, "scenes/signals.tscn", "Button")
+	sceneFile := filepath.Join(root, "scenes", "signals.tscn")
+	connection := `[connection signal="pressed" from="." to="." method="on_pressed"]`
+
+	requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var scene: PackedScene = load("res://scenes/signals.tscn")
+	var root: Node = scene.instantiate()
+	root.pressed.connect(Callable(root, "on_pressed"), CONNECT_PERSIST)
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	return ResourceSaver.save(packed, "res://scenes/signals.tscn")
+`)
+	requireContains(t, readFile(t, sceneFile), connection)
+	if got := readSceneConnections(t, session, "scenes/signals.tscn"); len(got) != 1 || got[0].Signal != "pressed" || got[0].Method != "on_pressed" {
+		t.Errorf("connections = %+v, want one pressed -> on_pressed", got)
+	}
+
+	requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var scene: PackedScene = load("res://scenes/signals.tscn")
+	var root: Node = scene.instantiate()
+	root.disconnect("pressed", Callable(root, "on_pressed"))
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	return ResourceSaver.save(packed, "res://scenes/signals.tscn")
+`)
+	requireNotContains(t, readFile(t, sceneFile), connection)
+	if got := readSceneConnections(t, session, "scenes/signals.tscn"); len(got) != 0 {
+		t.Errorf("connections = %+v, want none", got)
+	}
 }

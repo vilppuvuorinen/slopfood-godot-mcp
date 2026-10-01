@@ -14,7 +14,6 @@ const (
 	CategoryExport  Category = "export"
 	CategoryScene   Category = "scene"
 	CategoryNode    Category = "node"
-	CategorySignals Category = "signals"
 	CategoryTilemap Category = "tilemap"
 	CategoryScript  Category = "script"
 	CategoryAssets  Category = "assets"
@@ -28,7 +27,6 @@ var AllCategories = []Category{
 	CategoryExport,
 	CategoryScene,
 	CategoryNode,
-	CategorySignals,
 	CategoryTilemap,
 	CategoryScript,
 	CategoryAssets,
@@ -50,9 +48,6 @@ var categoryTools = map[Category][]func() mcp.Tool{
 	CategoryNode: {
 		addNode, modifySceneNode, removeSceneNode,
 		renameSceneNode, duplicateSceneNode, moveSceneNode,
-	},
-	CategorySignals: {
-		addSceneSignal, removeSceneSignal,
 	},
 	CategoryTilemap: {
 		setTilemapCell, eraseTilemapCell, clearTilemap, readTilemap,
