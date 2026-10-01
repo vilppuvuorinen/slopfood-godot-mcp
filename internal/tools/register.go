@@ -65,7 +65,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		readTileset,
 	},
 	CategoryTheme: {
-		createTheme, modifyTheme, readTheme,
+		readTheme,
 	},
 }
 

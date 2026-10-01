@@ -2045,42 +2045,11 @@ func _enum_name(mapping, value) -> String:
 
 func manage_theme(result: Result, params) -> Result:
     var resource_path = params.get("resourcePath", "")
-    var action = params.get("action", "read")
     var full_path = resource_path
     if not full_path.begins_with("res://"):
         full_path = "res://" + full_path
 
-    if action == "read":
-        _read_theme(result, full_path)
-        return result
-
-    if action == "create":
-        var created = Theme.new()
-        var created_defaults = _apply_theme_defaults(created, params)
-        if not created_defaults.ok:
-            result.err("Invalid theme property: " + created_defaults.error)
-            return result.fail()
-        if not _save_resource(result, created, full_path):
-            return result
-        result.out("Theme created: " + full_path)
-        return result
-
-    var theme = _load_theme(result, full_path)
-    if theme == null:
-        return result
-
-    if action == "modify":
-        var modified = _apply_theme_defaults(theme, params)
-        if not modified.ok:
-            result.err("Invalid theme property: " + modified.error)
-            return result.fail()
-    else:
-        result.err("Unknown manage_theme action: " + action)
-        return result.fail()
-
-    if not _save_resource(result, theme, full_path):
-        return result
-    result.out("Theme " + action + " succeeded: " + full_path)
+    _read_theme(result, full_path)
     return result
 
 func _load_theme(result: Result, full_path):
@@ -2098,29 +2067,6 @@ func _load_theme(result: Result, full_path):
         result.ok = false
         return null
     return resource
-
-func _apply_theme_defaults(theme, params) -> DecodeResult:
-    if params.has("defaultFont"):
-        var value = params["defaultFont"]
-        if value is String and not value.begins_with("res://") and not value.begins_with("user://"):
-            value = "res://" + value
-        var font = _decode_object(value)
-        if not font.ok:
-            return font
-        if not (font.value is Font):
-            return DecodeResult.failure("defaultFont must be a Font resource")
-        theme.default_font = font.value
-    if params.has("defaultFontSize"):
-        var size = params["defaultFontSize"]
-        if not (size is int or size is float):
-            return DecodeResult.failure("defaultFontSize must be a number")
-        theme.default_font_size = int(size)
-    if params.has("defaultBaseScale"):
-        var scale = params["defaultBaseScale"]
-        if not (scale is int or scale is float):
-            return DecodeResult.failure("defaultBaseScale must be a number")
-        theme.default_base_scale = float(scale)
-    return DecodeResult.success(null)
 
 func _read_theme(result: Result, full_path):
     var theme = _load_theme(result, full_path)

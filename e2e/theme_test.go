@@ -2,7 +2,6 @@ package e2e
 
 import (
 	"encoding/json"
-	"path/filepath"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -41,66 +40,8 @@ func seedThemeResources(t *testing.T, session *mcp.ClientSession, prefix string)
 	}
 }
 
-func TestThemeTools(t *testing.T) {
-	t.Parallel()
-	root := newProject(t)
-	session := connectProject(t, root)
-	seedThemeResources(t, session, "themes/shared_")
-
-	t.Run("creates a theme with defaults", func(t *testing.T) {
-		const path = "themes/defaults.tres"
-		text := requireToolText(t, session, "create_theme", map[string]any{
-			"resourcePath":     path,
-			"defaultFont":      "themes/shared_font.tres",
-			"defaultFontSize":  16,
-			"defaultBaseScale": 1.5,
-		})
-		requirePrefix(t, text, "manage_theme succeeded.")
-		requireContains(t, readFile(t, filepath.Join(root, "themes", "defaults.tres")), `[gd_resource type="Theme"`)
-
-		payload := readThemePayload(t, session, path)
-		if payload.Path != path {
-			t.Errorf("path = %q", payload.Path)
-		}
-		if payload.DefaultFontSize == nil || *payload.DefaultFontSize != 16 {
-			t.Errorf("defaultFontSize = %v, want 16", payload.DefaultFontSize)
-		}
-		if payload.DefaultBaseScale == nil || *payload.DefaultBaseScale != 1.5 {
-			t.Errorf("defaultBaseScale = %v, want 1.5", payload.DefaultBaseScale)
-		}
-		if payload.DefaultFont["$type"] != "Resource" || payload.DefaultFont["path"] != "res://themes/shared_font.tres" {
-			t.Errorf("defaultFont = %v", payload.DefaultFont)
-		}
-		if len(payload.Types) != 0 {
-			t.Errorf("types = %v, want none", payload.Types)
-		}
-	})
-
-	t.Run("modifies theme defaults", func(t *testing.T) {
-		const path = "themes/modify.tres"
-		requireToolText(t, session, "create_theme", map[string]any{
-			"resourcePath":    path,
-			"defaultFontSize": 12,
-		})
-		requireToolText(t, session, "modify_theme", map[string]any{
-			"resourcePath":    path,
-			"defaultFontSize": 20,
-		})
-
-		payload := readThemePayload(t, session, path)
-		if payload.DefaultFontSize == nil || *payload.DefaultFontSize != 20 {
-			t.Errorf("defaultFontSize = %v, want 20", payload.DefaultFontSize)
-		}
-	})
-}
-
 func TestThemeErrors(t *testing.T) {
 	t.Parallel()
-	validationSession := connect(t)
-	t.Run("missing params", func(t *testing.T) {
-		requireToolError(t, validationSession, "create_theme", map[string]any{}, "resourcePath is required.")
-	})
-
 	root := newProject(t)
 	session := connectProject(t, root)
 

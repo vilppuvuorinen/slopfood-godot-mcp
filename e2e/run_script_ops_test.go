@@ -177,6 +177,46 @@ func run():
 			t.Errorf("types = %v, want CustomButton based on Button", payload.Types)
 		}
 	})
+
+	t.Run("theme create and modify defaults", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		seedThemeResources(t, session, "themes/smoke_")
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var theme := Theme.new()
+	theme.default_font = load("res://themes/smoke_font.tres")
+	theme.default_font_size = 16
+	theme.default_base_scale = 1.5
+	return ResourceSaver.save(theme, "res://themes/defaults.tres")
+`)
+
+		payload := readThemePayload(t, session, "themes/defaults.tres")
+		if payload.DefaultFontSize == nil || *payload.DefaultFontSize != 16 {
+			t.Fatalf("defaultFontSize = %v, want 16", payload.DefaultFontSize)
+		}
+		if payload.DefaultBaseScale == nil || *payload.DefaultBaseScale != 1.5 {
+			t.Fatalf("defaultBaseScale = %v, want 1.5", payload.DefaultBaseScale)
+		}
+		if payload.DefaultFont["$type"] != "Resource" || payload.DefaultFont["path"] != "res://themes/smoke_font.tres" {
+			t.Fatalf("defaultFont = %v", payload.DefaultFont)
+		}
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var theme: Theme = load("res://themes/defaults.tres")
+	theme.default_font_size = 20
+	return ResourceSaver.save(theme, "res://themes/defaults.tres")
+`)
+
+		payload = readThemePayload(t, session, "themes/defaults.tres")
+		if payload.DefaultFontSize == nil || *payload.DefaultFontSize != 20 {
+			t.Fatalf("defaultFontSize = %v, want 20", payload.DefaultFontSize)
+		}
+	})
 }
 
 type testSceneConnection struct {

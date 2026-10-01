@@ -96,14 +96,6 @@ func propertiesSchema(description string) map[string]any {
 	}
 }
 
-func withResourcePath(properties map[string]any) map[string]any {
-	properties["resourcePath"] = map[string]any{
-		"type":        "string",
-		"description": "Resource file path (relative to project)",
-	}
-	return properties
-}
-
 func statusOutputSchema(properties map[string]any) map[string]any {
 	return map[string]any{
 		"type":       "object",
@@ -161,14 +153,6 @@ func requiredArgsResult(fields ...string) mcp.ToolResult {
 	return mcp.ErrorResult(
 		joinFieldNames(fields)+" "+verb+" required.",
 		"Provide the missing fields",
-	)
-}
-
-// Without it, a payload-less modify would reload and re-save a resource as a no-op.
-func requiredOneOfResult(tool string, fields ...string) mcp.ToolResult {
-	return mcp.ErrorResult(
-		"The "+tool+" tool requires at least one of: "+strings.Join(fields, ", ")+".",
-		"Provide a value to change",
 	)
 }
 

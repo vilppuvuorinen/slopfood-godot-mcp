@@ -43,13 +43,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireRequired(t, "scenePath")
 			schema.requireStringProps(t, "scenePath", "rootNodeType")
 		}},
-		{"create_theme", "Create a Theme resource", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requireType(t, "defaultFontSize", "integer")
-			schema.requireType(t, "defaultBaseScale", "number")
-			schema.requirePropCount(t, 4)
-		}},
 		{"duplicate_scene_node", "Duplicate a node within a .tscn scene", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath")
 			schema.requireStringProps(t, "scenePath", "nodePath")
@@ -86,13 +79,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireStringProps(t, "scenePath", "nodePath")
 			schema.requireType(t, "properties", "object")
 			schema.requirePropCount(t, 3)
-		}},
-		{"modify_theme", "Set a Theme's default font, font size, or base scale", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requireType(t, "defaultFontSize", "integer")
-			schema.requireType(t, "defaultBaseScale", "number")
-			schema.requirePropCount(t, 4)
 		}},
 		{"move_scene_node", "Move a node to a new parent in a .tscn scene", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath", "newParentPath")

@@ -8,59 +8,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-func TestCreateThemeSchema(t *testing.T) {
-	tool := createTheme()
-	if tool.Name != "create_theme" {
-		t.Errorf("name = %q", tool.Name)
-	}
-	if tool.Description != "Create a Theme resource" {
-		t.Errorf("description = %q", tool.Description)
-	}
-	if !hasRequired(tool.InputSchema, "resourcePath") {
-		t.Errorf("required = %v", tool.InputSchema["required"])
-	}
-	props, ok := tool.InputSchema["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("properties = %T", tool.InputSchema["properties"])
-	}
-	wantTypes := map[string]string{
-		"resourcePath":     "string",
-		"defaultFontSize":  "integer",
-		"defaultBaseScale": "number",
-	}
-	for key, want := range wantTypes {
-		prop, propOK := props[key].(map[string]any)
-		if !propOK || prop["type"] != want {
-			t.Errorf("property %q = %v, want %s", key, props[key], want)
-		}
-	}
-	if prop, propOK := props["defaultFont"].(map[string]any); !propOK || prop["anyOf"] == nil {
-		t.Errorf("defaultFont = %v, want a value-contract schema", props["defaultFont"])
-	}
-}
-
-func TestModifyThemeSchema(t *testing.T) {
-	tool := modifyTheme()
-	if tool.Name != "modify_theme" {
-		t.Errorf("name = %q", tool.Name)
-	}
-	if tool.Description != "Set a Theme's default font, font size, or base scale" {
-		t.Errorf("description = %q", tool.Description)
-	}
-	if !hasRequired(tool.InputSchema, "resourcePath") {
-		t.Errorf("required = %v", tool.InputSchema["required"])
-	}
-	props, ok := tool.InputSchema["properties"].(map[string]any)
-	if !ok {
-		t.Fatalf("properties = %T", tool.InputSchema["properties"])
-	}
-	for _, key := range []string{"resourcePath", "defaultFont", "defaultFontSize", "defaultBaseScale"} {
-		if _, propOK := props[key].(map[string]any); !propOK {
-			t.Errorf("missing property %q", key)
-		}
-	}
-}
-
 func TestReadThemeSchema(t *testing.T) {
 	tool := readTheme()
 	if tool.Name != "read_theme" {
@@ -71,40 +18,6 @@ func TestReadThemeSchema(t *testing.T) {
 	}
 	if !hasRequired(tool.InputSchema, "resourcePath") {
 		t.Errorf("required = %v", tool.InputSchema["required"])
-	}
-}
-
-func TestCreateThemeForwardsDefaults(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, createTheme(), root, `{"resourcePath":"themes/main.tres","defaultFontSize":16,"defaultBaseScale":1.5,"defaultFont":"themes/font.tres"}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	text := result.Content[0].Text
-	for _, want := range []string{`"action":"create"`, `"defaultFontSize":16`, `"defaultBaseScale":1.5`, `"defaultFont":"themes/font.tres"`} {
-		if !strings.Contains(text, want) {
-			t.Errorf("text = %q, want it to contain %q", text, want)
-		}
-	}
-}
-
-func TestModifyThemeForwardsDefaults(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
-	root := t.TempDir()
-	makeProject(t, root)
-
-	result := callToolArgs(t, modifyTheme(), root, `{"resourcePath":"themes/main.tres","defaultFontSize":20}`)
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	text := result.Content[0].Text
-	for _, want := range []string{`"action":"modify"`, `"defaultFontSize":20`} {
-		if !strings.Contains(text, want) {
-			t.Errorf("text = %q, want it to contain %q", text, want)
-		}
 	}
 }
 
@@ -157,8 +70,6 @@ func TestThemeValidation(t *testing.T) {
 		args    string
 		want    string
 	}{
-		{name: "create missing resource path", tool: createTheme, args: `{}`, want: "resourcePath is required."},
-		{name: "modify without defaults", tool: modifyTheme, project: root, args: `{"resourcePath":"themes/main.tres"}`, want: "The modify_theme tool requires at least one of: defaultFont, defaultFontSize, defaultBaseScale."},
 		{name: "read missing resource path", tool: readTheme, project: root, args: `{}`, want: "resourcePath is required."},
 		{name: "invalid project path", tool: readTheme, project: "../escape", args: `{"resourcePath":"themes/main.tres"}`, want: "Invalid path."},
 		{name: "invalid resource path", tool: readTheme, project: root, args: `{"resourcePath":"../escape.tres"}`, want: "Invalid path."},

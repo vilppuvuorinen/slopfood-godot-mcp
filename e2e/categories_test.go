@@ -19,7 +19,7 @@ func TestEnableCategories(t *testing.T) {
 			"create_resource",   // assets
 			"read_animation",    // animation
 			"read_tileset",      // tileset
-			"create_theme",      // theme
+			"read_theme",        // theme
 		} {
 			findTool(t, session, name)
 		}
@@ -46,14 +46,14 @@ func TestEnableCategories(t *testing.T) {
 		animation := connectCategories(t, "animation")
 		findTool(t, animation, "read_animation")
 		requireToolAbsent(t, animation, "read_tileset")
-		requireToolAbsent(t, animation, "create_theme")
+		requireToolAbsent(t, animation, "read_theme")
 
 		tileset := connectCategories(t, "tileset")
 		findTool(t, tileset, "read_tileset")
 		requireToolAbsent(t, tileset, "read_animation")
 
 		theme := connectCategories(t, "theme")
-		findTool(t, theme, "create_theme")
+		findTool(t, theme, "read_theme")
 		requireToolAbsent(t, theme, "read_animation")
 	})
 
@@ -72,7 +72,7 @@ func TestEnableCategories(t *testing.T) {
 			"create_resource",   // assets
 			"read_animation",    // animation
 			"read_tileset",      // tileset
-			"create_theme",      // theme
+			"read_theme",        // theme
 		} {
 			findTool(t, session, name)
 		}
