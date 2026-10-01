@@ -321,14 +321,14 @@ func TestSessionSkipsNonFrameStdout(t *testing.T) {
 	}
 }
 
-func TestSessionReimportProjectDrivesScan(t *testing.T) {
+func TestSessionRescanProjectDrivesScan(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 	project := t.TempDir()
 
-	if _, _, _, err := s.Run(context.Background(), project, "reimport_project", nil); err != nil {
+	if _, _, _, err := s.Run(context.Background(), project, "rescan_project", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if got := f.startCount(t); got != 1 {
@@ -338,8 +338,8 @@ func TestSessionReimportProjectDrivesScan(t *testing.T) {
 	if len(reqs) != 1 {
 		t.Fatalf("requests = %+v, want one", reqs)
 	}
-	if reqs[0]["operation"] != "reimport_project" {
-		t.Errorf("operation = %v, want reimport_project", reqs[0]["operation"])
+	if reqs[0]["operation"] != "rescan_project" {
+		t.Errorf("operation = %v, want rescan_project", reqs[0]["operation"])
 	}
 }
 
@@ -423,7 +423,7 @@ func TestSessionFingerprintRescans(t *testing.T) {
 		t.Fatalf("read ops: %v", err)
 	}
 	got := strings.Fields(string(data))
-	want := []string{"op", "reimport_project", "op"}
+	want := []string{"op", "rescan_project", "op"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("operations = %v, want %v", got, want)
 	}

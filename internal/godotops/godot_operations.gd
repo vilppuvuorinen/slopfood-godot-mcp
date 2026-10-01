@@ -330,8 +330,8 @@ func dispatch(operation, params) -> Result:
             handler_result = attach_script(result, params)
         "run_script":
             handler_result = run_script(result, params)
-        "reimport_project":
-            handler_result = reimport_project(result, params)
+        "rescan_project":
+            handler_result = rescan_project(result, params)
         "manage_resource":
             handler_result = manage_resource(result, params)
         "manage_animation":
@@ -377,15 +377,15 @@ func _free_temp_nodes():
             node.free()
     _temp_nodes.clear()
 
-func reimport_project(result: Result, params) -> Result:
+func rescan_project(result: Result, params) -> Result:
     if not Engine.is_editor_hint():
-        result.err("reimport_project requires the editor filesystem; run it through the editor session")
+        result.err("rescan_project requires the editor filesystem; run it through the editor session")
         return result.fail()
     var filesystem := _filesystem
     if filesystem == null:
         filesystem = EditorInterface.get_resource_filesystem()
         if filesystem == null:
-            result.err("reimport_project requires the editor filesystem; run it through the editor session")
+            result.err("rescan_project requires the editor filesystem; run it through the editor session")
             return result.fail()
     var touched = params.get("paths", [])
     if touched is Array and touched.size() > 0:

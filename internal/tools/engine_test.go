@@ -101,13 +101,13 @@ func TestAttachScriptReconcilesInPlace(t *testing.T) {
 	}
 }
 
-func TestReimportProjectReconcilesSession(t *testing.T) {
+func TestRescanProjectReconcilesSession(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
 	sess := &fakeSession{}
 	ctx := WithEngine(withProject(context.Background(), root), sess)
-	out, err := reimportProject().Handler(ctx, json.RawMessage(`{}`))
+	out, err := rescanProject().Handler(ctx, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -118,8 +118,8 @@ func TestReimportProjectReconcilesSession(t *testing.T) {
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
-	if len(sess.runs) != 1 || sess.runs[0].operation != "reimport_project" {
-		t.Fatalf("session runs = %+v, want one reimport_project", sess.runs)
+	if len(sess.runs) != 1 || sess.runs[0].operation != "rescan_project" {
+		t.Fatalf("session runs = %+v, want one rescan_project", sess.runs)
 	}
 	if sess.runs[0].project != root {
 		t.Errorf("session project = %q, want %q", sess.runs[0].project, root)

@@ -301,7 +301,7 @@ func (s *Session) runRescanLocked(ctx context.Context, p *sessionProc) error {
 		ID        int            `json:"id"`
 		Operation string         `json:"operation"`
 		Params    map[string]any `json:"params"`
-	}{ID: id, Operation: "reimport_project", Params: map[string]any{}}
+	}{ID: id, Operation: "rescan_project", Params: map[string]any{}}
 	line, err := json.Marshal(payload)
 	if err != nil {
 		return fmt.Errorf("engine session: encode rescan request: %w", err)

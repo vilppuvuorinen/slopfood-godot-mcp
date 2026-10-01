@@ -107,10 +107,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireStringProps(t, "resourcePath")
 			schema.requirePropCount(t, 1)
 		}},
-		{"reimport_project", "Reimport a Godot project by scanning it in the editor, generating .import sidecars and missing resource UIDs", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t)
-			schema.requirePropCount(t, 0)
-		}},
 		{"remove_scene_node", "Remove a node from a scene file (headless)", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath")
 			schema.requireStringProps(t, "scenePath", "nodePath")
@@ -120,6 +116,10 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireRequired(t, "scenePath", "nodePath", "newName")
 			schema.requireStringProps(t, "scenePath", "nodePath", "newName")
 			schema.requirePropCount(t, 3)
+		}},
+		{"rescan_project", "Rescan a Godot project in the editor, generating .import sidecars and missing resource UIDs", func(t *testing.T, schema toolSchema) {
+			schema.requireRequired(t)
+			schema.requirePropCount(t, 0)
 		}},
 		{"run_script", "Run a GDScript in the live editor session and return its output", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "script")

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestReimportProjectTool(t *testing.T) {
+func TestRescanProjectTool(t *testing.T) {
 	t.Parallel()
 	root, session := seedScene(t, "scenes/main.tscn")
 
@@ -24,8 +24,8 @@ func TestReimportProjectTool(t *testing.T) {
 		"[node name=\"root\" type=\"Node2D\"]\nscript = ExtResource(\"1_used\")\n"
 	writeE2EFile(t, scenePath, beforeScene)
 
-	text := requireToolText(t, session, "reimport_project", map[string]any{})
-	requirePrefix(t, text, "Project reimported successfully.")
+	text := requireToolText(t, session, "rescan_project", map[string]any{})
+	requirePrefix(t, text, "Project rescanned successfully.")
 
 	generated := strings.TrimSpace(readFile(t, scriptPath+".uid"))
 	if !strings.HasPrefix(generated, "uid://") {
@@ -39,13 +39,13 @@ func TestReimportProjectTool(t *testing.T) {
 	requireContains(t, afterScene, `uid="uid://e2euseduid"`)
 }
 
-func TestReimportProjectAppliesSidecarEdit(t *testing.T) {
+func TestRescanProjectAppliesSidecarEdit(t *testing.T) {
 	t.Parallel()
 	root := newProject(t)
 	writeE2EFile(t, filepath.Join(root, "icon.svg"), `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><rect width="16" height="16" fill="red"/></svg>`)
 	session := connectProject(t, root)
 
-	requireToolText(t, session, "reimport_project", nil)
+	requireToolText(t, session, "rescan_project", nil)
 	sidecarPath := filepath.Join(root, "icon.svg.import")
 	sidecar := readFile(t, sidecarPath)
 	requireContains(t, sidecar,
@@ -57,7 +57,7 @@ func TestReimportProjectAppliesSidecarEdit(t *testing.T) {
 	edited := setImportParam(sidecar, "compress/mode", "1")
 	writeE2EFile(t, sidecarPath, edited)
 
-	requireToolText(t, session, "reimport_project", nil)
+	requireToolText(t, session, "rescan_project", nil)
 	requireContains(t, readFile(t, sidecarPath), "compress/mode=1")
 }
 
@@ -73,12 +73,12 @@ func setImportParam(sidecar, key, value string) string {
 	return sidecar + "\n[params]\n\n" + key + "=" + value + "\n"
 }
 
-func TestReimportProjectErrors(t *testing.T) {
+func TestRescanProjectErrors(t *testing.T) {
 	t.Parallel()
 	t.Run("not a project", func(t *testing.T) {
 		root := t.TempDir()
 		session := connectProject(t, root)
-		requireToolError(t, session, "reimport_project", map[string]any{},
+		requireToolError(t, session, "rescan_project", map[string]any{},
 			"Not a valid Godot project: "+root)
 	})
 }

@@ -162,8 +162,8 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"validate_scripts":     true,
 	}
 	nonDestructive := map[string]bool{
-		"create_project":   true,
-		"reimport_project": true,
+		"create_project": true,
+		"rescan_project": true,
 	}
 	idempotent := map[string]bool{
 		"attach_script":       true,
@@ -175,7 +175,7 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"modify_resource":     true,
 		"modify_scene_node":   true,
 		"move_scene_node":     true,
-		"reimport_project":    true,
+		"rescan_project":      true,
 		"remove_scene_node":   true,
 		"rename_scene_node":   true,
 	}

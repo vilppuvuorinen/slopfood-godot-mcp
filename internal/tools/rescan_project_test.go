@@ -9,12 +9,12 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-func TestReimportProjectSchema(t *testing.T) {
-	tool := reimportProject()
-	if tool.Name != "reimport_project" {
+func TestRescanProjectSchema(t *testing.T) {
+	tool := rescanProject()
+	if tool.Name != "rescan_project" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Reimport a Godot project by scanning it in the editor, generating .import sidecars and missing resource UIDs" {
+	if tool.Description != "Rescan a Godot project in the editor, generating .import sidecars and missing resource UIDs" {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
@@ -43,13 +43,13 @@ func (s *recordingSession) Run(_ context.Context, project, operation string, par
 	return s.stdout, s.stderr, s.exit, s.err
 }
 
-func TestReimportProjectSuccess(t *testing.T) {
+func TestRescanProjectSuccess(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
 	sess := &recordingSession{stdout: "Scanned project sources\n"}
 	ctx := WithEngine(withProject(context.Background(), root), sess)
-	out, err := reimportProject().Handler(ctx, json.RawMessage(`{}`))
+	out, err := rescanProject().Handler(ctx, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -64,7 +64,7 @@ func TestReimportProjectSuccess(t *testing.T) {
 		t.Fatalf("content = %+v", result.Content)
 	}
 	text := result.Content[0].Text
-	if !strings.HasPrefix(text, "Project reimported successfully.") {
+	if !strings.HasPrefix(text, "Project rescanned successfully.") {
 		t.Errorf("text = %q", text)
 	}
 	if !strings.Contains(text, "Scanned project sources") {
@@ -73,15 +73,15 @@ func TestReimportProjectSuccess(t *testing.T) {
 	if len(sess.runs) != 1 {
 		t.Fatalf("session runs = %+v, want one", sess.runs)
 	}
-	if sess.runs[0].operation != "reimport_project" {
-		t.Errorf("session operation = %q, want reimport_project", sess.runs[0].operation)
+	if sess.runs[0].operation != "rescan_project" {
+		t.Errorf("session operation = %q, want rescan_project", sess.runs[0].operation)
 	}
 	if sess.runs[0].project != root {
 		t.Errorf("session project = %q, want the bound root %q", sess.runs[0].project, root)
 	}
 }
 
-func TestReimportProjectValidation(t *testing.T) {
+func TestRescanProjectValidation(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 	notAProject := t.TempDir()
@@ -98,7 +98,7 @@ func TestReimportProjectValidation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, reimportProject(), tt.project, tt.args)
+			result := callToolArgs(t, rescanProject(), tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -109,13 +109,13 @@ func TestReimportProjectValidation(t *testing.T) {
 	}
 }
 
-func TestReimportProjectScriptFailure(t *testing.T) {
+func TestRescanProjectScriptFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	sess := &recordingSession{stderr: "Failed to reimport project: boom", exit: 1}
+	sess := &recordingSession{stderr: "Failed to rescan project: boom", exit: 1}
 	ctx := WithEngine(withProject(context.Background(), root), sess)
-	out, err := reimportProject().Handler(ctx, json.RawMessage(`{}`))
+	out, err := rescanProject().Handler(ctx, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -129,7 +129,7 @@ func TestReimportProjectScriptFailure(t *testing.T) {
 	if len(result.Content) != 2 {
 		t.Fatalf("content = %+v", result.Content)
 	}
-	if !strings.HasPrefix(result.Content[0].Text, "Failed to reimport project: ") {
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to rescan project: ") {
 		t.Errorf("message = %q", result.Content[0].Text)
 	}
 	if !strings.HasPrefix(result.Content[1].Text, "Possible solutions:") {
@@ -137,13 +137,13 @@ func TestReimportProjectScriptFailure(t *testing.T) {
 	}
 }
 
-func TestReimportProjectSessionFailure(t *testing.T) {
+func TestRescanProjectSessionFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
 	sess := &recordingSession{err: context.DeadlineExceeded}
 	ctx := WithEngine(withProject(context.Background(), root), sess)
-	out, err := reimportProject().Handler(ctx, json.RawMessage(`{}`))
+	out, err := rescanProject().Handler(ctx, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestReimportProjectSessionFailure(t *testing.T) {
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
-	if !strings.HasPrefix(result.Content[0].Text, "Failed to reimport project: ") {
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to rescan project: ") {
 		t.Errorf("message = %q", result.Content[0].Text)
 	}
 }

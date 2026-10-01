@@ -37,7 +37,7 @@ var AllCategories = []Category{
 
 var categoryTools = map[Category][]func() mcp.Tool{
 	CategoryProject: {
-		getGodotVersion, createProject, validateProject, reimportProject,
+		getGodotVersion, createProject, validateProject, rescanProject,
 	},
 	CategoryExport: {
 		exportProject, exportMeshLibrary,
