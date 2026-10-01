@@ -1808,42 +1808,11 @@ const ANIMATION_INTERPOLATIONS = {
 
 func manage_animation(result: Result, params) -> Result:
     var resource_path = params.get("resourcePath", "")
-    var action = params.get("action", "read")
     var full_path = resource_path
     if not full_path.begins_with("res://"):
         full_path = "res://" + full_path
 
-    if action == "read":
-        _read_animation(result, full_path)
-        return result
-
-    if action == "create":
-        var created = Animation.new()
-        var created_properties = _apply_animation_properties(created, params)
-        if not created_properties.ok:
-            result.err("Invalid animation property: " + created_properties.error)
-            return result.fail()
-        if not _save_resource(result, created, full_path):
-            return result
-        result.out("Animation created: " + full_path)
-        return result
-
-    var animation = _load_animation(result, full_path)
-    if animation == null:
-        return result
-
-    if action == "modify":
-        var modified = _apply_animation_properties(animation, params)
-        if not modified.ok:
-            result.err("Invalid animation property: " + modified.error)
-            return result.fail()
-    else:
-        result.err("Unknown manage_animation action: " + action)
-        return result.fail()
-
-    if not _save_resource(result, animation, full_path):
-        return result
-    result.out("Animation " + action + " succeeded: " + full_path)
+    _read_animation(result, full_path)
     return result
 
 func _load_animation(result: Result, full_path):
@@ -1861,24 +1830,6 @@ func _load_animation(result: Result, full_path):
         result.ok = false
         return null
     return resource
-
-func _apply_animation_properties(animation, params) -> DecodeResult:
-    if params.has("length"):
-        var length = params["length"]
-        if not (length is int or length is float):
-            return DecodeResult.failure("length must be a number")
-        animation.length = float(length)
-    if params.has("loopMode"):
-        var mode = str(params["loopMode"])
-        if not ANIMATION_LOOP_MODES.has(mode):
-            return DecodeResult.failure("unknown loopMode: " + mode)
-        animation.loop_mode = ANIMATION_LOOP_MODES[mode]
-    if params.has("step"):
-        var step = params["step"]
-        if not (step is int or step is float):
-            return DecodeResult.failure("step must be a number")
-        animation.step = float(step)
-    return DecodeResult.success(null)
 
 func _require_tagged_type(value, type_id, label) -> DecodeResult:
     if not (value is Dictionary) or not value.has("$type"):

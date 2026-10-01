@@ -28,13 +28,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireStringProps(t, "scenePath", "nodePath")
 			schema.requirePropCount(t, 2)
 		}},
-		{"create_animation", "Create an Animation resource", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath")
-			schema.requireStringProps(t, "resourcePath", "loopMode")
-			schema.requireType(t, "length", "number")
-			schema.requireType(t, "step", "number")
-			schema.requirePropCount(t, 4)
-		}},
 		{"create_project", "Create a new Godot project from scratch", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "projectName")
 			schema.requireProps(t, "projectName", "dotnet")
@@ -81,13 +74,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requirePropCount(t, 3)
 			schema.requireStringProps(t, "presetName", "outputPath")
 			schema.requireType(t, "debug", "boolean")
-		}},
-		{"modify_animation", "Set an Animation resource's length, loop mode, or step", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath")
-			schema.requireStringProps(t, "resourcePath", "loopMode")
-			schema.requireType(t, "length", "number")
-			schema.requireType(t, "step", "number")
-			schema.requirePropCount(t, 4)
 		}},
 		{"modify_resource", "Set properties on a .tres/.res resource file", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "resourcePath", "properties")

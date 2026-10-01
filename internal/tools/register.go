@@ -59,7 +59,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		createResource, modifyResource, readBinaryResource,
 	},
 	CategoryAnim: {
-		createAnimation, modifyAnimation, readAnimation,
+		readAnimation,
 	},
 	CategoryTileset: {
 		readTileset,

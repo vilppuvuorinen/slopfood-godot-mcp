@@ -28,10 +28,9 @@ func themeTypeByName(payload testThemePayload, name string) map[string]any {
 }
 
 // TestRunScriptEditorOperations smoke tests the editor-mode mutations that the
-// removed tileset, animation-track, and theme-item tools used to wrap. The
-// scripts run in the live editor session and the results are read back with the
-// fixed read tools, so a bridge change that breaks editor-mode mutation fails
-// here.
+// removed mutation tools used to wrap. The scripts run in the live editor
+// session and the results are read back with the fixed read tools, so a bridge
+// change that breaks editor-mode mutation fails here.
 func TestRunScriptEditorOperations(t *testing.T) {
 	t.Parallel()
 
@@ -106,6 +105,41 @@ func run():
 		value, _ := key["value"].(map[string]any)
 		if value["$type"] != "Vector2" || value["x"] != float64(10) || value["y"] != float64(20) {
 			t.Errorf("key value = %v, want Vector2(10, 20)", key["value"])
+		}
+	})
+
+	t.Run("animation create and modify properties", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	DirAccess.make_dir_recursive_absolute("res://anims")
+	var animation := Animation.new()
+	animation.length = 2.0
+	animation.loop_mode = Animation.LOOP_LINEAR
+	animation.step = 0.25
+	return ResourceSaver.save(animation, "res://anims/props.tres")
+`)
+
+		payload := readAnimationPayload(t, session, "anims/props.tres")
+		if payload.Length != 2 || payload.LoopMode != "linear" || payload.Step != 0.25 {
+			t.Fatalf("payload = %+v, want length 2 linear step 0.25", payload)
+		}
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var animation: Animation = load("res://anims/props.tres")
+	animation.length = 3.0
+	animation.loop_mode = Animation.LOOP_PINGPONG
+	return ResourceSaver.save(animation, "res://anims/props.tres")
+`)
+
+		payload = readAnimationPayload(t, session, "anims/props.tres")
+		if payload.Length != 3 || payload.LoopMode != "pingpong" {
+			t.Fatalf("payload = %+v, want length 3 pingpong", payload)
 		}
 	})
 

@@ -17,7 +17,7 @@ func TestEnableCategories(t *testing.T) {
 			"attach_script",     // script
 			"run_script",        // script
 			"create_resource",   // assets
-			"create_animation",  // animation
+			"read_animation",    // animation
 			"read_tileset",      // tileset
 			"create_theme",      // theme
 		} {
@@ -44,17 +44,17 @@ func TestEnableCategories(t *testing.T) {
 
 	t.Run("animation, tileset, and theme are independent", func(t *testing.T) {
 		animation := connectCategories(t, "animation")
-		findTool(t, animation, "create_animation")
+		findTool(t, animation, "read_animation")
 		requireToolAbsent(t, animation, "read_tileset")
 		requireToolAbsent(t, animation, "create_theme")
 
 		tileset := connectCategories(t, "tileset")
 		findTool(t, tileset, "read_tileset")
-		requireToolAbsent(t, tileset, "create_animation")
+		requireToolAbsent(t, tileset, "read_animation")
 
 		theme := connectCategories(t, "theme")
 		findTool(t, theme, "create_theme")
-		requireToolAbsent(t, theme, "create_animation")
+		requireToolAbsent(t, theme, "read_animation")
 	})
 
 	t.Run("all registers every category", func(t *testing.T) {
@@ -70,7 +70,7 @@ func TestEnableCategories(t *testing.T) {
 			"attach_script",     // script
 			"run_script",        // script
 			"create_resource",   // assets
-			"create_animation",  // animation
+			"read_animation",    // animation
 			"read_tileset",      // tileset
 			"create_theme",      // theme
 		} {
