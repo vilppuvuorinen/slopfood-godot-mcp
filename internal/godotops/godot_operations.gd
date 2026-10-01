@@ -1831,16 +1831,6 @@ func _load_animation(result: Result, full_path):
         return null
     return resource
 
-func _require_tagged_type(value, type_id, label) -> DecodeResult:
-    if not (value is Dictionary) or not value.has("$type"):
-        return DecodeResult.failure("expected a tagged {\"$type\": ...} value for " + label)
-    var decoded = _decode_typed(value)
-    if not decoded.ok:
-        return decoded
-    if typeof(decoded.value) != type_id:
-        return DecodeResult.failure(label + " must be a " + type_string(type_id))
-    return decoded
-
 func _track_type_name(type_id) -> String:
     for name in ANIMATION_TRACK_TYPES:
         if ANIMATION_TRACK_TYPES[name] == type_id:
@@ -2106,7 +2096,6 @@ func _theme_items_to_json(theme, type_id, theme_type) -> Dictionary:
 
 func manage_tilemap(result: Result, params) -> Result:
     var scene_path = params.get("scenePath", "")
-    var action = params.get("action", "read")
     var node_path = str(params.get("nodePath", ""))
     var full_path = scene_path
     if not full_path.begins_with("res://"):
@@ -2128,60 +2117,8 @@ func manage_tilemap(result: Result, params) -> Result:
         result.err("Node is not a TileMapLayer: " + node_path)
         return result.fail()
 
-    if action == "read":
-        _read_tilemap_node(result, target, full_path, node_path)
-        return result
-
-    match action:
-        "setCell":
-            var set_cell = _set_tilemap_cell(target, params)
-            if not set_cell.ok:
-                result.err("Invalid tilemap cell: " + set_cell.error)
-                return result.fail()
-        "eraseCell":
-            var coords = _require_tagged_type(params.get("coords"), TYPE_VECTOR2I, "coords")
-            if not coords.ok:
-                result.err("Invalid tilemap cell: " + coords.error)
-                return result.fail()
-            target.erase_cell(coords.value)
-        "clear":
-            target.clear()
-        _:
-            result.err("Unknown manage_tilemap action: " + action)
-            return result.fail()
-
-    var packed_scene = PackedScene.new()
-    var pack_error = packed_scene.pack(scene_root)
-    if pack_error != OK:
-        result.err("Failed to pack scene after tilemap edit: " + str(pack_error))
-        return result.fail()
-    var save_error = ResourceSaver.save(packed_scene, full_path)
-    if save_error != OK:
-        result.err("Failed to save tilemap scene: " + str(save_error))
-        return result.fail()
-    _reconcile_path(full_path)
-    result.out("TileMap " + action + " succeeded: " + full_path)
+    _read_tilemap_node(result, target, full_path, node_path)
     return result
-
-func _set_tilemap_cell(target, params) -> DecodeResult:
-    var coords = _require_tagged_type(params.get("coords"), TYPE_VECTOR2I, "coords")
-    if not coords.ok:
-        return coords
-    var atlas_coords = _require_tagged_type(params.get("atlasCoords"), TYPE_VECTOR2I, "atlasCoords")
-    if not atlas_coords.ok:
-        return atlas_coords
-    if not params.has("sourceId"):
-        return DecodeResult.failure("sourceId is required")
-    var source_id = int(params["sourceId"])
-    if target.tile_set == null:
-        return DecodeResult.failure("the node has no tileSet")
-    if not target.tile_set.has_source(source_id):
-        return DecodeResult.failure("unknown sourceId: " + str(source_id))
-    var alternative_id = 0
-    if params.has("alternativeTile"):
-        alternative_id = int(params["alternativeTile"])
-    target.set_cell(coords.value, source_id, atlas_coords.value, alternative_id)
-    return DecodeResult.success(null)
 
 func _read_tilemap_node(result: Result, target, full_path, node_path):
     var cells = []

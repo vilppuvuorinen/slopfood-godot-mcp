@@ -23,11 +23,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireStringProps(t, "scenePath", "nodePath", "scriptPath")
 			schema.requirePropCount(t, 3)
 		}},
-		{"clear_tilemap", "Clear every cell on a TileMapLayer node in a scene", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath", "nodePath")
-			schema.requireStringProps(t, "scenePath", "nodePath")
-			schema.requirePropCount(t, 2)
-		}},
 		{"create_project", "Create a new Godot project from scratch", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "projectName")
 			schema.requireProps(t, "projectName", "dotnet")
@@ -47,11 +42,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireRequired(t, "scenePath", "nodePath")
 			schema.requireStringProps(t, "scenePath", "nodePath")
 			schema.requirePropCount(t, 2)
-		}},
-		{"erase_tilemap_cell", "Erase a tile from a TileMapLayer node in a scene", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath", "nodePath", "coords")
-			schema.requireStringProps(t, "scenePath", "nodePath")
-			schema.requirePropCount(t, 3)
 		}},
 		{"export_mesh_library", "Export a scene as a MeshLibrary resource", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "outputPath")
@@ -135,13 +125,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireRequired(t, "script")
 			schema.requireStringProps(t, "script")
 			schema.requirePropCount(t, 1)
-		}},
-		{"set_tilemap_cell", "Place a tile on a TileMapLayer node in a scene", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath", "nodePath", "coords", "sourceId", "atlasCoords")
-			schema.requireStringProps(t, "scenePath", "nodePath")
-			schema.requireType(t, "sourceId", "integer")
-			schema.requireType(t, "alternativeTile", "integer")
-			schema.requirePropCount(t, 6)
 		}},
 		{"validate_project", "Load project.godot with the Godot engine and report whether it parsed", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t)

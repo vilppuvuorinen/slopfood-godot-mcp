@@ -116,8 +116,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 27 {
-		t.Errorf("registered %d tools, want 27", len(seen))
+	if len(seen) != 24 {
+		t.Errorf("registered %d tools, want 24", len(seen))
 	}
 }
 
@@ -167,11 +167,9 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	}
 	idempotent := map[string]bool{
 		"attach_script":       true,
-		"clear_tilemap":       true,
 		"create_project":      true,
 		"create_resource":     true,
 		"create_scene":        true,
-		"erase_tilemap_cell":  true,
 		"export_mesh_library": true,
 		"export_project":      true,
 		"modify_resource":     true,
@@ -180,7 +178,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"reimport_project":    true,
 		"remove_scene_node":   true,
 		"rename_scene_node":   true,
-		"set_tilemap_cell":    true,
 	}
 	for _, category := range AllCategories {
 		for _, newTool := range categoryTools[category] {

@@ -217,6 +217,72 @@ func run():
 			t.Fatalf("defaultFontSize = %v, want 20", payload.DefaultFontSize)
 		}
 	})
+
+	t.Run("tilemap set, erase, and clear cells", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		seedAtlasTexture(t, root)
+		setupTestTileSet(t, session, "tiles/set_scripted.tres")
+		setupTilemapScene(t, session, "scenes/tilemap_scripted.tscn", "tiles/set_scripted.tres")
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var scene: PackedScene = load("res://scenes/tilemap_scripted.tscn")
+	var root: Node = scene.instantiate()
+	var ground: TileMapLayer = root.get_node("Ground")
+	ground.set_cell(Vector2i(1, 2), 0, Vector2i(0, 0))
+	ground.set_cell(Vector2i(0, 0), 0, Vector2i(0, 0))
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	return ResourceSaver.save(packed, "res://scenes/tilemap_scripted.tscn")
+`)
+
+		payload := readTilemapPayload(t, session, "scenes/tilemap_scripted.tscn")
+		if payload.TileSet != "tiles/set_scripted.tres" || len(payload.UsedCells) != 2 {
+			t.Fatalf("payload = %+v, want tileset and two cells", payload)
+		}
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var scene: PackedScene = load("res://scenes/tilemap_scripted.tscn")
+	var root: Node = scene.instantiate()
+	var ground: TileMapLayer = root.get_node("Ground")
+	ground.erase_cell(Vector2i(1, 2))
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	return ResourceSaver.save(packed, "res://scenes/tilemap_scripted.tscn")
+`)
+
+		payload = readTilemapPayload(t, session, "scenes/tilemap_scripted.tscn")
+		if len(payload.UsedCells) != 1 {
+			t.Fatalf("payload = %+v, want one cell after erase", payload)
+		}
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var scene: PackedScene = load("res://scenes/tilemap_scripted.tscn")
+	var root: Node = scene.instantiate()
+	var ground: TileMapLayer = root.get_node("Ground")
+	ground.clear()
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	return ResourceSaver.save(packed, "res://scenes/tilemap_scripted.tscn")
+`)
+
+		payload = readTilemapPayload(t, session, "scenes/tilemap_scripted.tscn")
+		if len(payload.UsedCells) != 0 {
+			t.Fatalf("payload = %+v, want no cells after clear", payload)
+		}
+	})
 }
 
 type testSceneConnection struct {

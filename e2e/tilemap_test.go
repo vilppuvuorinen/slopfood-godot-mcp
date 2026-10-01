@@ -64,18 +64,6 @@ func tileAlternatives(t *testing.T, payload testTilesetPayload) []map[string]any
 	return out
 }
 
-// The base tile is alternative 0, so a fresh alternative carries a positive id.
-func requireExtraAlternative(t *testing.T, payload testTilesetPayload) int {
-	t.Helper()
-	for _, alt := range tileAlternatives(t, payload) {
-		if id, ok := alt["id"].(float64); ok && id != 0 {
-			return int(id)
-		}
-	}
-	t.Fatalf("no non-base alternative in %v", tileAlternatives(t, payload))
-	return 0
-}
-
 // A GradientTexture2D needs no import step, unlike a raw PNG.
 func seedAtlasTexture(t *testing.T, root string) {
 	t.Helper()
