@@ -39,10 +39,7 @@ func TestAnimationErrors(t *testing.T) {
 	})
 
 	t.Run("not an animation resource", func(t *testing.T) {
-		requireToolText(t, session, "create_resource", map[string]any{
-			"resourcePath": "resources/mat.tres",
-			"resourceType": "StandardMaterial3D",
-		})
+		seedResource(t, session, "resources/mat.tres", "StandardMaterial3D")
 		res := callTool(t, session, "read_animation", map[string]any{"resourcePath": "resources/mat.tres"})
 		if !res.IsError {
 			t.Fatal("expected an error result")

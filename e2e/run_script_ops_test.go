@@ -283,6 +283,39 @@ func run():
 			t.Fatalf("payload = %+v, want no cells after clear", payload)
 		}
 	})
+
+	t.Run("resource create and modify properties", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var material := StandardMaterial3D.new()
+	material.metallic = 0.5
+	material.albedo_color = Color(1, 0, 0, 1)
+	DirAccess.make_dir_recursive_absolute("res://materials")
+	return ResourceSaver.save(material, "res://materials/scripted.res")
+`)
+
+		text := requireToolText(t, session, "read_binary_resource", map[string]any{
+			"resourcePath": "materials/scripted.res",
+		})
+		requireContains(t, text, `"type": "StandardMaterial3D"`, `"metallic": 0.5`, `"$type": "Color"`)
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var material: StandardMaterial3D = load("res://materials/scripted.res")
+	material.metallic = 0.75
+	return ResourceSaver.save(material, "res://materials/scripted.res")
+`)
+
+		text = requireToolText(t, session, "read_binary_resource", map[string]any{
+			"resourcePath": "materials/scripted.res",
+		})
+		requireContains(t, text, `"metallic": 0.75`)
+	})
 }
 
 type testSceneConnection struct {

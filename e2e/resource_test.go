@@ -15,17 +15,36 @@ const resourceTres = `[gd_resource type="StandardMaterial3D" format=3]
 metallic = 0.5
 `
 
+// seedResource creates a resource through run_script, since resource creation
+// now goes through the live editor session rather than a dedicated tool.
+func seedResource(t *testing.T, session *mcp.ClientSession, resourcePath, resourceType string) {
+	t.Helper()
+	requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var resource := `+resourceType+`.new()
+	DirAccess.make_dir_recursive_absolute("res://`+resourceDir(resourcePath)+`")
+	return ResourceSaver.save(resource, "res://`+resourcePath+`")
+`)
+}
+
+func resourceDir(resourcePath string) string {
+	dir, _ := filepath.Split(resourcePath)
+	return strings.TrimSuffix(dir, "/")
+}
+
 // read_binary_resource rejects text .tres, so the fixture must be a binary file.
 func seedMaterialRes(t *testing.T, session *mcp.ClientSession, resourcePath string) {
 	t.Helper()
-	requireToolText(t, session, "create_resource", map[string]any{
-		"resourcePath": resourcePath,
-		"resourceType": "StandardMaterial3D",
-		"properties": map[string]any{
-			"metallic":     0.5,
-			"albedo_color": map[string]any{"$type": "Color", "r": 1, "g": 0, "b": 0, "a": 1},
-		},
-	})
+	requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var material := StandardMaterial3D.new()
+	material.metallic = 0.5
+	material.albedo_color = Color(1, 0, 0, 1)
+	DirAccess.make_dir_recursive_absolute("res://`+resourceDir(resourcePath)+`")
+	return ResourceSaver.save(material, "res://`+resourcePath+`")
+`)
 }
 
 func TestResourceTools(t *testing.T) {
@@ -96,11 +115,13 @@ func TestResourceTools(t *testing.T) {
 		const path = "resources/modify.res"
 		seedMaterialRes(t, session, path)
 
-		modifyText := requireToolText(t, session, "modify_resource", map[string]any{
-			"resourcePath": path,
-			"properties":   map[string]any{"metallic": 0.75},
-		})
-		requirePrefix(t, modifyText, "manage_resource succeeded.")
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var material: StandardMaterial3D = load("res://`+path+`")
+	material.metallic = 0.75
+	return ResourceSaver.save(material, "res://`+path+`")
+`)
 
 		readText := requireToolText(t, session, "read_binary_resource", map[string]any{
 			"resourcePath": path,
@@ -109,14 +130,14 @@ func TestResourceTools(t *testing.T) {
 	})
 
 	t.Run("creates then reads a resource", func(t *testing.T) {
-		createText := requireToolText(t, session, "create_resource", map[string]any{
-			"resourcePath": "materials/red.res",
-			"resourceType": "StandardMaterial3D",
-			"properties": map[string]any{
-				"albedo_color": map[string]any{"$type": "Color", "r": 1, "g": 0, "b": 0, "a": 1},
-			},
-		})
-		requirePrefix(t, createText, "manage_resource succeeded.")
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(1, 0, 0, 1)
+	DirAccess.make_dir_recursive_absolute("res://materials")
+	return ResourceSaver.save(material, "res://materials/red.res")
+`)
 
 		readText := requireToolText(t, session, "read_binary_resource", map[string]any{
 			"resourcePath": "materials/red.res",
@@ -141,12 +162,14 @@ func TestResourceTheme(t *testing.T) {
 	t.Parallel()
 	_, session := sharedResourceSession(t)
 
-	createText := requireToolText(t, session, "create_resource", map[string]any{
-		"resourcePath": "themes/main.res",
-		"resourceType": "Theme",
-		"properties":   map[string]any{"default_font_size": 16},
-	})
-	requirePrefix(t, createText, "manage_resource succeeded.")
+	requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var theme := Theme.new()
+	theme.default_font_size = 16
+	DirAccess.make_dir_recursive_absolute("res://themes")
+	return ResourceSaver.save(theme, "res://themes/main.res")
+`)
 
 	readText := requireToolText(t, session, "read_binary_resource", map[string]any{
 		"resourcePath": "themes/main.res",
@@ -154,11 +177,13 @@ func TestResourceTheme(t *testing.T) {
 	requireContains(t, readText, `"type": "Theme"`, `"properties"`, `"default_font_size": 16`)
 	requireNotContains(t, readText, "THEME_JSON_START")
 
-	modifyText := requireToolText(t, session, "modify_resource", map[string]any{
-		"resourcePath": "themes/main.res",
-		"properties":   map[string]any{"default_font_size": 20},
-	})
-	requirePrefix(t, modifyText, "manage_resource succeeded.")
+	requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var theme: Theme = load("res://themes/main.res")
+	theme.default_font_size = 20
+	return ResourceSaver.save(theme, "res://themes/main.res")
+`)
 
 	reReadText := requireToolText(t, session, "read_binary_resource", map[string]any{
 		"resourcePath": "themes/main.res",
@@ -170,21 +195,25 @@ func TestResourceThemeConvertsTypes(t *testing.T) {
 	t.Parallel()
 	_, session := sharedResourceSession(t)
 
-	requireToolText(t, session, "create_resource", map[string]any{
-		"resourcePath": "themes/panel_box.res",
-		"resourceType": "StyleBoxFlat",
-	})
+	requireScriptSave(t, session, `extends RefCounted
 
-	createText := requireToolText(t, session, "create_resource", map[string]any{
-		"resourcePath": "themes/main.res",
-		"resourceType": "Theme",
-		"properties": map[string]any{
-			"Label/colors/font_color":    map[string]any{"$type": "Color", "r": 1, "g": 0, "b": 0, "a": 1},
-			"Label/font_sizes/font_size": 24,
-			"Panel/styles/panel":         "res://themes/panel_box.res",
-		},
-	})
-	requirePrefix(t, createText, "manage_resource succeeded.")
+func run():
+	DirAccess.make_dir_recursive_absolute("res://themes")
+	return ResourceSaver.save(StyleBoxFlat.new(), "res://themes/panel_box.res")
+`)
+	// run_script does not reconcile the filesystem, so the referenced resource
+	// needs a scan to register its UID before the theme can load it.
+	requireToolText(t, session, "rescan_project", nil)
+
+	requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var theme := Theme.new()
+	theme.set_theme_item(Theme.DATA_TYPE_COLOR, "font_color", "Label", Color(1, 0, 0, 1))
+	theme.set_theme_item(Theme.DATA_TYPE_FONT_SIZE, "font_size", "Label", 24)
+	theme.set_theme_item(Theme.DATA_TYPE_STYLEBOX, "panel", "Panel", load("res://themes/panel_box.res"))
+	return ResourceSaver.save(theme, "res://themes/main.res")
+`)
 
 	readText := requireToolText(t, session, "read_binary_resource", map[string]any{
 		"resourcePath": "themes/main.res",
@@ -208,13 +237,13 @@ func TestResourceThemeConvertsTypes(t *testing.T) {
 		t.Errorf("panel = %#v, want a reference to panel_box.res", readPayload.Properties["Panel/styles/panel"])
 	}
 
-	modifyText := requireToolText(t, session, "modify_resource", map[string]any{
-		"resourcePath": "themes/main.res",
-		"properties": map[string]any{
-			"Label/colors/font_color": map[string]any{"$type": "Color", "r": 0, "g": 0, "b": 1, "a": 1},
-		},
-	})
-	requirePrefix(t, modifyText, "manage_resource succeeded.")
+	requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var theme: Theme = load("res://themes/main.res")
+	theme.set_theme_item(Theme.DATA_TYPE_COLOR, "font_color", "Label", Color(0, 0, 1, 1))
+	return ResourceSaver.save(theme, "res://themes/main.res")
+`)
 
 	reReadText := requireToolText(t, session, "read_binary_resource", map[string]any{
 		"resourcePath": "themes/main.res",
@@ -235,19 +264,22 @@ func TestResourceThemeMoreCategories(t *testing.T) {
 	t.Parallel()
 	_, session := sharedResourceSession(t)
 
-	requireToolText(t, session, "create_resource", map[string]any{
-		"resourcePath": "themes/font.res",
-		"resourceType": "SystemFont",
-	})
+	requireScriptSave(t, session, `extends RefCounted
 
-	requireToolText(t, session, "create_resource", map[string]any{
-		"resourcePath": "themes/categories.res",
-		"resourceType": "Theme",
-		"properties": map[string]any{
-			"Label/constants/outline_size": 4,
-			"Label/fonts/font":             "res://themes/font.res",
-		},
-	})
+func run():
+	DirAccess.make_dir_recursive_absolute("res://themes")
+	return ResourceSaver.save(SystemFont.new(), "res://themes/font.res")
+`)
+	requireToolText(t, session, "rescan_project", nil)
+
+	requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var theme := Theme.new()
+	theme.set_theme_item(Theme.DATA_TYPE_CONSTANT, "outline_size", "Label", 4)
+	theme.set_theme_item(Theme.DATA_TYPE_FONT, "font", "Label", load("res://themes/font.res"))
+	return ResourceSaver.save(theme, "res://themes/categories.res")
+`)
 
 	readText := requireToolText(t, session, "read_binary_resource", map[string]any{
 		"resourcePath": "themes/categories.res",
@@ -272,63 +304,12 @@ func TestResourceErrors(t *testing.T) {
 	t.Parallel()
 	root, session := sharedResourceSession(t)
 
-	t.Run("missing params", func(t *testing.T) {
-		requireToolError(t, session, "create_resource", map[string]any{}, "resourcePath and resourceType are required.")
-	})
-
-	t.Run("create without resource type", func(t *testing.T) {
-		requireToolError(t, session, "create_resource", map[string]any{
-			"resourcePath": "materials/red.tres",
-		}, "resourcePath and resourceType are required.")
-	})
-
-	t.Run("modify without properties", func(t *testing.T) {
-		requireToolError(t, session, "modify_resource", map[string]any{
-			"resourcePath": "materials/red.tres",
-		}, "resourcePath and properties are required.")
-	})
-
 	t.Run("not a project", func(t *testing.T) {
 		notProject := t.TempDir()
 		notProjectSession := connectProject(t, notProject)
 		requireToolError(t, notProjectSession, "read_binary_resource", map[string]any{
 			"resourcePath": "mat.tres",
 		}, "Not a valid Godot project: "+notProject)
-	})
-
-	t.Run("unknown resource type", func(t *testing.T) {
-		res := callTool(t, session, "create_resource", map[string]any{
-			"resourcePath": "materials/unknown.tres",
-			"resourceType": "NotARealResource",
-		})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		requireContains(t, firstText(t, res), "Unknown resource type: NotARealResource")
-	})
-
-	t.Run("abstract resource type", func(t *testing.T) {
-		// Godot refuses to instantiate BaseMaterial3D directly.
-		res := callTool(t, session, "create_resource", map[string]any{
-			"resourcePath": "materials/abstract.tres",
-			"resourceType": "BaseMaterial3D",
-		})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		requireContains(t, firstText(t, res), "manage_resource failed", "Cannot instantiate resource type: BaseMaterial3D")
-	})
-
-	t.Run("non-resource type", func(t *testing.T) {
-		// Node is instantiable, so the failure is the Resource-subclass guard.
-		res := callTool(t, session, "create_resource", map[string]any{
-			"resourcePath": "materials/node.tres",
-			"resourceType": "Node",
-		})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		requireContains(t, firstText(t, res), "manage_resource failed", "Type Node is not a Resource subclass")
 	})
 
 	t.Run("resource not found", func(t *testing.T) {
@@ -351,18 +332,6 @@ func TestResourceErrors(t *testing.T) {
 			t.Fatal("expected an error result")
 		}
 		requireContains(t, firstText(t, res), "manage_resource failed", "Failed to load resource: res://resources/bad.res")
-	})
-
-	t.Run("invalid property value", func(t *testing.T) {
-		res := callTool(t, session, "create_resource", map[string]any{
-			"resourcePath": "materials/invalid.tres",
-			"resourceType": "StandardMaterial3D",
-			"properties":   map[string]any{"metallic": "not-a-number"},
-		})
-		if !res.IsError {
-			t.Fatal("expected an error result")
-		}
-		requireContains(t, firstText(t, res), "manage_resource failed", "Invalid property value")
 	})
 }
 

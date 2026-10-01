@@ -56,7 +56,7 @@ var categoryTools = map[Category][]func() mcp.Tool{
 		attachScript, validateScripts, runScript,
 	},
 	CategoryAssets: {
-		createResource, modifyResource, readBinaryResource,
+		readBinaryResource,
 	},
 	CategoryAnim: {
 		readAnimation,

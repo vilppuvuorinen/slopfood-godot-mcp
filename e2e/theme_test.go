@@ -33,10 +33,7 @@ func seedThemeResources(t *testing.T, session *mcp.ClientSession, prefix string)
 		"icon.tres": "GradientTexture2D",
 		"box.tres":  "StyleBoxFlat",
 	} {
-		requireToolText(t, session, "create_resource", map[string]any{
-			"resourcePath": prefix + name,
-			"resourceType": resourceType,
-		})
+		seedResource(t, session, prefix+name, resourceType)
 	}
 }
 
@@ -54,10 +51,7 @@ func TestThemeErrors(t *testing.T) {
 	})
 
 	t.Run("not a theme resource", func(t *testing.T) {
-		requireToolText(t, session, "create_resource", map[string]any{
-			"resourcePath": "resources/mat_theme.tres",
-			"resourceType": "StandardMaterial3D",
-		})
+		seedResource(t, session, "resources/mat_theme.tres", "StandardMaterial3D")
 		res := callTool(t, session, "read_theme", map[string]any{"resourcePath": "resources/mat_theme.tres"})
 		if !res.IsError {
 			t.Fatal("expected an error result")

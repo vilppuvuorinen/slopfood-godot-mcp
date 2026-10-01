@@ -8,18 +8,18 @@ func TestEnableCategories(t *testing.T) {
 		session := connectSession(t, nil)
 
 		for _, name := range []string{
-			"get_godot_version", // project
-			"validate_project",  // project
-			"export_project",    // export
-			"create_scene",      // scene
-			"add_node",          // node
-			"read_tilemap",      // tilemap
-			"attach_script",     // script
-			"run_script",        // script
-			"create_resource",   // assets
-			"read_animation",    // animation
-			"read_tileset",      // tileset
-			"read_theme",        // theme
+			"get_godot_version",    // project
+			"validate_project",     // project
+			"export_project",       // export
+			"create_scene",         // scene
+			"add_node",             // node
+			"read_tilemap",         // tilemap
+			"attach_script",        // script
+			"run_script",           // script
+			"read_binary_resource", // assets
+			"read_animation",       // animation
+			"read_tileset",         // tileset
+			"read_theme",           // theme
 		} {
 			findTool(t, session, name)
 		}
@@ -61,18 +61,18 @@ func TestEnableCategories(t *testing.T) {
 		session := connectCategories(t, "all")
 
 		for _, name := range []string{
-			"get_godot_version", // project
-			"validate_project",  // project
-			"export_project",    // export
-			"create_scene",      // scene
-			"add_node",          // node
-			"read_tilemap",      // tilemap
-			"attach_script",     // script
-			"run_script",        // script
-			"create_resource",   // assets
-			"read_animation",    // animation
-			"read_tileset",      // tileset
-			"read_theme",        // theme
+			"get_godot_version",    // project
+			"validate_project",     // project
+			"export_project",       // export
+			"create_scene",         // scene
+			"add_node",             // node
+			"read_tilemap",         // tilemap
+			"attach_script",        // script
+			"run_script",           // script
+			"read_binary_resource", // assets
+			"read_animation",       // animation
+			"read_tileset",         // tileset
+			"read_theme",           // theme
 		} {
 			findTool(t, session, name)
 		}

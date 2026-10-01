@@ -28,12 +28,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireProps(t, "projectName", "dotnet")
 			schema.requireType(t, "dotnet", "boolean")
 		}},
-		{"create_resource", "Create a .tres/.res resource file", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "resourceType")
-			schema.requireStringProps(t, "resourcePath", "resourceType")
-			schema.requireType(t, "properties", "object")
-			schema.requirePropCount(t, 3)
-		}},
 		{"create_scene", "Create a new Godot scene file", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath")
 			schema.requireStringProps(t, "scenePath", "rootNodeType")
@@ -57,12 +51,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requirePropCount(t, 3)
 			schema.requireStringProps(t, "presetName", "outputPath")
 			schema.requireType(t, "debug", "boolean")
-		}},
-		{"modify_resource", "Set properties on a .tres/.res resource file", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath", "properties")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requireType(t, "properties", "object")
-			schema.requirePropCount(t, 2)
 		}},
 		{"modify_scene_node", "Modify node properties in a scene file (headless)", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath", "properties")

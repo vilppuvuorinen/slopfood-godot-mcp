@@ -1042,7 +1042,9 @@ func _convert_value_for_type(type_id, value) -> DecodeResult:
                 return DecodeResult.success(out)
             return DecodeResult.failure("expected an array of strings")
         TYPE_OBJECT:
-            return _decode_object(value)
+            if value is String and (value.begins_with("res://") or value.begins_with("user://")):
+                return _decode_resource_path(value)
+            return DecodeResult.failure("expected a res:// path or a tagged value for an object property")
     return _decode_value(value)
 
 func _decode_value(value) -> DecodeResult:
@@ -1222,13 +1224,6 @@ func _zero_vector(type_id):
         TYPE_VECTOR4I:
             return Vector4i.ZERO
     return null
-
-func _decode_object(value) -> DecodeResult:
-    if value is String:
-        if value.begins_with("res://") or value.begins_with("user://"):
-            return _decode_resource_path(value)
-        return DecodeResult.failure("expected a res:// path or a tagged value for an object property")
-    return _decode_value(value)
 
 func _decode_resource(value) -> DecodeResult:
     var path = value.get("path", null)
@@ -1641,42 +1636,7 @@ func manage_resource(result: Result, params) -> Result:
     if not full_path.begins_with("res://"):
         full_path = "res://" + full_path
 
-    if action == "create":
-        var resource_type = params.get("resourceType", "")
-        if resource_type.is_empty():
-            result.err("resourceType is required to create a resource")
-            return result.fail()
-
-        log_info(result, "Creating resource of type " + resource_type + " at: " + full_path)
-
-        if not ClassDB.class_exists(resource_type):
-            result.err("Unknown resource type: " + resource_type)
-            result.err("Must be a valid Godot class name (e.g., StandardMaterial3D, AudioStreamPlayer, Theme)")
-            return result.fail()
-
-        if not ClassDB.can_instantiate(resource_type):
-            result.err("Cannot instantiate resource type: " + resource_type)
-            return result.fail()
-
-        var resource = ClassDB.instantiate(resource_type)
-        if resource == null:
-            result.err("Failed to instantiate resource of type: " + resource_type)
-            return result.fail()
-
-        if not resource is Resource:
-            result.err("Type " + resource_type + " is not a Resource subclass")
-            return result.fail()
-
-        var applied_create = _apply_resource_properties(resource, params.get("properties", {}))
-        if not applied_create.ok:
-            result.err("Invalid property value: " + applied_create.error)
-            return result.fail()
-
-        if not _save_resource(result, resource, full_path):
-            return result
-
-        result.out("Resource created: " + full_path)
-    elif action == "read":
+    if action == "read":
         var resource = _load_resource(result, full_path)
         if resource == null:
             return result
@@ -1694,17 +1654,6 @@ func manage_resource(result: Result, params) -> Result:
         result.out(JSON_START)
         result.out(JSON.stringify({"type": resource.get_class(), "path": project_relative(full_path), "properties": props}))
         result.out(JSON_END)
-    elif action == "modify":
-        var resource = _load_resource(result, full_path)
-        if resource == null:
-            return result
-        var applied_modify = _apply_resource_properties(resource, params.get("properties", {}))
-        if not applied_modify.ok:
-            result.err("Invalid property value: " + applied_modify.error)
-            return result.fail()
-        if not _save_resource(result, resource, full_path):
-            return result
-        result.out("Resource modified: " + full_path)
     else:
         result.err("Unknown manage_resource action: " + action)
         return result.fail()
@@ -1730,57 +1679,6 @@ func _load_resource(result: Result, full_path):
         result.ok = false
         return null
     return resource
-
-
-func _save_resource(result: Result, resource, full_path) -> bool:
-    var dir_path = full_path.get_base_dir()
-    var dir_relative = dir_path.substr(6)
-    if not dir_relative.is_empty():
-        var dir = DirAccess.open("res://")
-        if dir and not dir.dir_exists(dir_relative):
-            dir.make_dir_recursive(dir_relative)
-    var save_error = ResourceSaver.save(resource, full_path)
-    if save_error != OK:
-        result.err("Failed to save resource: " + str(save_error))
-        result.ok = false
-        return false
-    _reconcile_path(full_path)
-    return true
-
-
-func _apply_resource_properties(resource, properties) -> DecodeResult:
-    if resource is Theme:
-        return _apply_theme_properties(resource, properties)
-    return _apply_properties(resource, properties)
-
-
-func _apply_theme_properties(theme, properties) -> DecodeResult:
-    for key in properties:
-        var decoded = _convert_theme_property(theme, key, properties[key])
-        if not decoded.ok:
-            return decoded
-        theme.set(key, decoded.value)
-    return DecodeResult.success(null)
-
-func _convert_theme_property(theme, key, value) -> DecodeResult:
-    var type_id = -1
-    for prop in theme.get_property_list():
-        if prop["name"] == key:
-            type_id = prop.get("type", 0)
-            break
-    if type_id == -1:
-        var parts = key.split("/")
-        if parts.size() == 3:
-            match parts[1]:
-                "colors":
-                    type_id = TYPE_COLOR
-                "constants", "font_sizes":
-                    type_id = TYPE_INT
-                "fonts", "icons", "styles":
-                    type_id = TYPE_OBJECT
-    if type_id == -1:
-        return DecodeResult.success(value)
-    return _convert_value_for_type(type_id, value)
 
 const ANIMATION_TRACK_TYPES = {
     "value": Animation.TYPE_VALUE,

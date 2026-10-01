@@ -116,8 +116,8 @@ func TestCategoryToolsUnique(t *testing.T) {
 			seen[tool.Name] = true
 		}
 	}
-	if len(seen) != 24 {
-		t.Errorf("registered %d tools, want 24", len(seen))
+	if len(seen) != 22 {
+		t.Errorf("registered %d tools, want 22", len(seen))
 	}
 }
 
@@ -168,11 +168,9 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	idempotent := map[string]bool{
 		"attach_script":       true,
 		"create_project":      true,
-		"create_resource":     true,
 		"create_scene":        true,
 		"export_mesh_library": true,
 		"export_project":      true,
-		"modify_resource":     true,
 		"modify_scene_node":   true,
 		"move_scene_node":     true,
 		"rescan_project":      true,
