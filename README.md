@@ -18,8 +18,9 @@ What it does differently from upstream:
   imports, `.uid` sidecars, and the global class cache are reconciled by the
   same engine that serves the edits. No one-shot engine spawn per call.
 - **Narrower toolset.** It exposes only operations that cannot be done with
-  plain text edits: scene, node, tilemap, tileset, theme, animation,
-  resource, script, and export mutation, plus validation and reimport.
+  plain text edits: scene, node, resource, script, and export mutation, plus
+  validation and reimport. Tilemaps, tilesets, themes, and animations are read
+  back through dedicated tools, but their edits go through `run_script`.
   Upstream's runtime tools (`run_project`, `stop_project`, `get_debug_output`,
   `launch_editor`) are not present.
 - **No runtime dependencies.** The server is built from the Go standard library
