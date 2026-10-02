@@ -92,12 +92,9 @@ func TestDaemonChildArgs(t *testing.T) {
 		"--log-level", "debug",
 		"--log-file", "/tmp/project.log",
 		"--idle-timeout", "1m30s",
-		"--enable", "scene",
-		"--enable", "script",
 	}
 	opts := &options{
 		logLevel:    "debug",
-		enable:      enableValues{"scene", "script"},
 		idleTimeout: 90 * time.Second,
 	}
 	got := daemonChildArgs("/tmp/project", opts, "/tmp/project.log")
@@ -141,7 +138,7 @@ func TestRunDaemonDetach(t *testing.T) {
 	}
 
 	var stdout, stderr strings.Builder
-	args := []string{daemonSubcommand, "--detach", "--project", project, "--enable", "scene"}
+	args := []string{daemonSubcommand, "--detach", "--project", project}
 	if err := run(args, strings.NewReader(""), &stdout, &stderr); err != nil {
 		t.Fatalf("run detach: %v", err)
 	}

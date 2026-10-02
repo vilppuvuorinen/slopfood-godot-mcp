@@ -14,7 +14,7 @@ var (
 )
 
 func daemonChildArgs(root string, opts *options, logPath string) []string {
-	args := make([]string, 0, 12+2*len(opts.enable))
+	args := make([]string, 0, 12)
 	args = append(args,
 		daemonSubcommand,
 		"--project", root,
@@ -25,9 +25,6 @@ func daemonChildArgs(root string, opts *options, logPath string) []string {
 	// Forward --transport only when set, so a release child never sees an unknown flag.
 	if opts.transportSet {
 		args = append(args, "--transport", opts.transport)
-	}
-	for _, value := range opts.enable {
-		args = append(args, "--enable", value)
 	}
 	return args
 }

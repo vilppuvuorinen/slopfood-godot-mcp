@@ -22,22 +22,17 @@ const binaryEnv = "GODOT_MCP_BIN"
 // connect binds the server to the working directory; project-scoped tests use connectProject.
 func connect(t *testing.T) *mcp.ClientSession {
 	t.Helper()
-	return connectSession(t, nil, "--enable", "all")
+	return connectSession(t, nil)
 }
 
 func connectProject(t *testing.T, root string) *mcp.ClientSession {
 	t.Helper()
-	return connectSession(t, nil, "--enable", "all", "--project", root)
+	return connectSession(t, nil, "--project", root)
 }
 
 func connectProjectWithEnv(t *testing.T, root string, env ...string) *mcp.ClientSession {
 	t.Helper()
-	return connectSession(t, env, "--enable", "all", "--project", root)
-}
-
-func connectCategories(t *testing.T, categories string) *mcp.ClientSession {
-	t.Helper()
-	return connectSession(t, nil, "--enable", categories)
+	return connectSession(t, env, "--project", root)
 }
 
 // newRuntimeDir builds directly under /tmp rather than os.TempDir: Unix socket
@@ -58,7 +53,7 @@ func newRuntimeDir(t *testing.T) string {
 	return runtimeDir
 }
 
-// A private runtime dir keeps sessions from sharing a reused daemon across --enable values or runs; a short idle timeout lets the spawned daemon exit soon.
+// A private runtime dir keeps sessions from sharing a reused daemon across runs; a short idle timeout lets the spawned daemon exit soon.
 func sessionEnv(t *testing.T, runtimeDir string, env, args []string) ([]string, []string) {
 	t.Helper()
 	childEnv := slices.DeleteFunc(slices.Clone(os.Environ()), func(entry string) bool {
@@ -105,7 +100,7 @@ func connectWithProtocolVersion(t *testing.T, protocolVersion string) *mcp.Clien
 		t.Fatalf("%s is not set; build the server and point it at the binary", binaryEnv)
 	}
 
-	cmdEnv, cmdArgs := sessionEnv(t, newRuntimeDir(t), nil, []string{"--enable", "all"})
+	cmdEnv, cmdArgs := sessionEnv(t, newRuntimeDir(t), nil, nil)
 	cmd := exec.CommandContext(context.Background(), binary, cmdArgs...) //nolint:gosec // the binary path is supplied by the test harness.
 	cmd.Env = cmdEnv
 	client := mcp.NewClient(&mcp.Implementation{Name: "slopfood-godot-mcp-e2e", Version: "0.0.1"}, nil)
@@ -260,19 +255,6 @@ func findTool(t *testing.T, session *mcp.ClientSession, name string) *mcp.Tool {
 	}
 	t.Fatalf("tool %q not listed", name)
 	return nil
-}
-
-func requireToolAbsent(t *testing.T, session *mcp.ClientSession, name string) {
-	t.Helper()
-	res, err := session.ListTools(context.Background(), nil)
-	if err != nil {
-		t.Fatalf("list tools: %v", err)
-	}
-	for _, tool := range res.Tools {
-		if tool.Name == name {
-			t.Errorf("tool %q should not be listed", name)
-		}
-	}
 }
 
 func callTool(t *testing.T, session *mcp.ClientSession, name string, args map[string]any) *mcp.CallToolResult {

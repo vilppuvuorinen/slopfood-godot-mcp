@@ -68,15 +68,3 @@ func TestResolveProjectPrecedence(t *testing.T) {
 		t.Errorf("cwd project = %q, want %q", got, want)
 	}
 }
-
-func TestEnableValuesAccumulates(t *testing.T) {
-	var e enableValues
-	for _, value := range []string{"scene", "script"} {
-		if err := e.Set(value); err != nil {
-			t.Fatalf("set %q: %v", value, err)
-		}
-	}
-	if got := e.String(); got != "scene,script" {
-		t.Errorf("enable = %q, want scene,script", got)
-	}
-}

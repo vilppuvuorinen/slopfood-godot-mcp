@@ -230,15 +230,13 @@ func TestSchemaValidatorRejectsViolations(t *testing.T) {
 
 func TestErrorResultMatchesStatusOutputSchema(t *testing.T) {
 	envelope := jsonValue(t, mcp.ErrorResult("boom", "try again").StructuredContent)
-	for _, category := range AllCategories {
-		for _, newTool := range categoryTools[category] {
-			tool := newTool()
-			if !hasRequired(tool.OutputSchema, "success", "message") {
-				continue
-			}
-			if msg := schemaViolation(tool.OutputSchema, tool.OutputSchema, envelope, tool.Name); msg != "" {
-				t.Errorf("tool %q rejects its own error envelope: %s", tool.Name, msg)
-			}
+	for _, newTool := range allTools {
+		tool := newTool()
+		if !hasRequired(tool.OutputSchema, "success", "message") {
+			continue
+		}
+		if msg := schemaViolation(tool.OutputSchema, tool.OutputSchema, envelope, tool.Name); msg != "" {
+			t.Errorf("tool %q rejects its own error envelope: %s", tool.Name, msg)
 		}
 	}
 }

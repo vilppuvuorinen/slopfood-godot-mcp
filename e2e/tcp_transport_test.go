@@ -61,7 +61,7 @@ func TestDaemonTCPTransport(t *testing.T) {
 
 	// The exclusive lock rejects a second daemon for the same project.
 	loser := exec.CommandContext(context.Background(), os.Getenv(binaryEnv), //nolint:gosec // the binary path is supplied by the test harness.
-		daemonSubcommand, "--transport", "tcp", "--project", project, "--enable", "all")
+		daemonSubcommand, "--transport", "tcp", "--project", project)
 	loser.Env = append(os.Environ(), "XDG_RUNTIME_DIR="+runtimeDir)
 	if runErr := loser.Run(); runErr == nil {
 		t.Error("second TCP daemon exited zero, want the exclusive lock to reject it")

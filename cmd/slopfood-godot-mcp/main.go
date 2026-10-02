@@ -57,20 +57,10 @@ func resolveProject(flagValue string) (string, error) {
 	return filepath.Clean(abs), nil
 }
 
-type enableValues []string
-
-func (e *enableValues) String() string { return strings.Join(*e, ",") }
-
-func (e *enableValues) Set(value string) error {
-	*e = append(*e, value)
-	return nil
-}
-
 type options struct {
 	showVersion bool
 	logLevel    string
 	project     string
-	enable      enableValues
 	idleTimeout time.Duration
 	logFile     string
 	detach      bool
@@ -86,7 +76,6 @@ func newFlags(name string) (*flag.FlagSet, *options) {
 	fs.BoolVar(&opts.showVersion, "version", false, "print version and exit")
 	fs.StringVar(&opts.logLevel, "log-level", "info", "log level (debug, info, warn, error)")
 	fs.StringVar(&opts.project, "project", "", "Godot project directory to bind to (default: $"+projectEnv+", then the working directory)")
-	fs.Var(&opts.enable, "enable", "tool categories to enable (repeatable, comma-separated; default \"all\"; any name replaces the default)")
 	fs.DurationVar(&opts.idleTimeout, "idle-timeout", defaultIdleTimeout, "daemon: exit after this long with no clients (0 disables)")
 	fs.StringVar(&opts.logFile, "log-file", "", "daemon: log file (default: a per-project path under the runtime directory)")
 	fs.BoolVar(&opts.detach, "detach", false, "daemon: re-exec as a detached child and exit")
@@ -109,11 +98,10 @@ func run(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 }
 
 type role struct {
-	root       string
-	categories []tools.Category
-	logger     *slog.Logger
-	ctx        context.Context
-	stop       context.CancelFunc
+	root   string
+	logger *slog.Logger
+	ctx    context.Context
+	stop   context.CancelFunc
 }
 
 func setupRole(opts *options, stderr io.Writer) (*role, error) {
@@ -121,16 +109,12 @@ func setupRole(opts *options, stderr io.Writer) (*role, error) {
 	if err != nil {
 		return nil, err
 	}
-	categories, err := tools.ResolveCategories(opts.enable)
-	if err != nil {
-		return nil, fmt.Errorf("resolve categories: %w", err)
-	}
 	logger, err := newLogger(opts.logLevel, stderr)
 	if err != nil {
 		return nil, err
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), shutdownSignals()...)
-	return &role{root: root, categories: categories, logger: logger, ctx: ctx, stop: stop}, nil
+	return &role{root: root, logger: logger, ctx: ctx, stop: stop}, nil
 }
 
 func newLogger(logLevel string, stderr io.Writer) (*slog.Logger, error) {
@@ -152,7 +136,7 @@ func (r *role) newServer() *mcp.Server {
 			"paths relative to it, and no tool accepts or changes the project directory. Read-only "+
 			"tools are safe to call freely; tools that write files may overwrite existing content.",
 		r.root)
-	tools.Register(srv, r.root, r.categories...)
+	tools.Register(srv, r.root)
 	return srv
 }
 

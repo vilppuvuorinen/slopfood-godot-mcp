@@ -11,7 +11,7 @@ import (
 
 func daemonProjectArgs(project string, extra ...string) []string {
 	args := make([]string, 0, 4+len(extra))
-	args = append(args, "--enable", "all", "--project", project)
+	args = append(args, "--project", project)
 	return append(args, extra...)
 }
 
