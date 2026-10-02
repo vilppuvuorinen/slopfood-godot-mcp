@@ -63,6 +63,27 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireStringProps(t, "scenePath", "nodePath", "newParentPath")
 			schema.requirePropCount(t, 3)
 		}},
+		{"read", "Read a scene, animation, tileset, theme, or binary resource file; use read_node to read a node subtree", func(t *testing.T, schema toolSchema) {
+			schema.requireRequired(t, "type", "path")
+			schema.requireStringProps(t, "type", "path")
+			schema.requireType(t, "depth", "integer")
+			schema.requireType(t, "propertyFilter", "array")
+			schema.requirePropCount(t, 4)
+
+			enum, ok := schema.Properties["type"]["enum"].([]any)
+			if !ok {
+				t.Fatalf("type enum = %v", schema.Properties["type"]["enum"])
+			}
+			want := []string{"scene", "animation", "tileset", "theme", "resource"}
+			if len(enum) != len(want) {
+				t.Fatalf("type enum = %v, want %v", enum, want)
+			}
+			for i, value := range want {
+				if enum[i] != value {
+					t.Errorf("type enum[%d] = %v, want %q", i, enum[i], value)
+				}
+			}
+		}},
 		{"read_animation", "Read Animation resources and their tracks", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "resourcePath")
 			schema.requireStringProps(t, "resourcePath")

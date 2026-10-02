@@ -1,0 +1,427 @@
+package tools
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"path/filepath"
+	"reflect"
+	"strings"
+	"testing"
+
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
+)
+
+func TestReadSchema(t *testing.T) {
+	tool := read()
+	if tool.Name != "read" {
+		t.Errorf("name = %q", tool.Name)
+	}
+	if tool.Title == "" {
+		t.Error("title is empty")
+	}
+	if tool.Description != "Read a scene, animation, tileset, theme, or binary resource file; use read_node to read a node subtree" {
+		t.Errorf("description = %q", tool.Description)
+	}
+	if !hasRequired(tool.InputSchema, "type", "path") {
+		t.Errorf("required = %v", tool.InputSchema["required"])
+	}
+	props, ok := tool.InputSchema["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T", tool.InputSchema["properties"])
+	}
+	if got := len(props); got != 4 {
+		t.Errorf("properties = %d, want 4", got)
+	}
+	for _, key := range []string{"type", "path"} {
+		prop, isMap := props[key].(map[string]any)
+		if !isMap || prop["type"] != "string" {
+			t.Errorf("property %q = %v, want string", key, props[key])
+		}
+	}
+	enum, ok := props["type"].(map[string]any)["enum"].([]string)
+	if !ok || !reflect.DeepEqual(enum, readTypes) {
+		t.Errorf("type enum = %v, want %v", props["type"], readTypes)
+	}
+	depth, ok := props["depth"].(map[string]any)
+	if !ok || depth["type"] != "integer" {
+		t.Errorf("depth = %v, want integer", props["depth"])
+	}
+	filter, ok := props["propertyFilter"].(map[string]any)
+	if !ok || filter["type"] != "array" {
+		t.Errorf("propertyFilter = %v, want array", props["propertyFilter"])
+	}
+}
+
+// callReadSession drives read() with the recording fake session so tests can
+// assert the forwarded bridge operation and params.
+func callReadSession(t *testing.T, project, args string) (*fakeSession, mcp.ToolResult) {
+	t.Helper()
+	sess := &fakeSession{}
+	ctx := WithEngine(context.Background(), sess)
+	if project != "" {
+		ctx = withProject(ctx, project)
+	}
+	out, err := read().Handler(ctx, json.RawMessage(args))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	result, ok := out.(mcp.ToolResult)
+	if !ok {
+		t.Fatalf("result type %T, want mcp.ToolResult", out)
+	}
+	return sess, result
+}
+
+func TestReadDispatchMapping(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
+
+	tests := []struct {
+		name   string
+		args   string
+		op     string
+		params map[string]any
+	}{
+		{name: "scene", args: `{"type":"scene","path":"main.tscn","depth":1}`, op: "read_scene", params: map[string]any{"scenePath": "main.tscn", "depth": 1}},
+		{name: "scene without depth", args: `{"type":"scene","path":"main.tscn"}`, op: "read_scene", params: map[string]any{"scenePath": "main.tscn"}},
+		{name: "animation", args: `{"type":"animation","path":"anims/walk.tres"}`, op: "read_animation", params: map[string]any{"resourcePath": "anims/walk.tres"}},
+		{name: "tileset", args: `{"type":"tileset","path":"tiles/set.tres"}`, op: "read_tileset", params: map[string]any{"resourcePath": "tiles/set.tres"}},
+		{name: "theme", args: `{"type":"theme","path":"themes/main.tres"}`, op: "read_theme", params: map[string]any{"resourcePath": "themes/main.tres"}},
+		{name: "resource", args: `{"type":"resource","path":"resources/data.res"}`, op: "read_resource", params: map[string]any{"resourcePath": "resources/data.res"}},
+		{name: "resource with filter", args: `{"type":"resource","path":"resources/data.res","propertyFilter":["name","value"]}`, op: "read_resource", params: map[string]any{"resourcePath": "resources/data.res", "propertyFilter": []string{"name", "value"}}},
+		{name: "resource empty filter is omitted", args: `{"type":"resource","path":"resources/data.res","propertyFilter":[]}`, op: "read_resource", params: map[string]any{"resourcePath": "resources/data.res"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			sess, _ := callReadSession(t, root, tt.args)
+			if len(sess.runs) != 1 {
+				t.Fatalf("session runs = %d, want 1", len(sess.runs))
+			}
+			run := sess.runs[0]
+			if run.operation != tt.op {
+				t.Errorf("operation = %q, want %q", run.operation, tt.op)
+			}
+			if !reflect.DeepEqual(run.params, tt.params) {
+				t.Errorf("params = %#v, want %#v", run.params, tt.params)
+			}
+		})
+	}
+}
+
+func TestReadToolForwardsScopeOptions(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, read(), root, `{"type":"scene","path":"scenes/main.tscn","depth":1}`)
+	if !result.IsError {
+		t.Fatalf("expected the markerless echo to fail: %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	for _, want := range []string{`"scenePath":"scenes/main.tscn"`, `"depth":1`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text = %q, want it to contain %q", text, want)
+		}
+	}
+}
+
+func TestReadValidation(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+	notAProject := t.TempDir()
+
+	tests := []struct {
+		name    string
+		project string
+		args    string
+		want    string
+	}{
+		{name: "missing type", args: `{}`, want: "type is required."},
+		{name: "unknown type", project: root, args: `{"type":"nope","path":"x.tscn"}`, want: "Invalid type: nope."},
+		{name: "missing path", project: root, args: `{"type":"scene"}`, want: "path is required."},
+		{name: "nodePath rejected", project: root, args: `{"type":"scene","path":"main.tscn","nodePath":"root"}`, want: "read does not accept nodePath."},
+		{name: "depth on animation", project: root, args: `{"type":"animation","path":"a.tres","depth":1}`, want: "depth applies only to type=scene."},
+		{name: "propertyFilter on scene", project: root, args: `{"type":"scene","path":"main.tscn","propertyFilter":["x"]}`, want: "propertyFilter applies only to type=resource."},
+		{name: "negative depth", project: root, args: `{"type":"scene","path":"main.tscn","depth":-1}`, want: "depth must be zero or greater."},
+		{name: "invalid project path", project: "../escape", args: `{"type":"animation","path":"a.tres"}`, want: "Invalid path."},
+		{name: "invalid resource path", project: root, args: `{"type":"animation","path":"../escape.tres"}`, want: "Invalid path."},
+		{name: "absolute resource path", project: root, args: `{"type":"animation","path":"/etc/passwd.tres"}`, want: "Invalid path."},
+		{name: "normalized parent resource path", project: root, args: `{"type":"animation","path":"foo/../bar.tres"}`, want: "Invalid path."},
+		{name: "scene parent path", project: root, args: `{"type":"scene","path":"foo/../bar.tscn"}`, want: "Invalid path."},
+		{name: "not a project", project: notAProject, args: `{"type":"animation","path":"a.tres"}`, want: "Not a valid Godot project"},
+		{name: "resource rejects tres", project: root, args: `{"type":"resource","path":"foo.tres"}`, want: "read(type=resource) reads binary .res resources; foo.tres is a text .tres file."},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := callToolArgs(t, read(), tt.project, tt.args)
+			if !result.IsError {
+				t.Fatalf("expected an error result: %+v", result.Content)
+			}
+			if !strings.HasPrefix(result.Content[0].Text, tt.want) {
+				t.Errorf("message = %q, want prefix %q", result.Content[0].Text, tt.want)
+			}
+		})
+	}
+}
+
+// TestReadResourcePathRejections carries the step-1 tightened contract across
+// every resource type, since the old handler tests are deleted in step 7.
+func TestReadResourcePathRejections(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+
+	for _, readType := range []string{"animation", "tileset", "theme", "resource"} {
+		for _, path := range []string{"/etc/passwd.tres", "foo/../bar.tres"} {
+			t.Run(readType+" "+path, func(t *testing.T) {
+				result := callToolArgs(t, read(), root, fmt.Sprintf(`{"type":%q,"path":%q}`, readType, path))
+				if !result.IsError {
+					t.Fatalf("expected an error result: %+v", result.Content)
+				}
+				if !strings.HasPrefix(result.Content[0].Text, "Invalid path.") {
+					t.Errorf("message = %q, want prefix %q", result.Content[0].Text, "Invalid path.")
+				}
+			})
+		}
+	}
+}
+
+func TestReadToolSuccess(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","children":[{"name":"Child","type":"Sprite2D"}]}\n<<<GODOT_MCP_JSON_END>>>\n'`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, read(), root, `{"type":"scene","path":"scenes/main.tscn"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if len(result.Content) != 1 {
+		t.Fatalf("content = %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	for _, want := range []string{`"name": "root"`, `"type": "Node2D"`, `"name": "Child"`, `"type": "Sprite2D"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text = %q, want it to contain %q", text, want)
+		}
+	}
+	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
+		t.Errorf("text still contains markers: %q", text)
+	}
+}
+
+func TestReadToolPreservesNestedPropertyValues(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","properties":{"config":{"myKey":1,"nested":{"a":[1,2,3]}},"position":{"$type":"Vector2","x":0,"y":0}}}\n<<<GODOT_MCP_JSON_END>>>\n'`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, read(), root, `{"type":"scene","path":"scenes/main.tscn"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	for _, want := range []string{`"config": {`, `"myKey": 1`, `"a": [`, `"position": {`, `"$type": "Vector2"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("text = %q, want it to contain %q", text, want)
+		}
+	}
+
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+	}
+	props, ok := structured["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T, want object", structured["properties"])
+	}
+	if got := props["config"].(map[string]any)["myKey"]; got != float64(1) {
+		t.Errorf("config.myKey = %v, want 1", got)
+	}
+	position, ok := props["position"].(map[string]any)
+	if !ok || position["$type"] != "Vector2" {
+		t.Errorf("position = %#v, want a tagged Vector2 object", props["position"])
+	}
+}
+
+func TestReadToolNoMarkersIsError(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "plain output"`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, read(), root, `{"type":"scene","path":"main.tscn"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to read scene: ") {
+		t.Errorf("message = %q", result.Content[0].Text)
+	}
+	if !strings.Contains(result.Content[0].Text, "plain output") {
+		t.Errorf("message = %q, want the raw engine output for inspection", result.Content[0].Text)
+	}
+}
+
+func TestReadToolInvalidJSONIsError(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\nnot-json\n<<<GODOT_MCP_JSON_END>>>\n'`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, read(), root, `{"type":"scene","path":"main.tscn"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	text := result.Content[0].Text
+	if !strings.HasPrefix(text, "Failed to read scene: ") || !strings.Contains(text, "not-json") {
+		t.Errorf("message = %q, want the failure prefix and the invalid payload", text)
+	}
+	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
+		t.Errorf("message still contains markers: %q", text)
+	}
+}
+
+func TestReadToolScriptFailure(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo 'Failed to load scene: boom' >&2; exit 1`))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, read(), root, `{"type":"scene","path":"main.tscn"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to read scene: ") {
+		t.Errorf("message = %q", result.Content[0].Text)
+	}
+	if len(result.Content) != 2 || !strings.HasPrefix(result.Content[1].Text, "Possible solutions:") {
+		t.Errorf("solutions = %+v", result.Content)
+	}
+}
+
+func TestReadToolSpawnFailure(t *testing.T) {
+	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
+	root := t.TempDir()
+	makeProject(t, root)
+	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
+
+	result := callToolArgs(t, read(), root, `{"type":"scene","path":"main.tscn"}`)
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if !strings.HasPrefix(result.Content[0].Text, "Failed to read scene: ") {
+		t.Errorf("message = %q", result.Content[0].Text)
+	}
+}
+
+func TestReadResourceStructured(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		args string
+		want string
+	}{
+		{
+			name: "animation",
+			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"path":"anims/walk.tres","length":2,"loopMode":"linear","levels":[]}\n<<<GODOT_MCP_JSON_END>>>\n'`,
+			args: `{"type":"animation","path":"anims/walk.tres"}`,
+			want: `"loopMode": "linear"`,
+		},
+		{
+			name: "tileset",
+			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"path":"tiles/set.tres","tileShape":"square","sources":[]}\n<<<GODOT_MCP_JSON_END>>>\n'`,
+			args: `{"type":"tileset","path":"tiles/set.tres"}`,
+			want: `"tileShape": "square"`,
+		},
+		{
+			name: "theme",
+			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"path":"themes/main.tres","defaultFontSize":16,"types":[]}\n<<<GODOT_MCP_JSON_END>>>\n'`,
+			args: `{"type":"theme","path":"themes/main.tres"}`,
+			want: `"defaultFontSize": 16`,
+		},
+		{
+			name: "resource",
+			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"resourcePath":"resources/data.res","resourceType":"Resource","properties":{"value":1}}\n<<<GODOT_MCP_JSON_END>>>\n'`,
+			args: `{"type":"resource","path":"resources/data.res"}`,
+			want: `"value": 1`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(godot.PathEnv, fakeGodotOps(t, tt.body))
+			root := t.TempDir()
+			makeProject(t, root)
+
+			result := callToolArgs(t, read(), root, tt.args)
+			if result.IsError {
+				t.Fatalf("unexpected error: %+v", result.Content)
+			}
+			text := result.Content[0].Text
+			if !strings.Contains(text, tt.want) {
+				t.Errorf("text = %q, want it to contain %q", text, tt.want)
+			}
+			if strings.Contains(text, "succeeded.\n\nOutput:") {
+				t.Errorf("text = %q, want the structured payload without the legacy wrapper", text)
+			}
+		})
+	}
+}
+
+func TestReadResourceFallbackKeepsBridgeKey(t *testing.T) {
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
+	root := t.TempDir()
+	makeProject(t, root)
+
+	result := callToolArgs(t, read(), root, `{"type":"animation","path":"anims/walk.tres"}`)
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if !strings.Contains(result.Content[0].Text, `read_animation`) {
+		t.Errorf("text = %q, want the operation echoed", result.Content[0].Text)
+	}
+	structured, ok := result.StructuredContent.(map[string]any)
+	if !ok {
+		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
+	}
+	if got := structured["resourcePath"]; got != "anims/walk.tres" {
+		t.Errorf("resourcePath = %v, want the original path", got)
+	}
+	if _, ok := structured["path"]; ok {
+		t.Errorf("structuredContent uses the tool key: %v", structured)
+	}
+}
+
+func TestReadResourceScriptFailure(t *testing.T) {
+	tests := []struct {
+		name   string
+		body   string
+		args   string
+		prefix string
+	}{
+		{"animation", `echo 'Animation resource not found: boom' >&2; exit 1`, `{"type":"animation","path":"anim.tres"}`, "read_animation failed: "},
+		{"tileset", `echo 'TileSet resource not found: boom' >&2; exit 1`, `{"type":"tileset","path":"set.tres"}`, "read_tileset failed: "},
+		{"theme", `echo 'Theme resource not found: boom' >&2; exit 1`, `{"type":"theme","path":"main.tres"}`, "read_theme failed: "},
+		{"resource", `echo 'Resource not found: boom' >&2; exit 1`, `{"type":"resource","path":"data.res"}`, "read_resource failed: "},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv(godot.PathEnv, fakeGodotOps(t, tt.body))
+			root := t.TempDir()
+			makeProject(t, root)
+
+			result := callToolArgs(t, read(), root, tt.args)
+			if !result.IsError {
+				t.Fatalf("expected an error result: %+v", result.Content)
+			}
+			if !strings.HasPrefix(result.Content[0].Text, tt.prefix) {
+				t.Errorf("message = %q, want prefix %q", result.Content[0].Text, tt.prefix)
+			}
+			if len(result.Content) != 2 || !strings.HasPrefix(result.Content[1].Text, "Possible solutions:") {
+				t.Errorf("solutions = %+v", result.Content)
+			}
+		})
+	}
+}

@@ -61,13 +61,14 @@ func TestToolsUnique(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	if len(seen) != 22 {
-		t.Errorf("registered %d tools, want 22", len(seen))
+	if len(seen) != 23 {
+		t.Errorf("registered %d tools, want 23", len(seen))
 	}
 }
 
 // schemaOptionalReads is the allowlist of self-describing reads with no output schema.
 var schemaOptionalReads = map[string]bool{
+	"read":                 true,
 	"read_animation":       true,
 	"read_binary_resource": true,
 	"read_scene":           true,
@@ -95,6 +96,7 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	readOnly := map[string]bool{
 		"get_godot_version":    true,
+		"read":                 true,
 		"read_animation":       true,
 		"read_binary_resource": true,
 		"read_scene":           true,
