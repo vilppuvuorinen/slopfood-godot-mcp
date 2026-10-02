@@ -17,7 +17,7 @@ type testThemePayload struct {
 
 func readThemePayload(t *testing.T, session *mcp.ClientSession, resourcePath string) testThemePayload {
 	t.Helper()
-	text := requireToolText(t, session, "read_theme", map[string]any{"resourcePath": resourcePath})
+	text := requireToolText(t, session, "read", map[string]any{"type": "theme", "path": resourcePath})
 	var payload testThemePayload
 	if err := json.Unmarshal([]byte(text), &payload); err != nil {
 		t.Fatalf("unmarshal theme payload: %v\n%s", err, text)
@@ -43,7 +43,7 @@ func TestThemeErrors(t *testing.T) {
 	session := connectProject(t, root)
 
 	t.Run("missing theme", func(t *testing.T) {
-		res := callTool(t, session, "read_theme", map[string]any{"resourcePath": "themes/missing.tres"})
+		res := callTool(t, session, "read", map[string]any{"type": "theme", "path": "themes/missing.tres"})
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
@@ -52,7 +52,7 @@ func TestThemeErrors(t *testing.T) {
 
 	t.Run("not a theme resource", func(t *testing.T) {
 		seedResource(t, session, "resources/mat_theme.tres", "StandardMaterial3D")
-		res := callTool(t, session, "read_theme", map[string]any{"resourcePath": "resources/mat_theme.tres"})
+		res := callTool(t, session, "read", map[string]any{"type": "theme", "path": "resources/mat_theme.tres"})
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}

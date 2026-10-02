@@ -17,7 +17,7 @@ type testAnimationPayload struct {
 
 func readAnimationPayload(t *testing.T, session *mcp.ClientSession, resourcePath string) testAnimationPayload {
 	t.Helper()
-	text := requireToolText(t, session, "read_animation", map[string]any{"resourcePath": resourcePath})
+	text := requireToolText(t, session, "read", map[string]any{"type": "animation", "path": resourcePath})
 	var payload testAnimationPayload
 	if err := json.Unmarshal([]byte(text), &payload); err != nil {
 		t.Fatalf("unmarshal animation payload: %v\n%s", err, text)
@@ -31,7 +31,7 @@ func TestAnimationErrors(t *testing.T) {
 	session := connectProject(t, root)
 
 	t.Run("missing animation", func(t *testing.T) {
-		res := callTool(t, session, "read_animation", map[string]any{"resourcePath": "anims/missing.tres"})
+		res := callTool(t, session, "read", map[string]any{"type": "animation", "path": "anims/missing.tres"})
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}
@@ -40,7 +40,7 @@ func TestAnimationErrors(t *testing.T) {
 
 	t.Run("not an animation resource", func(t *testing.T) {
 		seedResource(t, session, "resources/mat.tres", "StandardMaterial3D")
-		res := callTool(t, session, "read_animation", map[string]any{"resourcePath": "resources/mat.tres"})
+		res := callTool(t, session, "read", map[string]any{"type": "animation", "path": "resources/mat.tres"})
 		if !res.IsError {
 			t.Fatal("expected an error result")
 		}

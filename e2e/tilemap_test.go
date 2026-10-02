@@ -17,7 +17,7 @@ type testTilesetPayload struct {
 
 func readTilesetPayload(t *testing.T, session *mcp.ClientSession, resourcePath string) testTilesetPayload {
 	t.Helper()
-	text := requireToolText(t, session, "read_tileset", map[string]any{"resourcePath": resourcePath})
+	text := requireToolText(t, session, "read", map[string]any{"type": "tileset", "path": resourcePath})
 	var payload testTilesetPayload
 	if err := json.Unmarshal([]byte(text), &payload); err != nil {
 		t.Fatalf("unmarshal tileset payload: %v\n%s", err, text)

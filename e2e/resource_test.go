@@ -33,7 +33,7 @@ func resourceDir(resourcePath string) string {
 	return strings.TrimSuffix(dir, "/")
 }
 
-// read_binary_resource rejects text .tres, so the fixture must be a binary file.
+// read(type=resource) rejects text .tres, so the fixture must be a binary file.
 func seedMaterialRes(t *testing.T, session *mcp.ClientSession, resourcePath string) {
 	t.Helper()
 	requireScriptSave(t, session, `extends RefCounted
@@ -56,8 +56,9 @@ func TestResourceTools(t *testing.T) {
 		const path = "resources/read.res"
 		seedMaterialRes(t, session, path)
 
-		text := requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath": path,
+		text := requireToolText(t, session, "read", map[string]any{
+			"type": "resource",
+			"path": path,
 		})
 		var payload map[string]any
 		if err := json.Unmarshal([]byte(text), &payload); err != nil {
@@ -73,15 +74,17 @@ func TestResourceTools(t *testing.T) {
 		const path = "resources/filter.res"
 		seedMaterialRes(t, session, path)
 
-		text := requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath":   path,
+		text := requireToolText(t, session, "read", map[string]any{
+			"type":           "resource",
+			"path":           path,
 			"propertyFilter": []any{"metallic"},
 		})
 		requireContains(t, text, `"metallic": 0.5`)
 		requireNotContains(t, text, `"albedo_color"`)
 
-		text = requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath":   path,
+		text = requireToolText(t, session, "read", map[string]any{
+			"type":           "resource",
+			"path":           path,
 			"propertyFilter": []any{"albedo_*"},
 		})
 		requireContains(t, text, `"albedo_color"`)
@@ -92,8 +95,9 @@ func TestResourceTools(t *testing.T) {
 		const path = "resources/wildcard.res"
 		seedMaterialRes(t, session, path)
 
-		text := requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath":   path,
+		text := requireToolText(t, session, "read", map[string]any{
+			"type":           "resource",
+			"path":           path,
 			"propertyFilter": []any{"albed?_color"},
 		})
 		requireContains(t, text, `"albedo_color"`)
@@ -104,8 +108,9 @@ func TestResourceTools(t *testing.T) {
 		const path = "resources/none.res"
 		seedMaterialRes(t, session, path)
 
-		text := requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath":   path,
+		text := requireToolText(t, session, "read", map[string]any{
+			"type":           "resource",
+			"path":           path,
 			"propertyFilter": []any{"nonexistent_*"},
 		})
 		requireContains(t, text, `"properties": {}`)
@@ -123,8 +128,9 @@ func run():
 	return ResourceSaver.save(material, "res://`+path+`")
 `)
 
-		readText := requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath": path,
+		readText := requireToolText(t, session, "read", map[string]any{
+			"type": "resource",
+			"path": path,
 		})
 		requireContains(t, readText, `"metallic": 0.75`)
 	})
@@ -139,8 +145,9 @@ func run():
 	return ResourceSaver.save(material, "res://materials/red.res")
 `)
 
-		readText := requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath": "materials/red.res",
+		readText := requireToolText(t, session, "read", map[string]any{
+			"type": "resource",
+			"path": "materials/red.res",
 		})
 		requireContains(t, readText, `"type": "StandardMaterial3D"`, `"path": "materials/red.res"`)
 	})
@@ -148,13 +155,14 @@ func run():
 	t.Run("rejects a text .tres", func(t *testing.T) {
 		writeE2EFile(t, filepath.Join(root, "resources", "mat.tres"), resourceTres)
 
-		res := callTool(t, session, "read_binary_resource", map[string]any{
-			"resourcePath": "resources/mat.tres",
+		res := callTool(t, session, "read", map[string]any{
+			"type": "resource",
+			"path": "resources/mat.tres",
 		})
 		if !res.IsError {
 			t.Fatalf("expected an error for a text .tres: %s", firstText(t, res))
 		}
-		requireContains(t, firstText(t, res), "read_binary_resource reads binary .res resources")
+		requireContains(t, firstText(t, res), "read(type=resource) reads binary .res resources")
 	})
 }
 
@@ -171,8 +179,9 @@ func run():
 	return ResourceSaver.save(theme, "res://themes/main.res")
 `)
 
-	readText := requireToolText(t, session, "read_binary_resource", map[string]any{
-		"resourcePath": "themes/main.res",
+	readText := requireToolText(t, session, "read", map[string]any{
+		"type": "resource",
+		"path": "themes/main.res",
 	})
 	requireContains(t, readText, `"type": "Theme"`, `"properties"`, `"default_font_size": 16`)
 	requireNotContains(t, readText, "THEME_JSON_START")
@@ -185,8 +194,9 @@ func run():
 	return ResourceSaver.save(theme, "res://themes/main.res")
 `)
 
-	reReadText := requireToolText(t, session, "read_binary_resource", map[string]any{
-		"resourcePath": "themes/main.res",
+	reReadText := requireToolText(t, session, "read", map[string]any{
+		"type": "resource",
+		"path": "themes/main.res",
 	})
 	requireContains(t, reReadText, `"type": "Theme"`, `"default_font_size": 20`)
 }
@@ -215,8 +225,9 @@ func run():
 	return ResourceSaver.save(theme, "res://themes/main.res")
 `)
 
-	readText := requireToolText(t, session, "read_binary_resource", map[string]any{
-		"resourcePath": "themes/main.res",
+	readText := requireToolText(t, session, "read", map[string]any{
+		"type": "resource",
+		"path": "themes/main.res",
 	})
 	var readPayload struct {
 		Properties map[string]any `json:"properties"`
@@ -245,8 +256,9 @@ func run():
 	return ResourceSaver.save(theme, "res://themes/main.res")
 `)
 
-	reReadText := requireToolText(t, session, "read_binary_resource", map[string]any{
-		"resourcePath": "themes/main.res",
+	reReadText := requireToolText(t, session, "read", map[string]any{
+		"type": "resource",
+		"path": "themes/main.res",
 	})
 	var reReadPayload struct {
 		Properties map[string]any `json:"properties"`
@@ -281,8 +293,9 @@ func run():
 	return ResourceSaver.save(theme, "res://themes/categories.res")
 `)
 
-	readText := requireToolText(t, session, "read_binary_resource", map[string]any{
-		"resourcePath": "themes/categories.res",
+	readText := requireToolText(t, session, "read", map[string]any{
+		"type": "resource",
+		"path": "themes/categories.res",
 	})
 	var payload struct {
 		Properties map[string]any `json:"properties"`
@@ -307,14 +320,16 @@ func TestResourceErrors(t *testing.T) {
 	t.Run("not a project", func(t *testing.T) {
 		notProject := t.TempDir()
 		notProjectSession := connectProject(t, notProject)
-		requireToolError(t, notProjectSession, "read_binary_resource", map[string]any{
-			"resourcePath": "mat.tres",
+		requireToolError(t, notProjectSession, "read", map[string]any{
+			"type": "resource",
+			"path": "mat.tres",
 		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("resource not found", func(t *testing.T) {
-		res := callTool(t, session, "read_binary_resource", map[string]any{
-			"resourcePath": "resources/missing.res",
+		res := callTool(t, session, "read", map[string]any{
+			"type": "resource",
+			"path": "resources/missing.res",
 		})
 		if !res.IsError {
 			t.Fatal("expected an error result")
@@ -325,8 +340,9 @@ func TestResourceErrors(t *testing.T) {
 	t.Run("unloadable resource", func(t *testing.T) {
 		writeE2EFile(t, filepath.Join(root, "resources", "bad.res"), "this is not a valid resource\n")
 
-		res := callTool(t, session, "read_binary_resource", map[string]any{
-			"resourcePath": "resources/bad.res",
+		res := callTool(t, session, "read", map[string]any{
+			"type": "resource",
+			"path": "resources/bad.res",
 		})
 		if !res.IsError {
 			t.Fatal("expected an error result")

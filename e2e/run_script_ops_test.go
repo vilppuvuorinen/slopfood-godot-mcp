@@ -298,8 +298,9 @@ func run():
 	return ResourceSaver.save(material, "res://materials/scripted.res")
 `)
 
-		text := requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath": "materials/scripted.res",
+		text := requireToolText(t, session, "read", map[string]any{
+			"type": "resource",
+			"path": "materials/scripted.res",
 		})
 		requireContains(t, text, `"type": "StandardMaterial3D"`, `"metallic": 0.5`, `"$type": "Color"`)
 
@@ -311,8 +312,9 @@ func run():
 	return ResourceSaver.save(material, "res://materials/scripted.res")
 `)
 
-		text = requireToolText(t, session, "read_binary_resource", map[string]any{
-			"resourcePath": "materials/scripted.res",
+		text = requireToolText(t, session, "read", map[string]any{
+			"type": "resource",
+			"path": "materials/scripted.res",
 		})
 		requireContains(t, text, `"metallic": 0.75`)
 	})
