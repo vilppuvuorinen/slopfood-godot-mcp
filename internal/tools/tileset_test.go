@@ -56,6 +56,8 @@ func TestTilesetValidation(t *testing.T) {
 		{name: "read missing resource path", tool: readTileset, project: root, args: `{}`, want: "resourcePath is required."},
 		{name: "invalid project path", tool: readTileset, project: "../escape", args: `{"resourcePath":"set.tres"}`, want: "Invalid path."},
 		{name: "invalid resource path", tool: readTileset, project: root, args: `{"resourcePath":"../escape.tres"}`, want: "Invalid path."},
+		{name: "absolute resource path", tool: readTileset, project: root, args: `{"resourcePath":"/etc/passwd.tres"}`, want: "Invalid path."},
+		{name: "normalized parent resource path", tool: readTileset, project: root, args: `{"resourcePath":"foo/../bar.tres"}`, want: "Invalid path."},
 		{name: "not a project", tool: readTileset, project: notAProject, args: `{"resourcePath":"set.tres"}`, want: "Not a valid Godot project"},
 	}
 	for _, tt := range tests {

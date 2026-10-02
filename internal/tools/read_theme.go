@@ -43,7 +43,7 @@ func handleReadTheme(ctx Context, raw json.RawMessage) (any, error) {
 	if args.ResourcePath == "" {
 		return requiredArgsResult("resourcePath"), nil
 	}
-	if !validPath(project) || !validPath(args.ResourcePath) {
+	if _, ok := normalizeReadPath(project, args.ResourcePath); !ok {
 		return invalidPathResult(), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {

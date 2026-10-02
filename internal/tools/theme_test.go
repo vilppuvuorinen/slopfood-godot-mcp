@@ -73,6 +73,8 @@ func TestThemeValidation(t *testing.T) {
 		{name: "read missing resource path", tool: readTheme, project: root, args: `{}`, want: "resourcePath is required."},
 		{name: "invalid project path", tool: readTheme, project: "../escape", args: `{"resourcePath":"themes/main.tres"}`, want: "Invalid path."},
 		{name: "invalid resource path", tool: readTheme, project: root, args: `{"resourcePath":"../escape.tres"}`, want: "Invalid path."},
+		{name: "absolute resource path", tool: readTheme, project: root, args: `{"resourcePath":"/etc/passwd.tres"}`, want: "Invalid path."},
+		{name: "normalized parent resource path", tool: readTheme, project: root, args: `{"resourcePath":"foo/../bar.tres"}`, want: "Invalid path."},
 		{name: "not a project", tool: readTheme, project: notAProject, args: `{"resourcePath":"themes/main.tres"}`, want: "Not a valid Godot project"},
 	}
 	for _, tt := range tests {

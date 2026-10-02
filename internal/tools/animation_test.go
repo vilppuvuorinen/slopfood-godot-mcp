@@ -73,6 +73,8 @@ func TestAnimationValidation(t *testing.T) {
 		{name: "read missing resource path", tool: readAnimation, project: root, args: `{}`, want: "resourcePath is required."},
 		{name: "invalid project path", tool: readAnimation, project: "../escape", args: `{"resourcePath":"anim.tres"}`, want: "Invalid path."},
 		{name: "invalid resource path", tool: readAnimation, project: root, args: `{"resourcePath":"../escape.tres"}`, want: "Invalid path."},
+		{name: "absolute resource path", tool: readAnimation, project: root, args: `{"resourcePath":"/etc/passwd.tres"}`, want: "Invalid path."},
+		{name: "normalized parent resource path", tool: readAnimation, project: root, args: `{"resourcePath":"foo/../bar.tres"}`, want: "Invalid path."},
 		{name: "not a project", tool: readAnimation, project: notAProject, args: `{"resourcePath":"anim.tres"}`, want: "Not a valid Godot project"},
 	}
 	for _, tt := range tests {
