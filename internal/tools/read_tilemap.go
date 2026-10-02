@@ -3,7 +3,6 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
@@ -48,15 +47,8 @@ func handleReadTilemap(ctx Context, raw json.RawMessage) (any, error) {
 	if args.ScenePath == "" || args.NodePath == "" {
 		return requiredArgsResult("scenePath", "nodePath"), nil
 	}
-	sceneFull, pathOK := confinePath(project, args.ScenePath)
-	if !validPath(project) || !pathOK {
-		return invalidPathResult(), nil
-	}
-	if !pathExists(filepath.Join(project, "project.godot")) {
-		return notAProjectResult(project), nil
-	}
-	if !pathExists(sceneFull) {
-		return sceneMissingResult(args.ScenePath), nil
+	if _, result, ok := ensureReadableScene(project, args.ScenePath); !ok {
+		return result, nil
 	}
 
 	params := map[string]any{

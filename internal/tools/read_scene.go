@@ -3,7 +3,6 @@ package tools
 import (
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
@@ -60,51 +59,5 @@ func handleReadScene(ctx Context, raw json.RawMessage) (any, error) {
 			"Omit depth to return the whole subtree",
 		), nil
 	}
-	sceneFull, pathOK := confinePath(project, args.ScenePath)
-	if !validPath(project) || !pathOK {
-		return invalidPathResult(), nil
-	}
-	if !pathExists(filepath.Join(project, "project.godot")) {
-		return notAProjectResult(project), nil
-	}
-	if !pathExists(sceneFull) {
-		return sceneMissingResult(args.ScenePath), nil
-	}
-
-	params := map[string]any{"scenePath": args.ScenePath}
-	if args.NodePath != "" {
-		params["nodePath"] = args.NodePath
-	}
-	if args.Depth != nil {
-		params["depth"] = *args.Depth
-	}
-	stdout, stderr, exitCode, err := ctx.Run(project, "read_scene", params)
-	if err != nil {
-		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
-			"Failed to read scene: "+err.Error(),
-			headlessSolutions...,
-		), nil
-	}
-	if scriptFailed(exitCode, stderr) {
-		return mcp.ErrorResult(
-			"Failed to read scene: "+stderr,
-			headlessSolutions...,
-		), nil
-	}
-
-	// A non-error result always carries the declared node tree, so markerless or
-	// invalid output is a failure; the raw output stays in the message.
-	if payload, ok := markerJSON(stdout); ok {
-		if json.Valid([]byte(payload)) {
-			return mcp.JSONResult(payload), nil
-		}
-		return mcp.ErrorResult(
-			"Failed to read scene: read_scene returned invalid JSON: "+payload,
-			headlessSolutions...,
-		), nil
-	}
-	return mcp.ErrorResult(
-		"Failed to read scene: read_scene returned no structured output: "+stdout,
-		headlessSolutions...,
-	), nil
+	return readSceneThrough(ctx, project, args.ScenePath, args.NodePath, args.Depth)
 }
