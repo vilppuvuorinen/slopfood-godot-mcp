@@ -95,6 +95,26 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireType(t, "propertyFilter", "array")
 			schema.requirePropCount(t, 2)
 		}},
+		{"read_node", "Read a node subtree from a scene, or the cells of a TileMapLayer node; use read to read whole files", func(t *testing.T, schema toolSchema) {
+			schema.requireRequired(t, "type", "path", "nodePath")
+			schema.requireStringProps(t, "type", "path", "nodePath")
+			schema.requireType(t, "depth", "integer")
+			schema.requirePropCount(t, 4)
+
+			enum, ok := schema.Properties["type"]["enum"].([]any)
+			if !ok {
+				t.Fatalf("type enum = %v", schema.Properties["type"]["enum"])
+			}
+			want := []string{"scene", "tilemap"}
+			if len(enum) != len(want) {
+				t.Fatalf("type enum = %v, want %v", enum, want)
+			}
+			for i, value := range want {
+				if enum[i] != value {
+					t.Errorf("type enum[%d] = %v, want %q", i, enum[i], value)
+				}
+			}
+		}},
 		{"read_scene", "Read scene file as JSON node tree, including signal connections (headless)", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath")
 			schema.requireStringProps(t, "scenePath", "nodePath")

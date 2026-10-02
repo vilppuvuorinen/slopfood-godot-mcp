@@ -61,8 +61,8 @@ func TestToolsUnique(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	if len(seen) != 23 {
-		t.Errorf("registered %d tools, want 23", len(seen))
+	if len(seen) != 24 {
+		t.Errorf("registered %d tools, want 24", len(seen))
 	}
 }
 
@@ -71,6 +71,7 @@ var schemaOptionalReads = map[string]bool{
 	"read":                 true,
 	"read_animation":       true,
 	"read_binary_resource": true,
+	"read_node":            true,
 	"read_scene":           true,
 	"read_theme":           true,
 	"read_tilemap":         true,
@@ -99,6 +100,7 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"read":                 true,
 		"read_animation":       true,
 		"read_binary_resource": true,
+		"read_node":            true,
 		"read_scene":           true,
 		"read_tilemap":         true,
 		"read_tileset":         true,

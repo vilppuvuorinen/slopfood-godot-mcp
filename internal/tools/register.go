@@ -17,6 +17,7 @@ var allTools = []func() mcp.Tool{
 	readTileset,
 	readTheme,
 	read,
+	readNode,
 }
 
 func Register(s *mcp.Server, project string) {
