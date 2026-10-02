@@ -329,12 +329,12 @@ type testSceneConnection struct {
 
 func readSceneConnections(t *testing.T, session *mcp.ClientSession, scenePath string) []testSceneConnection {
 	t.Helper()
-	text := requireToolText(t, session, "read_scene", map[string]any{"scenePath": scenePath})
+	text := requireToolText(t, session, "read", map[string]any{"type": "scene", "path": scenePath})
 	var payload struct {
 		Connections []testSceneConnection `json:"connections"`
 	}
 	if err := json.Unmarshal([]byte(text), &payload); err != nil {
-		t.Fatalf("decode read_scene: %v\n%s", err, text)
+		t.Fatalf("decode read: %v\n%s", err, text)
 	}
 	return payload.Connections
 }
@@ -342,7 +342,7 @@ func readSceneConnections(t *testing.T, session *mcp.ClientSession, scenePath st
 // TestRunScriptSceneSignals smoke tests the signal connections the removed
 // add_scene_signal/remove_scene_signal tools used to wrap. The scripts edit the
 // scene through the live editor session and the result is read back from the
-// file and with read_scene, so a bridge change that breaks editor-mode scene
+// file and with read(type=scene), so a bridge change that breaks editor-mode scene
 // mutation fails here.
 func TestRunScriptSceneSignals(t *testing.T) {
 	t.Parallel()

@@ -24,8 +24,9 @@ func TestReadSceneTool(t *testing.T) {
 	t.Run("reads the root node", func(t *testing.T) {
 		createScene(t, session, "scenes/main.tscn", "Node2D")
 
-		text := requireToolText(t, session, "read_scene", map[string]any{
-			"scenePath": "scenes/main.tscn",
+		text := requireToolText(t, session, "read", map[string]any{
+			"type": "scene",
+			"path": "scenes/main.tscn",
 		})
 
 		var tree sceneNode
@@ -46,8 +47,9 @@ func TestReadSceneTool(t *testing.T) {
 			"nodeName":  "Player",
 		})
 
-		text := requireToolText(t, session, "read_scene", map[string]any{
-			"scenePath": "scenes/tree.tscn",
+		text := requireToolText(t, session, "read", map[string]any{
+			"type": "scene",
+			"path": "scenes/tree.tscn",
 		})
 
 		var tree sceneNode
@@ -76,9 +78,10 @@ func TestReadSceneTool(t *testing.T) {
 			"parentNodePath": "Player",
 		})
 
-		text := requireToolText(t, session, "read_scene", map[string]any{
-			"scenePath": "scenes/scope.tscn",
-			"nodePath":  "root/Player",
+		text := requireToolText(t, session, "read_node", map[string]any{
+			"type":     "scene",
+			"path":     "scenes/scope.tscn",
+			"nodePath": "root/Player",
 		})
 		var scoped sceneNode
 		if err := json.Unmarshal([]byte(text), &scoped); err != nil {
@@ -91,9 +94,10 @@ func TestReadSceneTool(t *testing.T) {
 			t.Errorf("scoped children = %+v, want Weapon", scoped.Children)
 		}
 
-		text = requireToolText(t, session, "read_scene", map[string]any{
-			"scenePath": "scenes/scope.tscn",
-			"depth":     1,
+		text = requireToolText(t, session, "read", map[string]any{
+			"type":  "scene",
+			"path":  "scenes/scope.tscn",
+			"depth": 1,
 		})
 		var shallow sceneNode
 		if err := json.Unmarshal([]byte(text), &shallow); err != nil {
@@ -115,9 +119,10 @@ func TestReadSceneTool(t *testing.T) {
 			"nodeName":  "Player",
 		})
 
-		text := requireToolText(t, session, "read_scene", map[string]any{
-			"scenePath": "scenes/depth0.tscn",
-			"depth":     0,
+		text := requireToolText(t, session, "read", map[string]any{
+			"type":  "scene",
+			"path":  "scenes/depth0.tscn",
+			"depth": 0,
 		})
 		var tree sceneNode
 		if err := json.Unmarshal([]byte(text), &tree); err != nil {
@@ -131,9 +136,10 @@ func TestReadSceneTool(t *testing.T) {
 	t.Run("explicit root nodePath", func(t *testing.T) {
 		createScene(t, session, "scenes/rootpath.tscn", "Node2D")
 
-		text := requireToolText(t, session, "read_scene", map[string]any{
-			"scenePath": "scenes/rootpath.tscn",
-			"nodePath":  "root",
+		text := requireToolText(t, session, "read_node", map[string]any{
+			"type":     "scene",
+			"path":     "scenes/rootpath.tscn",
+			"nodePath": "root",
 		})
 		var tree sceneNode
 		if err := json.Unmarshal([]byte(text), &tree); err != nil {
@@ -147,9 +153,10 @@ func TestReadSceneTool(t *testing.T) {
 	t.Run("unknown nodePath", func(t *testing.T) {
 		createScene(t, session, "scenes/unknown.tscn", "Node2D")
 
-		res := callTool(t, session, "read_scene", map[string]any{
-			"scenePath": "scenes/unknown.tscn",
-			"nodePath":  "Nope",
+		res := callTool(t, session, "read_node", map[string]any{
+			"type":     "scene",
+			"path":     "scenes/unknown.tscn",
+			"nodePath": "Nope",
 		})
 		if !res.IsError {
 			t.Fatal("expected an error for an unknown nodePath")
@@ -157,12 +164,29 @@ func TestReadSceneTool(t *testing.T) {
 		requirePrefix(t, firstText(t, res), "Failed to read scene:")
 	})
 
+	t.Run("accepts res:// path", func(t *testing.T) {
+		createScene(t, session, "scenes/respath.tscn", "Node2D")
+
+		text := requireToolText(t, session, "read", map[string]any{
+			"type": "scene",
+			"path": "res://scenes/respath.tscn",
+		})
+		var tree sceneNode
+		if err := json.Unmarshal([]byte(text), &tree); err != nil {
+			t.Fatalf("unmarshal %q: %v", text, err)
+		}
+		if tree.Name != "root" || tree.Type != "Node2D" {
+			t.Errorf("root = %+v", tree)
+		}
+	})
+
 	t.Run("non-scene resource is an error", func(t *testing.T) {
 		writeE2EFile(t, filepath.Join(root, "thing.tres"), resourceTres)
 
-		// A .tres loads as a Resource, not a PackedScene, so read_scene errors.
-		res := callTool(t, session, "read_scene", map[string]any{
-			"scenePath": "thing.tres",
+		// A .tres loads as a Resource, not a PackedScene, so read(type=scene) errors.
+		res := callTool(t, session, "read", map[string]any{
+			"type": "scene",
+			"path": "thing.tres",
 		})
 		if !res.IsError {
 			t.Fatal("expected an error for a non-scene resource")
@@ -188,8 +212,9 @@ func TestReadSceneNestedProperties(t *testing.T) {
 		"scriptPath": "scripts/config.gd",
 	})
 
-	text := requireToolText(t, session, "read_scene", map[string]any{
-		"scenePath": "scenes/dict.tscn",
+	text := requireToolText(t, session, "read", map[string]any{
+		"type": "scene",
+		"path": "scenes/dict.tscn",
 	})
 
 	var tree sceneNode
@@ -232,8 +257,9 @@ func TestReadSceneGroups(t *testing.T) {
 [node name="Child" type="Node2D" parent="." groups=["pickups", "enemies"]]
 `)
 
-	text := requireToolText(t, session, "read_scene", map[string]any{
-		"scenePath": "scenes/groups.tscn",
+	text := requireToolText(t, session, "read", map[string]any{
+		"type": "scene",
+		"path": "scenes/groups.tscn",
 	})
 	var tree sceneNode
 	if err := json.Unmarshal([]byte(text), &tree); err != nil {
@@ -255,28 +281,35 @@ func TestReadSceneErrors(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
 
-	t.Run("missing paths", func(t *testing.T) {
-		requireToolError(t, session, "read_scene", map[string]any{}, "scenePath is required.")
+	t.Run("missing type and path", func(t *testing.T) {
+		requireToolError(t, session, "read", map[string]any{}, "type is required.")
+	})
+
+	t.Run("missing path", func(t *testing.T) {
+		requireToolError(t, session, "read", map[string]any{"type": "scene"}, "path is required.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {
 		notProject := t.TempDir()
 		notProjectSession := connectProject(t, notProject)
-		requireToolError(t, notProjectSession, "read_scene", map[string]any{
-			"scenePath": "main.tscn",
+		requireToolError(t, notProjectSession, "read", map[string]any{
+			"type": "scene",
+			"path": "main.tscn",
 		}, "Not a valid Godot project: "+notProject)
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		requireToolError(t, session, "read_scene", map[string]any{
-			"scenePath": "missing.tscn",
+		requireToolError(t, session, "read", map[string]any{
+			"type": "scene",
+			"path": "missing.tscn",
 		}, "Scene file does not exist: missing.tscn")
 	})
 
 	t.Run("negative depth", func(t *testing.T) {
-		requireToolError(t, session, "read_scene", map[string]any{
-			"scenePath": "main.tscn",
-			"depth":     -1,
+		requireToolError(t, session, "read", map[string]any{
+			"type":  "scene",
+			"path":  "main.tscn",
+			"depth": -1,
 		}, "depth must be zero or greater.")
 	})
 }

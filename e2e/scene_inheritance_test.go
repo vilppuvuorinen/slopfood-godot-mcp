@@ -49,8 +49,9 @@ func TestSceneInheritanceTool(t *testing.T) {
 		`instance=ExtResource(`,
 	)
 
-	text := requireToolText(t, session, "read_scene", map[string]any{
-		"scenePath": "scenes/derived.tscn",
+	text := requireToolText(t, session, "read", map[string]any{
+		"type": "scene",
+		"path": "scenes/derived.tscn",
 	})
 	var tree inheritedScene
 	if err := json.Unmarshal([]byte(text), &tree); err != nil {
@@ -117,9 +118,10 @@ func TestInheritedSceneEditsRejected(t *testing.T) {
 		t.Errorf("derived scene changed:\nbefore:\n%s\nafter:\n%s", before, got)
 	}
 
-	// read_scene is not caught by the guard; it instantiates the base subtree.
-	requireContains(t, requireToolText(t, session, "read_scene", map[string]any{
-		"scenePath": "scenes/derived.tscn",
+	// read(type=scene) is not caught by the guard; it instantiates the base subtree.
+	requireContains(t, requireToolText(t, session, "read", map[string]any{
+		"type": "scene",
+		"path": "scenes/derived.tscn",
 	}), `"connections"`)
 }
 

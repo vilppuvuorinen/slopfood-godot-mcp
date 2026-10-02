@@ -36,8 +36,9 @@ func seedValueCodecScene(t *testing.T) (string, *mcp.ClientSession) {
 
 func readRootProperties(t *testing.T, session *mcp.ClientSession) map[string]any {
 	t.Helper()
-	text := requireToolText(t, session, "read_scene", map[string]any{
-		"scenePath": "scenes/codec.tscn",
+	text := requireToolText(t, session, "read", map[string]any{
+		"type": "scene",
+		"path": "scenes/codec.tscn",
 	})
 	var tree sceneNode
 	if err := json.Unmarshal([]byte(text), &tree); err != nil {

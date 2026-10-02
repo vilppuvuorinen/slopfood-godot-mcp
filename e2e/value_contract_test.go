@@ -111,8 +111,9 @@ func writeSceneConfig(t *testing.T, session *mcp.ClientSession, config any) {
 
 func readSceneConfig(t *testing.T, session *mcp.ClientSession) map[string]any {
 	t.Helper()
-	text := requireToolText(t, session, "read_scene", map[string]any{
-		"scenePath": "scenes/contract.tscn",
+	text := requireToolText(t, session, "read", map[string]any{
+		"type": "scene",
+		"path": "scenes/contract.tscn",
 	})
 	var tree sceneNode
 	if err := json.Unmarshal([]byte(text), &tree); err != nil {

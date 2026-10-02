@@ -28,7 +28,7 @@ func TestAddNodeFromGlobalClass(t *testing.T) {
 	scene := readFile(t, filepath.Join(root, "scenes", "main.tscn"))
 	requireContains(t, scene, "res://scripts/player.gd")
 
-	text := requireToolText(t, session, "read_scene", map[string]any{"scenePath": "scenes/main.tscn"})
+	text := requireToolText(t, session, "read", map[string]any{"type": "scene", "path": "scenes/main.tscn"})
 	var tree sceneNode
 	if err := json.Unmarshal([]byte(text), &tree); err != nil {
 		t.Fatalf("unmarshal %q: %v", text, err)

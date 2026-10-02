@@ -173,7 +173,7 @@ func TestDaemonConcurrentMutationsNoLostUpdate(t *testing.T) {
 		}
 	}
 
-	text := requireToolText(t, first, "read_scene", map[string]any{"scenePath": "scenes/main.tscn"})
+	text := requireToolText(t, first, "read", map[string]any{"type": "scene", "path": "scenes/main.tscn"})
 	var tree sceneNode
 	if err := json.Unmarshal([]byte(text), &tree); err != nil {
 		t.Fatalf("unmarshal %q: %v", text, err)

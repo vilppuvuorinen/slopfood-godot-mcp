@@ -102,9 +102,10 @@ type testTilemapPayload struct {
 
 func readTilemapPayload(t *testing.T, session *mcp.ClientSession, scenePath string) testTilemapPayload {
 	t.Helper()
-	text := requireToolText(t, session, "read_tilemap", map[string]any{
-		"scenePath": scenePath,
-		"nodePath":  "root/Ground",
+	text := requireToolText(t, session, "read_node", map[string]any{
+		"type":     "tilemap",
+		"path":     scenePath,
+		"nodePath": "root/Ground",
 	})
 	var payload testTilemapPayload
 	if err := json.Unmarshal([]byte(text), &payload); err != nil {
@@ -136,9 +137,10 @@ func TestReadTilemapErrors(t *testing.T) {
 	t.Run("missing node", func(t *testing.T) {
 		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/level_missing_node.tscn", "rootNodeType": "Node2D"})
 
-		res := callTool(t, session, "read_tilemap", map[string]any{
-			"scenePath": "scenes/level_missing_node.tscn",
-			"nodePath":  "root/Missing",
+		res := callTool(t, session, "read_node", map[string]any{
+			"type":     "tilemap",
+			"path":     "scenes/level_missing_node.tscn",
+			"nodePath": "root/Missing",
 		})
 		if !res.IsError {
 			t.Fatal("expected an error result")
@@ -154,9 +156,10 @@ func TestReadTilemapErrors(t *testing.T) {
 			"nodeName":  "Art",
 		})
 
-		res := callTool(t, session, "read_tilemap", map[string]any{
-			"scenePath": "scenes/level_not_tilemap.tscn",
-			"nodePath":  "root/Art",
+		res := callTool(t, session, "read_node", map[string]any{
+			"type":     "tilemap",
+			"path":     "scenes/level_not_tilemap.tscn",
+			"nodePath": "root/Art",
 		})
 		if !res.IsError {
 			t.Fatal("expected an error result")
@@ -165,9 +168,10 @@ func TestReadTilemapErrors(t *testing.T) {
 	})
 
 	t.Run("missing scene", func(t *testing.T) {
-		requireToolError(t, session, "read_tilemap", map[string]any{
-			"scenePath": "scenes/missing.tscn",
-			"nodePath":  "root/Ground",
+		requireToolError(t, session, "read_node", map[string]any{
+			"type":     "tilemap",
+			"path":     "scenes/missing.tscn",
+			"nodePath": "root/Ground",
 		}, "Scene file does not exist: scenes/missing.tscn")
 	})
 }
