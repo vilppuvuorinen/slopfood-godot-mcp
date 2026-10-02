@@ -68,9 +68,8 @@ func TestToolsUnique(t *testing.T) {
 
 // schemaOptionalReads is the allowlist of self-describing reads with no output schema.
 var schemaOptionalReads = map[string]bool{
-	"read":             true,
-	"read_node":        true,
-	"validate_scripts": true,
+	"read":      true,
+	"read_node": true,
 }
 
 func TestToolsAdvertiseMetadata(t *testing.T) {

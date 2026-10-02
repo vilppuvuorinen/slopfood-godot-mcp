@@ -19,6 +19,36 @@ func validateScripts() mcp.Tool {
 			"properties": map[string]any{},
 			"required":   []string{},
 		},
+		OutputSchema: payloadOutputSchema(map[string]any{
+			"fileCount":       map[string]any{"type": "integer"},
+			"filesWithErrors": map[string]any{"type": "integer"},
+			"allValid":        map[string]any{"type": "boolean"},
+			"results": map[string]any{
+				"type": "array",
+				"items": map[string]any{
+					"type": "object",
+					"properties": map[string]any{
+						"scriptPath": map[string]any{"type": "string"},
+						"checked":    map[string]any{"type": "boolean"},
+						"valid":      map[string]any{"type": "boolean"},
+						"errorCount": map[string]any{"type": "integer"},
+						"errors": map[string]any{
+							"type": "array",
+							"items": map[string]any{
+								"type": "object",
+								"properties": map[string]any{
+									"message": map[string]any{"type": "string"},
+									"file":    map[string]any{"type": "string"},
+									"line":    map[string]any{"type": "integer"},
+								},
+								"required": []string{"message"},
+							},
+						},
+					},
+					"required": []string{"scriptPath", "checked", "valid", "errorCount", "errors"},
+				},
+			},
+		}),
 		Handler: withContext(handleValidateScripts),
 	}
 }
