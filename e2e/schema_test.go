@@ -84,17 +84,6 @@ func TestToolSchemas(t *testing.T) {
 				}
 			}
 		}},
-		{"read_animation", "Read Animation resources and their tracks", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requirePropCount(t, 1)
-		}},
-		{"read_binary_resource", "Read engine-decoded binary .res resource files (text .tres files are read directly)", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requireType(t, "propertyFilter", "array")
-			schema.requirePropCount(t, 2)
-		}},
 		{"read_node", "Read a node subtree from a scene, or the cells of a TileMapLayer node; use read to read whole files", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "type", "path", "nodePath")
 			schema.requireStringProps(t, "type", "path", "nodePath")
@@ -114,27 +103,6 @@ func TestToolSchemas(t *testing.T) {
 					t.Errorf("type enum[%d] = %v, want %q", i, enum[i], value)
 				}
 			}
-		}},
-		{"read_scene", "Read scene file as JSON node tree, including signal connections (headless)", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath")
-			schema.requireStringProps(t, "scenePath", "nodePath")
-			schema.requireType(t, "depth", "integer")
-			schema.requirePropCount(t, 3)
-		}},
-		{"read_theme", "Read Theme resources, their types, variations, and items", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requirePropCount(t, 1)
-		}},
-		{"read_tilemap", "Read the cells of a TileMapLayer node in a scene", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath", "nodePath")
-			schema.requireStringProps(t, "scenePath", "nodePath")
-			schema.requirePropCount(t, 2)
-		}},
-		{"read_tileset", "Read TileSet resources and their sources and tiles", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "resourcePath")
-			schema.requireStringProps(t, "resourcePath")
-			schema.requirePropCount(t, 1)
 		}},
 		{"remove_scene_node", "Remove a node from a scene file (headless)", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath")

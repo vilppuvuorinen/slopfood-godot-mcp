@@ -774,7 +774,7 @@ func read_scene(result: Result, params) -> Result:
     if scene == null:
         return result.fail()
     if not (scene is PackedScene):
-        result.err("Not a scene file: " + full_scene_path + " (use read_binary_resource for binary resources)")
+        result.err("Not a scene file: " + full_scene_path + " (use read(type=resource) for binary resources)")
         return result.fail()
 
     var scene_root = track_temp(scene.instantiate())

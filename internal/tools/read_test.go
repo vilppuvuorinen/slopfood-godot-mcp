@@ -152,6 +152,8 @@ func TestReadValidation(t *testing.T) {
 		{name: "absolute resource path", project: root, args: `{"type":"animation","path":"/etc/passwd.tres"}`, want: "Invalid path."},
 		{name: "normalized parent resource path", project: root, args: `{"type":"animation","path":"foo/../bar.tres"}`, want: "Invalid path."},
 		{name: "scene parent path", project: root, args: `{"type":"scene","path":"foo/../bar.tscn"}`, want: "Invalid path."},
+		{name: "scene escape path", project: root, args: `{"type":"scene","path":"../escape.tscn"}`, want: "Invalid path."},
+		{name: "missing scene file", project: root, args: `{"type":"scene","path":"missing.tscn"}`, want: "Scene file does not exist: missing.tscn"},
 		{name: "not a project", project: notAProject, args: `{"type":"animation","path":"a.tres"}`, want: "Not a valid Godot project"},
 		{name: "resource rejects tres", project: root, args: `{"type":"resource","path":"foo.tres"}`, want: "read(type=resource) reads binary .res resources; foo.tres is a text .tres file."},
 	}

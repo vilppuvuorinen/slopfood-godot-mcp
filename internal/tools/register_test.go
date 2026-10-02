@@ -42,7 +42,7 @@ func registeredToolNames(t *testing.T) map[string]bool {
 
 func TestRegisterAllTools(t *testing.T) {
 	names := registeredToolNames(t)
-	for _, name := range []string{"validate_project", "create_scene", "run_script", "read_theme"} {
+	for _, name := range []string{"validate_project", "create_scene", "run_script", "read", "read_node"} {
 		if !names[name] {
 			t.Errorf("tool %q not registered", name)
 		}
@@ -61,22 +61,16 @@ func TestToolsUnique(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	if len(seen) != 24 {
-		t.Errorf("registered %d tools, want 24", len(seen))
+	if len(seen) != 18 {
+		t.Errorf("registered %d tools, want 18", len(seen))
 	}
 }
 
 // schemaOptionalReads is the allowlist of self-describing reads with no output schema.
 var schemaOptionalReads = map[string]bool{
-	"read":                 true,
-	"read_animation":       true,
-	"read_binary_resource": true,
-	"read_node":            true,
-	"read_scene":           true,
-	"read_theme":           true,
-	"read_tilemap":         true,
-	"read_tileset":         true,
-	"validate_scripts":     true,
+	"read":             true,
+	"read_node":        true,
+	"validate_scripts": true,
 }
 
 func TestToolsAdvertiseMetadata(t *testing.T) {
@@ -96,17 +90,11 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 
 func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	readOnly := map[string]bool{
-		"get_godot_version":    true,
-		"read":                 true,
-		"read_animation":       true,
-		"read_binary_resource": true,
-		"read_node":            true,
-		"read_scene":           true,
-		"read_tilemap":         true,
-		"read_tileset":         true,
-		"read_theme":           true,
-		"validate_project":     true,
-		"validate_scripts":     true,
+		"get_godot_version": true,
+		"read":              true,
+		"read_node":         true,
+		"validate_project":  true,
+		"validate_scripts":  true,
 	}
 	nonDestructive := map[string]bool{
 		"create_project": true,
