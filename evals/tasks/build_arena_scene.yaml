@@ -80,12 +80,17 @@ checks:
     value: player.gd
     weight: 2
 expect:
+  # The new scene is a tool-editable entity; player.gd is file-editable.
   full:
     used_all: [godot_create_scene]
-    used_none: [edit]
+    file_edit_any: ["**/scripts/player.gd"]
+    file_edit_none: ["**/levels/arena.tscn"]
+    used_none: [edit, bash]
   script_escape:
     used_all: [godot_run_script]
-    used_none: [edit]
+    file_edit_any: ["**/scripts/player.gd"]
+    file_edit_none: ["**/levels/arena.tscn"]
+    used_none: [edit, bash]
 rubric: |
   res://levels/arena.tscn exists with a Node2D root named Arena containing a
   Ground StaticBody2D at (200, 300) with a 400x40 rectangle collider and a

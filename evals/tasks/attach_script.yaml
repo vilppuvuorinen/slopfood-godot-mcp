@@ -21,13 +21,18 @@ checks:
     path: Player
     value: player.gd
 expect:
-  # Creating player.gd with the built-in write tool is fine; rewriting the
-  # .tscn by hand is not, and attaching must go through the structured tool.
+  # player.gd is file-editable and should be written as a file; the .tscn must
+  # not be hand-edited, and attaching must go through the structured tool.
   full:
     used_all: [godot_attach_script]
-    used_none: [edit]
+    file_edit_any: ["**/player.gd"]
+    file_edit_none: ["**/main.tscn"]
+    used_none: [edit, bash]
   script_escape:
     used_all: [godot_run_script]
+    file_edit_any: ["**/player.gd"]
+    file_edit_none: ["**/main.tscn"]
+    used_none: [edit, bash]
 rubric: |
   res://player.gd exists, extends CharacterBody2D, exposes a speed() method, and
   is attached to Root/Player.

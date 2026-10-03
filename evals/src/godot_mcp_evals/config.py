@@ -8,6 +8,10 @@ from typing import Any
 
 import yaml
 
+# Built-in tools that mutate files. Entity-scoped expectations use these to tell
+# a legitimate script/project edit from a hand-edited scene.
+FILE_EDIT_TOOLS = ("edit", "write")
+
 
 @dataclasses.dataclass(frozen=True)
 class Check:
@@ -50,6 +54,13 @@ class Expectation:
     used_any: tuple[str, ...] = ()
     used_all: tuple[str, ...] = ()
     used_none: tuple[str, ...] = ()
+    # Entity-scoped checks: glob patterns matched against the path a file-editing
+    # tool (``edit``/``write``) targeted. ``file_edit_none`` forbids touching the
+    # matched entities by hand; ``file_edit_any`` requires at least one of them
+    # to be edited as a file. This distinguishes hand-editing a scene (illegal)
+    # from editing a script or project.godot (the intended file path).
+    file_edit_none: tuple[str, ...] = ()
+    file_edit_any: tuple[str, ...] = ()
 
     @classmethod
     def from_mapping(cls, raw: dict[str, Any]) -> Expectation:
@@ -63,6 +74,8 @@ class Expectation:
             used_any=names("used_any"),
             used_all=names("used_all"),
             used_none=names("used_none"),
+            file_edit_none=names("file_edit_none"),
+            file_edit_any=names("file_edit_any"),
         )
 
 
@@ -130,9 +143,21 @@ class Shape:
     description: str
     tools: dict[str, bool]
     reps: int | None = None
+    # Grade this shape with another shape's trajectory expectations. A bash-free
+    # variant of ``full`` exposes the same tools that the expectations name, so
+    # it can reuse ``full``'s ``expect`` block without duplicating it per task.
+    expect_alias: str | None = None
 
     def enabled(self) -> list[str]:
         return sorted(name for name, on in self.tools.items() if on)
+
+
+def resolve_expectation(task: Task, shape: Shape) -> Expectation | None:
+    """Look up a task's expectation for a shape, following ``expect_alias``."""
+    expectation = task.expect.get(shape.name)
+    if expectation is None and shape.expect_alias:
+        expectation = task.expect.get(shape.expect_alias)
+    return expectation
 
 
 @dataclasses.dataclass(frozen=True)
@@ -145,6 +170,10 @@ class Suite:
     shapes: list[str]
     tasks: str | list[str]
     jobs: int = 4
+    # Recycle ``opencode serve`` after this many runs. The server retains every
+    # session for the life of the process, so a long suite grows without bound;
+    # a fresh server per batch caps peak memory. See ``runner._execute_plan``.
+    server_max_runs: int = 40
 
 
 def load_tasks(tasks_dir: Path) -> dict[str, Task]:
@@ -171,6 +200,7 @@ def load_suite(path: Path) -> Suite:
         shapes=[str(s) for s in data.get("shapes", [])],
         tasks=data.get("tasks", "all"),
         jobs=max(1, int(data.get("jobs", 4))),
+        server_max_runs=max(1, int(data.get("server_max_runs", 40))),
     )
 
 
@@ -236,11 +266,13 @@ def load_shapes(
             all_mcp,
             all_builtin,
         )
+        alias = spec.get("expect_alias")
         shapes[str(name)] = Shape(
             name=str(name),
             description=str(spec.get("description", "")),
             tools=tools,
             reps=int(spec["reps"]) if spec.get("reps") is not None else None,
+            expect_alias=str(alias) if alias else None,
         )
     if not shapes:
         raise ValueError(f"no shapes defined in {path}")

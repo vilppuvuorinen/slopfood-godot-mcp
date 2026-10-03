@@ -2,15 +2,33 @@
 
 from __future__ import annotations
 
+import json
 import math
 from collections import defaultdict
 from typing import Any
+
+# Argument keys that name the file (or resource) a tool call targets. opencode's
+# built-ins use ``filePath``; the MCP scene tools use ``scenePath`` and friends.
+_PATH_ARG_KEYS = (
+    "filePath",
+    "path",
+    "file",
+    "fileName",
+    "filename",
+    "scenePath",
+    "resourcePath",
+    "scriptPath",
+    "target",
+)
+
+_ARG_TEXT_LIMIT = 400
 
 
 def extract(messages: list[dict[str, Any]], wall_ms: int) -> dict[str, Any]:
     """Summarise tokens, cost, tool usage and errors from session messages."""
     turns = 0
     tool_names: list[str] = []
+    tool_calls: list[dict[str, Any]] = []
     tool_errors = 0
     text_parts: list[str] = []
     errors: list[str] = []
@@ -47,6 +65,16 @@ def extract(messages: list[dict[str, Any]], wall_ms: int) -> dict[str, Any]:
                 name = str(part.get("tool") or part.get("name") or "")
                 tool_names.append(name)
                 state = part.get("state") or {}
+                args = state.get("input")
+                if not isinstance(args, dict):
+                    args = {}
+                tool_calls.append(
+                    {
+                        "name": name,
+                        "path": _tool_target(args),
+                        "args": _trim_args(args),
+                    }
+                )
                 if state.get("status") == "error":
                     tool_errors += 1
             elif kind == "text" and info.get("role") == "assistant":
@@ -59,6 +87,7 @@ def extract(messages: list[dict[str, Any]], wall_ms: int) -> dict[str, Any]:
         "mcp_tool_calls": len(mcp_calls),
         "builtin_tool_calls": len(tool_names) - len(mcp_calls),
         "tool_names": tool_names,
+        "call_log": tool_calls,
         "tool_errors": tool_errors,
         "input_tokens": totals["input_tokens"],
         "output_tokens": totals["output_tokens"],
@@ -71,6 +100,29 @@ def extract(messages: list[dict[str, Any]], wall_ms: int) -> dict[str, Any]:
         "errors": errors,
         "final_answer": "\n".join(text_parts).strip(),
     }
+
+
+def _tool_target(args: dict[str, Any]) -> str | None:
+    """Best-effort path/resource a tool call targets, for entity-scoped checks."""
+    for key in _PATH_ARG_KEYS:
+        value = args.get(key)
+        if isinstance(value, str) and value.strip():
+            return value
+    return None
+
+
+def _trim_args(args: dict[str, Any]) -> dict[str, Any]:
+    """Keep a call log cheap to store while preserving what the judge needs."""
+    trimmed: dict[str, Any] = {}
+    for key, value in args.items():
+        if isinstance(value, (int, float, bool)) or value is None:
+            trimmed[key] = value
+            continue
+        text = value if isinstance(value, str) else json.dumps(value, default=str)
+        if len(text) > _ARG_TEXT_LIMIT:
+            text = text[:_ARG_TEXT_LIMIT] + "...[truncated]"
+        trimmed[key] = text
+    return trimmed
 
 
 def _error_text(error: Any) -> str:

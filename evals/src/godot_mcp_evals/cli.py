@@ -39,6 +39,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--jobs", type=int, help="concurrent sessions (default: suite config, usually 4)"
     )
+    parser.add_argument(
+        "--server-max-runs",
+        type=int,
+        dest="server_max_runs",
+        help="recycle opencode serve after this many runs (default: suite config)",
+    )
     parser.add_argument("--model", help="executor model as provider/model")
     parser.add_argument("--judge", help="judge model as provider/model")
     parser.add_argument("--no-judge", action="store_true", help="skip the LLM judge")
@@ -104,6 +110,7 @@ def main(argv: list[str] | None = None) -> int:
         judge_spec=args.judge,
         reps=args.reps,
         jobs=args.jobs,
+        server_max_runs=args.server_max_runs,
     )
     try:
         runner.run_suite(options, console)

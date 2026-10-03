@@ -36,6 +36,7 @@ Useful flags:
 | `--tasks` / `--shapes` | Comma-separated allowlists (default: the suite config). |
 | `--reps` | Repetitions per task × shape. |
 | `--jobs` | Concurrent sessions (default: suite config, usually 4). |
+| `--server-max-runs` | Recycle `opencode serve` after this many runs (default `server_max_runs` in the suite config). |
 | `--model` / `--judge` | `provider/model` for the executor and judge. |
 | `--no-judge` | Deterministic checks only (cheaper, faster). |
 | `--dry-run` | Materialize fixtures and print the plan without model calls. |
@@ -53,7 +54,9 @@ summary is also printed to the terminal.
    is carried over minus its `mcp` block, so configured providers/models still
    resolve; set `EVALS_OPENCODE_CONFIG` to point at a specific config instead.
    Subagents are disabled (`subagent_depth: 0`) so each trajectory is the one
-   model's own.
+   model's own. The server retains every session for its lifetime, so it is
+   recycled (stopped and restarted) after `server_max_runs` runs; the plan is
+   executed in batches of that size, which bounds peak server memory.
 2. Up to `jobs` (default 4) cells run concurrently. For each (task × shape ×
    repetition):
    - the task fixture is copied to a fresh project directory under the work
@@ -159,14 +162,41 @@ checks and part of pass/fail:
 
 - `used_all` — every listed tool must appear in the trajectory.
 - `used_any` — at least one of the listed tools must appear.
-- `used_none` — none of the listed tools may appear (e.g. `edit`/`write`, to
-  catch a model that hand-edits `.tscn` text instead of using the structured
-  tool).
+- `used_none` — none of the listed tools may appear (e.g. `bash`/`edit`, to
+  catch a model that shells out to rewrite `.tscn` text instead of using the
+  structured tool).
+
+Tool-name checks say *which* tools ran, but not *what* they touched, so a
+trajectory that legitimately writes a script and illegitimately rewrites a scene
+both trip a blanket `used_none: [write]`. Two entity-scoped checks resolve that;
+they match against the path each `edit`/`write` call targeted (normalised both
+with and without the `res://` prefix):
+
+- `file_edit_none` — no `edit`/`write` call may target a matching path. Use it
+  to protect a tool-editable entity (e.g. `["**/main.tscn"]`).
+- `file_edit_any` — at least one `edit`/`write` call must target a matching
+  path. Use it to positively require that a file-editable entity (a `.gd`
+  script, `project.godot`) is edited as a file.
+
+The split the suite measures: scenes and resources (`.tscn`/`.tres`) are
+tool-editable and must go through the `godot_*` tools; scripts, `project.godot`
+and importable source assets are file-editable and should go through `edit`/
+`write`. A task asserts both sides — `used_none: [godot_run_script]` keeps a
+file-editable entity out of `run_script`, while `file_edit_none` keeps a
+tool-editable entity out of the file tools. This catches the case a name-only
+`used_none` misses: a scene rewritten through `bash`.
 
 Tool names are the fully-qualified opencode names: MCP tools carry the server
 prefix (`godot_add_node`, `godot_run_script`), built-ins do not (`edit`,
 `write`). A required tool that the shape does not expose is a config error and
-fails the run loudly, so expectations cannot silently become unsatisfiable.
+fails the run loudly, so expectations cannot silently become unsatisfiable; an
+entity-scoped check in a shape with no file-editing tool is rejected the same
+way, since it would pass vacuously.
+
+The call log (tool name, target path and trimmed arguments) is captured per run
+and handed to the judge, which is asked to flag edits that violate the legality
+rule — including a `bash` command that rewrites a `.tscn`, which the name-only
+checks cannot see. The judge verdict is reported, not enforced.
 
 ## Adding a toolset shape
 
@@ -176,6 +206,13 @@ The harness always sends a complete boolean map, so unspecified tools are off.
 A shape may also set `reps` to override the suite default (e.g. `read_only: 1`).
 A shape's `reps` takes precedence over `--reps`; `--reps` only overrides shapes
 that do not set their own.
+
+`full_nobash` and `script_escape_nobash` mirror their parents with the shell
+tool removed. They are the control for the `bash` escape hatch: shell commands
+can rewrite a `.tscn` without calling `edit`/`write`, so removing `bash`
+isolates how much of the score depends on that route. They expose the same
+tools the expectations name, so they grade with their parent's `expect` block
+via `expect_alias` rather than duplicating it per task.
 
 ## Interpreting results
 

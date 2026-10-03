@@ -9,10 +9,16 @@ judge: true
 # Concurrent sessions. Each is a full headless Godot process plus an agent, so
 # the ceiling is CPU/memory rather than the opencode server.
 jobs: 4
+# Recycle opencode serve after this many runs. The server retains every session
+# for its lifetime, so a long suite grows without bound; a fresh server per
+# batch caps peak memory. Lower it on memory-constrained hosts.
+server_max_runs: 40
 
 shapes:
   - full
+  - full_nobash
   - script_escape
+  - script_escape_nobash
   - read_only
 
 tasks: all

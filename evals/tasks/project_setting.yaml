@@ -9,10 +9,14 @@ checks:
     key: application/config/name
     value: Evals Suite
 expect:
-  # No structured tool covers this setting, so script_escape (no edit/write/
-  # bash) must reach for run_script.
+  # project.godot is a file-editable entity, so it is edited with a file tool in
+  # both shapes; the check rejects a run that reaches for run_script instead.
+  full:
+    file_edit_any: ["**/project.godot"]
+    used_none: [godot_run_script]
   script_escape:
-    used_all: [godot_run_script]
+    file_edit_any: ["**/project.godot"]
+    used_none: [godot_run_script]
 rubric: |
   project.godot declares application/config/name = "Evals Suite". The change was
   made in a way that keeps project.godot valid.

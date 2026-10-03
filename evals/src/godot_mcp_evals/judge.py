@@ -22,9 +22,23 @@ JUDGE_SCHEMA: dict[str, Any] = {
 
 JUDGE_SYSTEM = (
     "You are a strict evaluator of Godot project edits. You are given a task, the "
-    "deterministic check results, the agent's final answer and the file diff. Judge "
-    "whether the task was actually accomplished, not whether the agent claimed success. "
-    "Return only the requested JSON. Do not use tools."
+    "deterministic check results, the agent's tool-call log, its final answer and the "
+    "file diff. Judge whether the task was actually accomplished, not whether the agent "
+    "claimed success. Also flag any edit that violates the legality rule below. Return "
+    "only the requested JSON. Do not use tools."
+)
+
+# The rule the suite exists to measure: Godot entities that cannot be edited
+# reliably as text must be mutated through the MCP tools, and files that are
+# meant to be edited as text (scripts, project.godot, source assets) must be
+# edited with the file tools rather than through run_script.
+LEGALITY_RULE = (
+    "Godot scene and resource files (.tscn/.tres) must be mutated through the MCP "
+    "scene/resource tools (godot_*), never by editing their text or rewriting them "
+    "with a shell command. GDScript files (.gd), project.godot and importable source "
+    "assets should be edited as files with the edit/write tools (or run_script for "
+    "operations with no structured tool). A bash command that creates or rewrites a "
+    ".tscn/.tres is an illegal edit even though it does not call edit/write."
 )
 
 
@@ -42,6 +56,7 @@ def judge_run(
     answer: str,
     diff: list[dict[str, Any]],
     timeout_s: float,
+    call_log: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     judge_dir.mkdir(parents=True, exist_ok=True)
     user = _build_prompt(
@@ -52,6 +67,7 @@ def judge_run(
         check_results=check_results,
         answer=answer,
         diff=diff,
+        call_log=call_log or [],
     )
     try:
         session_id = client.create_session(str(judge_dir), f"judge-{task_id}")
@@ -100,6 +116,7 @@ def _build_prompt(
     check_results: list[dict[str, Any]],
     answer: str,
     diff: list[dict[str, Any]],
+    call_log: list[dict[str, Any]],
 ) -> str:
     checks = "\n".join(
         f"- [{ 'PASS' if c['passed'] else 'FAIL' }] {c['id']}: {c['detail']}" for c in check_results
@@ -109,10 +126,26 @@ def _build_prompt(
         f"# Task: {task_id}\n{description}\n\n"
         f"## Instruction given to the agent\n{prompt}\n\n"
         f"## Rubric\n{rubric or 'The task instruction should be satisfied exactly.'}\n\n"
+        f"## Legality rule (flag violations in reasons)\n{LEGALITY_RULE}\n\n"
         f"## Deterministic checks\n{checks or '(none)'}\n\n"
+        f"## Tool-call log\n{_render_call_log(call_log)}\n\n"
         f"## Agent final answer\n{answer or '(empty)'}\n\n"
         f"## File diff\n{diff_text}\n"
     )
+
+
+def _render_call_log(call_log: list[dict[str, Any]], limit: int = 6000) -> str:
+    if not call_log:
+        return "(no tool calls recorded)"
+    lines = []
+    for call in call_log:
+        name = call.get("name") or "?"
+        path = call.get("path")
+        args = call.get("args") or {}
+        rendered = json.dumps(args, ensure_ascii=False)
+        target = f" -> {path}" if path else ""
+        lines.append(f"- {name}{target}: {rendered}")
+    return "\n".join(lines)[:limit]
 
 
 def _render_diff(diff: list[dict[str, Any]], limit: int = 6000) -> str:

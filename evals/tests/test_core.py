@@ -74,6 +74,14 @@ def test_expect_parsing_and_defaults():
     assert read_answer.expect["full"].used_none == ("edit", "write")
 
 
+def test_entity_scoped_expect_parsing():
+    task = config.Task.from_yaml(EVALS_DIR / "tasks" / "project_setting.yaml")
+    assert task.expect["full"].file_edit_any == ("**/project.godot",)
+    assert task.expect["full"].used_none == ("godot_run_script",)
+    spawn = config.Task.from_yaml(EVALS_DIR / "tasks" / "spawn_pickup.yaml")
+    assert spawn.expect["full"].file_edit_none == ("**/main.tscn",)
+
+
 def test_trajectory_checks_pass_and_fail():
     task = config.Task.from_yaml(EVALS_DIR / "tasks" / "rename_move.yaml")
     shape = config.Shape(name="full", description="", tools={})
@@ -86,6 +94,60 @@ def test_trajectory_checks_pass_and_fail():
     failing = runner._trajectory_checks(task, shape, ["godot_run_script", "edit"])
     assert not all(result.passed for result in failing)
     assert any(result.id.endswith("used_none:edit") for result in failing if not result.passed)
+
+
+def test_file_edit_checks_are_entity_scoped():
+    task = config.Task.from_yaml(EVALS_DIR / "tasks" / "attach_script.yaml")
+    shape = config.Shape(name="full", description="", tools={})
+    call_log = [
+        {"name": "write", "path": "res://player.gd", "args": {}},
+        {"name": "godot_attach_script", "path": "res://main.tscn", "args": {}},
+    ]
+    checks = runner._trajectory_checks(task, shape, ["write", "godot_attach_script"], call_log)
+    assert all(result.passed for result in checks)
+    # Editing the scene by hand fails the entity check even though it is not the
+    # named edit tool's own target.
+    bad = runner._trajectory_checks(
+        task,
+        shape,
+        ["write", "godot_attach_script"],
+        [{"name": "write", "path": "res://main.tscn", "args": {}}],
+    )
+    assert any(
+        not result.passed and "main.tscn" in result.detail for result in bad
+    )
+    assert not any(
+        result.id.endswith("file_edit_any:**/player.gd") and result.passed for result in bad
+    )
+
+
+def test_file_edit_targets_normalizes_res_prefix():
+    targets = runner._file_edit_targets(
+        [
+            {"name": "write", "path": "res://a.gd"},
+            {"name": "edit", "path": "b.tscn"},
+            {"name": "write", "path": "/tmp/run/project.godot"},
+            {"name": "godot_run_script", "path": "res://c.tscn"},
+            {"name": "bash", "path": None},
+        ]
+    )
+    assert targets == {
+        "res://a.gd",
+        "a.gd",
+        "b.tscn",
+        "res://b.tscn",
+        "/tmp/run/project.godot",
+    }
+
+
+def test_expect_alias_resolution():
+    task = config.Task.from_yaml(EVALS_DIR / "tasks" / "project_setting.yaml")
+    aliased = config.Shape(name="full_nobash", description="", tools={}, expect_alias="full")
+    assert config.resolve_expectation(task, aliased) is task.expect["full"]
+    direct = config.Shape(name="full", description="", tools={})
+    assert config.resolve_expectation(task, direct) is task.expect["full"]
+    other = config.Shape(name="unknown", description="", tools={})
+    assert config.resolve_expectation(task, other) is None
 
 
 def test_check_weight_and_required_parsing():
@@ -156,6 +218,22 @@ def test_wilson_is_bounded():
     assert metrics.wilson(0, 0) == (0.0, 0.0)
 
 
+def test_judge_prompt_includes_legality_and_call_log():
+    prompt = judge._build_prompt(
+        task_id="t",
+        description="d",
+        prompt="p",
+        rubric="r",
+        check_results=[{"id": "t:0", "passed": True, "detail": "ok"}],
+        answer="done",
+        diff=[{"file": "res://main.tscn", "patch": "@@"}],
+        call_log=[{"name": "write", "path": "res://a.gd", "args": {"filePath": "res://a.gd"}}],
+    )
+    assert judge.LEGALITY_RULE.split(".")[0] in prompt
+    assert "Tool-call log" in prompt
+    assert "res://a.gd" in prompt
+
+
 def test_parse_json_tolerates_prose_and_fences():
     assert judge._parse_json('```json\n{"a": 1}\n```') == {"a": 1}
     assert judge._parse_json('here you go: {"b": true} thanks') == {"b": True}
@@ -181,6 +259,29 @@ def test_select_helper():
 def test_cli_jobs_flag():
     assert cli.build_parser().parse_args(["--jobs", "7"]).jobs == 7
     assert cli.build_parser().parse_args([]).jobs is None
+
+
+def test_cli_server_max_runs_flag():
+    parsed = cli.build_parser().parse_args(["--server-max-runs", "7"])
+    assert parsed.server_max_runs == 7
+    assert cli.build_parser().parse_args([]).server_max_runs is None
+
+
+def test_suite_server_max_runs_default_and_override(tmp_path):
+    assert config.load_suite(EVALS_DIR / "config" / "suite.yaml").server_max_runs == 40
+    custom = tmp_path / "suite.yaml"
+    custom.write_text("server_max_runs: 5\n")
+    assert config.load_suite(custom).server_max_runs == 5
+    custom.write_text("server_max_runs: 0\n")
+    assert config.load_suite(custom).server_max_runs == 1
+
+
+def test_plan_batches_caps_batch_size():
+    plan = list(range(10))
+    assert runner._plan_batches(plan, 4) == [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9]]
+    assert runner._plan_batches(plan, 100) == [list(range(10))]
+    assert runner._plan_batches([], 4) == []
+    assert runner._plan_batches(plan, 0) == [[i] for i in range(10)]
 
 
 def test_suite_jobs_default_and_override(tmp_path):
@@ -258,7 +359,13 @@ def test_default_shapes_resolve_against_registered_tools():
             "rename_scene_node",
         )
     )
-    assert set(shapes) == {"full", "script_escape", "read_only"}
+    assert set(shapes) == {
+        "full",
+        "full_nobash",
+        "script_escape",
+        "script_escape_nobash",
+        "read_only",
+    }
     assert shapes["full"].tools["bash"] is True
     # script_escape isolates the structured MCP tools only; the model must keep
     # the same built-in escape hatches so its choice of tool stays observable.
@@ -267,3 +374,70 @@ def test_default_shapes_resolve_against_registered_tools():
         assert shapes["full"].tools[name] is True
     for name in ("bash", "edit", "write"):
         assert shapes["read_only"].tools[name] is False
+    # The *_nobash variants differ from their parent only by the shell tool, and
+    # grade with the parent's expectations.
+    assert shapes["full_nobash"].tools["bash"] is False
+    assert shapes["full_nobash"].tools["godot_add_node"] is True
+    assert shapes["full_nobash"].expect_alias == "full"
+    assert shapes["script_escape_nobash"].tools["bash"] is False
+    assert shapes["script_escape_nobash"].tools["godot_run_script"] is True
+    assert shapes["script_escape_nobash"].expect_alias == "script_escape"
+
+
+def test_shapes_validate_expectations(tmp_path):
+    import types
+
+    shapes = config.load_shapes(
+        EVALS_DIR / "config" / "toolsets.yaml",
+        REGISTERED_MCP,
+        runner.DEFAULT_BUILTIN_TOOLS,
+    )
+    tasks = config.load_tasks(EVALS_DIR / "tasks")
+    options = types.SimpleNamespace(
+        tasks=tasks,
+        selected_tasks=list(tasks),
+        selected_shapes=list(shapes),
+    )
+    runner._validate_expectations(options, shapes)
+
+
+def test_validate_expectations_rejects_alias_cycle():
+    import types
+
+    shapes = {
+        "a": config.Shape(name="a", description="", tools={"edit": True}, expect_alias="missing"),
+    }
+    options = types.SimpleNamespace(tasks={}, selected_tasks=[], selected_shapes=["a"])
+    with pytest.raises(ValueError):
+        runner._validate_expectations(options, shapes)
+
+
+def test_extract_records_call_log():
+    messages = [
+        {
+            "info": {"role": "assistant"},
+            "parts": [
+                {
+                    "type": "tool",
+                    "tool": "write",
+                    "state": {
+                        "status": "completed",
+                        "input": {"filePath": "res://a.gd", "content": "x"},
+                    },
+                },
+                {
+                    "type": "tool",
+                    "tool": "godot_run_script",
+                    "state": {"status": "completed", "input": {"scenePath": "res://main.tscn"}},
+                },
+            ],
+        }
+    ]
+    metrics_out = metrics.extract(messages, wall_ms=1)
+    assert metrics_out["tool_names"] == ["write", "godot_run_script"]
+    assert metrics_out["call_log"][0] == {
+        "name": "write",
+        "path": "res://a.gd",
+        "args": {"filePath": "res://a.gd", "content": "x"},
+    }
+    assert metrics_out["call_log"][1]["path"] == "res://main.tscn"

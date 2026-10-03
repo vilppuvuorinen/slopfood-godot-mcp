@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import concurrent.futures
 import dataclasses
+import fnmatch
+import os
 import time
 from pathlib import Path
 from typing import Any
@@ -12,7 +14,14 @@ from rich.console import Console
 
 from . import metrics as metrics_mod
 from . import report, verifier
-from .config import Shape, Suite, Task, load_shapes
+from .config import (
+    FILE_EDIT_TOOLS,
+    Shape,
+    Suite,
+    Task,
+    load_shapes,
+    resolve_expectation,
+)
 from .judge import judge_run
 from .mcp_probe import discover_mcp_tools
 from .opencode import OpencodeClient, OpencodeError, OpencodeServer, parse_model
@@ -57,6 +66,7 @@ class RunOptions:
     judge_spec: str | None = None
     reps: int | None = None
     jobs: int | None = None
+    server_max_runs: int | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -72,63 +82,70 @@ class _PlannedRun:
 
 def run_suite(options: RunOptions, console: Console | None = None) -> list[dict[str, Any]]:
     console = console or Console()
-    server = OpencodeServer(options.work_root, binary=options.opencode_bin, startup_timeout_s=40)
-    with server:
-        assert server.client is not None
-        client = server.client
-        all_mcp = discover_mcp_tools(options.mcp_bin)
-        all_builtin = _builtin_tools(client, options.work_root, console)
-        shapes = load_shapes(options.toolsets_path, all_mcp, all_builtin)
+    all_mcp = discover_mcp_tools(options.mcp_bin)
+    # Probe built-ins on a throwaway server: the dynamic list feeds shape
+    # resolution and paying one extra startup keeps the batch servers below
+    # free of any work that is not a run.
+    with OpencodeServer(
+        options.work_root, binary=options.opencode_bin, startup_timeout_s=40
+    ) as probe:
+        assert probe.client is not None
+        all_builtin = _builtin_tools(probe.client, options.work_root, console)
+    shapes = load_shapes(options.toolsets_path, all_mcp, all_builtin)
 
-        executor_spec = options.executor_spec or options.suite.executor
-        judge_spec = options.judge_spec or options.suite.judge
-        executor_model = parse_model(executor_spec)
-        judge_model = parse_model(judge_spec)
+    executor_spec = options.executor_spec or options.suite.executor
+    judge_spec = options.judge_spec or options.suite.judge
+    executor_model = parse_model(executor_spec)
+    judge_model = parse_model(judge_spec)
 
-        _validate_selection(options, shapes)
-        _validate_expectations(options, shapes)
+    _validate_selection(options, shapes)
+    _validate_expectations(options, shapes)
 
-        reps_by_shape = {
-            name: effective_reps(shapes[name], options.reps, options.suite.reps)
-            for name in options.selected_shapes
-        }
-        plan = _plan_runs(options, shapes, reps_by_shape)
+    reps_by_shape = {
+        name: effective_reps(shapes[name], options.reps, options.suite.reps)
+        for name in options.selected_shapes
+    }
+    plan = _plan_runs(options, shapes, reps_by_shape)
 
-        if options.dry_run:
-            _print_plan(options, shapes, executor_spec, judge_spec, reps_by_shape, console)
-            return []
+    if options.dry_run:
+        _print_plan(options, shapes, executor_spec, judge_spec, reps_by_shape, console)
+        return []
 
-        disabled = {name: False for name in next(iter(shapes.values())).tools}
-        options.judge_dir.mkdir(parents=True, exist_ok=True)
-        (options.out_dir / "verify").mkdir(parents=True, exist_ok=True)
+    disabled = {name: False for name in next(iter(shapes.values())).tools}
+    options.judge_dir.mkdir(parents=True, exist_ok=True)
+    (options.out_dir / "verify").mkdir(parents=True, exist_ok=True)
 
-        jobs = max(1, options.jobs or options.suite.jobs)
-        records = _execute_plan(
-            plan,
-            options=options,
-            client=client,
-            executor_model=executor_model,
-            judge_model=judge_model,
-            disabled=disabled,
-            console=console,
-            jobs=jobs,
-        )
+    jobs = max(1, options.jobs or options.suite.jobs)
+    # opencode serve keeps every session alive for the life of the process, so
+    # peak memory grows with the number of runs. Recycle it every batch.
+    server_max_runs = max(1, options.server_max_runs or options.suite.server_max_runs)
+    records = _execute_plan(
+        plan,
+        options=options,
+        executor_model=executor_model,
+        judge_model=judge_model,
+        disabled=disabled,
+        console=console,
+        jobs=jobs,
+        server_max_runs=server_max_runs,
+    )
 
-        report.write_reports(
-            options.out_dir,
-            records,
-            {
-                "executor": executor_spec,
-                "judge": judge_spec,
-                "reps": reps_by_shape,
-                "shapes": options.selected_shapes,
-                "tasks": options.selected_tasks,
-                "jobs": jobs,
-            },
-        )
-        report.print_summary(records, console)
-        console.print(f"\nWrote [bold]{options.out_dir}[/]")
-        return records
+    report.write_reports(
+        options.out_dir,
+        records,
+        {
+            "executor": executor_spec,
+            "judge": judge_spec,
+            "reps": reps_by_shape,
+            "shapes": options.selected_shapes,
+            "tasks": options.selected_tasks,
+            "jobs": jobs,
+            "server_max_runs": server_max_runs,
+        },
+    )
+    report.print_summary(records, console)
+    console.print(f"\nWrote [bold]{options.out_dir}[/]")
+    return records
 
 
 def effective_reps(shape: Shape, cli_reps: int | None, suite_reps: int) -> int:
@@ -166,51 +183,77 @@ def _plan_runs(
     return plan
 
 
+def _plan_batches(
+    plan: list[_PlannedRun], server_max_runs: int
+) -> list[list[_PlannedRun]]:
+    """Split a plan into batches of at most ``server_max_runs`` cells.
+
+    A batch is the unit of opencode-serve lifetime: the server is started
+    before the batch and stopped after it, so peak server memory is bounded by
+    the batch size rather than the whole suite.
+    """
+    size = max(1, server_max_runs)
+    return [plan[start : start + size] for start in range(0, len(plan), size)]
+
+
 def _execute_plan(
     plan: list[_PlannedRun],
     *,
     options: RunOptions,
-    client: OpencodeClient,
     executor_model: dict[str, str],
     judge_model: dict[str, str],
     disabled: dict[str, bool],
     console: Console,
     jobs: int,
+    server_max_runs: int,
 ) -> list[dict[str, Any]]:
     """Run every planned cell, up to ``jobs`` concurrently.
 
     Each cell owns its project, runtime and judge directories, so the only
-    shared state is the opencode server (which scopes instances per directory)
-    and the records list, which is written by index from this thread alone.
+    shared state within a batch is the opencode server (which scopes instances
+    per directory) and the records list, which is written by index from this
+    thread alone. The server is recycled between batches.
     """
-
-    def work(item: _PlannedRun) -> dict[str, Any]:
-        return _run_once(
-            options=options,
-            client=client,
-            task=item.task,
-            shape=item.shape,
-            rep=item.rep,
-            run_id=item.run_id,
-            executor_model=executor_model,
-            judge_model=judge_model,
-            judge_enabled=options.judge_enabled,
-            disabled=disabled,
-            timeout_s=item.task.timeout_s or options.suite.timeout_s,
-            console=console,
-        )
-
     records: list[dict[str, Any] | None] = [None] * len(plan)
     total = len(plan)
-    console.rule(f"[bold]Running {total} session(s) with {jobs} job(s)[/]")
-    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
-        futures = {pool.submit(work, item): item for item in plan}
-        for done, future in enumerate(concurrent.futures.as_completed(futures), start=1):
-            item = futures[future]
-            record = future.result()
-            records[item.index - 1] = record
-            status = "PASS" if record["passed"] else "FAIL"
-            console.print(f"[bold]{done}/{total}[/] {status} {record['run_id']}")
+    batches = _plan_batches(plan, server_max_runs)
+    console.rule(
+        f"[bold]Running {total} session(s) with {jobs} job(s), "
+        f"server recycled every {server_max_runs}[/]"
+    )
+    done = 0
+    for batch in batches:
+        with OpencodeServer(
+            options.work_root, binary=options.opencode_bin, startup_timeout_s=40
+        ) as server:
+            assert server.client is not None
+            client = server.client
+
+            def work(item: _PlannedRun, client: OpencodeClient = client) -> dict[str, Any]:
+                return _run_once(
+                    options=options,
+                    client=client,
+                    task=item.task,
+                    shape=item.shape,
+                    rep=item.rep,
+                    run_id=item.run_id,
+                    executor_model=executor_model,
+                    judge_model=judge_model,
+                    judge_enabled=options.judge_enabled,
+                    disabled=disabled,
+                    timeout_s=item.task.timeout_s or options.suite.timeout_s,
+                    console=console,
+                )
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+                futures = {pool.submit(work, item): item for item in batch}
+                for future in concurrent.futures.as_completed(futures):
+                    done += 1
+                    item = futures[future]
+                    record = future.result()
+                    records[item.index - 1] = record
+                    status = "PASS" if record["passed"] else "FAIL"
+                    console.print(f"[bold]{done}/{total}[/] {status} {record['run_id']}")
     return [record for record in records if record is not None]
 
 
@@ -242,22 +285,40 @@ def _validate_expectations(options: RunOptions, shapes: dict[str, Shape]) -> Non
     """Fail loudly when a task's trajectory expectation can never be met.
 
     A required tool that the shape does not expose is a config bug: the run
-    would always fail for a reason unrelated to model behaviour.
+    would always fail for a reason unrelated to model behaviour. The same goes
+    for an entity-scoped check in a shape with no file-editing tool (the check
+    would be vacuously true and silently measure nothing).
     """
+    for name, shape in shapes.items():
+        if shape.expect_alias and shape.expect_alias not in shapes:
+            raise ValueError(
+                f"shape {name!r} aliases unknown shape {shape.expect_alias!r}; "
+                f"known: {sorted(shapes)}"
+            )
     for task_id in options.selected_tasks:
         task = options.tasks[task_id]
-        for shape_name, expectation in task.expect.items():
-            shape = shapes.get(shape_name)
-            if shape is None:
+        for shape_name in task.expect:
+            if shape_name not in shapes:
                 raise ValueError(
                     f"task {task_id!r} expects unknown shape {shape_name!r}; "
                     f"known: {sorted(shapes)}"
                 )
+        for shape_name in options.selected_shapes:
+            shape = shapes[shape_name]
+            expectation = resolve_expectation(task, shape)
+            if expectation is None:
+                continue
             for tool in (*expectation.used_any, *expectation.used_all):
                 if not shape.tools.get(tool, False):
                     raise ValueError(
                         f"task {task_id!r} expects {tool!r} in shape {shape_name!r}, "
                         "but that tool is not enabled"
+                    )
+            if expectation.file_edit_none or expectation.file_edit_any:
+                if not any(shape.tools.get(tool, False) for tool in FILE_EDIT_TOOLS):
+                    raise ValueError(
+                        f"task {task_id!r} uses file_edit_* in shape {shape_name!r}, "
+                        f"but none of {list(FILE_EDIT_TOOLS)} are enabled"
                     )
 
 
@@ -351,7 +412,9 @@ def _run_once(
         fixture_dir=options.fixtures_dir / task.fixture,
         timeout_s=max(120, timeout_s),
     )
-    check_results.extend(_trajectory_checks(task, shape, run_metrics["tool_names"]))
+    check_results.extend(
+        _trajectory_checks(task, shape, run_metrics["tool_names"], run_metrics["call_log"])
+    )
     threshold = task.min_score if task.min_score is not None else 1.0
     score = _weighted_score(check_results)
     required_ok = all(result.passed for result in check_results if result.required)
@@ -371,6 +434,7 @@ def _run_once(
             check_results=[dataclasses.asdict(r) for r in check_results],
             answer=run_metrics["final_answer"],
             diff=diff,
+            call_log=run_metrics["call_log"],
             timeout_s=timeout_s,
         )
 
@@ -412,15 +476,22 @@ def _weighted_score(check_results: list[verifier.CheckResult]) -> float:
 
 
 def _trajectory_checks(
-    task: Task, shape: Shape, tool_names: list[str]
+    task: Task,
+    shape: Shape,
+    tool_names: list[str],
+    call_log: list[dict[str, Any]] | None = None,
 ) -> list[verifier.CheckResult]:
     """Grade which tools the agent reached for, per the task's shape expectation.
 
     Trajectory checks are ``required``: a composite task may earn partial credit
     on its artifact checks, but tool choice is the signal the suite exists to
     measure, so it always gates the pass/fail verdict.
+
+    Tool-name checks (``used_*``) say *which* tools ran. Entity-scoped checks
+    (``file_edit_*``) additionally say *what* a file-editing tool targeted, so a
+    scene rewrite can be told apart from a script edit within one trajectory.
     """
-    expectation = task.expect.get(shape.name)
+    expectation = resolve_expectation(task, shape)
     if expectation is None:
         return []
     used = set(tool_names)
@@ -459,7 +530,63 @@ def _trajectory_checks(
                 required=True,
             )
         )
+
+    edited = _file_edit_targets(call_log or [])
+    for pattern in expectation.file_edit_none:
+        hits = sorted(path for path in edited if fnmatch.fnmatch(path, pattern))
+        checks.append(
+            verifier.CheckResult(
+                id=f"{prefix}:file_edit_none:{pattern}",
+                kind="file_edit",
+                passed=not hits,
+                detail=(
+                    f"{pattern} untouched by {list(FILE_EDIT_TOOLS)}"
+                    if not hits
+                    else f"{pattern} edited as a file: {hits}"
+                ),
+                required=True,
+            )
+        )
+    for pattern in expectation.file_edit_any:
+        hits = sorted(path for path in edited if fnmatch.fnmatch(path, pattern))
+        checks.append(
+            verifier.CheckResult(
+                id=f"{prefix}:file_edit_any:{pattern}",
+                kind="file_edit",
+                passed=bool(hits),
+                detail=(
+                    f"{pattern} edited as a file: {hits}"
+                    if hits
+                    else f"{pattern} not edited by {list(FILE_EDIT_TOOLS)}"
+                ),
+                required=True,
+            )
+        )
     return checks
+
+
+def _file_edit_targets(call_log: list[dict[str, Any]]) -> set[str]:
+    """Paths targeted by a file-editing built-in, matched as a set of aliases.
+
+    A call may name the path absolute (the sandbox project root is passed to the
+    tools) or project-relative, with or without the ``res://`` prefix, so each is
+    recorded both ways for the glob patterns to match against.
+    """
+    targets: set[str] = set()
+    for call in call_log:
+        name = str(call.get("name") or "")
+        if name not in FILE_EDIT_TOOLS:
+            continue
+        path = call.get("path")
+        if not isinstance(path, str) or not path.strip():
+            continue
+        raw = path.strip()
+        targets.add(raw)
+        if raw.startswith("res://"):
+            targets.add(raw[len("res://") :])
+        elif not os.path.isabs(raw):
+            targets.add(f"res://{raw}")
+    return targets
 
 
 def _print_plan(

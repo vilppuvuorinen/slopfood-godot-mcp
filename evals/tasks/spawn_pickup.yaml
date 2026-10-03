@@ -53,12 +53,17 @@ checks:
     value: 12
     weight: 2
 expect:
+  # pickup.gd is file-editable; main.tscn must not be hand-edited.
   full:
     used_all: [godot_add_node, godot_attach_script]
-    used_none: [edit]
+    file_edit_any: ["**/pickup.gd"]
+    file_edit_none: ["**/main.tscn"]
+    used_none: [edit, bash]
   script_escape:
     used_all: [godot_run_script]
-    used_none: [edit]
+    file_edit_any: ["**/pickup.gd"]
+    file_edit_none: ["**/main.tscn"]
+    used_none: [edit, bash]
 rubric: |
   res://pickup.gd extends Area2D, declares signal collected, and defines
   collect(). main.tscn has a root-level Area2D named Pickup at (300, 150) with

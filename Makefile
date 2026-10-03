@@ -19,6 +19,8 @@ EVALS_MODEL ?= opencode-go/deepseek-v4.1-flash
 EVALS_JUDGE ?= opencode-go/deepseek-v4.1-flash
 EVALS_REPS ?= 3
 EVALS_JOBS ?= 4
+# Recycle opencode serve every N runs; empty uses the suite config default.
+EVALS_SERVER_MAX_RUNS ?=
 EVALS_SHAPES ?=
 EVALS_ARGS ?=
 
@@ -115,6 +117,7 @@ evals: godot
 	cd evals && MCP_BIN='$(CURDIR)/bin/$(BINARY)-dev' uv run evals run \
 		--model '$(EVALS_MODEL)' --judge '$(EVALS_JUDGE)' --reps '$(EVALS_REPS)' \
 		--jobs '$(EVALS_JOBS)' \
+		$(if $(EVALS_SERVER_MAX_RUNS),--server-max-runs '$(EVALS_SERVER_MAX_RUNS)') \
 		$(if $(EVALS_SHAPES),--shapes '$(EVALS_SHAPES)') $(EVALS_ARGS)
 
 .PHONY: cover
