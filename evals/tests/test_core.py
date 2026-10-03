@@ -70,7 +70,7 @@ def test_expect_parsing_and_defaults():
     assert task.expect["full"].used_none == ("edit", "write")
     assert task.expect["script_escape"].used_all == ("godot_run_script",)
     read_answer = config.Task.from_yaml(EVALS_DIR / "tasks" / "read_answer.yaml")
-    assert read_answer.expect["full"].used_any == ()
+    assert read_answer.expect["full"].used_any == ("godot_read", "godot_read_node")
     assert read_answer.expect["full"].used_none == ("edit", "write")
 
 
@@ -151,7 +151,10 @@ def test_every_task_has_a_fixture_and_known_checks():
     for task in tasks.values():
         fixture = EVALS_DIR / "fixtures" / task.fixture
         assert fixture.is_dir(), f"{task.id}: missing fixture {fixture}"
-        assert (fixture / "project.godot").is_file(), f"{task.id}: fixture has no project.godot"
+        if not task.bootstraps_project:
+            assert (fixture / "project.godot").is_file(), (
+                f"{task.id}: fixture has no project.godot"
+            )
         assert task.checks, f"{task.id}: no checks"
         for check in task.checks:
             assert check.kind in KNOWN_CHECK_KINDS, f"{task.id}: unknown check {check.kind}"

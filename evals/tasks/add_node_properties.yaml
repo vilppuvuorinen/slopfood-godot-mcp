@@ -1,0 +1,33 @@
+id: add_node_properties
+description: Add a node with initial property values in one call.
+fixture: add_node_properties
+prompt: |
+  In main.tscn, add a Sprite2D named "Icon" as a direct child of the scene root.
+  In the same operation, set its position to Vector2(100, 50) and its z_index to
+  3. Save the scene.
+checks:
+  - kind: node_type
+    scene: res://main.tscn
+    path: Icon
+    value: Sprite2D
+  - kind: node_property
+    scene: res://main.tscn
+    path: Icon
+    property: position
+    value: Vector2(100, 50)
+  - kind: node_property
+    scene: res://main.tscn
+    path: Icon
+    property: z_index
+    value: 3
+expect:
+  full:
+    used_all: [godot_add_node]
+    used_none: [edit, write]
+  script_escape:
+    used_all: [godot_run_script]
+    used_none: [edit, write]
+rubric: |
+  main.tscn has a direct child of the root named Icon of type Sprite2D with
+  position (100, 50) and z_index 3, created with its properties already set.
+timeout_s: 300

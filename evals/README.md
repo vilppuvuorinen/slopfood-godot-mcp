@@ -105,6 +105,10 @@ rubric: |
   The Sprite node keeps its type and position; only z_index changes.
 ```
 
+A fixture normally ships a `project.godot`. Tasks that create the project
+themselves (e.g. `create_project`) set `bootstraps_project: true`; their fixture
+is then deliberately not a Godot project.
+
 Supported checks: `node_exists`, `node_not_exists`, `node_type`, `node_property`,
 `node_script`, `scene_root_type`, `file_exists`, `file_contains`,
 `script_has_method`, `project_setting`, `file_unchanged`, and `answer_contains`

@@ -3,4 +3,7 @@
 [node name="Root" type="Node2D"]
 
 [node name="Sprite" type="Sprite2D" parent="."]
-position = Vector2(0, 0)
+
+[node name="Hero" type="Node2D" parent="."]
+
+[node name="Sprite" type="Sprite2D" parent="Hero"]

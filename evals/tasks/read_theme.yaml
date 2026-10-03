@@ -1,0 +1,23 @@
+id: read_theme
+description: Read a theme resource and report a value (read-path control).
+fixture: read_theme
+prompt: |
+  Read the theme resource at res://themes/main.tres. Then answer with a single
+  final line in exactly this format:
+
+      ANSWER: <default font size>
+
+  Do not modify any files.
+checks:
+  - kind: answer_contains
+    value: "42"
+  - kind: file_unchanged
+    path: res://themes/main.tres
+expect:
+  full:
+    used_all: [godot_read]
+  read_only:
+    used_all: [godot_read]
+rubric: |
+  The final answer reports the theme's default font size as 42. No files change.
+timeout_s: 240

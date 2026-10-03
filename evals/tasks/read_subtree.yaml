@@ -1,0 +1,27 @@
+id: read_subtree
+description: Read a single node subtree and report its children (read-path control).
+fixture: read_subtree
+prompt: |
+  Read only the subtree rooted at Root/Hero in main.tscn; do not read the whole
+  scene. Then answer with a single final line in exactly this format:
+
+      ANSWER: <comma-separated names of Hero's direct children>
+
+  Do not modify any files.
+checks:
+  - kind: answer_contains
+    value: Body
+  - kind: answer_contains
+    value: Head
+  - kind: file_unchanged
+    path: res://main.tscn
+expect:
+  full:
+    used_all: [godot_read_node]
+  read_only:
+    used_all: [godot_read_node]
+rubric: |
+  The final answer names Hero's direct children Body and Head, and no files
+  change. The subtree was read with read_node rather than loading the whole
+  scene.
+timeout_s: 240

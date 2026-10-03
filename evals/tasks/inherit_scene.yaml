@@ -1,0 +1,30 @@
+id: inherit_scene
+description: Create a scene that inherits from an existing scene.
+fixture: inherit_scene
+prompt: |
+  Create a new scene at res://derived.tscn that inherits from res://base.tscn,
+  so the new scene's root is an instance of the base scene (and thus exposes the
+  inherited Icon node). Do not modify base.tscn.
+checks:
+  - kind: file_exists
+    path: res://derived.tscn
+  - kind: file_contains
+    path: res://derived.tscn
+    value: '[ext_resource type="PackedScene" path="res://base.tscn"'
+  - kind: file_contains
+    path: res://derived.tscn
+    value: 'instance=ExtResource('
+  - kind: scene_root_type
+    scene: res://derived.tscn
+    value: Node2D
+  - kind: node_exists
+    scene: res://derived.tscn
+    path: Icon
+expect:
+  full:
+    used_all: [godot_create_scene]
+    used_none: [edit, write]
+rubric: |
+  res://derived.tscn exists, instances res://base.tscn as its root, and still
+  exposes the inherited Icon node. base.tscn is unchanged.
+timeout_s: 300

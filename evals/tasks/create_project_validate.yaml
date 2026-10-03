@@ -1,0 +1,23 @@
+id: create_project_validate
+description: Scaffold a new Godot project and confirm it loads.
+fixture: create_project_validate
+# The fixture is intentionally not a Godot project: create_project refuses to
+# overwrite an existing project.godot.
+bootstraps_project: true
+prompt: |
+  This directory is not a Godot project yet. Create a new Godot project here
+  named "Eval Forge", then validate that the project loads. Do not add any
+  scenes or scripts.
+checks:
+  - kind: file_exists
+    path: res://project.godot
+  - kind: project_setting
+    key: application/config/name
+    value: Eval Forge
+expect:
+  full:
+    used_all: [godot_create_project, godot_validate_project]
+rubric: |
+  project.godot exists and declares application/config/name = "Eval Forge".
+  The project validates without parse errors.
+timeout_s: 300

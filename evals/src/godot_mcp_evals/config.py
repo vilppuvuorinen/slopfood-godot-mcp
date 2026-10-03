@@ -62,6 +62,9 @@ class Task:
     rubric: str
     timeout_s: int | None
     expect: dict[str, Expectation]
+    # True for tasks whose fixture is deliberately not yet a Godot project (e.g.
+    # create_project); every other fixture must ship a project.godot.
+    bootstraps_project: bool = False
 
     @classmethod
     def from_yaml(cls, path: Path) -> Task:
@@ -79,6 +82,7 @@ class Task:
             rubric=str(data.get("rubric", "")),
             timeout_s=int(data["timeout_s"]) if data.get("timeout_s") else None,
             expect=_parse_expect(data.get("expect"), path),
+            bootstraps_project=bool(data.get("bootstraps_project", False)),
         )
 
 

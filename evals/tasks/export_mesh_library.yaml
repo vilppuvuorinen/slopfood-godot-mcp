@@ -1,0 +1,16 @@
+id: export_mesh_library
+description: Export a 3D scene as a MeshLibrary resource.
+fixture: export_mesh_library
+prompt: |
+  Export the scene res://main.tscn as a MeshLibrary at res://exported/library.res.
+  Include every mesh item in the scene.
+checks:
+  - kind: file_exists
+    path: res://exported/library.res
+expect:
+  full:
+    used_all: [godot_export_mesh_library]
+rubric: |
+  res://exported/library.res exists and is a MeshLibrary built from the meshes
+  in main.tscn.
+timeout_s: 300

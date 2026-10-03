@@ -1,0 +1,29 @@
+id: instance_scene
+description: Instance an existing scene as a child node.
+fixture: instance_scene
+prompt: |
+  In main.tscn, instance the scene res://enemy.tscn as a direct child of the
+  scene root, naming the new node "Enemy". Save the scene. Do not modify
+  enemy.tscn.
+checks:
+  - kind: node_exists
+    scene: res://main.tscn
+    path: Enemy
+  - kind: node_type
+    scene: res://main.tscn
+    path: Enemy
+    value: CharacterBody2D
+  - kind: file_contains
+    path: res://main.tscn
+    value: 'instance=ExtResource('
+expect:
+  full:
+    used_all: [godot_add_node]
+    used_none: [edit, write]
+  script_escape:
+    used_all: [godot_run_script]
+    used_none: [edit, write]
+rubric: |
+  main.tscn has a direct child of the root named Enemy that is an instance of
+  res://enemy.tscn (a CharacterBody2D). enemy.tscn itself is unchanged.
+timeout_s: 300

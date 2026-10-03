@@ -1,0 +1,26 @@
+id: import_asset
+description: Import a new source asset so Godot generates its .import sidecar.
+fixture: import_asset
+prompt: |
+  Add a 16x16 SVG at res://icon.svg whose only content is a single red square
+  filling the viewbox. Then run the editor filesystem scan so Godot imports the
+  asset, generating its .import sidecar and resource UID. Do not add or modify
+  any scenes.
+checks:
+  - kind: file_exists
+    path: res://icon.svg
+  - kind: file_exists
+    path: res://icon.svg.import
+  - kind: file_contains
+    path: res://icon.svg.import
+    value: 'importer="texture"'
+  - kind: file_contains
+    path: res://icon.svg.import
+    value: 'uid="uid://'
+expect:
+  full:
+    used_all: [godot_rescan_project]
+rubric: |
+  res://icon.svg exists and was imported: res://icon.svg.import exists, names
+  the texture importer, and carries a uid:// resource UID.
+timeout_s: 300
