@@ -11,17 +11,31 @@ import yaml
 
 @dataclasses.dataclass(frozen=True)
 class Check:
-    """One deterministic assertion evaluated against the resulting project."""
+    """One deterministic assertion evaluated against the resulting project.
+
+    ``weight`` and ``required`` shape how composite tasks are scored: a run
+    earns the weight of every passing check, and a ``required`` check must pass
+    regardless of the final weighted score. Both default to the binary
+    behavior (weight 1, not required).
+    """
 
     kind: str
     params: dict[str, Any]
+    weight: float = 1.0
+    required: bool = False
 
     @classmethod
     def from_mapping(cls, raw: dict[str, Any]) -> Check:
         if "kind" not in raw:
             raise ValueError(f"check is missing 'kind': {raw!r}")
-        params = {k: v for k, v in raw.items() if k != "kind"}
-        return cls(kind=str(raw["kind"]), params=params)
+        weight = float(raw.get("weight", 1.0))
+        if weight < 0:
+            raise ValueError(f"check weight must be non-negative: {raw!r}")
+        required = bool(raw.get("required", False))
+        params = {
+            k: v for k, v in raw.items() if k not in ("kind", "weight", "required")
+        }
+        return cls(kind=str(raw["kind"]), params=params, weight=weight, required=required)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -62,6 +76,9 @@ class Task:
     rubric: str
     timeout_s: int | None
     expect: dict[str, Expectation]
+    # Weighted fraction of check weight a run must earn to pass. ``None`` means
+    # every check must pass (the binary default).
+    min_score: float | None = None
     # True for tasks whose fixture is deliberately not yet a Godot project (e.g.
     # create_project); every other fixture must ship a project.godot.
     bootstraps_project: bool = False
@@ -73,6 +90,9 @@ class Task:
         if missing:
             raise ValueError(f"{path}: missing required keys: {', '.join(missing)}")
         checks = [Check.from_mapping(c) for c in data["checks"]]
+        min_score = float(data["min_score"]) if data.get("min_score") is not None else None
+        if min_score is not None and not 0.0 <= min_score <= 1.0:
+            raise ValueError(f"{path}: min_score must be between 0 and 1, got {min_score}")
         return cls(
             id=str(data["id"]),
             description=str(data.get("description", "")),
@@ -82,6 +102,7 @@ class Task:
             rubric=str(data.get("rubric", "")),
             timeout_s=int(data["timeout_s"]) if data.get("timeout_s") else None,
             expect=_parse_expect(data.get("expect"), path),
+            min_score=min_score,
             bootstraps_project=bool(data.get("bootstraps_project", False)),
         )
 

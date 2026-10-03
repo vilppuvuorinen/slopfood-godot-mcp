@@ -284,7 +284,10 @@ def _run_once(
         timeout_s=max(120, timeout_s),
     )
     check_results.extend(_trajectory_checks(task, shape, run_metrics["tool_names"]))
-    passed = bool(check_results) and all(result.passed for result in check_results)
+    threshold = task.min_score if task.min_score is not None else 1.0
+    score = _weighted_score(check_results)
+    required_ok = all(result.passed for result in check_results if result.required)
+    passed = bool(check_results) and required_ok and score >= threshold - 1e-9
 
     judge: dict[str, Any] = {}
     if judge_enabled and run_metrics["turns"] > 0:
@@ -313,6 +316,9 @@ def _run_once(
         "rep": rep,
         "fixture": task.fixture,
         "passed": passed,
+        "score": round(score, 4),
+        "min_score": threshold,
+        "required_ok": required_ok,
         "error": error,
         "session_id": session_id,
         "project": str(project),
@@ -328,10 +334,24 @@ def _run_once(
     return record
 
 
+def _weighted_score(check_results: list[verifier.CheckResult]) -> float:
+    """Fraction of total check weight earned by the run (0.0 when no checks)."""
+    total = sum(result.weight for result in check_results)
+    if total <= 0:
+        return 0.0
+    earned = sum(result.weight for result in check_results if result.passed)
+    return earned / total
+
+
 def _trajectory_checks(
     task: Task, shape: Shape, tool_names: list[str]
 ) -> list[verifier.CheckResult]:
-    """Grade which tools the agent reached for, per the task's shape expectation."""
+    """Grade which tools the agent reached for, per the task's shape expectation.
+
+    Trajectory checks are ``required``: a composite task may earn partial credit
+    on its artifact checks, but tool choice is the signal the suite exists to
+    measure, so it always gates the pass/fail verdict.
+    """
     expectation = task.expect.get(shape.name)
     if expectation is None:
         return []
@@ -346,6 +366,7 @@ def _trajectory_checks(
                 kind="tool_used",
                 passed=tool in used,
                 detail=f"{tool} {'used' if tool in used else 'not used'}",
+                required=True,
             )
         )
     if expectation.used_any:
@@ -357,6 +378,7 @@ def _trajectory_checks(
                 kind="tool_used",
                 passed=bool(hit),
                 detail=f"wanted any of {wanted}; used {hit}",
+                required=True,
             )
         )
     for tool in expectation.used_none:
@@ -366,6 +388,7 @@ def _trajectory_checks(
                 kind="tool_not_used",
                 passed=tool not in used,
                 detail=f"{tool} {'used' if tool in used else 'not used'}",
+                required=True,
             )
         )
     return checks

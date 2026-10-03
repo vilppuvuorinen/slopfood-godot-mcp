@@ -98,6 +98,13 @@ def _mean(values: list[float]) -> float:
     return sum(values) / len(values) if values else 0.0
 
 
+def _score(record: dict[str, Any]) -> float:
+    """Weighted check score; older records predate it, so fall back to pass."""
+    if "score" in record:
+        return float(record["score"])
+    return 1.0 if record["passed"] else 0.0
+
+
 def aggregate(records: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
     """Aggregate run records by ``key`` (e.g. ``shape`` or ``task``)."""
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
@@ -122,6 +129,7 @@ def aggregate(records: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
                 "pass_rate": passes / n if n else 0.0,
                 "pass_ci_low": low,
                 "pass_ci_high": high,
+                "score_mean": _mean([_score(r) for r in group]),
                 "judge_mean": _mean([float(s) for s in judge_scores]),
                 "judge_scored": len(judge_scores),
                 "mcp_calls_mean": _mean([float(r["metrics"]["mcp_tool_calls"]) for r in group]),

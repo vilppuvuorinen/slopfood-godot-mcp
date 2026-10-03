@@ -1,0 +1,95 @@
+id: build_arena_scene
+description: Assemble a new 2D arena scene with collisions and an attached script.
+fixture: build_arena_scene
+# Composite: create a scene, compose several nested nodes with collision
+# shapes, and add + attach a script. Graded with partial credit (min_score).
+min_score: 0.85
+prompt: |
+  Build a new 2D arena at res://levels/arena.tscn and save it. Requirements:
+
+    - The root node is named "Arena" and is of type Node2D.
+    - A StaticBody2D named "Ground" at position Vector2(200, 300) with a
+      CollisionShape2D child whose RectangleShape2D has size Vector2(400, 40).
+    - A CharacterBody2D named "Player" at position Vector2(100, 200) with a
+      CollisionShape2D child whose RectangleShape2D has size Vector2(32, 48).
+    - A script at res://scripts/player.gd that extends CharacterBody2D and
+      defines `func jump() -> void:` (the body can be empty), attached to the
+      Player node.
+
+  Leave project.godot untouched and do not create any other scenes.
+checks:
+  - kind: file_exists
+    path: res://levels/arena.tscn
+    required: true
+  - kind: scene_root_type
+    scene: res://levels/arena.tscn
+    value: Node2D
+    required: true
+  - kind: node_property
+    scene: res://levels/arena.tscn
+    path: "."
+    property: name
+    value: Arena
+  - kind: node_exists
+    scene: res://levels/arena.tscn
+    path: Ground
+    weight: 2
+  - kind: node_type
+    scene: res://levels/arena.tscn
+    path: Ground
+    value: StaticBody2D
+  - kind: node_property
+    scene: res://levels/arena.tscn
+    path: Ground
+    property: position
+    value: Vector2(200, 300)
+  - kind: node_property
+    scene: res://levels/arena.tscn
+    path: Ground/CollisionShape2D
+    property: shape.size
+    value: Vector2(400, 40)
+    weight: 2
+  - kind: node_exists
+    scene: res://levels/arena.tscn
+    path: Player
+    required: true
+    weight: 2
+  - kind: node_type
+    scene: res://levels/arena.tscn
+    path: Player
+    value: CharacterBody2D
+  - kind: node_property
+    scene: res://levels/arena.tscn
+    path: Player
+    property: position
+    value: Vector2(100, 200)
+  - kind: node_property
+    scene: res://levels/arena.tscn
+    path: Player/CollisionShape2D
+    property: shape.size
+    value: Vector2(32, 48)
+    weight: 2
+  - kind: file_exists
+    path: res://scripts/player.gd
+  - kind: script_has_method
+    path: res://scripts/player.gd
+    value: jump
+  - kind: node_script
+    scene: res://levels/arena.tscn
+    path: Player
+    value: player.gd
+    weight: 2
+expect:
+  full:
+    used_all: [godot_create_scene]
+    used_none: [edit]
+  script_escape:
+    used_all: [godot_run_script]
+    used_none: [edit]
+rubric: |
+  res://levels/arena.tscn exists with a Node2D root named Arena containing a
+  Ground StaticBody2D at (200, 300) with a 400x40 rectangle collider and a
+  Player CharacterBody2D at (100, 200) with a 32x48 rectangle collider.
+  res://scripts/player.gd extends CharacterBody2D, defines jump(), and is
+  attached to Player. project.godot is unchanged.
+timeout_s: 480

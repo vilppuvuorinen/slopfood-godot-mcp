@@ -88,6 +88,39 @@ def test_trajectory_checks_pass_and_fail():
     assert any(result.id.endswith("used_none:edit") for result in failing if not result.passed)
 
 
+def test_check_weight_and_required_parsing():
+    check = config.Check.from_mapping(
+        {"kind": "node_exists", "path": "X", "weight": 2.5, "required": True}
+    )
+    assert check.weight == 2.5
+    assert check.required is True
+    # weight/required are harness metadata, not engine params.
+    assert check.params == {"path": "X"}
+    default = config.Check.from_mapping({"kind": "node_exists", "path": "X"})
+    assert default.weight == 1.0
+    assert default.required is False
+    with pytest.raises(ValueError):
+        config.Check.from_mapping({"kind": "node_exists", "weight": -1})
+
+
+def test_min_score_parsing_and_default():
+    task = config.Task.from_yaml(EVALS_DIR / "tasks" / "build_arena_scene.yaml")
+    assert task.min_score == pytest.approx(0.85)
+    assert any(check.required for check in task.checks)
+    assert any(check.weight > 1 for check in task.checks)
+    binary = config.Task.from_yaml(EVALS_DIR / "tasks" / "add_node.yaml")
+    assert binary.min_score is None
+
+
+def test_weighted_score_and_threshold():
+    checks = [
+        verifier.CheckResult("a", "node_exists", True, "", weight=3.0),
+        verifier.CheckResult("b", "node_exists", False, "", weight=1.0),
+    ]
+    assert runner._weighted_score(checks) == pytest.approx(0.75)
+    assert runner._weighted_score([]) == 0.0
+
+
 def test_file_unchanged_check(tmp_path):
     fixture = tmp_path / "fixture"
     project = tmp_path / "project"

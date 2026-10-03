@@ -1,0 +1,78 @@
+id: ready_level
+description: Reshape an existing level scene in one multi-operation pass.
+fixture: ready_level
+# Composite: rename, reposition, reparent, duplicate, add and remove in a
+# single scene edit. Graded with partial credit (min_score).
+min_score: 0.85
+prompt: |
+  Tidy up level.tscn and stage it for gameplay. In one pass:
+
+    - Rename the node at Root/A to "Hero" and set its position to
+      Vector2(50, 50).
+    - Reparent the node at Root/B so it becomes a direct child of Root/Hero.
+    - Duplicate the node at Root/Enemy into a sibling named "Enemy2".
+    - Add a Camera2D named "Camera" as a direct child of Root/Hero.
+    - Remove the node at Root/Trash.
+
+  Save the scene. Do not modify project.godot or any other file.
+checks:
+  - kind: node_exists
+    scene: res://level.tscn
+    path: Hero
+    required: true
+  - kind: node_not_exists
+    scene: res://level.tscn
+    path: A
+    required: true
+  - kind: node_property
+    scene: res://level.tscn
+    path: Hero
+    property: position
+    value: Vector2(50, 50)
+  - kind: node_exists
+    scene: res://level.tscn
+    path: Hero/B
+    weight: 2
+  - kind: node_not_exists
+    scene: res://level.tscn
+    path: B
+  - kind: node_exists
+    scene: res://level.tscn
+    path: Enemy
+  - kind: node_exists
+    scene: res://level.tscn
+    path: Enemy2
+    weight: 2
+  - kind: node_type
+    scene: res://level.tscn
+    path: Enemy2
+    value: CharacterBody2D
+  - kind: node_exists
+    scene: res://level.tscn
+    path: Hero/Camera
+  - kind: node_type
+    scene: res://level.tscn
+    path: Hero/Camera
+    value: Camera2D
+  - kind: node_not_exists
+    scene: res://level.tscn
+    path: Trash
+  - kind: file_unchanged
+    path: res://project.godot
+expect:
+  full:
+    used_all:
+      - godot_rename_scene_node
+      - godot_move_scene_node
+      - godot_duplicate_scene_node
+      - godot_remove_scene_node
+      - godot_add_node
+    used_none: [edit, write]
+  script_escape:
+    used_all: [godot_run_script]
+    used_none: [edit, write]
+rubric: |
+  level.tscn's former A is now Hero at (50, 50), formerly-B now sits under
+  Hero, Enemy has a CharacterBody2D sibling Enemy2, Hero has a Camera2D child
+  named Camera, and Trash is gone. project.godot is unchanged.
+timeout_s: 420

@@ -116,6 +116,39 @@ Supported checks: `node_exists`, `node_not_exists`, `node_type`, `node_property`
 project against the fixture). A `node_property` `property` may be dotted to
 reach nested objects, e.g. `shape.size` on a `CollisionShape2D`.
 
+### Partial credit for composite tasks
+
+Tasks whose `min_score` is set are graded on a weighted fraction of their
+checks rather than all-or-nothing, which suits multi-step "composite" tasks
+where several valid trajectories exist:
+
+```yaml
+min_score: 0.85
+checks:
+  - kind: node_exists
+    scene: res://level.tscn
+    path: Hero
+    required: true
+  - kind: node_property
+    scene: res://level.tscn
+    path: Hero/Camera
+    property: name
+    value: Camera
+    weight: 2
+```
+
+- `min_score` (0–1) is the weighted fraction a run must earn to pass. When
+  omitted, every check must pass (the binary default).
+- `weight` (default 1) is how much a check contributes to the score.
+- `required: true` gates the verdict: the check must pass no matter how high
+  the score is. Use it for load-bearing checks (the scene exists, the root
+  type) so a run cannot pass by skipping the point of the task.
+
+Trajectory expectations (`used_all`/`used_none`/`used_any`) are always
+*required*: partial credit is for the artifact, never for tool choice, since
+tool choice is the signal the suite exists to measure. The report shows the
+mean weighted score per shape and task alongside pass@1.
+
 ### Trajectory expectations
 
 `expect` maps a shape name to tool-use assertions, graded alongside the artifact

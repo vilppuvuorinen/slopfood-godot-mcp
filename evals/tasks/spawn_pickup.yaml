@@ -1,0 +1,67 @@
+id: spawn_pickup
+description: Add a scripted, collidable pickup node to an existing scene.
+fixture: spawn_pickup
+# Composite: new script resource + new node + nested collision shape, all in
+# one scene edit. Graded with partial credit (min_score).
+min_score: 0.85
+prompt: |
+  In main.tscn, add a collectible called "Pickup". Requirements:
+
+    - Create res://pickup.gd extending Area2D, declaring `signal collected` and
+      defining `func collect() -> void:` that emits the signal.
+    - Add an Area2D named "Pickup" as a direct child of the scene root, at
+      position Vector2(300, 150), with res://pickup.gd attached.
+    - Give it a CollisionShape2D child whose CircleShape2D has radius 12.
+
+  Save the scene and leave the existing Player node unchanged.
+checks:
+  - kind: file_exists
+    path: res://pickup.gd
+    required: true
+  - kind: script_has_method
+    path: res://pickup.gd
+    value: collect
+  - kind: file_contains
+    path: res://pickup.gd
+    value: signal collected
+  - kind: node_exists
+    scene: res://main.tscn
+    path: Pickup
+    required: true
+    weight: 2
+  - kind: node_type
+    scene: res://main.tscn
+    path: Pickup
+    value: Area2D
+  - kind: node_script
+    scene: res://main.tscn
+    path: Pickup
+    value: pickup.gd
+    weight: 2
+  - kind: node_property
+    scene: res://main.tscn
+    path: Pickup
+    property: position
+    value: Vector2(300, 150)
+  - kind: node_exists
+    scene: res://main.tscn
+    path: Pickup/CollisionShape2D
+  - kind: node_property
+    scene: res://main.tscn
+    path: Pickup/CollisionShape2D
+    property: shape.radius
+    value: 12
+    weight: 2
+expect:
+  full:
+    used_all: [godot_add_node, godot_attach_script]
+    used_none: [edit]
+  script_escape:
+    used_all: [godot_run_script]
+    used_none: [edit]
+rubric: |
+  res://pickup.gd extends Area2D, declares signal collected, and defines
+  collect(). main.tscn has a root-level Area2D named Pickup at (300, 150) with
+  pickup.gd attached and a CollisionShape2D child using a CircleShape2D of
+  radius 12. The Player node is unchanged.
+timeout_s: 480

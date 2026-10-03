@@ -9,6 +9,7 @@ from typing import Any
 from rich.console import Console
 from rich.table import Table
 
+from .metrics import _score as _record_score
 from .metrics import aggregate
 
 
@@ -36,6 +37,7 @@ def _shape_table(records: list[dict[str, Any]]) -> Table:
         "runs",
         "pass@1",
         "95% CI",
+        "score",
         "judge",
         "mcp/task",
         "builtin/task",
@@ -52,6 +54,7 @@ def _shape_table(records: list[dict[str, Any]]) -> Table:
             str(row["runs"]),
             f"{row['pass_rate']:.0%}",
             f"{row['pass_ci_low']:.2f}-{row['pass_ci_high']:.2f}",
+            f"{row['score_mean']:.2f}",
             f"{row['judge_mean']:.2f}" if row["judge_scored"] else "-",
             f"{row['mcp_calls_mean']:.1f}",
             f"{row['builtin_calls_mean']:.1f}",
@@ -68,6 +71,7 @@ def _task_table(records: list[dict[str, Any]]) -> Table:
     table.add_column("task")
     table.add_column("runs", justify="right")
     table.add_column("pass@1", justify="right")
+    table.add_column("score", justify="right")
     table.add_column("shapes passing")
     for row in aggregate(records, "task"):
         group = [r for r in records if r["task"] == row["task"]]
@@ -77,6 +81,7 @@ def _task_table(records: list[dict[str, Any]]) -> Table:
             row["task"],
             str(row["runs"]),
             f"{row['pass_rate']:.0%}",
+            f"{row['score_mean']:.2f}",
             f"{len(passing)}/{len(shape_names)}",
         )
     return table
@@ -96,15 +101,18 @@ def _markdown(records: list[dict[str, Any]], meta: dict[str, Any]) -> str:
     lines.append("## By shape")
     lines.append("")
     lines.append(
-        "| shape | runs | pass@1 | 95% CI | judge | mcp calls | builtin calls | "
+        "| shape | runs | pass@1 | 95% CI | score | judge | mcp calls | builtin calls | "
         "turns | tokens | cost $ | wall s |"
     )
-    lines.append("| --- | ---: | ---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |")
+    lines.append(
+        "| --- | ---: | ---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+    )
     for row in aggregate(records, "shape"):
         judge = f"{row['judge_mean']:.2f}" if row["judge_scored"] else "-"
         lines.append(
             f"| {row['shape']} | {row['runs']} | {row['pass_rate']:.0%} | "
-            f"{row['pass_ci_low']:.2f}-{row['pass_ci_high']:.2f} | {judge} | "
+            f"{row['pass_ci_low']:.2f}-{row['pass_ci_high']:.2f} | "
+            f"{row['score_mean']:.2f} | {judge} | "
             f"{row['mcp_calls_mean']:.1f} | {row['builtin_calls_mean']:.1f} | "
             f"{row['turns_mean']:.1f} | {row['total_tokens_mean']:,.0f} | "
             f"{row['cost_mean']:.4f} | {row['wall_s_mean']:.1f} |"
@@ -125,7 +133,8 @@ def _markdown(records: list[dict[str, Any]], meta: dict[str, Any]) -> str:
                 cells.append("-")
             else:
                 passed = sum(1 for r in group if r["passed"])
-                cells.append(f"{passed}/{len(group)}")
+                score = sum(_record_score(r) for r in group) / len(group)
+                cells.append(f"{passed}/{len(group)} ({score:.2f})")
         lines.append(f"| {task} | " + " | ".join(cells) + " |")
     lines.append("")
     return "\n".join(lines)

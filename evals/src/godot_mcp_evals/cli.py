@@ -121,9 +121,13 @@ def _list(console: Console, tasks: dict, toolsets_path: Path, args: argparse.Nam
     table.add_column("id")
     table.add_column("fixture")
     table.add_column("checks", justify="right")
+    table.add_column("min_score", justify="right")
     table.add_column("description")
     for task in tasks.values():
-        table.add_row(task.id, task.fixture, str(len(task.checks)), task.description)
+        min_score = "-" if task.min_score is None else f"{task.min_score:.2f}"
+        table.add_row(
+            task.id, task.fixture, str(len(task.checks)), min_score, task.description
+        )
     console.print(table)
 
     try:

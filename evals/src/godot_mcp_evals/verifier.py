@@ -19,6 +19,8 @@ class CheckResult:
     kind: str
     passed: bool
     detail: str
+    weight: float = 1.0
+    required: bool = False
 
 
 def verifier_script() -> Path:
@@ -50,7 +52,12 @@ def run_checks(
                 _file_unchanged_check(task.id, index, check, project_dir, fixture_dir)
             )
         else:
-            entry = {"id": _check_id(task.id, index, check), "kind": check.kind}
+            entry = {
+                "id": _check_id(task.id, index, check),
+                "kind": check.kind,
+                "weight": check.weight,
+                "required": check.required,
+            }
             entry.update(check.params)
             engine_checks.append(entry)
 
@@ -92,11 +99,8 @@ def _engine_checks(
         )
     except subprocess.TimeoutExpired:
         return [
-            CheckResult(
-                id=str(check["id"]),
-                kind=str(check["kind"]),
-                passed=False,
-                detail=f"verifier timed out after {timeout_s:.0f}s",
+            _engine_result(
+                check, passed=False, detail=f"verifier timed out after {timeout_s:.0f}s"
             )
             for check in checks
         ]
@@ -121,12 +125,7 @@ def _engine_checks(
     if payload is None or "results" not in payload:
         reason = payload.get("error") if payload else "no EVALS_RESULT line from engine"
         return [
-            CheckResult(
-                id=str(check["id"]),
-                kind=str(check["kind"]),
-                passed=False,
-                detail=f"verifier error: {reason}",
-            )
+            _engine_result(check, passed=False, detail=f"verifier error: {reason}")
             for check in checks
         ]
 
@@ -135,14 +134,24 @@ def _engine_checks(
     for check in checks:
         item = by_id.get(str(check["id"]), {})
         out.append(
-            CheckResult(
-                id=str(check["id"]),
-                kind=str(check["kind"]),
+            _engine_result(
+                check,
                 passed=bool(item.get("passed", False)),
                 detail=str(item.get("detail", item.get("error", "missing result"))),
             )
         )
     return out
+
+
+def _engine_result(check: dict[str, object], *, passed: bool, detail: str) -> CheckResult:
+    return CheckResult(
+        id=str(check["id"]),
+        kind=str(check["kind"]),
+        passed=passed,
+        detail=detail,
+        weight=float(check.get("weight", 1.0)),
+        required=bool(check.get("required", False)),
+    )
 
 
 def _file_unchanged_check(
@@ -155,29 +164,17 @@ def _file_unchanged_check(
     rel = _relative_path(str(check.params.get("path", "")))
     result_id = _check_id(task_id, index, check)
     if fixture_dir is None or not rel:
-        return CheckResult(
-            id=result_id,
-            kind=check.kind,
-            passed=False,
-            detail="file_unchanged requires a fixture and a path",
+        return _scored(
+            result_id, check, False, "file_unchanged requires a fixture and a path"
         )
     original = fixture_dir / rel
     current = project_dir / rel
     if not original.is_file():
-        return CheckResult(
-            id=result_id, kind=check.kind, passed=False, detail=f"fixture has no {rel}"
-        )
+        return _scored(result_id, check, False, f"fixture has no {rel}")
     if not current.is_file():
-        return CheckResult(
-            id=result_id, kind=check.kind, passed=False, detail=f"{rel} was deleted"
-        )
+        return _scored(result_id, check, False, f"{rel} was deleted")
     changed = original.read_bytes() != current.read_bytes()
-    return CheckResult(
-        id=result_id,
-        kind=check.kind,
-        passed=not changed,
-        detail=f"{rel} {'changed' if changed else 'unchanged'}",
-    )
+    return _scored(result_id, check, not changed, f"{rel} {'changed' if changed else 'unchanged'}")
 
 
 def _relative_path(path: str) -> str:
@@ -187,11 +184,22 @@ def _relative_path(path: str) -> str:
 def _answer_check(task_id: str, index: int, check: Check, answer: str) -> CheckResult:
     wanted = str(check.params.get("value", ""))
     found = wanted.casefold() in answer.casefold()
+    return _scored(
+        _check_id(task_id, index, check),
+        check,
+        found,
+        f"answer {'contains' if found else 'missing'} {wanted!r}",
+    )
+
+
+def _scored(result_id: str, check: Check, passed: bool, detail: str) -> CheckResult:
     return CheckResult(
-        id=_check_id(task_id, index, check),
+        id=result_id,
         kind=check.kind,
-        passed=found,
-        detail=f"answer {'contains' if found else 'missing'} {wanted!r}",
+        passed=passed,
+        detail=detail,
+        weight=check.weight,
+        required=check.required,
     )
 
 
