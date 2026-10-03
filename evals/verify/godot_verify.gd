@@ -48,9 +48,10 @@ func _run_check(check: Dictionary) -> Dictionary:
 			detail = "type=%s want=%s" % ["" if node == null else node.get_class(), check.get("value", "")]
 		"node_property":
 			var node := _node(check)
-			var actual: Variant = null if node == null else node.get(String(check.get("property", "")))
-			passed = node != null and _values_equal(actual, check.get("value"))
-			detail = "actual=%s want=%s" % [str(actual), str(check.get("value"))]
+			var property := String(check.get("property", ""))
+			var actual: Variant = _read_property(node, property)
+			passed = node != null and actual != null and _values_equal(actual, check.get("value"))
+			detail = "%s=%s want=%s" % [property, str(actual), str(check.get("value"))]
 		"node_script":
 			var node := _node(check)
 			var script: Variant = null if node == null else node.get_script()
@@ -89,6 +90,29 @@ func _node(check: Dictionary) -> Node:
 	if path == "" or path == ".":
 		return root
 	return root.get_node_or_null(NodePath(path))
+
+
+# A dotted "property" walks nested objects, e.g. "shape.size" reads the embedded
+# Resource on a CollisionShape2D. A missing step yields null, which fails the
+# check.
+func _read_property(node: Node, property: String) -> Variant:
+	if node == null:
+		return null
+	var current: Variant = node
+	for part: String in property.split("."):
+		if current == null or not (current is Object):
+			return null
+		if not _has_property(current as Object, part):
+			return null
+		current = current.get(part)
+	return current
+
+
+func _has_property(obj: Object, property: String) -> bool:
+	for entry: Dictionary in obj.get_property_list():
+		if String(entry.get("name", "")) == property:
+			return true
+	return false
 
 
 func _load_scene(check: Dictionary) -> Node:

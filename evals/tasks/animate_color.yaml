@@ -1,0 +1,36 @@
+id: animate_color
+description: Animate a sprite's modulate color with an AnimationPlayer.
+fixture: animate_color
+prompt: |
+  In main.tscn, add an AnimationPlayer named "Anim" as a direct child of the
+  scene root. Give it an animation named "fade" of length 1.25 seconds that
+  animates Root/Sprite's modulate from Color(1, 1, 1, 1) at t=0 to
+  Color(1, 0, 0, 1) at t=1.25, and make "fade" play automatically. Save the scene.
+checks:
+  - kind: file_contains
+    path: res://main.tscn
+    value: 'type="AnimationPlayer"'
+  - kind: file_contains
+    path: res://main.tscn
+    value: 'name="Anim"'
+  - kind: file_contains
+    path: res://main.tscn
+    value: 'length = 1.25'
+  - kind: file_contains
+    path: res://main.tscn
+    value: 'NodePath("Sprite:modulate")'
+  - kind: file_contains
+    path: res://main.tscn
+    value: 'Color(1, 0, 0, 1)'
+  - kind: file_contains
+    path: res://main.tscn
+    value: '&"fade"'
+expect:
+  script_escape:
+    used_all: [godot_run_script]
+    used_none: [edit, write]
+rubric: |
+  main.tscn has a direct child AnimationPlayer named Anim with an animation
+  "fade" (1.25s) tracking Sprite:modulate from opaque white to opaque red, set to
+  autoplay.
+timeout_s: 360

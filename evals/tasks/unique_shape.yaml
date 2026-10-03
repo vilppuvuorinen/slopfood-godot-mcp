@@ -1,0 +1,28 @@
+id: unique_shape
+description: Change one node's shared collision shape without affecting its sibling.
+fixture: unique_shape
+prompt: |
+  In main.tscn, the CollisionShape2D nodes under Root/WallA and Root/WallB share
+  one embedded RectangleShape2D. Change the shape used by Root/WallA to a
+  rectangle of size Vector2(20, 20), while Root/WallB's shape must stay
+  Vector2(10, 10). Save the scene.
+checks:
+  - kind: node_property
+    scene: res://main.tscn
+    path: WallA/CollisionShape2D
+    property: shape.size
+    value: Vector2(20, 20)
+  - kind: node_property
+    scene: res://main.tscn
+    path: WallB/CollisionShape2D
+    property: shape.size
+    value: Vector2(10, 10)
+expect:
+  script_escape:
+    used_all: [godot_run_script]
+    used_none: [edit, write]
+rubric: |
+  WallA's CollisionShape2D uses its own RectangleShape2D of size (20, 20).
+  WallB's CollisionShape2D is unchanged at (10, 10): the edit must not leak
+  through the previously shared sub-resource.
+timeout_s: 300

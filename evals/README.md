@@ -109,7 +109,8 @@ Supported checks: `node_exists`, `node_not_exists`, `node_type`, `node_property`
 `node_script`, `scene_root_type`, `file_exists`, `file_contains`,
 `script_has_method`, `project_setting`, `file_unchanged`, and `answer_contains`
 (the last two are evaluated in Python; `file_unchanged` compares the graded
-project against the fixture).
+project against the fixture). A `node_property` `property` may be dotted to
+reach nested objects, e.g. `shape.size` on a `CollisionShape2D`.
 
 ### Trajectory expectations
 
