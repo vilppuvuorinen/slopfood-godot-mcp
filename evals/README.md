@@ -18,6 +18,7 @@ not part of the root Go module.
 ```sh
 make evals                                  # full suite, default models
 make evals EVALS_REPS=1 EVALS_SHAPES=full   # quick smoke slice
+make evals EVALS_JOBS=8                     # raise concurrent sessions (default 4)
 ```
 
 Or drive it directly:
@@ -34,6 +35,7 @@ Useful flags:
 | --- | --- |
 | `--tasks` / `--shapes` | Comma-separated allowlists (default: the suite config). |
 | `--reps` | Repetitions per task × shape. |
+| `--jobs` | Concurrent sessions (default: suite config, usually 4). |
 | `--model` / `--judge` | `provider/model` for the executor and judge. |
 | `--no-judge` | Deterministic checks only (cheaper, faster). |
 | `--dry-run` | Materialize fixtures and print the plan without model calls. |
@@ -52,7 +54,8 @@ summary is also printed to the terminal.
    resolve; set `EVALS_OPENCODE_CONFIG` to point at a specific config instead.
    Subagents are disabled (`subagent_depth: 0`) so each trajectory is the one
    model's own.
-2. For each (task × shape × repetition):
+2. Up to `jobs` (default 4) cells run concurrently. For each (task × shape ×
+   repetition):
    - the task fixture is copied to a fresh project directory under the work
      root (a temp directory outside the repository, so the host's `AGENTS.md`
      and git state do not leak into the session);

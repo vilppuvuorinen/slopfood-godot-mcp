@@ -178,6 +178,49 @@ def test_select_helper():
     assert cli._select(None, ["x"], ["y"]) == ["x"]
 
 
+def test_cli_jobs_flag():
+    assert cli.build_parser().parse_args(["--jobs", "7"]).jobs == 7
+    assert cli.build_parser().parse_args([]).jobs is None
+
+
+def test_suite_jobs_default_and_override(tmp_path):
+    assert config.load_suite(EVALS_DIR / "config" / "suite.yaml").jobs == 4
+    custom = tmp_path / "suite.yaml"
+    custom.write_text("jobs: 6\n")
+    assert config.load_suite(custom).jobs == 6
+    custom.write_text("jobs: 0\n")
+    assert config.load_suite(custom).jobs == 1
+
+
+def test_plan_runs_flattens_in_execution_order():
+    import types
+
+    def task(task_id):
+        return config.Task(
+            id=task_id,
+            description="",
+            fixture=task_id,
+            prompt="",
+            checks=[],
+            rubric="",
+            timeout_s=None,
+            expect={},
+        )
+
+    shapes = {"full": config.Shape(name="full", description="", tools={})}
+    options = types.SimpleNamespace(
+        selected_tasks=["a", "b"], tasks={"a": task("a"), "b": task("b")}, selected_shapes=["full"]
+    )
+    plan = runner._plan_runs(options, shapes, {"full": 2})
+    assert [p.run_id for p in plan] == [
+        "a__full__r1",
+        "a__full__r2",
+        "b__full__r1",
+        "b__full__r2",
+    ]
+    assert [p.index for p in plan] == [1, 2, 3, 4]
+
+
 def test_every_task_has_a_fixture_and_known_checks():
     tasks = config.load_tasks(EVALS_DIR / "tasks")
     assert tasks

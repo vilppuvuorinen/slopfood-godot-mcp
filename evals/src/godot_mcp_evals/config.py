@@ -144,6 +144,7 @@ class Suite:
     judge_enabled: bool
     shapes: list[str]
     tasks: str | list[str]
+    jobs: int = 4
 
 
 def load_tasks(tasks_dir: Path) -> dict[str, Task]:
@@ -169,6 +170,7 @@ def load_suite(path: Path) -> Suite:
         judge_enabled=bool(data.get("judge", True)),
         shapes=[str(s) for s in data.get("shapes", [])],
         tasks=data.get("tasks", "all"),
+        jobs=max(1, int(data.get("jobs", 4))),
     )
 
 

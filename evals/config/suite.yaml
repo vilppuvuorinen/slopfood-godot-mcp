@@ -6,6 +6,9 @@ models:
 reps: 3
 timeout_s: 300
 judge: true
+# Concurrent sessions. Each is a full headless Godot process plus an agent, so
+# the ceiling is CPU/memory rather than the opencode server.
+jobs: 4
 
 shapes:
   - full

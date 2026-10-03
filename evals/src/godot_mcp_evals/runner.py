@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import dataclasses
 import time
 from pathlib import Path
@@ -55,6 +56,18 @@ class RunOptions:
     executor_spec: str | None = None
     judge_spec: str | None = None
     reps: int | None = None
+    jobs: int | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class _PlannedRun:
+    """One (task, shape, repetition) cell, awaiting execution."""
+
+    index: int
+    task: Task
+    shape: Shape
+    rep: int
+    run_id: str
 
 
 def run_suite(options: RunOptions, console: Console | None = None) -> list[dict[str, Any]]:
@@ -79,7 +92,7 @@ def run_suite(options: RunOptions, console: Console | None = None) -> list[dict[
             name: effective_reps(shapes[name], options.reps, options.suite.reps)
             for name in options.selected_shapes
         }
-        total = len(options.selected_tasks) * sum(reps_by_shape.values())
+        plan = _plan_runs(options, shapes, reps_by_shape)
 
         if options.dry_run:
             _print_plan(options, shapes, executor_spec, judge_spec, reps_by_shape, console)
@@ -89,33 +102,17 @@ def run_suite(options: RunOptions, console: Console | None = None) -> list[dict[
         options.judge_dir.mkdir(parents=True, exist_ok=True)
         (options.out_dir / "verify").mkdir(parents=True, exist_ok=True)
 
-        records: list[dict[str, Any]] = []
-        index = 0
-        for task_id in options.selected_tasks:
-            task = options.tasks[task_id]
-            for shape_name in options.selected_shapes:
-                shape = shapes[shape_name]
-                for rep in range(1, reps_by_shape[shape_name] + 1):
-                    index += 1
-                    run_id = f"{task_id}__{shape_name}__r{rep}"
-                    console.rule(f"[bold]{index}/{total}[/] {run_id}")
-                    record = _run_once(
-                        options=options,
-                        client=client,
-                        task=task,
-                        shape=shape,
-                        rep=rep,
-                        run_id=run_id,
-                        executor_model=executor_model,
-                        judge_model=judge_model,
-                        judge_enabled=options.judge_enabled,
-                        disabled=disabled,
-                        timeout_s=task.timeout_s or options.suite.timeout_s,
-                        console=console,
-                    )
-                    records.append(record)
-                    status = "PASS" if record["passed"] else "FAIL"
-                    console.print(f"  -> [bold]{status}[/] {record['run_id']}")
+        jobs = max(1, options.jobs or options.suite.jobs)
+        records = _execute_plan(
+            plan,
+            options=options,
+            client=client,
+            executor_model=executor_model,
+            judge_model=judge_model,
+            disabled=disabled,
+            console=console,
+            jobs=jobs,
+        )
 
         report.write_reports(
             options.out_dir,
@@ -126,6 +123,7 @@ def run_suite(options: RunOptions, console: Console | None = None) -> list[dict[
                 "reps": reps_by_shape,
                 "shapes": options.selected_shapes,
                 "tasks": options.selected_tasks,
+                "jobs": jobs,
             },
         )
         report.print_summary(records, console)
@@ -144,6 +142,76 @@ def effective_reps(shape: Shape, cli_reps: int | None, suite_reps: int) -> int:
     if cli_reps is not None:
         return cli_reps
     return suite_reps
+
+
+def _plan_runs(
+    options: RunOptions, shapes: dict[str, Shape], reps_by_shape: dict[str, int]
+) -> list[_PlannedRun]:
+    """Expand the task x shape x repetition matrix into a flat, ordered plan."""
+    plan: list[_PlannedRun] = []
+    for task_id in options.selected_tasks:
+        task = options.tasks[task_id]
+        for shape_name in options.selected_shapes:
+            shape = shapes[shape_name]
+            for rep in range(1, reps_by_shape[shape_name] + 1):
+                plan.append(
+                    _PlannedRun(
+                        index=len(plan) + 1,
+                        task=task,
+                        shape=shape,
+                        rep=rep,
+                        run_id=f"{task_id}__{shape_name}__r{rep}",
+                    )
+                )
+    return plan
+
+
+def _execute_plan(
+    plan: list[_PlannedRun],
+    *,
+    options: RunOptions,
+    client: OpencodeClient,
+    executor_model: dict[str, str],
+    judge_model: dict[str, str],
+    disabled: dict[str, bool],
+    console: Console,
+    jobs: int,
+) -> list[dict[str, Any]]:
+    """Run every planned cell, up to ``jobs`` concurrently.
+
+    Each cell owns its project, runtime and judge directories, so the only
+    shared state is the opencode server (which scopes instances per directory)
+    and the records list, which is written by index from this thread alone.
+    """
+
+    def work(item: _PlannedRun) -> dict[str, Any]:
+        return _run_once(
+            options=options,
+            client=client,
+            task=item.task,
+            shape=item.shape,
+            rep=item.rep,
+            run_id=item.run_id,
+            executor_model=executor_model,
+            judge_model=judge_model,
+            judge_enabled=options.judge_enabled,
+            disabled=disabled,
+            timeout_s=item.task.timeout_s or options.suite.timeout_s,
+            console=console,
+        )
+
+    records: list[dict[str, Any] | None] = [None] * len(plan)
+    total = len(plan)
+    console.rule(f"[bold]Running {total} session(s) with {jobs} job(s)[/]")
+    with concurrent.futures.ThreadPoolExecutor(max_workers=jobs) as pool:
+        futures = {pool.submit(work, item): item for item in plan}
+        for done, future in enumerate(concurrent.futures.as_completed(futures), start=1):
+            item = futures[future]
+            record = future.result()
+            records[item.index - 1] = record
+            status = "PASS" if record["passed"] else "FAIL"
+            console.print(f"[bold]{done}/{total}[/] {status} {record['run_id']}")
+    return [record for record in records if record is not None]
 
 
 def _builtin_tools(

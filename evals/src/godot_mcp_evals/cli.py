@@ -36,6 +36,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--tasks", help="comma-separated task ids (default: suite config)")
     parser.add_argument("--shapes", help="comma-separated shape names (default: suite config)")
     parser.add_argument("--reps", type=int, help="repetitions per task x shape")
+    parser.add_argument(
+        "--jobs", type=int, help="concurrent sessions (default: suite config, usually 4)"
+    )
     parser.add_argument("--model", help="executor model as provider/model")
     parser.add_argument("--judge", help="judge model as provider/model")
     parser.add_argument("--no-judge", action="store_true", help="skip the LLM judge")
@@ -100,6 +103,7 @@ def main(argv: list[str] | None = None) -> int:
         executor_spec=args.model,
         judge_spec=args.judge,
         reps=args.reps,
+        jobs=args.jobs,
     )
     try:
         runner.run_suite(options, console)
