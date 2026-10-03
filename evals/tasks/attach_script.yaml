@@ -1,0 +1,34 @@
+id: attach_script
+description: Create a GDScript with a method and attach it to a node.
+fixture: attach_script
+prompt: |
+  Create a new GDScript file at res://player.gd that extends CharacterBody2D and
+  defines an integer method:
+
+      func speed() -> int:
+          return 5
+
+  Then attach that script to the existing node at Root/Player in main.tscn and
+  save the scene.
+checks:
+  - kind: file_exists
+    path: res://player.gd
+  - kind: script_has_method
+    path: res://player.gd
+    value: speed
+  - kind: node_script
+    scene: res://main.tscn
+    path: Player
+    value: player.gd
+expect:
+  # Creating player.gd with the built-in write tool is fine; rewriting the
+  # .tscn by hand is not, and attaching must go through the structured tool.
+  full:
+    used_all: [godot_attach_script]
+    used_none: [edit]
+  script_escape:
+    used_all: [godot_run_script]
+rubric: |
+  res://player.gd exists, extends CharacterBody2D, exposes a speed() method, and
+  is attached to Root/Player.
+timeout_s: 300

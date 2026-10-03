@@ -1,0 +1,15 @@
+# Default suite configuration. Every field is overridable on the command line.
+models:
+  executor: opencode-go/deepseek-v4.1-flash
+  judge: opencode-go/deepseek-v4.1-flash
+
+reps: 3
+timeout_s: 300
+judge: true
+
+shapes:
+  - full
+  - script_escape
+  - read_only
+
+tasks: all

@@ -1,0 +1,28 @@
+id: modify_property
+description: Change numeric properties on an existing node.
+fixture: modify_property
+prompt: |
+  In main.tscn, set the z_index of the node at Root/Sprite to 5 and set its
+  rotation to 1.5707963 radians (90 degrees). Save the scene.
+checks:
+  - kind: node_property
+    scene: res://main.tscn
+    path: Sprite
+    property: z_index
+    value: 5
+  - kind: node_property
+    scene: res://main.tscn
+    path: Sprite
+    property: rotation
+    value: 1.5707963
+expect:
+  full:
+    used_all: [godot_modify_scene_node]
+    used_none: [edit, write]
+  script_escape:
+    used_all: [godot_run_script]
+    used_none: [edit, write]
+rubric: |
+  Root/Sprite keeps its type and position; only z_index and rotation change as
+  requested. Rotation is approximately pi/2 radians.
+timeout_s: 240

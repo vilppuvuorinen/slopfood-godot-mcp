@@ -13,6 +13,14 @@ GOFLAGS ?=
 TOOLS_MOD := tools/go.mod
 GOLANGCI_LINT ?= $(GO) tool -modfile=$(CURDIR)/$(TOOLS_MOD) golangci-lint
 
+# Toolset-shape evals (a standalone uv project under evals/; not part of this
+# module). EVALS_SHAPES/EVALS_ARGS narrow a run, e.g. EVALS_SHAPES=full.
+EVALS_MODEL ?= opencode-go/deepseek-v4.1-flash
+EVALS_JUDGE ?= opencode-go/deepseek-v4.1-flash
+EVALS_REPS ?= 3
+EVALS_SHAPES ?=
+EVALS_ARGS ?=
+
 .PHONY: all
 all: fmt vet test build
 
@@ -97,6 +105,16 @@ e2e-cover:
 bench:
 	$(GO) test $(GOFLAGS) -run '^$$' -bench . -benchmem ./...
 
+# Compare toolset shapes end to end. Builds the dev server, then drives it
+# through `opencode serve`; see evals/README.md. Not part of `check` because it
+# needs the opencode CLI, configured models and paid inference.
+.PHONY: evals
+evals: godot
+	$(GO) build $(GOFLAGS) -tags devtransport -trimpath -ldflags '$(LDFLAGS)' -o bin/$(BINARY)-dev $(CMD)
+	cd evals && MCP_BIN='$(CURDIR)/bin/$(BINARY)-dev' uv run evals run \
+		--model '$(EVALS_MODEL)' --judge '$(EVALS_JUDGE)' --reps '$(EVALS_REPS)' \
+		$(if $(EVALS_SHAPES),--shapes '$(EVALS_SHAPES)') $(EVALS_ARGS)
+
 .PHONY: cover
 cover: test
 	$(GO) tool cover -html=coverage.out
@@ -156,6 +174,7 @@ help:
 	@printf '  e2e      build, then run the SDK-backed black-box tests in parallel (E2E_PARALLEL=%s)\n' '$(E2E_PARALLEL)'
 	@printf '  e2e-cover  e2e coverage: Go to %s, GDScript bridge to %s and %s\n' '$(E2E_COVERPROFILE)' '$(GDCOVER_PROFILE)' '$(GDCOVER_VALIDATE_PROFILE)'
 	@printf '  fmt-check/vet/lint  code quality (fmt fixes)\n'
+	@printf '  evals    toolset-shape evals through opencode serve (see evals/README.md)\n'
 	@printf '  static   fmt-check vet lint test build (no Godot needed)\n'
 	@printf '  check    static plus godot and e2e\n'
 	@printf '  clean    remove build artifacts\n'

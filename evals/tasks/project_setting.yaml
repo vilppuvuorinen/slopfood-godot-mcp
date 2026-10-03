@@ -1,0 +1,19 @@
+id: project_setting
+description: Change a project setting that no structured tool covers.
+fixture: project_setting
+prompt: |
+  Change the project name in project.godot to exactly "Evals Suite". Leave the
+  rest of the project configuration intact.
+checks:
+  - kind: project_setting
+    key: application/config/name
+    value: Evals Suite
+expect:
+  # No structured tool covers this setting, so script_escape (no edit/write/
+  # bash) must reach for run_script.
+  script_escape:
+    used_all: [godot_run_script]
+rubric: |
+  project.godot declares application/config/name = "Evals Suite". The change was
+  made in a way that keeps project.godot valid.
+timeout_s: 240

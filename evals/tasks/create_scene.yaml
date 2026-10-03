@@ -1,0 +1,27 @@
+id: create_scene
+description: Create a new scene file with a typed, named root node.
+fixture: create_scene
+prompt: |
+  Create a new Godot scene at res://levels/level1.tscn. Its root node must be
+  named "Level1" and be of type Node2D. Make sure the directory exists.
+checks:
+  - kind: file_exists
+    path: res://levels/level1.tscn
+  - kind: scene_root_type
+    scene: res://levels/level1.tscn
+    value: Node2D
+  - kind: node_property
+    scene: res://levels/level1.tscn
+    path: "."
+    property: name
+    value: Level1
+expect:
+  full:
+    used_all: [godot_create_scene]
+    used_none: [edit, write]
+  script_escape:
+    used_all: [godot_run_script]
+    used_none: [edit, write]
+rubric: |
+  res://levels/level1.tscn exists and its root node is a Node2D named Level1.
+timeout_s: 240

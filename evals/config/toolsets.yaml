@@ -1,0 +1,28 @@
+# Named toolset shapes.
+#
+# `mcp` selects MCP tools exposed by the slopfood-godot-mcp server:
+#   all                    every tool the server registers
+#   none                   no MCP tools
+#   [a, b, ...]            an explicit allowlist
+#   all-except:a,b         every registered tool except the named ones
+#
+# `builtin` lists the opencode built-in tools to leave enabled. Anything not
+# named here (and not selected above) is explicitly disabled in the prompt, so
+# a shape is fully reproducible.
+shapes:
+  full:
+    description: All MCP tools plus shell and file-writing built-ins.
+    mcp: all
+    builtin: [bash, edit, write, read, glob, grep]
+
+  script_escape:
+    description: Every tool except the structured scene tools; mutation via run_script only.
+    mcp: all-except:add_node,attach_script,create_scene,duplicate_scene_node,modify_scene_node,move_scene_node,remove_scene_node,rename_scene_node
+    builtin: [read, glob, grep]
+
+  read_only:
+    description: Read-only control surface.
+    mcp: [get_godot_version, read, read_node]
+    builtin: [read, glob, grep]
+    # Write tasks are expected to fail here; one rep is enough to characterise it.
+    reps: 1

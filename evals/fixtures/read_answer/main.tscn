@@ -1,0 +1,8 @@
+[gd_scene format=3]
+
+[node name="Root" type="Node2D"]
+
+[node name="Enemy" type="CharacterBody2D" parent="."]
+
+[node name="Label" type="Label" parent="."]
+text = "hello"

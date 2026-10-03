@@ -1,0 +1,23 @@
+id: read_answer
+description: Read scene state and report it without editing (read-path control).
+fixture: read_answer
+prompt: |
+  Read main.tscn. Then answer with a single final line in exactly this format:
+
+      ANSWER: <type of Root/Enemy> | <text of Root/Label>
+
+  Do not modify any files.
+checks:
+  - kind: answer_contains
+    value: CharacterBody2D
+  - kind: answer_contains
+    value: hello
+  - kind: file_unchanged
+    path: res://main.tscn
+expect:
+  full:
+    used_none: [edit, write]
+rubric: |
+  The final answer reports the Enemy node's native type as CharacterBody2D and
+  the Label node's text as hello. No files should change.
+timeout_s: 240

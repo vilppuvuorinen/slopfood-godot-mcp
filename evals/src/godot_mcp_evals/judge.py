@@ -1,0 +1,156 @@
+"""LLM judge: score a run's outcome through opencode structured output."""
+
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+from typing import Any
+
+from .opencode import OpencodeClient, OpencodeError
+
+JUDGE_SCHEMA: dict[str, Any] = {
+    "type": "object",
+    "properties": {
+        "pass": {"type": "boolean"},
+        "score": {"type": "number", "minimum": 0, "maximum": 1},
+        "reasons": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["pass", "score", "reasons"],
+    "additionalProperties": False,
+}
+
+JUDGE_SYSTEM = (
+    "You are a strict evaluator of Godot project edits. You are given a task, the "
+    "deterministic check results, the agent's final answer and the file diff. Judge "
+    "whether the task was actually accomplished, not whether the agent claimed success. "
+    "Return only the requested JSON. Do not use tools."
+)
+
+
+def judge_run(
+    client: OpencodeClient,
+    *,
+    model: dict[str, str],
+    judge_dir: Path,
+    disabled_tools: dict[str, bool],
+    task_id: str,
+    description: str,
+    prompt: str,
+    rubric: str,
+    check_results: list[dict[str, Any]],
+    answer: str,
+    diff: list[dict[str, Any]],
+    timeout_s: float,
+) -> dict[str, Any]:
+    judge_dir.mkdir(parents=True, exist_ok=True)
+    user = _build_prompt(
+        task_id=task_id,
+        description=description,
+        prompt=prompt,
+        rubric=rubric,
+        check_results=check_results,
+        answer=answer,
+        diff=diff,
+    )
+    try:
+        session_id = client.create_session(str(judge_dir), f"judge-{task_id}")
+        response = client.prompt(
+            session_id,
+            str(judge_dir),
+            model=model,
+            agent="build",
+            tools=disabled_tools,
+            parts=[{"type": "text", "text": user}],
+            timeout_s=timeout_s,
+            system=JUDGE_SYSTEM,
+            output_format={"type": "json_schema", "schema": JUDGE_SCHEMA},
+        )
+    except OpencodeError as exc:
+        return {"error": str(exc), "pass": None, "score": None, "reasons": []}
+
+    text = "\n".join(
+        str(part.get("text", ""))
+        for part in response.get("parts", [])
+        if part.get("type") == "text"
+    )
+    parsed = _structured_output(response) or _parse_json(text)
+    if parsed is None:
+        return {
+            "error": "judge returned no parseable JSON",
+            "raw": text[:1000],
+            "pass": None,
+            "score": None,
+            "reasons": [],
+        }
+    return {
+        "pass": bool(parsed.get("pass")),
+        "score": float(parsed.get("score", 0.0)),
+        "reasons": [str(r) for r in parsed.get("reasons", [])],
+        "raw": parsed,
+    }
+
+
+def _build_prompt(
+    *,
+    task_id: str,
+    description: str,
+    prompt: str,
+    rubric: str,
+    check_results: list[dict[str, Any]],
+    answer: str,
+    diff: list[dict[str, Any]],
+) -> str:
+    checks = "\n".join(
+        f"- [{ 'PASS' if c['passed'] else 'FAIL' }] {c['id']}: {c['detail']}" for c in check_results
+    )
+    diff_text = _render_diff(diff)
+    return (
+        f"# Task: {task_id}\n{description}\n\n"
+        f"## Instruction given to the agent\n{prompt}\n\n"
+        f"## Rubric\n{rubric or 'The task instruction should be satisfied exactly.'}\n\n"
+        f"## Deterministic checks\n{checks or '(none)'}\n\n"
+        f"## Agent final answer\n{answer or '(empty)'}\n\n"
+        f"## File diff\n{diff_text}\n"
+    )
+
+
+def _render_diff(diff: list[dict[str, Any]], limit: int = 6000) -> str:
+    if not diff:
+        return "(no diff recorded)"
+    chunks = []
+    for entry in diff:
+        path = entry.get("file") or entry.get("path") or "?"
+        patch = entry.get("patch") or entry.get("diff") or ""
+        chunks.append(f"--- {path}\n{patch}")
+    return "\n".join(chunks)[:limit]
+
+
+def _structured_output(response: dict[str, Any]) -> dict[str, Any] | None:
+    """Structured output arrives as a synthetic ``StructuredOutput`` tool call."""
+    for part in response.get("parts", []):
+        if part.get("type") != "tool":
+            continue
+        if str(part.get("tool", "")).lower() != "structuredoutput":
+            continue
+        payload = (part.get("state") or {}).get("input")
+        if isinstance(payload, dict):
+            return payload
+    return None
+
+
+def _parse_json(text: str) -> dict[str, Any] | None:
+    text = text.strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    match = re.search(r"\{.*\}", text, re.DOTALL)
+    if not match:
+        return None
+    try:
+        return json.loads(match.group(0))
+    except json.JSONDecodeError:
+        return None

@@ -1,0 +1,26 @@
+id: remove_duplicate
+description: Duplicate one node and delete another.
+fixture: remove_duplicate
+prompt: |
+  In main.tscn, duplicate the node at Root/Enemy1 into a sibling named
+  "Enemy1Copy", then remove the node at Root/Enemy2. Save the scene.
+checks:
+  - kind: node_exists
+    scene: res://main.tscn
+    path: Enemy1
+  - kind: node_exists
+    scene: res://main.tscn
+    path: Enemy1Copy
+  - kind: node_not_exists
+    scene: res://main.tscn
+    path: Enemy2
+expect:
+  full:
+    used_all: [godot_duplicate_scene_node, godot_remove_scene_node]
+    used_none: [edit, write]
+  script_escape:
+    used_all: [godot_run_script]
+    used_none: [edit, write]
+rubric: |
+  Enemy1 remains, a sibling Enemy1Copy exists, and Enemy2 is gone.
+timeout_s: 300

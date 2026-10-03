@@ -1,0 +1,25 @@
+id: add_node
+description: Add a child node of a specific type to an existing scene.
+fixture: add_node
+prompt: |
+  In the Godot project at res://, open main.tscn and add a new CharacterBody2D
+  node named "Player" as a direct child of the scene's root node. Save the scene.
+checks:
+  - kind: node_exists
+    scene: res://main.tscn
+    path: Player
+  - kind: node_type
+    scene: res://main.tscn
+    path: Player
+    value: CharacterBody2D
+expect:
+  full:
+    used_all: [godot_add_node]
+    used_none: [edit, write]
+  script_escape:
+    used_all: [godot_run_script]
+    used_none: [edit, write]
+rubric: |
+  main.tscn must contain a direct child of the root named Player whose native
+  type is CharacterBody2D. The rest of the scene should be unchanged.
+timeout_s: 240
