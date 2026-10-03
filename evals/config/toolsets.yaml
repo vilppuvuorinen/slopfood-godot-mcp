@@ -16,9 +16,9 @@ shapes:
     builtin: [bash, edit, write, read, glob, grep]
 
   script_escape:
-    description: Every tool except the structured scene tools; mutation via run_script only.
+    description: Default built-ins plus every MCP tool except the structured scene tools; mutation must go through run_script or raw edit/write/bash.
     mcp: all-except:add_node,attach_script,create_scene,duplicate_scene_node,modify_scene_node,move_scene_node,remove_scene_node,rename_scene_node
-    builtin: [read, glob, grep]
+    builtin: [bash, edit, write, read, glob, grep]
 
   read_only:
     description: Read-only control surface.

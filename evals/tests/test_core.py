@@ -181,3 +181,10 @@ def test_default_shapes_resolve_against_registered_tools():
     )
     assert set(shapes) == {"full", "script_escape", "read_only"}
     assert shapes["full"].tools["bash"] is True
+    # script_escape isolates the structured MCP tools only; the model must keep
+    # the same built-in escape hatches so its choice of tool stays observable.
+    for name in ("bash", "edit", "write", "read", "glob", "grep"):
+        assert shapes["script_escape"].tools[name] is True
+        assert shapes["full"].tools[name] is True
+    for name in ("bash", "edit", "write"):
+        assert shapes["read_only"].tools[name] is False
