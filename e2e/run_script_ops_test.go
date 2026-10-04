@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"testing"
 
@@ -317,6 +318,316 @@ func run():
 			"path": "materials/scripted.res",
 		})
 		requireContains(t, text, `"metallic": 0.75`)
+	})
+}
+
+func readSceneTree(t *testing.T, session *mcp.ClientSession, scenePath string) sceneNode {
+	t.Helper()
+	text := requireToolText(t, session, "read", map[string]any{"type": "scene", "path": scenePath})
+	var tree sceneNode
+	if err := json.Unmarshal([]byte(text), &tree); err != nil {
+		t.Fatalf("unmarshal scene %s: %v\n%s", scenePath, err, text)
+	}
+	return tree
+}
+
+func childByName(node sceneNode, name string) *sceneNode {
+	for i := range node.Children {
+		if node.Children[i].Name == name {
+			return &node.Children[i]
+		}
+	}
+	return nil
+}
+
+// TestRunScriptSceneOperations smoke tests the load-mutate-pack-save GDScript
+// that the removed create_scene, add_node, modify_scene_node,
+// remove_scene_node, rename_scene_node, duplicate_scene_node and move_scene_node
+// tools used to wrap. The scripts run in the live editor session and the result
+// is read back with read(type=scene), so a bridge change that breaks editor-mode
+// scene mutation fails here.
+func TestRunScriptSceneOperations(t *testing.T) {
+	t.Parallel()
+
+	t.Run("creates scenes with custom roots", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+
+		for _, tc := range []struct{ path, rootType string }{
+			{"levels/arena.tscn", "Node3D"},
+			{"world.tscn", "Node2D"},
+		} {
+			requireScriptSave(t, session, fmt.Sprintf(`extends RefCounted
+
+func run():
+	var root = ClassDB.instantiate("%s")
+	root.name = "root"
+	var dir := "res://%s".get_base_dir()
+	if not dir.is_empty():
+		DirAccess.make_dir_recursive_absolute(dir)
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	return ResourceSaver.save(packed, "res://%s")
+`, tc.rootType, tc.path, tc.path))
+
+			requireContains(t, readFile(t, filepath.Join(root, tc.path)), `type="`+tc.rootType+`"`)
+			tree := readSceneTree(t, session, tc.path)
+			if tree.Name != "root" || tree.Type != tc.rootType {
+				t.Errorf("%s root = %+v, want root of type %s", tc.path, tree, tc.rootType)
+			}
+		}
+	})
+
+	t.Run("adds typed nodes, nested children, and scene instances", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		createScene(t, session, "scenes/level.tscn", "Node2D")
+		createScene(t, session, "scenes/enemy.tscn", "Sprite2D")
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var scene: PackedScene = load("res://scenes/level.tscn")
+	var root: Node = scene.instantiate()
+	var player = ClassDB.instantiate("Sprite2D")
+	player.name = "Player"
+	root.add_child(player)
+	player.owner = root
+	var weapon = ClassDB.instantiate("Node2D")
+	weapon.name = "Weapon"
+	player.add_child(weapon)
+	weapon.owner = root
+	var foe = load("res://scenes/enemy.tscn").instantiate()
+	foe.name = "Foe"
+	root.add_child(foe)
+	foe.owner = root
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	return ResourceSaver.save(packed, "res://scenes/level.tscn")
+`)
+
+		tree := readSceneTree(t, session, "scenes/level.tscn")
+		player := childByName(tree, "Player")
+		if player == nil || player.Type != "Sprite2D" {
+			t.Fatalf("children = %+v, want a Sprite2D Player", tree.Children)
+		}
+		if weapon := childByName(*player, "Weapon"); weapon == nil || weapon.Type != "Node2D" {
+			t.Errorf("Player children = %+v, want a Node2D Weapon", player.Children)
+		}
+		if foe := childByName(tree, "Foe"); foe == nil || foe.Type != "Sprite2D" {
+			t.Errorf("children = %+v, want an instanced Sprite2D Foe", tree.Children)
+		}
+		requireContains(t, readFile(t, filepath.Join(root, "scenes", "level.tscn")),
+			`[ext_resource type="PackedScene"`, `instance=ExtResource(`)
+	})
+
+	t.Run("modifies typed node properties", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		createScene(t, session, "scenes/props.tscn", "Node2D")
+		addNodeViaScript(t, session, "scenes/props.tscn", "", "Player", "Sprite2D", nil)
+		writeE2EFile(t, filepath.Join(root, "art", "icon.tres"),
+			"[gd_resource type=\"GradientTexture2D\" format=3]\n\n[resource]\nwidth = 16\nheight = 16\n")
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var scene: PackedScene = load("res://scenes/props.tscn")
+	var root: Node = scene.instantiate()
+	var player: Sprite2D = root.get_node("Player")
+	player.position = Vector2(10, 20)
+	player.modulate = Color(0, 1, 0, 1)
+	player.visible = false
+	player.z_index = 3
+	player.editor_description = "hero"
+	player.texture = load("res://art/icon.tres")
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	return ResourceSaver.save(packed, "res://scenes/props.tscn")
+`)
+
+		requireContains(t, readFile(t, filepath.Join(root, "scenes", "props.tscn")),
+			"position = Vector2(10, 20)", "visible = false", "z_index = 3", `editor_description = "hero"`)
+
+		player := childByName(readSceneTree(t, session, "scenes/props.tscn"), "Player")
+		if player == nil {
+			t.Fatal("Player missing from the scene tree")
+		}
+		if position, _ := player.Properties["position"].(map[string]any); position["$type"] != "Vector2" || position["x"] != float64(10) || position["y"] != float64(20) {
+			t.Errorf("position = %v, want Vector2(10, 20)", player.Properties["position"])
+		}
+		if modulate, _ := player.Properties["modulate"].(map[string]any); modulate["$type"] != "Color" || modulate["g"] != float64(1) {
+			t.Errorf("modulate = %v, want a green Color", player.Properties["modulate"])
+		}
+		if player.Properties["visible"] != false || player.Properties["z_index"] != float64(3) {
+			t.Errorf("visible/z_index = %v/%v, want false/3", player.Properties["visible"], player.Properties["z_index"])
+		}
+		if player.Properties["editor_description"] != "hero" {
+			t.Errorf("editor_description = %v, want hero", player.Properties["editor_description"])
+		}
+		if texture, _ := player.Properties["texture"].(map[string]any); texture["$type"] != "Resource" || texture["path"] != "res://art/icon.tres" {
+			t.Errorf("texture = %v, want the icon resource", player.Properties["texture"])
+		}
+	})
+
+	t.Run("removes a node", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		createScene(t, session, "scenes/remove.tscn", "Node2D")
+		addNodeViaScript(t, session, "scenes/remove.tscn", "", "Keep", "Node2D", nil)
+		addNodeViaScript(t, session, "scenes/remove.tscn", "", "Drop", "Sprite2D", nil)
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var scene: PackedScene = load("res://scenes/remove.tscn")
+	var root: Node = scene.instantiate()
+	var drop: Node = root.get_node("Drop")
+	root.remove_child(drop)
+	drop.free()
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	return ResourceSaver.save(packed, "res://scenes/remove.tscn")
+`)
+
+		tree := readSceneTree(t, session, "scenes/remove.tscn")
+		if childByName(tree, "Drop") != nil || childByName(tree, "Keep") == nil {
+			t.Errorf("children = %+v, want Keep retained and Drop removed", tree.Children)
+		}
+		requireNotContains(t, readFile(t, filepath.Join(root, "scenes", "remove.tscn")), `name="Drop"`)
+	})
+
+	t.Run("renames a node", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		createScene(t, session, "scenes/rename.tscn", "Node2D")
+		addNodeViaScript(t, session, "scenes/rename.tscn", "", "Player", "Sprite2D", nil)
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var scene: PackedScene = load("res://scenes/rename.tscn")
+	var root: Node = scene.instantiate()
+	var player: Node = root.get_node("Player")
+	player.name = "Hero"
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	return ResourceSaver.save(packed, "res://scenes/rename.tscn")
+`)
+
+		tree := readSceneTree(t, session, "scenes/rename.tscn")
+		if hero := childByName(tree, "Hero"); hero == nil || hero.Type != "Sprite2D" {
+			t.Errorf("children = %+v, want a renamed Sprite2D Hero", tree.Children)
+		}
+		if childByName(tree, "Player") != nil {
+			t.Errorf("children = %+v, want no Player after rename", tree.Children)
+		}
+		requireContains(t, readFile(t, filepath.Join(root, "scenes", "rename.tscn")), `[node name="Hero"`)
+	})
+
+	t.Run("duplicates a subtree with ownership", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		createScene(t, session, "scenes/dup.tscn", "Node2D")
+		addNodeViaScript(t, session, "scenes/dup.tscn", "", "Parent", "Node2D", nil)
+		addNodeViaScript(t, session, "scenes/dup.tscn", "Parent", "Child", "Sprite2D", nil)
+
+		// The duplicate's children must be re-owned to the scene root or pack() drops them.
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var scene: PackedScene = load("res://scenes/dup.tscn")
+	var root: Node = scene.instantiate()
+	var parent: Node = root.get_node("Parent")
+	var copy: Node = parent.duplicate()
+	copy.name = "Parent2"
+	root.add_child(copy)
+	_own(copy, root)
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	return ResourceSaver.save(packed, "res://scenes/dup.tscn")
+
+func _own(node: Node, owner: Node) -> void:
+	node.owner = owner
+	for child in node.get_children():
+		_own(child, owner)
+`)
+
+		copy := childByName(readSceneTree(t, session, "scenes/dup.tscn"), "Parent2")
+		if copy == nil || copy.Type != "Node2D" {
+			t.Fatalf("children = %+v, want a duplicated Node2D Parent2", copy)
+		}
+		if childByName(*copy, "Child") == nil {
+			t.Errorf("Parent2 children = %+v, want the duplicated Child", copy.Children)
+		}
+		requireContains(t, readFile(t, filepath.Join(root, "scenes", "dup.tscn")),
+			`[node name="Parent2"`, `parent="Parent2"`)
+	})
+
+	t.Run("moves a node under a new parent", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		createScene(t, session, "scenes/move.tscn", "Node2D")
+		addNodeViaScript(t, session, "scenes/move.tscn", "", "Player", "Node2D", nil)
+		addNodeViaScript(t, session, "scenes/move.tscn", "", "World", "Node2D", nil)
+
+		requireScriptSave(t, session, `extends RefCounted
+
+func run():
+	var scene: PackedScene = load("res://scenes/move.tscn")
+	var root: Node = scene.instantiate()
+	var player: Node = root.get_node("Player")
+	var world: Node = root.get_node("World")
+	player.get_parent().remove_child(player)
+	player.owner = null
+	world.add_child(player)
+	player.owner = root
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	return ResourceSaver.save(packed, "res://scenes/move.tscn")
+`)
+
+		world := childByName(readSceneTree(t, session, "scenes/move.tscn"), "World")
+		if world == nil || childByName(*world, "Player") == nil {
+			t.Fatalf("World = %+v, want Player reparented under it", world)
+		}
+		requireContains(t, readFile(t, filepath.Join(root, "scenes", "move.tscn")), `parent="World"`)
+	})
+
+	t.Run("reports a structure error from the editor session", func(t *testing.T) {
+		root := newProject(t)
+		session := connectProject(t, root)
+		createScene(t, session, "scenes/fail.tscn", "Node2D")
+
+		doc := decodeRunScript(t, requireToolText(t, session, "run_script", map[string]any{"script": `extends RefCounted
+
+func run():
+	var scene: PackedScene = load("res://scenes/fail.tscn")
+	var root: Node = scene.instantiate()
+	var missing: Node = root.get_node("Missing")
+	missing.name = "Nope"
+	return 0
+`}))
+		if !doc.Compiled {
+			t.Fatalf("compiled = false, errors = %+v", doc.Errors)
+		}
+		if len(doc.Errors) == 0 {
+			t.Fatal("errors = none, want a runtime error for the missing node")
+		}
 	})
 }
 
