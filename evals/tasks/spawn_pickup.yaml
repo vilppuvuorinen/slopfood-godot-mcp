@@ -59,7 +59,6 @@ expect:
     used_all: [godot_add_node, godot_attach_script]
     file_edit_any: ["**/pickup.gd"]
   script_escape:
-    used_all: [godot_run_script]
     file_edit_any: ["**/pickup.gd"]
 rubric: |
   res://pickup.gd extends Area2D, declares signal collected, and defines

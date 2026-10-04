@@ -104,16 +104,17 @@ checks:
 expect:
   full:
     used_all: [godot_modify_scene_node]
-  script_escape:
-    used_all: [godot_run_script]
 rubric: |
   The Sprite node keeps its type and position; only z_index changes.
 ```
 
-The `used_all` assertion requires the intended tool to run; it does not forbid
-also touching the `.tscn` as text, since a text scene stays valid however it is
-produced. Only non-text-serializable files get a `file_edit_none` ban (see
-`binary_resource` and `binary_scene`).
+The `used_all` assertion pins the intended tool for a shape: in `full` that is
+the structured `godot_*` tool. A text-serializable `.tscn` may also be touched
+as text, since a text scene stays valid however it is produced. `script_escape`
+deliberately does *not* pin `godot_run_script`: a correct text edit is accepted
+there, so the artifact checks decide the verdict. Only non-text-serializable
+files get a `file_edit_none` ban (see `binary_resource` and `binary_scene`),
+which is what makes `godot_run_script` genuinely required in those shapes.
 
 A fixture normally ships a `project.godot`. Tasks that create the project
 themselves (e.g. `create_project`) set `bootstraps_project: true`; their fixture
@@ -190,11 +191,14 @@ because a text edit corrupts them; scripts, `project.godot` and importable
 source assets are file-editable and should go through `edit`/`write`. This is
 the only place the no-hand-edit rule is enforced (`binary_resource` and
 `binary_scene`; see below). Text-serialized scenes and resources (`.tscn`/
-`.tres`) *can* be edited as text, so tasks no longer forbid it: instead each
-asserts the intended tool with `used_all` (`godot_add_node`, `run_script`, …),
-and the artifact checks decide whether the result is right regardless of route.
-The inverse direction is still asserted positively by `file_edit_any` and, where
-worth pinning, negatively by `used_none: [godot_run_script]`.
+`.tres`) *can* be edited as text, so the suite does not forbid it: the `full`
+shape still pins the structured `godot_*` tool with `used_all`, but
+`script_escape` asserts no tool for these tasks — the artifact checks decide
+whether the result is right regardless of route. `godot_run_script` is only a
+required tool where a binary target leaves no text route (`binary_resource`,
+`binary_scene`). The inverse direction is still asserted positively by
+`file_edit_any` and, where worth pinning, negatively by
+`used_none: [godot_run_script]`.
 
 Tool names are the fully-qualified opencode names: MCP tools carry the server
 prefix (`godot_add_node`, `godot_run_script`), built-ins do not (`edit`,

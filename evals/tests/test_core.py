@@ -69,7 +69,11 @@ def test_expect_parsing_and_defaults():
     task = config.Task.from_yaml(EVALS_DIR / "tasks" / "add_node.yaml")
     assert task.expect["full"].used_all == ("godot_add_node",)
     assert task.expect["full"].used_none == ()
-    assert task.expect["script_escape"].used_all == ("godot_run_script",)
+    # A text-serializable scene may be produced by a correct text edit, so
+    # script_escape no longer pins godot_run_script here.
+    assert "script_escape" not in task.expect
+    binary = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_resource.yaml")
+    assert binary.expect["script_escape"].used_all == ("godot_run_script",)
     read_answer = config.Task.from_yaml(EVALS_DIR / "tasks" / "read_answer.yaml")
     assert read_answer.expect["full"].used_any == ("godot_read", "godot_read_node")
     assert read_answer.expect["full"].used_none == ()

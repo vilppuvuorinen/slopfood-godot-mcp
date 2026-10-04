@@ -86,7 +86,6 @@ expect:
     used_all: [godot_create_scene]
     file_edit_any: ["**/scripts/player.gd"]
   script_escape:
-    used_all: [godot_run_script]
     file_edit_any: ["**/scripts/player.gd"]
 rubric: |
   res://levels/arena.tscn exists with a Node2D root named Arena containing a

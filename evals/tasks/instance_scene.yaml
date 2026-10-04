@@ -19,8 +19,6 @@ checks:
 expect:
   full:
     used_all: [godot_add_node]
-  script_escape:
-    used_all: [godot_run_script]
 rubric: |
   main.tscn has a direct child of the root named Enemy that is an instance of
   res://enemy.tscn (a CharacterBody2D). enemy.tscn itself is unchanged.

@@ -20,8 +20,6 @@ checks:
 expect:
   full:
     used_all: [godot_rename_scene_node, godot_move_scene_node]
-  script_escape:
-    used_all: [godot_run_script]
 rubric: |
   The root has a child named Hero (formerly A), B no longer sits directly under
   the root, and Root/Hero/B exists.

@@ -17,8 +17,6 @@ checks:
 expect:
   full:
     used_all: [godot_duplicate_scene_node, godot_remove_scene_node]
-  script_escape:
-    used_all: [godot_run_script]
 rubric: |
   Enemy1 remains, a sibling Enemy1Copy exists, and Enemy2 is gone.
 timeout_s: 300

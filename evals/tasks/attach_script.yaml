@@ -28,7 +28,6 @@ expect:
     used_all: [godot_attach_script]
     file_edit_any: ["**/player.gd"]
   script_escape:
-    used_all: [godot_run_script]
     file_edit_any: ["**/player.gd"]
 rubric: |
   res://player.gd exists, extends CharacterBody2D, exposes a speed() method, and

@@ -17,13 +17,6 @@ checks:
     path: WallB/CollisionShape2D
     property: shape.size
     value: Vector2(10, 10)
-expect:
-  # No structured property tool can split a shared sub-resource, so both shapes
-  # mutate the scene through run_script.
-  full:
-    used_all: [godot_run_script]
-  script_escape:
-    used_all: [godot_run_script]
 rubric: |
   WallA's CollisionShape2D uses its own RectangleShape2D of size (20, 20).
   WallB's CollisionShape2D is unchanged at (10, 10): the edit must not leak
