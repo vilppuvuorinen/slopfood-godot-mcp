@@ -6,20 +6,13 @@ from godot_mcp_evals import cli, config, judge, metrics, runner, verifier
 
 EVALS_DIR = Path(__file__).resolve().parents[1]
 REGISTERED_MCP = [
-    "add_node",
     "attach_script",
     "create_project",
-    "create_scene",
-    "duplicate_scene_node",
     "export_mesh_library",
     "export_project",
     "get_godot_version",
-    "modify_scene_node",
-    "move_scene_node",
     "read",
     "read_node",
-    "remove_scene_node",
-    "rename_scene_node",
     "rescan_project",
     "run_script",
     "validate_project",
@@ -73,11 +66,11 @@ def test_resolve_shape_rejects_unknown():
 
 def test_expect_parsing_and_defaults():
     task = config.Task.from_yaml(EVALS_DIR / "tasks" / "add_node.yaml")
-    assert task.expect["full"].used_all == ("godot_add_node",)
-    assert task.expect["full"].used_none == ()
-    # A text-serializable scene may be produced by a correct text edit, so
-    # script_escape no longer pins godot_run_script here.
-    assert "script_escape" not in task.expect
+    # Scene mutation now goes through run_script in every shape, so the task
+    # pins godot_run_script under script_escape and nothing under full.
+    assert task.expect["script_escape"].used_all == ("godot_run_script",)
+    assert task.expect["script_escape"].used_none == ()
+    assert "full" not in task.expect
     binary = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_resource.yaml")
     assert binary.expect["script_escape"].used_all == ("godot_run_script",)
     read_answer = config.Task.from_yaml(EVALS_DIR / "tasks" / "read_answer.yaml")
@@ -90,25 +83,21 @@ def test_entity_scoped_expect_parsing():
     assert task.expect["full"].file_edit_any == ("**/project.godot",)
     assert task.expect["full"].used_none == ("godot_run_script",)
     spawn = config.Task.from_yaml(EVALS_DIR / "tasks" / "spawn_pickup.yaml")
-    assert spawn.expect["full"].file_edit_any == ("**/pickup.gd",)
-    assert spawn.expect["full"].file_edit_none == ()
+    assert spawn.expect["script_escape"].file_edit_any == ("**/pickup.gd",)
+    assert spawn.expect["script_escape"].file_edit_none == ()
     binary = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_resource.yaml")
     assert binary.expect["full"].file_edit_none == ("**/score.res",)
 
 
 def test_trajectory_checks_pass_and_fail():
     task = config.Task.from_yaml(EVALS_DIR / "tasks" / "rename_move.yaml")
-    shape = config.Shape(name="full", description="", tools={})
-    passing = runner._trajectory_checks(
-        task,
-        shape,
-        ["godot_rename_scene_node", "godot_move_scene_node"],
-    )
+    shape = config.Shape(name="script_escape", description="", tools={})
+    passing = runner._trajectory_checks(task, shape, ["godot_run_script"])
     assert all(result.passed for result in passing)
-    failing = runner._trajectory_checks(task, shape, ["godot_run_script", "edit"])
+    failing = runner._trajectory_checks(task, shape, ["edit"])
     assert not all(result.passed for result in failing)
     assert any(
-        result.id.endswith("used_all:godot_rename_scene_node")
+        result.id.endswith("used_all:godot_run_script")
         for result in failing
         if not result.passed
     )
@@ -136,10 +125,11 @@ def test_file_edit_checks_are_entity_scoped():
     )
     # A file with no text form is protected by file_edit_none.
     binary = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_scene.yaml")
+    binary_shape = config.Shape(name="script_escape", description="", tools={})
     bad_binary = runner._trajectory_checks(
         binary,
-        shape,
-        ["write", "godot_modify_scene_node"],
+        binary_shape,
+        ["write", "godot_run_script"],
         [{"name": "write", "path": "res://level.scn", "args": {}}],
     )
     assert any(
@@ -464,17 +454,18 @@ def test_default_shapes_resolve_against_registered_tools():
     assert shapes["script_escape"].tools["godot_run_script"] is True
     assert shapes["script_escape"].tools["godot_rescan_project"] is True
     assert all(
-        shapes["script_escape"].tools[f"godot_{name}"] is False
+        shapes["script_escape"].tools[name] is True
         for name in (
-            "add_node",
-            "attach_script",
-            "create_scene",
-            "duplicate_scene_node",
-            "modify_scene_node",
-            "move_scene_node",
-            "remove_scene_node",
-            "rename_scene_node",
+            "godot_run_script",
+            "godot_read",
+            "godot_read_node",
+            "godot_create_project",
         )
+    )
+    # Only attach_script is withheld; every other MCP tool stays exposed.
+    assert shapes["script_escape"].tools["godot_attach_script"] is False
+    assert sum(value for value in shapes["script_escape"].tools.values()) >= len(
+        REGISTERED_MCP
     )
     assert set(shapes) == {
         "full",

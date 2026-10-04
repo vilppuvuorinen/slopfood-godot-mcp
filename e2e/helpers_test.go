@@ -408,17 +408,70 @@ func seedScene(t *testing.T, scenePath string, rootNodeType ...string) (string, 
 	return root, session
 }
 
+// createScene builds a text scene through run_script, the route that replaced
+// the removed create_scene tool. The root is named "root".
 func createScene(t *testing.T, session *mcp.ClientSession, scenePath string, rootNodeType ...string) {
 	t.Helper()
-	args := map[string]any{"scenePath": scenePath}
-	if len(rootNodeType) > 0 {
-		args["rootNodeType"] = rootNodeType[0]
+	rootType := "Node2D"
+	if len(rootNodeType) > 0 && rootNodeType[0] != "" {
+		rootType = rootNodeType[0]
 	}
-	res := callTool(t, session, "create_scene", args)
-	if res.IsError {
-		t.Fatalf("create_scene failed: %s", firstText(t, res))
+	doc := requireRunScript(t, session, fmt.Sprintf(`extends RefCounted
+
+func run():
+	var root = ClassDB.instantiate("%s")
+	root.name = "root"
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	var path := "res://%s"
+	var dir := path.get_base_dir()
+	if not dir.is_empty():
+		DirAccess.make_dir_recursive_absolute(dir)
+	return ResourceSaver.save(packed, path)
+`, rootType, scenePath))
+	if code, ok := doc.Result.(float64); !ok || code != 0 {
+		t.Fatalf("create scene %s: result = %v, want 0 (errors = %+v)", scenePath, doc.Result, doc.Errors)
 	}
-	requirePrefix(t, firstText(t, res), "Scene created successfully at: "+scenePath)
+}
+
+// addNodeViaScript adds a node through run_script, the route that replaced the
+// removed add_node tool. Property values are raw GDScript expressions.
+func addNodeViaScript(t *testing.T, session *mcp.ClientSession, scenePath, parentNodePath, nodeName, nodeType string, properties map[string]string) {
+	t.Helper()
+	parentExpr := "root"
+	if rel := strings.TrimPrefix(parentNodePath, "root/"); parentNodePath != "" && parentNodePath != "." && parentNodePath != "root" {
+		if rel = strings.TrimPrefix(rel, "root"); rel != "" {
+			parentExpr = fmt.Sprintf("root.get_node(%q)", rel)
+		}
+	}
+
+	var b strings.Builder
+	b.WriteString("extends RefCounted\n\nfunc run():\n")
+	fmt.Fprintf(&b, "\tvar scene: PackedScene = load(\"res://%s\")\n", scenePath)
+	b.WriteString("\tvar root: Node = scene.instantiate()\n")
+	if parentExpr == "root" {
+		b.WriteString("\tvar parent: Node = root\n")
+	} else {
+		fmt.Fprintf(&b, "\tvar parent: Node = %s\n", parentExpr)
+	}
+	fmt.Fprintf(&b, "\tvar node = ClassDB.instantiate(\"%s\")\n", nodeType)
+	fmt.Fprintf(&b, "\tnode.name = \"%s\"\n", nodeName)
+	b.WriteString("\tparent.add_child(node)\n")
+	b.WriteString("\tnode.owner = root\n")
+	for name, expr := range properties {
+		fmt.Fprintf(&b, "\tnode.%s = %s\n", name, expr)
+	}
+	b.WriteString("\tvar packed := PackedScene.new()\n")
+	b.WriteString("\tvar err := packed.pack(root)\n")
+	b.WriteString("\tif err != OK:\n\t\treturn err\n")
+	fmt.Fprintf(&b, "\treturn ResourceSaver.save(packed, \"res://%s\")\n", scenePath)
+
+	doc := requireRunScript(t, session, b.String())
+	if code, ok := doc.Result.(float64); !ok || code != 0 {
+		t.Fatalf("add node %s to %s: result = %v, want 0 (errors = %+v)", nodeName, scenePath, doc.Result, doc.Errors)
+	}
 }
 
 func assertNonEmptyFile(t *testing.T, path string) {

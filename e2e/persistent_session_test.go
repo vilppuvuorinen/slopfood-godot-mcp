@@ -10,10 +10,8 @@ func TestPersistentSessionReloadsEditedScene(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
 
-	requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/main.tscn"})
-	requireToolText(t, session, "add_node", map[string]any{
-		"scenePath": "scenes/main.tscn", "nodeType": "Sprite2D", "nodeName": "Alpha",
-	})
+	writeE2EFile(t, filepath.Join(root, "scenes", "main.tscn"),
+		"[gd_scene format=3]\n\n[node name=\"Alpha\" type=\"Sprite2D\"]\n")
 
 	first := requireToolText(t, session, "read", map[string]any{"type": "scene", "path": "scenes/main.tscn"})
 	requireContains(t, first, "Alpha")

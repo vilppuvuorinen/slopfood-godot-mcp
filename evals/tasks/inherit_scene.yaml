@@ -21,8 +21,8 @@ checks:
     scene: res://derived.tscn
     path: Icon
 expect:
-  full:
-    used_all: [godot_create_scene]
+  script_escape:
+    used_all: [godot_run_script]
 rubric: |
   res://derived.tscn exists, instances res://base.tscn as its root, and still
   exposes the inherited Icon node. base.tscn is unchanged.

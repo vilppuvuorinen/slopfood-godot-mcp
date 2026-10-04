@@ -28,7 +28,7 @@ func (f *fakeSession) Run(_ context.Context, project, operation string, params m
 
 func TestContextRunRequiresSession(t *testing.T) {
 	ctx := Context{Context: context.Background()}
-	_, _, _, err := ctx.Run("/proj", "create_scene", nil)
+	_, _, _, err := ctx.Run("/proj", "attach_script", nil)
 	if err == nil {
 		t.Fatal("Run with no session: err = nil, want an error")
 	}
@@ -49,29 +49,6 @@ func TestContextWithSessionDelegates(t *testing.T) {
 	}
 	if got := sess.runs[0]; got.project != "/proj" || got.operation != "read_scene" {
 		t.Errorf("session call = %+v", got)
-	}
-}
-
-func TestSessionEligibleHandlerUsesInstalledSession(t *testing.T) {
-	t.Setenv(godot.PathEnv, filepath.Join(t.TempDir(), "missing-godot"))
-	root := t.TempDir()
-	makeProject(t, root)
-
-	sess := &fakeSession{}
-	ctx := WithEngine(withProject(context.Background(), root), sess)
-	out, err := createScene().Handler(ctx, json.RawMessage(`{"scenePath":"main.tscn"}`))
-	if err != nil {
-		t.Fatalf("handler: %v", err)
-	}
-	result, ok := out.(mcp.ToolResult)
-	if !ok {
-		t.Fatalf("result type %T", out)
-	}
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if len(sess.runs) != 1 || sess.runs[0].operation != "create_scene" {
-		t.Fatalf("session runs = %+v", sess.runs)
 	}
 }
 

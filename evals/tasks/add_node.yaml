@@ -13,8 +13,8 @@ checks:
     path: Player
     value: CharacterBody2D
 expect:
-  full:
-    used_all: [godot_add_node]
+  script_escape:
+    used_all: [godot_run_script]
 rubric: |
   main.tscn must contain a direct child of the root named Player whose native
   type is CharacterBody2D. The rest of the scene should be unchanged.

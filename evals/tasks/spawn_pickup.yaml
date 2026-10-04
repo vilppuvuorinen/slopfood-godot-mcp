@@ -65,11 +65,9 @@ targets:
     form: text
 expect:
   # pickup.gd is file-editable; the text .tscn itself is not hand-edit
-  # restricted. The scene edit must still go through the structured tools.
-  full:
-    used_all: [godot_add_node, godot_attach_script]
-    file_edit_any: ["**/pickup.gd"]
+  # restricted. The scene edit goes through run_script.
   script_escape:
+    used_all: [godot_run_script]
     file_edit_any: ["**/pickup.gd"]
 rubric: |
   res://pickup.gd extends Area2D, declares signal collected, and defines

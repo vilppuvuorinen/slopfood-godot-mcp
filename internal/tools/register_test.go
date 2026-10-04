@@ -42,7 +42,7 @@ func registeredToolNames(t *testing.T) map[string]bool {
 
 func TestRegisterAllTools(t *testing.T) {
 	names := registeredToolNames(t)
-	for _, name := range []string{"validate_project", "create_scene", "run_script", "read", "read_node"} {
+	for _, name := range []string{"validate_project", "attach_script", "run_script", "read", "read_node"} {
 		if !names[name] {
 			t.Errorf("tool %q not registered", name)
 		}
@@ -61,8 +61,8 @@ func TestToolsUnique(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	if len(seen) != 18 {
-		t.Errorf("registered %d tools, want 18", len(seen))
+	if len(seen) != 11 {
+		t.Errorf("registered %d tools, want 11", len(seen))
 	}
 }
 
@@ -102,14 +102,9 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	idempotent := map[string]bool{
 		"attach_script":       true,
 		"create_project":      true,
-		"create_scene":        true,
 		"export_mesh_library": true,
 		"export_project":      true,
-		"modify_scene_node":   true,
-		"move_scene_node":     true,
 		"rescan_project":      true,
-		"remove_scene_node":   true,
-		"rename_scene_node":   true,
 	}
 	for _, newTool := range allTools {
 		tool := newTool()

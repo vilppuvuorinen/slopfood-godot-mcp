@@ -18,24 +18,27 @@ type inheritedScene struct {
 	} `json:"children"`
 }
 
+const inheritedBaseScene = `[gd_scene format=3]
+
+[node name="root" type="Node2D"]
+
+[node name="Icon" type="Sprite2D" parent="."]
+`
+
+const inheritedDerivedScene = `[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://scenes/base.tscn" id="1"]
+
+[node name="root" instance=ExtResource("1")]
+`
+
 func seedInheritedScene(t *testing.T, derivedPath string) (string, *mcp.ClientSession) {
 	t.Helper()
 	root := newProject(t)
 	session := connectProject(t, root)
 
-	requireToolText(t, session, "create_scene", map[string]any{
-		"scenePath":    "scenes/base.tscn",
-		"rootNodeType": "Node2D",
-	})
-	requireToolText(t, session, "add_node", map[string]any{
-		"scenePath": "scenes/base.tscn",
-		"nodeType":  "Sprite2D",
-		"nodeName":  "Icon",
-	})
-	requireToolText(t, session, "create_scene", map[string]any{
-		"scenePath":     derivedPath,
-		"baseScenePath": "scenes/base.tscn",
-	})
+	writeE2EFile(t, filepath.Join(root, "scenes", "base.tscn"), inheritedBaseScene)
+	writeE2EFile(t, filepath.Join(root, derivedPath), inheritedDerivedScene)
 	return root, session
 }
 
@@ -80,25 +83,6 @@ func TestInheritedSceneEditsRejected(t *testing.T) {
 		name string
 		args map[string]any
 	}{
-		{"add_node", map[string]any{
-			"scenePath": "scenes/derived.tscn",
-			"nodeType":  "Camera2D",
-			"nodeName":  "Cam",
-		}},
-		{"modify_scene_node", map[string]any{
-			"scenePath":  "scenes/derived.tscn",
-			"nodePath":   "root",
-			"properties": map[string]any{"position": map[string]any{"$type": "Vector2", "x": 1, "y": 2}},
-		}},
-		{"remove_scene_node", map[string]any{
-			"scenePath": "scenes/derived.tscn",
-			"nodePath":  "root/Icon",
-		}},
-		{"rename_scene_node", map[string]any{
-			"scenePath": "scenes/derived.tscn",
-			"nodePath":  "root/Icon",
-			"newName":   "Renamed",
-		}},
 		{"attach_script", map[string]any{
 			"scenePath":  "scenes/derived.tscn",
 			"nodePath":   "root/Icon",
@@ -123,32 +107,4 @@ func TestInheritedSceneEditsRejected(t *testing.T) {
 		"type": "scene",
 		"path": "scenes/derived.tscn",
 	}), `"connections"`)
-}
-
-func TestCreateSceneInheritanceErrors(t *testing.T) {
-	t.Parallel()
-	root := newProject(t)
-	session := connectProject(t, root)
-
-	t.Run("both root sources", func(t *testing.T) {
-		requireToolError(t, session, "create_scene", map[string]any{
-			"scenePath":     "derived.tscn",
-			"rootNodeType":  "Node2D",
-			"baseScenePath": "base.tscn",
-		}, "Provide either rootNodeType or baseScenePath, not both.")
-	})
-
-	t.Run("missing base scene", func(t *testing.T) {
-		requireToolError(t, session, "create_scene", map[string]any{
-			"scenePath":     "derived.tscn",
-			"baseScenePath": "scenes/missing.tscn",
-		}, "Base scene does not exist: scenes/missing.tscn")
-	})
-
-	t.Run("invalid base path", func(t *testing.T) {
-		requireToolError(t, session, "create_scene", map[string]any{
-			"scenePath":     "derived.tscn",
-			"baseScenePath": "../escape.tscn",
-		}, "Invalid path.")
-	})
 }

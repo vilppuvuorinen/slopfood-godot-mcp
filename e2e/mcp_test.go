@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -131,7 +132,7 @@ func TestStructuredContent(t *testing.T) {
 
 func TestMutationToolMetadata(t *testing.T) {
 	t.Parallel()
-	tool := findTool(t, connect(t), "create_scene")
+	tool := findTool(t, connect(t), "attach_script")
 	if tool.OutputSchema == nil {
 		t.Error("outputSchema missing")
 	}
@@ -145,12 +146,15 @@ func TestMutationStructuredContent(t *testing.T) {
 	root := newProject(t)
 	session := connectProject(t, root)
 
-	res := callTool(t, session, "create_scene", map[string]any{
-		"scenePath":    "level.tscn",
-		"rootNodeType": "Node2D",
+	writeE2EFile(t, filepath.Join(root, "level.tscn"), "[gd_scene format=3]\n\n[node name=\"root\" type=\"Node2D\"]\n")
+	writeE2EFile(t, filepath.Join(root, "player.gd"), "extends Node2D\n")
+	res := callTool(t, session, "attach_script", map[string]any{
+		"scenePath":  "level.tscn",
+		"nodePath":   "root",
+		"scriptPath": "player.gd",
 	})
 	if res.IsError {
-		t.Fatalf("create_scene error: %s", firstText(t, res))
+		t.Fatalf("attach_script error: %s", firstText(t, res))
 	}
 	structured, ok := res.StructuredContent.(map[string]any)
 	if !ok {

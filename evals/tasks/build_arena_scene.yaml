@@ -96,12 +96,10 @@ targets:
   - path: res://project.godot
     form: text
 expect:
-  # The scene must be created through the structured tool; player.gd is
-  # file-editable. The text .tscn itself is not hand-edit restricted.
-  full:
-    used_all: [godot_create_scene]
-    file_edit_any: ["**/scripts/player.gd"]
+  # The scene is created through run_script; player.gd is file-editable. The
+  # text .tscn itself is not hand-edit restricted.
   script_escape:
+    used_all: [godot_run_script]
     file_edit_any: ["**/scripts/player.gd"]
 rubric: |
   res://levels/arena.tscn exists with a Node2D root named Arena containing a

@@ -13,11 +13,6 @@ func TestToolSchemas(t *testing.T) {
 	tools := listToolsOnce(t, connect(t))
 
 	cases := []toolSchemaCase{
-		{"add_node", "Add a built-in node or a scene instance to an existing scene (rewrites the .tscn file)", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath", "nodeName")
-			schema.requireProps(t, "scenePath", "parentNodePath", "nodeType", "instancePath", "nodeName", "properties")
-			schema.requireType(t, "properties", "object")
-		}},
 		{"attach_script", "Attach a GDScript to a scene node (headless)", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "nodePath", "scriptPath")
 			schema.requireStringProps(t, "scenePath", "nodePath", "scriptPath")
@@ -27,15 +22,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireRequired(t, "projectName")
 			schema.requireProps(t, "projectName", "dotnet")
 			schema.requireType(t, "dotnet", "boolean")
-		}},
-		{"create_scene", "Create a new Godot scene file", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath")
-			schema.requireStringProps(t, "scenePath", "rootNodeType")
-		}},
-		{"duplicate_scene_node", "Duplicate a node within a .tscn scene", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath", "nodePath")
-			schema.requireStringProps(t, "scenePath", "nodePath")
-			schema.requirePropCount(t, 2)
 		}},
 		{"export_mesh_library", "Export a scene as a MeshLibrary resource", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "scenePath", "outputPath")
@@ -51,17 +37,6 @@ func TestToolSchemas(t *testing.T) {
 			schema.requirePropCount(t, 3)
 			schema.requireStringProps(t, "presetName", "outputPath")
 			schema.requireType(t, "debug", "boolean")
-		}},
-		{"modify_scene_node", "Modify node properties in a scene file (headless)", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath", "nodePath", "properties")
-			schema.requireStringProps(t, "scenePath", "nodePath")
-			schema.requireType(t, "properties", "object")
-			schema.requirePropCount(t, 3)
-		}},
-		{"move_scene_node", "Move a node to a new parent in a .tscn scene", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath", "nodePath", "newParentPath")
-			schema.requireStringProps(t, "scenePath", "nodePath", "newParentPath")
-			schema.requirePropCount(t, 3)
 		}},
 		{"read", "Read a scene, animation, tileset, theme, or binary resource file; use read_node to read a node subtree", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "type", "path")
@@ -103,16 +78,6 @@ func TestToolSchemas(t *testing.T) {
 					t.Errorf("type enum[%d] = %v, want %q", i, enum[i], value)
 				}
 			}
-		}},
-		{"remove_scene_node", "Remove a node from a scene file (headless)", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath", "nodePath")
-			schema.requireStringProps(t, "scenePath", "nodePath")
-			schema.requirePropCount(t, 2)
-		}},
-		{"rename_scene_node", "Rename a node in a .tscn scene", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t, "scenePath", "nodePath", "newName")
-			schema.requireStringProps(t, "scenePath", "nodePath", "newName")
-			schema.requirePropCount(t, 3)
 		}},
 		{"rescan_project", "Rescan a Godot project in the editor, generating .import sidecars and missing resource UIDs", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t)

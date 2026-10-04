@@ -251,6 +251,21 @@ func TestPrepareSocketDirAndSecureSocket(t *testing.T) {
 	}
 }
 
+// seedSceneScript saves a minimal text scene through run_script, which is how
+// scene mutation reaches the bridge now that the structured scene tools are gone.
+const seedSceneScript = `extends RefCounted
+
+func run():
+	var root = Node2D.new()
+	root.name = "root"
+	var packed := PackedScene.new()
+	var err := packed.pack(root)
+	if err != OK:
+		return err
+	DirAccess.make_dir_recursive_absolute("res://scenes")
+	return ResourceSaver.save(packed, "res://scenes/main.tscn")
+`
+
 func requireSocketGodot(t *testing.T) string {
 	t.Helper()
 	path := Path()
@@ -288,11 +303,11 @@ func TestSocketSessionDrivesRealBridge(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	if _, stderr, exitCode, runErr := session.Run(ctx, project, "create_scene",
-		map[string]any{"scenePath": "scenes/main.tscn"}); runErr != nil {
-		t.Fatalf("create_scene: %v", runErr)
+	if _, stderr, exitCode, runErr := session.Run(ctx, project, "run_script",
+		map[string]any{"script": seedSceneScript}); runErr != nil {
+		t.Fatalf("run_script: %v", runErr)
 	} else if exitCode != 0 {
-		t.Fatalf("create_scene exitCode = %d; stderr:\n%s", exitCode, stderr)
+		t.Fatalf("run_script exitCode = %d; stderr:\n%s", exitCode, stderr)
 	}
 
 	proc := session.proc
@@ -362,11 +377,11 @@ func TestSocketSessionDrivesRealBridgeTCP(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	if _, stderr, exitCode, runErr := session.Run(ctx, project, "create_scene",
-		map[string]any{"scenePath": "scenes/main.tscn"}); runErr != nil {
-		t.Fatalf("create_scene: %v", runErr)
+	if _, stderr, exitCode, runErr := session.Run(ctx, project, "run_script",
+		map[string]any{"script": seedSceneScript}); runErr != nil {
+		t.Fatalf("run_script: %v", runErr)
 	} else if exitCode != 0 {
-		t.Fatalf("create_scene exitCode = %d; stderr:\n%s", exitCode, stderr)
+		t.Fatalf("run_script exitCode = %d; stderr:\n%s", exitCode, stderr)
 	}
 
 	if proc := session.proc; proc == nil || proc.socketPath != "" {

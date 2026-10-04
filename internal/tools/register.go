@@ -7,9 +7,6 @@ import "github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 var allTools = []func() mcp.Tool{
 	getGodotVersion, createProject, validateProject, rescanProject,
 	exportProject, exportMeshLibrary,
-	createScene,
-	addNode, modifySceneNode, removeSceneNode,
-	renameSceneNode, duplicateSceneNode, moveSceneNode,
 	attachScript, validateScripts, runScript,
 	read,
 	readNode,

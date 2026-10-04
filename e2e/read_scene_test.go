@@ -40,12 +40,7 @@ func TestReadSceneTool(t *testing.T) {
 
 	t.Run("reads a child node", func(t *testing.T) {
 		createScene(t, session, "scenes/tree.tscn", "Node2D")
-
-		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/tree.tscn",
-			"nodeType":  "Sprite2D",
-			"nodeName":  "Player",
-		})
+		addNodeViaScript(t, session, "scenes/tree.tscn", "", "Player", "Sprite2D", nil)
 
 		text := requireToolText(t, session, "read", map[string]any{
 			"type": "scene",
@@ -66,17 +61,8 @@ func TestReadSceneTool(t *testing.T) {
 
 	t.Run("scopes to a node and depth", func(t *testing.T) {
 		createScene(t, session, "scenes/scope.tscn", "Node2D")
-		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/scope.tscn",
-			"nodeType":  "Sprite2D",
-			"nodeName":  "Player",
-		})
-		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath":      "scenes/scope.tscn",
-			"nodeType":       "Node2D",
-			"nodeName":       "Weapon",
-			"parentNodePath": "Player",
-		})
+		addNodeViaScript(t, session, "scenes/scope.tscn", "", "Player", "Sprite2D", nil)
+		addNodeViaScript(t, session, "scenes/scope.tscn", "Player", "Weapon", "Node2D", nil)
 
 		text := requireToolText(t, session, "read_node", map[string]any{
 			"type":     "scene",
@@ -113,11 +99,7 @@ func TestReadSceneTool(t *testing.T) {
 
 	t.Run("depth zero returns the node alone", func(t *testing.T) {
 		createScene(t, session, "scenes/depth0.tscn", "Node2D")
-		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/depth0.tscn",
-			"nodeType":  "Sprite2D",
-			"nodeName":  "Player",
-		})
+		addNodeViaScript(t, session, "scenes/depth0.tscn", "", "Player", "Sprite2D", nil)
 
 		text := requireToolText(t, session, "read", map[string]any{
 			"type":  "scene",

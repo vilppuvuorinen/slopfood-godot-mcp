@@ -45,16 +45,8 @@ size = Vector3(1, 1, 1)
 func seedMeshScene(t *testing.T, session *mcp.ClientSession, scenePath string) {
 	t.Helper()
 	createScene(t, session, scenePath, "Node3D")
-
-	res := callTool(t, session, "add_node", map[string]any{
-		"scenePath":  scenePath,
-		"nodeType":   "MeshInstance3D",
-		"nodeName":   "Mesh",
-		"properties": map[string]any{"mesh": "res://box.tres"},
-	})
-	if res.IsError {
-		t.Fatalf("add_node failed: %s", firstText(t, res))
-	}
+	addNodeViaScript(t, session, scenePath, "", "Mesh", "MeshInstance3D",
+		map[string]string{"mesh": `load("res://box.tres")`})
 }
 
 func TestExportMeshLibraryTool(t *testing.T) {
@@ -93,12 +85,8 @@ func TestExportMeshLibraryTool(t *testing.T) {
 		const scene = "scenes/named.tscn"
 		seedMeshScene(t, session, scene)
 		// A second mesh the filter must exclude, so an unfiltered export cannot pass.
-		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath":  scene,
-			"nodeType":   "MeshInstance3D",
-			"nodeName":   "Other",
-			"properties": map[string]any{"mesh": "res://box.tres"},
-		})
+		addNodeViaScript(t, session, scene, "", "Other", "MeshInstance3D",
+			map[string]string{"mesh": `load("res://box.tres")`})
 
 		output := filepath.Join(root, "exported", "named.tres")
 		text := requireToolText(t, session, "export_mesh_library", map[string]any{
@@ -124,19 +112,10 @@ func TestExportMeshLibraryCollisionAndPreview(t *testing.T) {
 	writeE2EFile(t, filepath.Join(root, "box.tres"), texturedBoxMeshResource)
 	writeE2EFile(t, filepath.Join(root, "box_shape.tres"), boxShapeResource)
 
-	requireToolText(t, session, "add_node", map[string]any{
-		"scenePath":  "scenes/main.tscn",
-		"nodeType":   "MeshInstance3D",
-		"nodeName":   "Mesh",
-		"properties": map[string]any{"mesh": "res://box.tres"},
-	})
-	requireToolText(t, session, "add_node", map[string]any{
-		"scenePath":      "scenes/main.tscn",
-		"nodeType":       "CollisionShape3D",
-		"nodeName":       "Shape",
-		"parentNodePath": "root/Mesh",
-		"properties":     map[string]any{"shape": "res://box_shape.tres"},
-	})
+	addNodeViaScript(t, session, "scenes/main.tscn", "", "Mesh", "MeshInstance3D",
+		map[string]string{"mesh": `load("res://box.tres")`})
+	addNodeViaScript(t, session, "scenes/main.tscn", "root/Mesh", "Shape", "CollisionShape3D",
+		map[string]string{"shape": `load("res://box_shape.tres")`})
 
 	output := filepath.Join(root, "exported", "meshlib.tres")
 	text := requireToolText(t, session, "export_mesh_library", map[string]any{
@@ -166,18 +145,9 @@ func TestExportMeshLibraryDescendantAndPreview(t *testing.T) {
 		createScene(t, session, scene, "Node3D")
 
 		// Holder is not itself a mesh; only the descendant search can collect its child.
-		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath": scene,
-			"nodeType":  "Node3D",
-			"nodeName":  "Holder",
-		})
-		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath":      scene,
-			"nodeType":       "MeshInstance3D",
-			"nodeName":       "Mesh",
-			"parentNodePath": "root/Holder",
-			"properties":     map[string]any{"mesh": "res://box.tres"},
-		})
+		addNodeViaScript(t, session, scene, "", "Holder", "Node3D", nil)
+		addNodeViaScript(t, session, scene, "root/Holder", "Mesh", "MeshInstance3D",
+			map[string]string{"mesh": `load("res://box.tres")`})
 
 		output := filepath.Join(root, "exported", "descendant.tres")
 		text := requireToolText(t, session, "export_mesh_library", map[string]any{

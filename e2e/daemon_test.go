@@ -2,8 +2,8 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -125,17 +125,27 @@ func TestDaemonIdleExitAndRespawn(t *testing.T) {
 	}
 }
 
-// The daemon's one queue serializes add_node's read-modify-write, so concurrent editors do not lose updates.
+// The daemon's one queue serializes a scene's read-modify-write, so concurrent editors do not lose updates.
 func TestDaemonConcurrentMutationsNoLostUpdate(t *testing.T) {
 	t.Parallel()
 	project := newProject(t)
 	runtimeDir := newRuntimeDir(t)
 
+	writeE2EFile(t, filepath.Join(project, "scenes", "main.tscn"), `[gd_scene format=3]
+
+[node name="root" type="Node2D"]
+
+[node name="Alpha" type="Sprite2D" parent="."]
+
+[node name="Beta" type="Sprite2D" parent="."]
+`)
+	writeE2EFile(t, filepath.Join(project, "scripts", "alpha.gd"), "extends Sprite2D\n")
+	writeE2EFile(t, filepath.Join(project, "scripts", "beta.gd"), "extends Sprite2D\n")
+
 	first, err := connectInRuntime(t, runtimeDir, daemonProjectArgs(project, "--idle-timeout", "2s")...)
 	if err != nil {
 		t.Fatalf("connect first: %v", err)
 	}
-	requireToolText(t, first, "create_scene", map[string]any{"scenePath": "scenes/main.tscn"})
 
 	second, err := connectInRuntime(t, runtimeDir, daemonProjectArgs(project, "--idle-timeout", "2s")...)
 	if err != nil {
@@ -148,43 +158,31 @@ func TestDaemonConcurrentMutationsNoLostUpdate(t *testing.T) {
 		err error
 	}
 	resultCh := make(chan result, 2)
-	addNode := func(session *mcp.ClientSession, name string) {
+	attachScript := func(session *mcp.ClientSession, nodePath, scriptPath string) {
 		res, err := session.CallTool(context.Background(), &mcp.CallToolParams{
-			Name: "add_node",
+			Name: "attach_script",
 			Arguments: map[string]any{
-				"scenePath": "scenes/main.tscn",
-				"nodeType":  "Sprite2D",
-				"nodeName":  name,
+				"scenePath":  "scenes/main.tscn",
+				"nodePath":   nodePath,
+				"scriptPath": scriptPath,
 			},
 		})
 		resultCh <- result{res: res, err: err}
 	}
-	go addNode(first, "Alpha")
-	go addNode(second, "Beta")
+	go attachScript(first, "root/Alpha", "scripts/alpha.gd")
+	go attachScript(second, "root/Beta", "scripts/beta.gd")
 
 	for range 2 {
 		got := <-resultCh
 		if got.err != nil {
-			t.Errorf("add_node: %v", got.err)
+			t.Errorf("attach_script: %v", got.err)
 			continue
 		}
 		if got.res.IsError {
-			t.Errorf("add_node: %s", firstText(t, got.res))
+			t.Errorf("attach_script: %s", firstText(t, got.res))
 		}
 	}
 
 	text := requireToolText(t, first, "read", map[string]any{"type": "scene", "path": "scenes/main.tscn"})
-	var tree sceneNode
-	if err := json.Unmarshal([]byte(text), &tree); err != nil {
-		t.Fatalf("unmarshal %q: %v", text, err)
-	}
-	names := make(map[string]bool, len(tree.Children))
-	for _, child := range tree.Children {
-		names[child.Name] = true
-	}
-	for _, want := range []string{"Alpha", "Beta"} {
-		if !names[want] {
-			t.Errorf("node %q missing after concurrent add_node; children = %+v", want, tree.Children)
-		}
-	}
+	requireContains(t, text, "scripts/alpha.gd", "scripts/beta.gd")
 }

@@ -116,17 +116,9 @@ func readTilemapPayload(t *testing.T, session *mcp.ClientSession, scenePath stri
 
 func setupTilemapScene(t *testing.T, session *mcp.ClientSession, scenePath, tileSetPath string) {
 	t.Helper()
-	requireToolText(t, session, "create_scene", map[string]any{"scenePath": scenePath, "rootNodeType": "Node2D"})
-	requireToolText(t, session, "add_node", map[string]any{
-		"scenePath": scenePath,
-		"nodeType":  "TileMapLayer",
-		"nodeName":  "Ground",
-	})
-	requireToolText(t, session, "modify_scene_node", map[string]any{
-		"scenePath":  scenePath,
-		"nodePath":   "root/Ground",
-		"properties": map[string]any{"tile_set": "res://" + tileSetPath},
-	})
+	createScene(t, session, scenePath, "Node2D")
+	addNodeViaScript(t, session, scenePath, "", "Ground", "TileMapLayer",
+		map[string]string{"tile_set": fmt.Sprintf(`load("res://%s")`, tileSetPath)})
 }
 
 func TestReadTilemapErrors(t *testing.T) {
@@ -135,7 +127,7 @@ func TestReadTilemapErrors(t *testing.T) {
 	session := connectProject(t, root)
 
 	t.Run("missing node", func(t *testing.T) {
-		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/level_missing_node.tscn", "rootNodeType": "Node2D"})
+		createScene(t, session, "scenes/level_missing_node.tscn", "Node2D")
 
 		res := callTool(t, session, "read_node", map[string]any{
 			"type":     "tilemap",
@@ -149,12 +141,8 @@ func TestReadTilemapErrors(t *testing.T) {
 	})
 
 	t.Run("node is not a TileMapLayer", func(t *testing.T) {
-		requireToolText(t, session, "create_scene", map[string]any{"scenePath": "scenes/level_not_tilemap.tscn", "rootNodeType": "Node2D"})
-		requireToolText(t, session, "add_node", map[string]any{
-			"scenePath": "scenes/level_not_tilemap.tscn",
-			"nodeType":  "Sprite2D",
-			"nodeName":  "Art",
-		})
+		createScene(t, session, "scenes/level_not_tilemap.tscn", "Node2D")
+		addNodeViaScript(t, session, "scenes/level_not_tilemap.tscn", "", "Art", "Sprite2D", nil)
 
 		res := callTool(t, session, "read_node", map[string]any{
 			"type":     "tilemap",

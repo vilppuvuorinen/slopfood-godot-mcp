@@ -176,7 +176,7 @@ func TestSessionRoundTripFraming(t *testing.T) {
 	defer s.Close()
 	project := t.TempDir()
 
-	stdout, stderr, exitCode, err := s.Run(context.Background(), project, "create_scene",
+	stdout, stderr, exitCode, err := s.Run(context.Background(), project, "run_script",
 		map[string]any{"scenePath": "scenes/main.tscn"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -219,7 +219,7 @@ func TestSessionForcedTCPFraming(t *testing.T) {
 	defer s.Close()
 	project := t.TempDir()
 
-	stdout, stderr, exitCode, err := s.Run(context.Background(), project, "create_scene",
+	stdout, stderr, exitCode, err := s.Run(context.Background(), project, "run_script",
 		map[string]any{"scenePath": "scenes/main.tscn"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
@@ -252,13 +252,13 @@ func TestSessionFramesRecorded(t *testing.T) {
 	defer s.Close()
 	project := t.TempDir()
 
-	if _, _, _, err := s.Run(context.Background(), project, "create_scene", map[string]any{"scenePath": "a.tscn"}); err != nil {
+	if _, _, _, err := s.Run(context.Background(), project, "run_script", map[string]any{"scenePath": "a.tscn"}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if _, _, _, err := s.Run(context.Background(), project, "read_scene", map[string]any{"scenePath": "b.tscn"}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if _, _, _, err := s.Run(context.Background(), project, "add_node", nil); err != nil {
+	if _, _, _, err := s.Run(context.Background(), project, "read_node", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -268,9 +268,9 @@ func TestSessionFramesRecorded(t *testing.T) {
 	}
 	got := strings.Split(strings.TrimSpace(string(data)), "\n")
 	want := []string{
-		`{"id":1,"operation":"create_scene","params":{"scenePath":"a.tscn"}}`,
+		`{"id":1,"operation":"run_script","params":{"scenePath":"a.tscn"}}`,
 		`{"id":2,"operation":"read_scene","params":{"scenePath":"b.tscn"}}`,
-		`{"id":3,"operation":"add_node","params":{}}`,
+		`{"id":3,"operation":"read_node","params":{}}`,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("frames = %d, want %d: %q", len(got), len(want), got)

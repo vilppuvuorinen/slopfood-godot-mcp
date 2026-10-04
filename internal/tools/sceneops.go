@@ -86,16 +86,6 @@ func godotValueSchema(description string) map[string]any {
 	}
 }
 
-// Requires at least one entry: an empty map applies nothing.
-func propertiesSchema(description string) map[string]any {
-	return map[string]any{
-		"type":                 "object",
-		"description":          description,
-		"minProperties":        1,
-		"additionalProperties": godotValueSchema("A value in the tool value contract"),
-	}
-}
-
 func statusOutputSchema(properties map[string]any) map[string]any {
 	return map[string]any{
 		"type":       "object",
@@ -173,23 +163,7 @@ func sceneMissingResult(scenePath string) mcp.ToolResult {
 	return mcp.ErrorResult(
 		"Scene file does not exist: "+scenePath,
 		"Ensure the scene path is correct",
-		"Use create_scene to create a new scene first",
-	)
-}
-
-func baseSceneMissingResult(baseScenePath string) mcp.ToolResult {
-	return mcp.ErrorResult(
-		"Base scene does not exist: "+baseScenePath,
-		"Ensure the base scene path is correct",
-		"Use create_scene to create the base scene first",
-	)
-}
-
-func instanceMissingResult(instancePath string) mcp.ToolResult {
-	return mcp.ErrorResult(
-		"Instance scene does not exist: "+instancePath,
-		"Ensure the instance path is correct",
-		"Use create_scene to create the scene to instance first",
+		"Create and save the scene first, for example through run_script",
 	)
 }
 
