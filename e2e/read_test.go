@@ -11,13 +11,10 @@ func TestReadAcceptsResPaths(t *testing.T) {
 	t.Run("animation", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	DirAccess.make_dir_recursive_absolute("res://anims")
-	var animation := Animation.new()
-	animation.length = 1.5
-	return ResourceSaver.save(animation, "res://anims/foo.tres")
+		requireScriptSave(t, session, `DirAccess.make_dir_recursive_absolute("res://anims")
+var animation := Animation.new()
+animation.length = 1.5
+return ResourceSaver.save(animation, "res://anims/foo.tres")
 `)
 
 		relative := readAnimationPayload(t, session, "anims/foo.tres")
@@ -43,13 +40,10 @@ func run():
 	t.Run("theme", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	DirAccess.make_dir_recursive_absolute("res://themes")
-	var theme := Theme.new()
-	theme.default_font_size = 12
-	return ResourceSaver.save(theme, "res://themes/foo.tres")
+		requireScriptSave(t, session, `DirAccess.make_dir_recursive_absolute("res://themes")
+var theme := Theme.new()
+theme.default_font_size = 12
+return ResourceSaver.save(theme, "res://themes/foo.tres")
 `)
 
 		relative := readThemePayload(t, session, "themes/foo.tres")

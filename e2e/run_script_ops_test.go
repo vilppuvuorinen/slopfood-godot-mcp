@@ -39,20 +39,17 @@ func TestRunScriptEditorOperations(t *testing.T) {
 		session := connectProject(t, root)
 		seedAtlasTexture(t, root)
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var tile_set := TileSet.new()
-	tile_set.tile_size = Vector2i(16, 16)
-	var source := TileSetAtlasSource.new()
-	source.texture = load("res://tiles/atlas.tres")
-	source.texture_region_size = Vector2i(16, 16)
-	tile_set.add_source(source, 0)
-	source.create_tile(Vector2i(0, 0))
-	source.create_alternative_tile(Vector2i(0, 0))
-	var tile_data := source.get_tile_data(Vector2i(0, 0), 0)
-	tile_data.z_index = 3
-	return ResourceSaver.save(tile_set, "res://tiles/scripted.tres")
+		requireScriptSave(t, session, `var tile_set := TileSet.new()
+tile_set.tile_size = Vector2i(16, 16)
+var source := TileSetAtlasSource.new()
+source.texture = load("res://tiles/atlas.tres")
+source.texture_region_size = Vector2i(16, 16)
+tile_set.add_source(source, 0)
+source.create_tile(Vector2i(0, 0))
+source.create_alternative_tile(Vector2i(0, 0))
+var tile_data := source.get_tile_data(Vector2i(0, 0), 0)
+tile_data.z_index = 3
+return ResourceSaver.save(tile_set, "res://tiles/scripted.tres")
 `)
 
 		payload := readTilesetPayload(t, session, "tiles/scripted.tres")
@@ -76,17 +73,14 @@ func run():
 		root := newProject(t)
 		session := connectProject(t, root)
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	DirAccess.make_dir_recursive_absolute("res://anims")
-	var animation := Animation.new()
-	animation.length = 2.0
-	var track := animation.add_track(Animation.TYPE_VALUE)
-	animation.track_set_path(track, NodePath("Sprite2D:position"))
-	animation.track_set_interpolation_type(track, Animation.INTERPOLATION_CUBIC)
-	animation.track_insert_key(track, 0.0, Vector2(10, 20))
-	return ResourceSaver.save(animation, "res://anims/scripted.tres")
+		requireScriptSave(t, session, `DirAccess.make_dir_recursive_absolute("res://anims")
+var animation := Animation.new()
+animation.length = 2.0
+var track := animation.add_track(Animation.TYPE_VALUE)
+animation.track_set_path(track, NodePath("Sprite2D:position"))
+animation.track_set_interpolation_type(track, Animation.INTERPOLATION_CUBIC)
+animation.track_insert_key(track, 0.0, Vector2(10, 20))
+return ResourceSaver.save(animation, "res://anims/scripted.tres")
 `)
 
 		payload := readAnimationPayload(t, session, "anims/scripted.tres")
@@ -112,15 +106,12 @@ func run():
 		root := newProject(t)
 		session := connectProject(t, root)
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	DirAccess.make_dir_recursive_absolute("res://anims")
-	var animation := Animation.new()
-	animation.length = 2.0
-	animation.loop_mode = Animation.LOOP_LINEAR
-	animation.step = 0.25
-	return ResourceSaver.save(animation, "res://anims/props.tres")
+		requireScriptSave(t, session, `DirAccess.make_dir_recursive_absolute("res://anims")
+var animation := Animation.new()
+animation.length = 2.0
+animation.loop_mode = Animation.LOOP_LINEAR
+animation.step = 0.25
+return ResourceSaver.save(animation, "res://anims/props.tres")
 `)
 
 		payload := readAnimationPayload(t, session, "anims/props.tres")
@@ -128,13 +119,10 @@ func run():
 			t.Fatalf("payload = %+v, want length 2 linear step 0.25", payload)
 		}
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var animation: Animation = load("res://anims/props.tres")
-	animation.length = 3.0
-	animation.loop_mode = Animation.LOOP_PINGPONG
-	return ResourceSaver.save(animation, "res://anims/props.tres")
+		requireScriptSave(t, session, `var animation: Animation = load("res://anims/props.tres")
+animation.length = 3.0
+animation.loop_mode = Animation.LOOP_PINGPONG
+return ResourceSaver.save(animation, "res://anims/props.tres")
 `)
 
 		payload = readAnimationPayload(t, session, "anims/props.tres")
@@ -147,15 +135,12 @@ func run():
 		root := newProject(t)
 		session := connectProject(t, root)
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	DirAccess.make_dir_recursive_absolute("res://themes")
-	var theme := Theme.new()
-	theme.set_theme_item(Theme.DATA_TYPE_COLOR, "font_color", "Label", Color(1, 0, 0, 1))
-	theme.set_theme_item(Theme.DATA_TYPE_CONSTANT, "outline_size", "Label", 4)
-	theme.set_type_variation("CustomButton", "Button")
-	return ResourceSaver.save(theme, "res://themes/scripted.tres")
+		requireScriptSave(t, session, `DirAccess.make_dir_recursive_absolute("res://themes")
+var theme := Theme.new()
+theme.set_theme_item(Theme.DATA_TYPE_COLOR, "font_color", "Label", Color(1, 0, 0, 1))
+theme.set_theme_item(Theme.DATA_TYPE_CONSTANT, "outline_size", "Label", 4)
+theme.set_type_variation("CustomButton", "Button")
+return ResourceSaver.save(theme, "res://themes/scripted.tres")
 `)
 
 		payload := readThemePayload(t, session, "themes/scripted.tres")
@@ -183,14 +168,11 @@ func run():
 		session := connectProject(t, root)
 		seedThemeResources(t, session, "themes/smoke_")
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var theme := Theme.new()
-	theme.default_font = load("res://themes/smoke_font.tres")
-	theme.default_font_size = 16
-	theme.default_base_scale = 1.5
-	return ResourceSaver.save(theme, "res://themes/defaults.tres")
+		requireScriptSave(t, session, `var theme := Theme.new()
+theme.default_font = load("res://themes/smoke_font.tres")
+theme.default_font_size = 16
+theme.default_base_scale = 1.5
+return ResourceSaver.save(theme, "res://themes/defaults.tres")
 `)
 
 		payload := readThemePayload(t, session, "themes/defaults.tres")
@@ -204,12 +186,9 @@ func run():
 			t.Fatalf("defaultFont = %v", payload.DefaultFont)
 		}
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var theme: Theme = load("res://themes/defaults.tres")
-	theme.default_font_size = 20
-	return ResourceSaver.save(theme, "res://themes/defaults.tres")
+		requireScriptSave(t, session, `var theme: Theme = load("res://themes/defaults.tres")
+theme.default_font_size = 20
+return ResourceSaver.save(theme, "res://themes/defaults.tres")
 `)
 
 		payload = readThemePayload(t, session, "themes/defaults.tres")
@@ -225,19 +204,16 @@ func run():
 		setupTestTileSet(t, session, "tiles/set_scripted.tres")
 		setupTilemapScene(t, session, "scenes/tilemap_scripted.tscn", "tiles/set_scripted.tres")
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var scene: PackedScene = load("res://scenes/tilemap_scripted.tscn")
-	var root: Node = scene.instantiate()
-	var ground: TileMapLayer = root.get_node("Ground")
-	ground.set_cell(Vector2i(1, 2), 0, Vector2i(0, 0))
-	ground.set_cell(Vector2i(0, 0), 0, Vector2i(0, 0))
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	return ResourceSaver.save(packed, "res://scenes/tilemap_scripted.tscn")
+		requireScriptSave(t, session, `var scene: PackedScene = load("res://scenes/tilemap_scripted.tscn")
+var root: Node = scene.instantiate()
+var ground: TileMapLayer = root.get_node("Ground")
+ground.set_cell(Vector2i(1, 2), 0, Vector2i(0, 0))
+ground.set_cell(Vector2i(0, 0), 0, Vector2i(0, 0))
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+return ResourceSaver.save(packed, "res://scenes/tilemap_scripted.tscn")
 `)
 
 		payload := readTilemapPayload(t, session, "scenes/tilemap_scripted.tscn")
@@ -245,18 +221,15 @@ func run():
 			t.Fatalf("payload = %+v, want tileset and two cells", payload)
 		}
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var scene: PackedScene = load("res://scenes/tilemap_scripted.tscn")
-	var root: Node = scene.instantiate()
-	var ground: TileMapLayer = root.get_node("Ground")
-	ground.erase_cell(Vector2i(1, 2))
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	return ResourceSaver.save(packed, "res://scenes/tilemap_scripted.tscn")
+		requireScriptSave(t, session, `var scene: PackedScene = load("res://scenes/tilemap_scripted.tscn")
+var root: Node = scene.instantiate()
+var ground: TileMapLayer = root.get_node("Ground")
+ground.erase_cell(Vector2i(1, 2))
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+return ResourceSaver.save(packed, "res://scenes/tilemap_scripted.tscn")
 `)
 
 		payload = readTilemapPayload(t, session, "scenes/tilemap_scripted.tscn")
@@ -264,18 +237,15 @@ func run():
 			t.Fatalf("payload = %+v, want one cell after erase", payload)
 		}
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var scene: PackedScene = load("res://scenes/tilemap_scripted.tscn")
-	var root: Node = scene.instantiate()
-	var ground: TileMapLayer = root.get_node("Ground")
-	ground.clear()
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	return ResourceSaver.save(packed, "res://scenes/tilemap_scripted.tscn")
+		requireScriptSave(t, session, `var scene: PackedScene = load("res://scenes/tilemap_scripted.tscn")
+var root: Node = scene.instantiate()
+var ground: TileMapLayer = root.get_node("Ground")
+ground.clear()
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+return ResourceSaver.save(packed, "res://scenes/tilemap_scripted.tscn")
 `)
 
 		payload = readTilemapPayload(t, session, "scenes/tilemap_scripted.tscn")
@@ -288,14 +258,11 @@ func run():
 		root := newProject(t)
 		session := connectProject(t, root)
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var material := StandardMaterial3D.new()
-	material.metallic = 0.5
-	material.albedo_color = Color(1, 0, 0, 1)
-	DirAccess.make_dir_recursive_absolute("res://materials")
-	return ResourceSaver.save(material, "res://materials/scripted.res")
+		requireScriptSave(t, session, `var material := StandardMaterial3D.new()
+material.metallic = 0.5
+material.albedo_color = Color(1, 0, 0, 1)
+DirAccess.make_dir_recursive_absolute("res://materials")
+return ResourceSaver.save(material, "res://materials/scripted.res")
 `)
 
 		text := requireToolText(t, session, "read", map[string]any{
@@ -304,12 +271,9 @@ func run():
 		})
 		requireContains(t, text, `"class": "StandardMaterial3D"`, `"metallic": 0.5`, `"$type": "Color"`)
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var material: StandardMaterial3D = load("res://materials/scripted.res")
-	material.metallic = 0.75
-	return ResourceSaver.save(material, "res://materials/scripted.res")
+		requireScriptSave(t, session, `var material: StandardMaterial3D = load("res://materials/scripted.res")
+material.metallic = 0.75
+return ResourceSaver.save(material, "res://materials/scripted.res")
 `)
 
 		text = requireToolText(t, session, "read", map[string]any{
@@ -352,19 +316,16 @@ func TestRunScriptSceneOperations(t *testing.T) {
 			{"levels/arena.tscn", "Node3D"},
 			{"world.tscn", "Node2D"},
 		} {
-			requireScriptSave(t, session, fmt.Sprintf(`extends RefCounted
-
-func run():
-	var root = ClassDB.instantiate("%s")
-	root.name = "root"
-	var dir := "res://%s".get_base_dir()
-	if not dir.is_empty():
-		DirAccess.make_dir_recursive_absolute(dir)
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	return ResourceSaver.save(packed, "res://%s")
+			requireScriptSave(t, session, fmt.Sprintf(`var root = ClassDB.instantiate("%s")
+root.name = "root"
+var dir := "res://%s".get_base_dir()
+if not dir.is_empty():
+	DirAccess.make_dir_recursive_absolute(dir)
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+return ResourceSaver.save(packed, "res://%s")
 `, tc.rootType, tc.path, tc.path))
 
 			requireContains(t, readFile(t, filepath.Join(root, tc.path)), `type="`+tc.rootType+`"`)
@@ -381,28 +342,25 @@ func run():
 		createScene(t, session, "scenes/level.tscn", "Node2D")
 		createScene(t, session, "scenes/enemy.tscn", "Sprite2D")
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var scene: PackedScene = load("res://scenes/level.tscn")
-	var root: Node = scene.instantiate()
-	var player = ClassDB.instantiate("Sprite2D")
-	player.name = "Player"
-	root.add_child(player)
-	player.owner = root
-	var weapon = ClassDB.instantiate("Node2D")
-	weapon.name = "Weapon"
-	player.add_child(weapon)
-	weapon.owner = root
-	var foe = load("res://scenes/enemy.tscn").instantiate()
-	foe.name = "Foe"
-	root.add_child(foe)
-	foe.owner = root
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	return ResourceSaver.save(packed, "res://scenes/level.tscn")
+		requireScriptSave(t, session, `var scene: PackedScene = load("res://scenes/level.tscn")
+var root: Node = scene.instantiate()
+var player = ClassDB.instantiate("Sprite2D")
+player.name = "Player"
+root.add_child(player)
+player.owner = root
+var weapon = ClassDB.instantiate("Node2D")
+weapon.name = "Weapon"
+player.add_child(weapon)
+weapon.owner = root
+var foe = load("res://scenes/enemy.tscn").instantiate()
+foe.name = "Foe"
+root.add_child(foe)
+foe.owner = root
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+return ResourceSaver.save(packed, "res://scenes/level.tscn")
 `)
 
 		tree := readSceneTree(t, session, "scenes/level.tscn")
@@ -428,23 +386,20 @@ func run():
 		writeE2EFile(t, filepath.Join(root, "art", "icon.tres"),
 			"[gd_resource type=\"GradientTexture2D\" format=3]\n\n[resource]\nwidth = 16\nheight = 16\n")
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var scene: PackedScene = load("res://scenes/props.tscn")
-	var root: Node = scene.instantiate()
-	var player: Sprite2D = root.get_node("Player")
-	player.position = Vector2(10, 20)
-	player.modulate = Color(0, 1, 0, 1)
-	player.visible = false
-	player.z_index = 3
-	player.editor_description = "hero"
-	player.texture = load("res://art/icon.tres")
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	return ResourceSaver.save(packed, "res://scenes/props.tscn")
+		requireScriptSave(t, session, `var scene: PackedScene = load("res://scenes/props.tscn")
+var root: Node = scene.instantiate()
+var player: Sprite2D = root.get_node("Player")
+player.position = Vector2(10, 20)
+player.modulate = Color(0, 1, 0, 1)
+player.visible = false
+player.z_index = 3
+player.editor_description = "hero"
+player.texture = load("res://art/icon.tres")
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+return ResourceSaver.save(packed, "res://scenes/props.tscn")
 `)
 
 		requireContains(t, readFile(t, filepath.Join(root, "scenes", "props.tscn")),
@@ -478,19 +433,16 @@ func run():
 		addNodeViaScript(t, session, "scenes/remove.tscn", "", "Keep", "Node2D", nil)
 		addNodeViaScript(t, session, "scenes/remove.tscn", "", "Drop", "Sprite2D", nil)
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var scene: PackedScene = load("res://scenes/remove.tscn")
-	var root: Node = scene.instantiate()
-	var drop: Node = root.get_node("Drop")
-	root.remove_child(drop)
-	drop.free()
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	return ResourceSaver.save(packed, "res://scenes/remove.tscn")
+		requireScriptSave(t, session, `var scene: PackedScene = load("res://scenes/remove.tscn")
+var root: Node = scene.instantiate()
+var drop: Node = root.get_node("Drop")
+root.remove_child(drop)
+drop.free()
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+return ResourceSaver.save(packed, "res://scenes/remove.tscn")
 `)
 
 		tree := readSceneTree(t, session, "scenes/remove.tscn")
@@ -506,18 +458,15 @@ func run():
 		createScene(t, session, "scenes/rename.tscn", "Node2D")
 		addNodeViaScript(t, session, "scenes/rename.tscn", "", "Player", "Sprite2D", nil)
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var scene: PackedScene = load("res://scenes/rename.tscn")
-	var root: Node = scene.instantiate()
-	var player: Node = root.get_node("Player")
-	player.name = "Hero"
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	return ResourceSaver.save(packed, "res://scenes/rename.tscn")
+		requireScriptSave(t, session, `var scene: PackedScene = load("res://scenes/rename.tscn")
+var root: Node = scene.instantiate()
+var player: Node = root.get_node("Player")
+player.name = "Hero"
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+return ResourceSaver.save(packed, "res://scenes/rename.tscn")
 `)
 
 		tree := readSceneTree(t, session, "scenes/rename.tscn")
@@ -538,26 +487,23 @@ func run():
 		addNodeViaScript(t, session, "scenes/dup.tscn", "Parent", "Child", "Sprite2D", nil)
 
 		// The duplicate's children must be re-owned to the scene root or pack() drops them.
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var scene: PackedScene = load("res://scenes/dup.tscn")
-	var root: Node = scene.instantiate()
-	var parent: Node = root.get_node("Parent")
-	var copy: Node = parent.duplicate()
-	copy.name = "Parent2"
-	root.add_child(copy)
-	_own(copy, root)
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	return ResourceSaver.save(packed, "res://scenes/dup.tscn")
-
-func _own(node: Node, owner: Node) -> void:
-	node.owner = owner
+		requireScriptSave(t, session, `var scene: PackedScene = load("res://scenes/dup.tscn")
+var root: Node = scene.instantiate()
+var parent: Node = root.get_node("Parent")
+var copy: Node = parent.duplicate()
+copy.name = "Parent2"
+root.add_child(copy)
+var stack: Array[Node] = [copy]
+while not stack.is_empty():
+	var node: Node = stack.pop_back()
+	node.owner = root
 	for child in node.get_children():
-		_own(child, owner)
+		stack.append(child)
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+return ResourceSaver.save(packed, "res://scenes/dup.tscn")
 `)
 
 		copy := childByName(readSceneTree(t, session, "scenes/dup.tscn"), "Parent2")
@@ -578,22 +524,19 @@ func _own(node: Node, owner: Node) -> void:
 		addNodeViaScript(t, session, "scenes/move.tscn", "", "Player", "Node2D", nil)
 		addNodeViaScript(t, session, "scenes/move.tscn", "", "World", "Node2D", nil)
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var scene: PackedScene = load("res://scenes/move.tscn")
-	var root: Node = scene.instantiate()
-	var player: Node = root.get_node("Player")
-	var world: Node = root.get_node("World")
-	player.get_parent().remove_child(player)
-	player.owner = null
-	world.add_child(player)
-	player.owner = root
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	return ResourceSaver.save(packed, "res://scenes/move.tscn")
+		requireScriptSave(t, session, `var scene: PackedScene = load("res://scenes/move.tscn")
+var root: Node = scene.instantiate()
+var player: Node = root.get_node("Player")
+var world: Node = root.get_node("World")
+player.get_parent().remove_child(player)
+player.owner = null
+world.add_child(player)
+player.owner = root
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+return ResourceSaver.save(packed, "res://scenes/move.tscn")
 `)
 
 		world := childByName(readSceneTree(t, session, "scenes/move.tscn"), "World")
@@ -608,14 +551,11 @@ func run():
 		session := connectProject(t, root)
 		createScene(t, session, "scenes/fail.tscn", "Node2D")
 
-		doc := decodeRunScript(t, requireToolText(t, session, "run_script", map[string]any{"script": `extends RefCounted
-
-func run():
-	var scene: PackedScene = load("res://scenes/fail.tscn")
-	var root: Node = scene.instantiate()
-	var missing: Node = root.get_node("Missing")
-	missing.name = "Nope"
-	return 0
+		doc := decodeRunScript(t, requireToolText(t, session, "run_script", map[string]any{"body": `var scene: PackedScene = load("res://scenes/fail.tscn")
+var root: Node = scene.instantiate()
+var missing: Node = root.get_node("Missing")
+missing.name = "Nope"
+return 0
 `}))
 		if !doc.Compiled {
 			t.Fatalf("compiled = false, errors = %+v", doc.Errors)
@@ -652,34 +592,28 @@ func TestRunScriptSceneSignals(t *testing.T) {
 	sceneFile := filepath.Join(root, "scenes", "signals.tscn")
 	connection := `[connection signal="pressed" from="." to="." method="on_pressed"]`
 
-	requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var scene: PackedScene = load("res://scenes/signals.tscn")
-	var root: Node = scene.instantiate()
-	root.pressed.connect(Callable(root, "on_pressed"), CONNECT_PERSIST)
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	return ResourceSaver.save(packed, "res://scenes/signals.tscn")
+	requireScriptSave(t, session, `var scene: PackedScene = load("res://scenes/signals.tscn")
+var root: Node = scene.instantiate()
+root.pressed.connect(Callable(root, "on_pressed"), CONNECT_PERSIST)
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+return ResourceSaver.save(packed, "res://scenes/signals.tscn")
 `)
 	requireContains(t, readFile(t, sceneFile), connection)
 	if got := readSceneConnections(t, session, "scenes/signals.tscn"); len(got) != 1 || got[0].Signal != "pressed" || got[0].Method != "on_pressed" {
 		t.Errorf("connections = %+v, want one pressed -> on_pressed", got)
 	}
 
-	requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var scene: PackedScene = load("res://scenes/signals.tscn")
-	var root: Node = scene.instantiate()
-	root.disconnect("pressed", Callable(root, "on_pressed"))
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	return ResourceSaver.save(packed, "res://scenes/signals.tscn")
+	requireScriptSave(t, session, `var scene: PackedScene = load("res://scenes/signals.tscn")
+var root: Node = scene.instantiate()
+root.disconnect("pressed", Callable(root, "on_pressed"))
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+return ResourceSaver.save(packed, "res://scenes/signals.tscn")
 `)
 	requireNotContains(t, readFile(t, sceneFile), connection)
 	if got := readSceneConnections(t, session, "scenes/signals.tscn"); len(got) != 0 {

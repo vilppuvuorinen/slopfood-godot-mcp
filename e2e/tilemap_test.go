@@ -30,11 +30,11 @@ func readTilesetPayload(t *testing.T, session *mcp.ClientSession, resourcePath s
 	return payload
 }
 
-// requireRunScript runs a fixture script and fails the test unless it compiled
+// requireRunScript runs a fixture body and fails the test unless it compiled
 // cleanly and reported no engine errors.
-func requireRunScript(t *testing.T, session *mcp.ClientSession, source string) runScriptDoc {
+func requireRunScript(t *testing.T, session *mcp.ClientSession, body string) runScriptDoc {
 	t.Helper()
-	doc := decodeRunScript(t, requireToolText(t, session, "run_script", map[string]any{"script": source}))
+	doc := decodeRunScript(t, requireToolText(t, session, "run_script", map[string]any{"body": body}))
 	if !doc.Compiled {
 		t.Fatalf("run_script did not compile: %+v", doc.Errors)
 	}
@@ -81,17 +81,14 @@ func seedAtlasTexture(t *testing.T, root string) {
 // scripting. It returns the ResourceSaver error code (0 is OK).
 func setupTestTileSet(t *testing.T, session *mcp.ClientSession, resourcePath string) {
 	t.Helper()
-	doc := requireRunScript(t, session, fmt.Sprintf(`extends RefCounted
-
-func run():
-	var tile_set := TileSet.new()
-	tile_set.tile_size = Vector2i(16, 16)
-	var source := TileSetAtlasSource.new()
-	source.texture = load("res://tiles/atlas.tres")
-	source.texture_region_size = Vector2i(16, 16)
-	tile_set.add_source(source, 0)
-	source.create_tile(Vector2i(0, 0))
-	return ResourceSaver.save(tile_set, "res://%s")
+	doc := requireRunScript(t, session, fmt.Sprintf(`var tile_set := TileSet.new()
+tile_set.tile_size = Vector2i(16, 16)
+var source := TileSetAtlasSource.new()
+source.texture = load("res://tiles/atlas.tres")
+source.texture_region_size = Vector2i(16, 16)
+tile_set.add_source(source, 0)
+source.create_tile(Vector2i(0, 0))
+return ResourceSaver.save(tile_set, "res://%s")
 `, resourcePath))
 	if code, ok := doc.Result.(float64); !ok || code != 0 {
 		t.Fatalf("save tileset %s: result = %v, want 0", resourcePath, doc.Result)

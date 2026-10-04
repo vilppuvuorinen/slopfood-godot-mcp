@@ -11,6 +11,12 @@ const JSON_END = "<<<GODOT_MCP_JSON_END>>>"
 # cannot grow the frame without bound.
 const RUN_SCRIPT_LOG_LIMIT := 2000
 
+# run_script receives a bare function body and wraps it in this prelude. The
+# count is the number of lines before the body, used to shift diagnostics back
+# onto the caller's line numbers.
+const RUN_SCRIPT_PRELUDE := "@tool\nextends RefCounted\n\nfunc run():\n"
+const RUN_SCRIPT_PRELUDE_LINES := 4
+
 class Result extends RefCounted:
     var ok := true
     var stdout := ""
@@ -823,23 +829,21 @@ func attach_script(result: Result, params) -> Result:
     result.out("Script '" + full_script_path + "' attached successfully to node in: " + full_scene_path)
     return result
 
-# Compiles the caller's source in-memory and runs it inside the live editor
-# session. The engine default logger still prints to stdout; ScriptRunLogger
-# observes the same stream so logs and errors can be returned in the frame.
+# Compiles the caller's function body in-memory and runs it inside the live
+# editor session. The engine default logger still prints to stdout; the
+# ScriptRunLogger observes the same stream so logs and errors can be returned in
+# the frame. The body becomes the body of a generated run() method whose return
+# value is reported.
 func run_script(result: Result, params) -> Result:
-    if not params.has("script") or not (params.script is String):
-        result.err("script is required")
+    if not params.has("body") or not (params.body is String):
+        result.err("body is required")
         return result.fail()
-    var source: String = params.script
-    if source.strip_edges().is_empty():
-        result.err("script is empty")
+    var body: String = params.body
+    if body.strip_edges().is_empty():
+        result.err("body is empty")
         return result.fail()
 
-    # The editor refuses to instantiate a non-@tool script, so force tool mode
-    # unless the caller already opted in.
-    var injected_tool := not source.contains("@tool")
-    if injected_tool:
-        source = "@tool\n" + source
+    var source: String = RUN_SCRIPT_PRELUDE + _indent_body(body)
 
     var logger := ScriptRunLogger.new()
     logger.limit = RUN_SCRIPT_LOG_LIMIT
@@ -860,25 +864,16 @@ func run_script(result: Result, params) -> Result:
             compiled = false
             result.err("script did not instantiate")
         else:
-            # run() is the value-returning entry; _initialize() lets a
-            # SceneTree-shaped script run as Godot would with --script.
-            if instance.has_method("run"):
-                value = instance.call("run")
-            elif instance.has_method("_initialize"):
-                instance.call("_initialize")
+            value = instance.call("run")
             serialized = _variant_to_json(value)
-            # A non-RefCounted instance (Node, SceneTree) would otherwise leak.
-            if not (instance is RefCounted):
-                instance.free()
 
     OS.remove_logger(logger)
 
-    # The injected @tool line shifts every line in the in-memory script by one;
-    # report diagnostics against the caller's source instead.
-    if injected_tool:
-        for captured in logger.errors:
-            if str(captured.get("file", "")).begins_with("gdscript://") and int(captured.get("line", 0)) > 0:
-                captured["line"] = int(captured["line"]) - 1
+    # The prelude shifts every body line; report diagnostics against the
+    # caller's body instead of the generated source.
+    for captured in logger.errors:
+        if str(captured.get("file", "")).begins_with("gdscript://") and int(captured.get("line", 0)) > RUN_SCRIPT_PRELUDE_LINES:
+            captured["line"] = int(captured["line"]) - RUN_SCRIPT_PRELUDE_LINES
 
     result.out(JSON_START)
     result.out(JSON.stringify({
@@ -889,6 +884,23 @@ func run_script(result: Result, params) -> Result:
     }))
     result.out(JSON_END)
     return result
+
+# Indents a bare function body so it forms the body of the generated run().
+# Every non-blank line gains one tab; the body's own leading whitespace is
+# normalised to tabs because the prelude is tab-indented and GDScript rejects
+# mixing tabs and spaces in one file.
+func _indent_body(body: String) -> String:
+    var lines := body.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    var out := PackedStringArray()
+    for line in lines:
+        if line.strip_edges().is_empty():
+            out.append("")
+            continue
+        var index := 0
+        while index < line.length() and (line[index] == " " or line[index] == "\t"):
+            index += 1
+        out.append("\t" + "\t".repeat(index) + line.substr(index))
+    return "\n".join(out)
 
 func read_resource(result: Result, params) -> Result:
     var resource_path = params.get("resourcePath", "")

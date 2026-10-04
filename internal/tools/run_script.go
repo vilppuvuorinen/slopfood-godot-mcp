@@ -12,24 +12,24 @@ func runScript() mcp.Tool {
 	return mcp.Tool{
 		Name:        "run_script",
 		Title:       "Run GDScript",
-		Description: "Run a GDScript in the live editor session and return its output",
+		Description: "Run a GDScript function body in the live editor session and return its output",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"script": map[string]any{
+				"body": map[string]any{
 					"type":        "string",
-					"description": "Full GDScript source; a run() method's return value is reported, or _initialize() is called for a SceneTree-shaped script",
+					"description": "Body of a synchronous GDScript function, indented as it would appear inside `func run():`. The server wraps it as `@tool\\nextends RefCounted\\n\\nfunc run():\\n<body>` and reports the function's return value",
 				},
 			},
-			"required": []string{"script"},
+			"required": []string{"body"},
 		},
 		OutputSchema: payloadOutputSchema(map[string]any{
 			"compiled": map[string]any{
 				"type":        "boolean",
-				"description": "Whether the source compiled and instantiated; false means errors holds the parse/runtime diagnostics",
+				"description": "Whether the generated run() compiled and instantiated; false means errors holds the parse/runtime diagnostics",
 			},
-			"result": godotValueSchema("Value returned by the script's run() method, or null when there is none"),
+			"result": godotValueSchema("Value returned by the generated run() function, or null when there is none"),
 			"logs": map[string]any{
 				"type":        "array",
 				"items":       map[string]any{"type": "string"},
@@ -56,7 +56,7 @@ func runScript() mcp.Tool {
 }
 
 type runScriptArgs struct {
-	Script string `json:"script"`
+	Body string `json:"body"`
 }
 
 func handleRunScript(ctx Context, raw json.RawMessage) (any, error) {
@@ -67,8 +67,8 @@ func handleRunScript(ctx Context, raw json.RawMessage) (any, error) {
 		}
 	}
 	project := projectRoot(ctx)
-	if args.Script == "" {
-		return requiredArgsResult("script"), nil
+	if args.Body == "" {
+		return requiredArgsResult("body"), nil
 	}
 	if !validPath(project) {
 		return invalidPathResult(), nil
@@ -77,7 +77,7 @@ func handleRunScript(ctx Context, raw json.RawMessage) (any, error) {
 		return notAProjectResult(project), nil
 	}
 
-	stdout, stderr, exitCode, err := ctx.Run(project, "run_script", map[string]any{"script": args.Script})
+	stdout, stderr, exitCode, err := ctx.Run(project, "run_script", map[string]any{"body": args.Body})
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to run script: "+err.Error(),

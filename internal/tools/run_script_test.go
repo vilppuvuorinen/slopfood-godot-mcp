@@ -28,8 +28,8 @@ func TestRunScriptDelegatesToSession(t *testing.T) {
 	payload := `{"compiled":true,"result":{"answer":42},"logs":["hi"],"errors":[]}`
 	sess := &runScriptSession{output: jsonStartMarker + "\n" + payload + "\n" + jsonEndMarker}
 	ctx := WithEngine(withProject(context.Background(), root), sess)
-	source := "extends RefCounted\nfunc run():\n\treturn 42\n"
-	raw, err := json.Marshal(map[string]any{"script": source})
+	body := "return 42\n"
+	raw, err := json.Marshal(map[string]any{"body": body})
 	if err != nil {
 		t.Fatalf("marshal args: %v", err)
 	}
@@ -47,8 +47,8 @@ func TestRunScriptDelegatesToSession(t *testing.T) {
 	if sess.run.operation != "run_script" {
 		t.Errorf("operation = %q, want run_script", sess.run.operation)
 	}
-	if got, _ := sess.run.params["script"].(string); got != source {
-		t.Errorf("script param = %q, want the source verbatim", got)
+	if got, _ := sess.run.params["body"].(string); got != body {
+		t.Errorf("body param = %q, want the body verbatim", got)
 	}
 	structured, ok := result.StructuredContent.(map[string]any)
 	if !ok {
@@ -59,7 +59,7 @@ func TestRunScriptDelegatesToSession(t *testing.T) {
 	}
 }
 
-func TestRunScriptRequiresScript(t *testing.T) {
+func TestRunScriptRequiresBody(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 	ctx := WithEngine(withProject(context.Background(), root), &fakeSession{})
@@ -79,7 +79,7 @@ func TestRunScriptRequiresScript(t *testing.T) {
 func TestRunScriptNotAProject(t *testing.T) {
 	root := t.TempDir()
 	ctx := WithEngine(withProject(context.Background(), root), &fakeSession{})
-	out, err := runScript().Handler(ctx, json.RawMessage(`{"script":"extends RefCounted\n"}`))
+	out, err := runScript().Handler(ctx, json.RawMessage(`{"body":"return 0\n"}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}

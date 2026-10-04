@@ -416,20 +416,17 @@ func createScene(t *testing.T, session *mcp.ClientSession, scenePath string, roo
 	if len(rootNodeType) > 0 && rootNodeType[0] != "" {
 		rootType = rootNodeType[0]
 	}
-	doc := requireRunScript(t, session, fmt.Sprintf(`extends RefCounted
-
-func run():
-	var root = ClassDB.instantiate("%s")
-	root.name = "root"
-	var packed := PackedScene.new()
-	var err := packed.pack(root)
-	if err != OK:
-		return err
-	var path := "res://%s"
-	var dir := path.get_base_dir()
-	if not dir.is_empty():
-		DirAccess.make_dir_recursive_absolute(dir)
-	return ResourceSaver.save(packed, path)
+	doc := requireRunScript(t, session, fmt.Sprintf(`var root = ClassDB.instantiate("%s")
+root.name = "root"
+var packed := PackedScene.new()
+var err := packed.pack(root)
+if err != OK:
+	return err
+var path := "res://%s"
+var dir := path.get_base_dir()
+if not dir.is_empty():
+	DirAccess.make_dir_recursive_absolute(dir)
+return ResourceSaver.save(packed, path)
 `, rootType, scenePath))
 	if code, ok := doc.Result.(float64); !ok || code != 0 {
 		t.Fatalf("create scene %s: result = %v, want 0 (errors = %+v)", scenePath, doc.Result, doc.Errors)
@@ -448,25 +445,24 @@ func addNodeViaScript(t *testing.T, session *mcp.ClientSession, scenePath, paren
 	}
 
 	var b strings.Builder
-	b.WriteString("extends RefCounted\n\nfunc run():\n")
-	fmt.Fprintf(&b, "\tvar scene: PackedScene = load(\"res://%s\")\n", scenePath)
-	b.WriteString("\tvar root: Node = scene.instantiate()\n")
+	fmt.Fprintf(&b, "var scene: PackedScene = load(\"res://%s\")\n", scenePath)
+	b.WriteString("var root: Node = scene.instantiate()\n")
 	if parentExpr == "root" {
-		b.WriteString("\tvar parent: Node = root\n")
+		b.WriteString("var parent: Node = root\n")
 	} else {
-		fmt.Fprintf(&b, "\tvar parent: Node = %s\n", parentExpr)
+		fmt.Fprintf(&b, "var parent: Node = %s\n", parentExpr)
 	}
-	fmt.Fprintf(&b, "\tvar node = ClassDB.instantiate(\"%s\")\n", nodeType)
-	fmt.Fprintf(&b, "\tnode.name = \"%s\"\n", nodeName)
-	b.WriteString("\tparent.add_child(node)\n")
-	b.WriteString("\tnode.owner = root\n")
+	fmt.Fprintf(&b, "var node = ClassDB.instantiate(\"%s\")\n", nodeType)
+	fmt.Fprintf(&b, "node.name = \"%s\"\n", nodeName)
+	b.WriteString("parent.add_child(node)\n")
+	b.WriteString("node.owner = root\n")
 	for name, expr := range properties {
-		fmt.Fprintf(&b, "\tnode.%s = %s\n", name, expr)
+		fmt.Fprintf(&b, "node.%s = %s\n", name, expr)
 	}
-	b.WriteString("\tvar packed := PackedScene.new()\n")
-	b.WriteString("\tvar err := packed.pack(root)\n")
-	b.WriteString("\tif err != OK:\n\t\treturn err\n")
-	fmt.Fprintf(&b, "\treturn ResourceSaver.save(packed, \"res://%s\")\n", scenePath)
+	b.WriteString("var packed := PackedScene.new()\n")
+	b.WriteString("var err := packed.pack(root)\n")
+	b.WriteString("if err != OK:\n\treturn err\n")
+	fmt.Fprintf(&b, "return ResourceSaver.save(packed, \"res://%s\")\n", scenePath)
 
 	doc := requireRunScript(t, session, b.String())
 	if code, ok := doc.Result.(float64); !ok || code != 0 {

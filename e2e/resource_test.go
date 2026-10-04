@@ -19,12 +19,9 @@ metallic = 0.5
 // now goes through the live editor session rather than a dedicated tool.
 func seedResource(t *testing.T, session *mcp.ClientSession, resourcePath, resourceType string) {
 	t.Helper()
-	requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var resource := `+resourceType+`.new()
-	DirAccess.make_dir_recursive_absolute("res://`+resourceDir(resourcePath)+`")
-	return ResourceSaver.save(resource, "res://`+resourcePath+`")
+	requireScriptSave(t, session, `var resource := `+resourceType+`.new()
+DirAccess.make_dir_recursive_absolute("res://`+resourceDir(resourcePath)+`")
+return ResourceSaver.save(resource, "res://`+resourcePath+`")
 `)
 }
 
@@ -41,14 +38,11 @@ type resourceData struct {
 // read(type=resource) rejects text .tres, so the fixture must be a binary file.
 func seedMaterialRes(t *testing.T, session *mcp.ClientSession, resourcePath string) {
 	t.Helper()
-	requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var material := StandardMaterial3D.new()
-	material.metallic = 0.5
-	material.albedo_color = Color(1, 0, 0, 1)
-	DirAccess.make_dir_recursive_absolute("res://`+resourceDir(resourcePath)+`")
-	return ResourceSaver.save(material, "res://`+resourcePath+`")
+	requireScriptSave(t, session, `var material := StandardMaterial3D.new()
+material.metallic = 0.5
+material.albedo_color = Color(1, 0, 0, 1)
+DirAccess.make_dir_recursive_absolute("res://`+resourceDir(resourcePath)+`")
+return ResourceSaver.save(material, "res://`+resourcePath+`")
 `)
 }
 
@@ -125,12 +119,9 @@ func TestResourceTools(t *testing.T) {
 		const path = "resources/modify.res"
 		seedMaterialRes(t, session, path)
 
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var material: StandardMaterial3D = load("res://`+path+`")
-	material.metallic = 0.75
-	return ResourceSaver.save(material, "res://`+path+`")
+		requireScriptSave(t, session, `var material: StandardMaterial3D = load("res://`+path+`")
+material.metallic = 0.75
+return ResourceSaver.save(material, "res://`+path+`")
 `)
 
 		readText := requireToolText(t, session, "read", map[string]any{
@@ -141,13 +132,10 @@ func run():
 	})
 
 	t.Run("creates then reads a resource", func(t *testing.T) {
-		requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var material := StandardMaterial3D.new()
-	material.albedo_color = Color(1, 0, 0, 1)
-	DirAccess.make_dir_recursive_absolute("res://materials")
-	return ResourceSaver.save(material, "res://materials/red.res")
+		requireScriptSave(t, session, `var material := StandardMaterial3D.new()
+material.albedo_color = Color(1, 0, 0, 1)
+DirAccess.make_dir_recursive_absolute("res://materials")
+return ResourceSaver.save(material, "res://materials/red.res")
 `)
 
 		readText := requireToolText(t, session, "read", map[string]any{
@@ -175,13 +163,10 @@ func TestResourceTheme(t *testing.T) {
 	t.Parallel()
 	_, session := sharedResourceSession(t)
 
-	requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var theme := Theme.new()
-	theme.default_font_size = 16
-	DirAccess.make_dir_recursive_absolute("res://themes")
-	return ResourceSaver.save(theme, "res://themes/main.res")
+	requireScriptSave(t, session, `var theme := Theme.new()
+theme.default_font_size = 16
+DirAccess.make_dir_recursive_absolute("res://themes")
+return ResourceSaver.save(theme, "res://themes/main.res")
 `)
 
 	readText := requireToolText(t, session, "read", map[string]any{
@@ -191,12 +176,9 @@ func run():
 	requireContains(t, readText, `"class": "Theme"`, `"properties"`, `"default_font_size": 16`)
 	requireNotContains(t, readText, "THEME_JSON_START")
 
-	requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var theme: Theme = load("res://themes/main.res")
-	theme.default_font_size = 20
-	return ResourceSaver.save(theme, "res://themes/main.res")
+	requireScriptSave(t, session, `var theme: Theme = load("res://themes/main.res")
+theme.default_font_size = 20
+return ResourceSaver.save(theme, "res://themes/main.res")
 `)
 
 	reReadText := requireToolText(t, session, "read", map[string]any{
@@ -210,24 +192,18 @@ func TestResourceThemeConvertsTypes(t *testing.T) {
 	t.Parallel()
 	_, session := sharedResourceSession(t)
 
-	requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	DirAccess.make_dir_recursive_absolute("res://themes")
-	return ResourceSaver.save(StyleBoxFlat.new(), "res://themes/panel_box.res")
+	requireScriptSave(t, session, `DirAccess.make_dir_recursive_absolute("res://themes")
+return ResourceSaver.save(StyleBoxFlat.new(), "res://themes/panel_box.res")
 `)
 	// run_script does not reconcile the filesystem, so the referenced resource
 	// needs a scan to register its UID before the theme can load it.
 	requireToolText(t, session, "rescan_project", nil)
 
-	requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var theme := Theme.new()
-	theme.set_theme_item(Theme.DATA_TYPE_COLOR, "font_color", "Label", Color(1, 0, 0, 1))
-	theme.set_theme_item(Theme.DATA_TYPE_FONT_SIZE, "font_size", "Label", 24)
-	theme.set_theme_item(Theme.DATA_TYPE_STYLEBOX, "panel", "Panel", load("res://themes/panel_box.res"))
-	return ResourceSaver.save(theme, "res://themes/main.res")
+	requireScriptSave(t, session, `var theme := Theme.new()
+theme.set_theme_item(Theme.DATA_TYPE_COLOR, "font_color", "Label", Color(1, 0, 0, 1))
+theme.set_theme_item(Theme.DATA_TYPE_FONT_SIZE, "font_size", "Label", 24)
+theme.set_theme_item(Theme.DATA_TYPE_STYLEBOX, "panel", "Panel", load("res://themes/panel_box.res"))
+return ResourceSaver.save(theme, "res://themes/main.res")
 `)
 
 	readText := requireToolText(t, session, "read", map[string]any{
@@ -251,12 +227,9 @@ func run():
 		t.Errorf("panel = %#v, want a reference to panel_box.res", readEnvelopeValue.Data.Properties["Panel/styles/panel"])
 	}
 
-	requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var theme: Theme = load("res://themes/main.res")
-	theme.set_theme_item(Theme.DATA_TYPE_COLOR, "font_color", "Label", Color(0, 0, 1, 1))
-	return ResourceSaver.save(theme, "res://themes/main.res")
+	requireScriptSave(t, session, `var theme: Theme = load("res://themes/main.res")
+theme.set_theme_item(Theme.DATA_TYPE_COLOR, "font_color", "Label", Color(0, 0, 1, 1))
+return ResourceSaver.save(theme, "res://themes/main.res")
 `)
 
 	reReadText := requireToolText(t, session, "read", map[string]any{
@@ -277,21 +250,15 @@ func TestResourceThemeMoreCategories(t *testing.T) {
 	t.Parallel()
 	_, session := sharedResourceSession(t)
 
-	requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	DirAccess.make_dir_recursive_absolute("res://themes")
-	return ResourceSaver.save(SystemFont.new(), "res://themes/font.res")
+	requireScriptSave(t, session, `DirAccess.make_dir_recursive_absolute("res://themes")
+return ResourceSaver.save(SystemFont.new(), "res://themes/font.res")
 `)
 	requireToolText(t, session, "rescan_project", nil)
 
-	requireScriptSave(t, session, `extends RefCounted
-
-func run():
-	var theme := Theme.new()
-	theme.set_theme_item(Theme.DATA_TYPE_CONSTANT, "outline_size", "Label", 4)
-	theme.set_theme_item(Theme.DATA_TYPE_FONT, "font", "Label", load("res://themes/font.res"))
-	return ResourceSaver.save(theme, "res://themes/categories.res")
+	requireScriptSave(t, session, `var theme := Theme.new()
+theme.set_theme_item(Theme.DATA_TYPE_CONSTANT, "outline_size", "Label", 4)
+theme.set_theme_item(Theme.DATA_TYPE_FONT, "font", "Label", load("res://themes/font.res"))
+return ResourceSaver.save(theme, "res://themes/categories.res")
 `)
 
 	readText := requireToolText(t, session, "read", map[string]any{
