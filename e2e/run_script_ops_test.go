@@ -1,7 +1,6 @@
 package e2e
 
 import (
-	"encoding/json"
 	"fmt"
 	"path/filepath"
 	"testing"
@@ -139,8 +138,8 @@ func run():
 `)
 
 		payload = readAnimationPayload(t, session, "anims/props.tres")
-		if payload.Length != 3 || payload.LoopMode != "pingpong" {
-			t.Fatalf("payload = %+v, want length 3 pingpong", payload)
+		if payload.Length != 3 || payload.LoopMode != "ping_pong" {
+			t.Fatalf("payload = %+v, want length 3 ping_pong", payload)
 		}
 	})
 
@@ -242,7 +241,7 @@ func run():
 `)
 
 		payload := readTilemapPayload(t, session, "scenes/tilemap_scripted.tscn")
-		if payload.TileSet != "tiles/set_scripted.tres" || len(payload.UsedCells) != 2 {
+		if payload.TileSet != "tiles/set_scripted.tres" || len(payload.Cells) != 2 {
 			t.Fatalf("payload = %+v, want tileset and two cells", payload)
 		}
 
@@ -261,7 +260,7 @@ func run():
 `)
 
 		payload = readTilemapPayload(t, session, "scenes/tilemap_scripted.tscn")
-		if len(payload.UsedCells) != 1 {
+		if len(payload.Cells) != 1 {
 			t.Fatalf("payload = %+v, want one cell after erase", payload)
 		}
 
@@ -280,7 +279,7 @@ func run():
 `)
 
 		payload = readTilemapPayload(t, session, "scenes/tilemap_scripted.tscn")
-		if len(payload.UsedCells) != 0 {
+		if len(payload.Cells) != 0 {
 			t.Fatalf("payload = %+v, want no cells after clear", payload)
 		}
 	})
@@ -303,7 +302,7 @@ func run():
 			"type": "resource",
 			"path": "materials/scripted.res",
 		})
-		requireContains(t, text, `"type": "StandardMaterial3D"`, `"metallic": 0.5`, `"$type": "Color"`)
+		requireContains(t, text, `"class": "StandardMaterial3D"`, `"metallic": 0.5`, `"$type": "Color"`)
 
 		requireScriptSave(t, session, `extends RefCounted
 
@@ -324,11 +323,7 @@ func run():
 func readSceneTree(t *testing.T, session *mcp.ClientSession, scenePath string) sceneNode {
 	t.Helper()
 	text := requireToolText(t, session, "read", map[string]any{"type": "scene", "path": scenePath})
-	var tree sceneNode
-	if err := json.Unmarshal([]byte(text), &tree); err != nil {
-		t.Fatalf("unmarshal scene %s: %v\n%s", scenePath, err, text)
-	}
-	return tree
+	return unmarshalSceneEnvelope(t, text).Data.Root
 }
 
 func childByName(node sceneNode, name string) *sceneNode {
@@ -641,13 +636,7 @@ type testSceneConnection struct {
 func readSceneConnections(t *testing.T, session *mcp.ClientSession, scenePath string) []testSceneConnection {
 	t.Helper()
 	text := requireToolText(t, session, "read", map[string]any{"type": "scene", "path": scenePath})
-	var payload struct {
-		Connections []testSceneConnection `json:"connections"`
-	}
-	if err := json.Unmarshal([]byte(text), &payload); err != nil {
-		t.Fatalf("decode read: %v\n%s", err, text)
-	}
-	return payload.Connections
+	return unmarshalSceneEnvelope(t, text).Data.Connections
 }
 
 // TestRunScriptSceneSignals smoke tests the signal connections the removed

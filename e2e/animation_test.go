@@ -18,10 +18,15 @@ type testAnimationPayload struct {
 func readAnimationPayload(t *testing.T, session *mcp.ClientSession, resourcePath string) testAnimationPayload {
 	t.Helper()
 	text := requireToolText(t, session, "read", map[string]any{"type": "animation", "path": resourcePath})
-	var payload testAnimationPayload
-	if err := json.Unmarshal([]byte(text), &payload); err != nil {
+	var env readEnvelope[testAnimationPayload]
+	if err := json.Unmarshal([]byte(text), &env); err != nil {
 		t.Fatalf("unmarshal animation payload: %v\n%s", err, text)
 	}
+	if env.Kind != "animation" {
+		t.Fatalf("kind = %q, want animation\n%s", env.Kind, text)
+	}
+	payload := env.Data
+	payload.Path = env.Path
 	return payload
 }
 

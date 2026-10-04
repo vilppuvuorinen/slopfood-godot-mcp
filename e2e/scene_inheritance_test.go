@@ -1,22 +1,11 @@
 package e2e
 
 import (
-	"encoding/json"
 	"path/filepath"
 	"testing"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
-
-type inheritedScene struct {
-	Name          string `json:"name"`
-	Type          string `json:"type"`
-	BaseScenePath string `json:"baseScenePath"`
-	Children      []struct {
-		Name string `json:"name"`
-		Type string `json:"type"`
-	} `json:"children"`
-}
 
 const inheritedBaseScene = `[gd_scene format=3]
 
@@ -56,13 +45,11 @@ func TestSceneInheritanceTool(t *testing.T) {
 		"type": "scene",
 		"path": "scenes/derived.tscn",
 	})
-	var tree inheritedScene
-	if err := json.Unmarshal([]byte(text), &tree); err != nil {
-		t.Fatalf("unmarshal %q: %v", text, err)
+	env := unmarshalSceneEnvelope(t, text)
+	if env.Data.BaseScenePath != "scenes/base.tscn" {
+		t.Errorf("baseScenePath = %q, want scenes/base.tscn", env.Data.BaseScenePath)
 	}
-	if tree.BaseScenePath != "scenes/base.tscn" {
-		t.Errorf("baseScenePath = %q, want scenes/base.tscn", tree.BaseScenePath)
-	}
+	tree := env.Data.Root
 	if tree.Name != "root" || tree.Type != "Node2D" {
 		t.Errorf("root = %+v", tree)
 	}

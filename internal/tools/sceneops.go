@@ -110,6 +110,35 @@ func payloadOutputSchema(properties map[string]any) map[string]any {
 	return schema
 }
 
+// readEnvelopeSchema is the shallow outer contract shared by read and
+// read_node: a self-identifying envelope (kind + path, plus nodePath when a node
+// was addressed) wrapping an opaque kind-specific data body, alongside the
+// status shape reached by the markerless fallback. The data body is deliberately
+// not described; the kind discriminator makes it discoverable from the value.
+func readEnvelopeSchema(kinds []string, nodeScoped bool) map[string]any {
+	payloadProps := map[string]any{
+		"kind": map[string]any{"type": "string", "enum": kinds, "description": "Payload discriminator; selects the shape of data."},
+		"path": map[string]any{"type": "string", "description": "File path, project-relative."},
+		"data": godotValueSchema("Kind-specific payload; its shape is selected by kind."),
+	}
+	statusProps := map[string]any{
+		"kind": map[string]any{"type": "string", "enum": kinds},
+		"path": map[string]any{"type": "string"},
+	}
+	required := []string{"kind", "path", "data"}
+	if nodeScoped {
+		payloadProps["nodePath"] = map[string]any{"type": "string", "description": "Node path addressed within the scene."}
+		statusProps["nodePath"] = map[string]any{"type": "string"}
+		required = append(required, "nodePath")
+	}
+	return map[string]any{
+		"anyOf": []any{
+			map[string]any{"type": "object", "properties": payloadProps, "required": required},
+			statusOutputSchema(statusProps),
+		},
+	}
+}
+
 const envelopeMessageContract = "Human-readable outcome: the success summary on success, or the failure reason on an error."
 
 const (

@@ -33,6 +33,11 @@ func resourceDir(resourcePath string) string {
 	return strings.TrimSuffix(dir, "/")
 }
 
+type resourceData struct {
+	Class      string         `json:"class"`
+	Properties map[string]any `json:"properties"`
+}
+
 // read(type=resource) rejects text .tres, so the fixture must be a binary file.
 func seedMaterialRes(t *testing.T, session *mcp.ClientSession, resourcePath string) {
 	t.Helper()
@@ -60,14 +65,14 @@ func TestResourceTools(t *testing.T) {
 			"type": "resource",
 			"path": path,
 		})
-		var payload map[string]any
-		if err := json.Unmarshal([]byte(text), &payload); err != nil {
+		var env readEnvelope[resourceData]
+		if err := json.Unmarshal([]byte(text), &env); err != nil {
 			t.Fatalf("unmarshal resource payload: %v\n%s", err, text)
 		}
-		if payload["type"] != "StandardMaterial3D" {
-			t.Errorf("type = %v, want StandardMaterial3D", payload["type"])
+		if env.Kind != "resource" || env.Data.Class != "StandardMaterial3D" {
+			t.Errorf("envelope = %+v, want kind resource with class StandardMaterial3D", env)
 		}
-		requireContains(t, text, `"type": "StandardMaterial3D"`)
+		requireContains(t, text, `"kind": "resource"`, `"class": "StandardMaterial3D"`)
 	})
 
 	t.Run("reads with a property filter", func(t *testing.T) {
@@ -149,7 +154,7 @@ func run():
 			"type": "resource",
 			"path": "materials/red.res",
 		})
-		requireContains(t, readText, `"type": "StandardMaterial3D"`, `"path": "materials/red.res"`)
+		requireContains(t, readText, `"class": "StandardMaterial3D"`, `"path": "materials/red.res"`)
 	})
 
 	t.Run("rejects a text .tres", func(t *testing.T) {
@@ -183,7 +188,7 @@ func run():
 		"type": "resource",
 		"path": "themes/main.res",
 	})
-	requireContains(t, readText, `"type": "Theme"`, `"properties"`, `"default_font_size": 16`)
+	requireContains(t, readText, `"class": "Theme"`, `"properties"`, `"default_font_size": 16`)
 	requireNotContains(t, readText, "THEME_JSON_START")
 
 	requireScriptSave(t, session, `extends RefCounted
@@ -198,7 +203,7 @@ func run():
 		"type": "resource",
 		"path": "themes/main.res",
 	})
-	requireContains(t, reReadText, `"type": "Theme"`, `"default_font_size": 20`)
+	requireContains(t, reReadText, `"class": "Theme"`, `"default_font_size": 20`)
 }
 
 func TestResourceThemeConvertsTypes(t *testing.T) {
@@ -229,23 +234,21 @@ func run():
 		"type": "resource",
 		"path": "themes/main.res",
 	})
-	var readPayload struct {
-		Properties map[string]any `json:"properties"`
-	}
-	if err := json.Unmarshal([]byte(readText), &readPayload); err != nil {
+	var readEnvelopeValue readEnvelope[resourceData]
+	if err := json.Unmarshal([]byte(readText), &readEnvelopeValue); err != nil {
 		t.Fatalf("unmarshal theme payload: %v\n%s", err, readText)
 	}
-	fontColor, ok := readPayload.Properties["Label/colors/font_color"].(map[string]any)
+	fontColor, ok := readEnvelopeValue.Data.Properties["Label/colors/font_color"].(map[string]any)
 	if !ok || fontColor["$type"] != "Color" || fontColor["r"] != float64(1) {
-		t.Errorf("font_color = %#v, want a tagged red Color", readPayload.Properties["Label/colors/font_color"])
+		t.Errorf("font_color = %#v, want a tagged red Color", readEnvelopeValue.Data.Properties["Label/colors/font_color"])
 	}
-	if got := readPayload.Properties["Label/font_sizes/font_size"]; got != float64(24) {
+	if got := readEnvelopeValue.Data.Properties["Label/font_sizes/font_size"]; got != float64(24) {
 		t.Errorf("font_size = %#v, want 24", got)
 	}
-	panel, ok := readPayload.Properties["Panel/styles/panel"].(map[string]any)
+	panel, ok := readEnvelopeValue.Data.Properties["Panel/styles/panel"].(map[string]any)
 	panelPath, _ := panel["path"].(string)
 	if !ok || !strings.Contains(panelPath, "panel_box.res") {
-		t.Errorf("panel = %#v, want a reference to panel_box.res", readPayload.Properties["Panel/styles/panel"])
+		t.Errorf("panel = %#v, want a reference to panel_box.res", readEnvelopeValue.Data.Properties["Panel/styles/panel"])
 	}
 
 	requireScriptSave(t, session, `extends RefCounted
@@ -260,15 +263,13 @@ func run():
 		"type": "resource",
 		"path": "themes/main.res",
 	})
-	var reReadPayload struct {
-		Properties map[string]any `json:"properties"`
-	}
-	if err := json.Unmarshal([]byte(reReadText), &reReadPayload); err != nil {
+	var reReadEnvelope readEnvelope[resourceData]
+	if err := json.Unmarshal([]byte(reReadText), &reReadEnvelope); err != nil {
 		t.Fatalf("unmarshal theme payload: %v\n%s", err, reReadText)
 	}
-	fontColor, ok = reReadPayload.Properties["Label/colors/font_color"].(map[string]any)
+	fontColor, ok = reReadEnvelope.Data.Properties["Label/colors/font_color"].(map[string]any)
 	if !ok || fontColor["b"] != float64(1) {
-		t.Errorf("font_color = %#v, want a tagged blue Color", reReadPayload.Properties["Label/colors/font_color"])
+		t.Errorf("font_color = %#v, want a tagged blue Color", reReadEnvelope.Data.Properties["Label/colors/font_color"])
 	}
 }
 
@@ -297,19 +298,17 @@ func run():
 		"type": "resource",
 		"path": "themes/categories.res",
 	})
-	var payload struct {
-		Properties map[string]any `json:"properties"`
-	}
-	if err := json.Unmarshal([]byte(readText), &payload); err != nil {
+	var env readEnvelope[resourceData]
+	if err := json.Unmarshal([]byte(readText), &env); err != nil {
 		t.Fatalf("unmarshal theme payload: %v\n%s", err, readText)
 	}
-	if got := payload.Properties["Label/constants/outline_size"]; got != float64(4) {
+	if got := env.Data.Properties["Label/constants/outline_size"]; got != float64(4) {
 		t.Errorf("outline_size = %#v, want 4", got)
 	}
-	font, ok := payload.Properties["Label/fonts/font"].(map[string]any)
+	font, ok := env.Data.Properties["Label/fonts/font"].(map[string]any)
 	fontPath, _ := font["path"].(string)
 	if !ok || !strings.Contains(fontPath, "font.res") {
-		t.Errorf("font = %#v, want a reference to font.res", payload.Properties["Label/fonts/font"])
+		t.Errorf("font = %#v, want a reference to font.res", env.Data.Properties["Label/fonts/font"])
 	}
 }
 

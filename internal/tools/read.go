@@ -23,10 +23,11 @@ var readResourceOperations = map[string]string{
 
 func read() mcp.Tool {
 	return mcp.Tool{
-		Name:        "read",
-		Title:       "Read",
-		Description: "Read a scene, animation, tileset, theme, or binary resource file; use read_node to read a node subtree",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Name:         "read",
+		Title:        "Read",
+		Description:  "Read a scene, animation, tileset, theme, or binary resource file; use read_node to read a node subtree",
+		Annotations:  &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		OutputSchema: readEnvelopeSchema(readTypes, false),
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -131,7 +132,7 @@ func handleRead(ctx Context, raw json.RawMessage) (any, error) {
 	}
 
 	params := map[string]any{"resourcePath": args.Path}
-	fields := map[string]any{"resourcePath": args.Path}
+	fields := map[string]any{"kind": args.Type, "path": args.Path}
 	if args.Type == "resource" && len(args.PropertyFilter) > 0 {
 		params["propertyFilter"] = args.PropertyFilter
 	}

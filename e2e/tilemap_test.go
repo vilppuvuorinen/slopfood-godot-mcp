@@ -18,10 +18,15 @@ type testTilesetPayload struct {
 func readTilesetPayload(t *testing.T, session *mcp.ClientSession, resourcePath string) testTilesetPayload {
 	t.Helper()
 	text := requireToolText(t, session, "read", map[string]any{"type": "tileset", "path": resourcePath})
-	var payload testTilesetPayload
-	if err := json.Unmarshal([]byte(text), &payload); err != nil {
+	var env readEnvelope[testTilesetPayload]
+	if err := json.Unmarshal([]byte(text), &env); err != nil {
 		t.Fatalf("unmarshal tileset payload: %v\n%s", err, text)
 	}
+	if env.Kind != "tileset" {
+		t.Fatalf("kind = %q, want tileset\n%s", env.Kind, text)
+	}
+	payload := env.Data
+	payload.Path = env.Path
 	return payload
 }
 
@@ -94,10 +99,9 @@ func run():
 }
 
 type testTilemapPayload struct {
-	ScenePath string           `json:"scenePath"`
-	NodePath  string           `json:"nodePath"`
-	TileSet   string           `json:"tileSet"`
-	UsedCells []map[string]any `json:"usedCells"`
+	NodePath string           `json:"nodePath"`
+	TileSet  string           `json:"tileSet"`
+	Cells    []map[string]any `json:"cells"`
 }
 
 func readTilemapPayload(t *testing.T, session *mcp.ClientSession, scenePath string) testTilemapPayload {
@@ -107,10 +111,15 @@ func readTilemapPayload(t *testing.T, session *mcp.ClientSession, scenePath stri
 		"path":     scenePath,
 		"nodePath": "root/Ground",
 	})
-	var payload testTilemapPayload
-	if err := json.Unmarshal([]byte(text), &payload); err != nil {
+	var env readEnvelope[testTilemapPayload]
+	if err := json.Unmarshal([]byte(text), &env); err != nil {
 		t.Fatalf("unmarshal tilemap payload: %v\n%s", err, text)
 	}
+	if env.Kind != "tilemap" || env.NodePath != "root/Ground" {
+		t.Fatalf("envelope = %+v, want kind tilemap at root/Ground\n%s", env, text)
+	}
+	payload := env.Data
+	payload.NodePath = env.NodePath
 	return payload
 }
 

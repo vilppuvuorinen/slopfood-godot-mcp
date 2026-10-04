@@ -13,10 +13,11 @@ var readNodeTypes = []string{"scene", "tilemap"}
 
 func readNode() mcp.Tool {
 	return mcp.Tool{
-		Name:        "read_node",
-		Title:       "Read Node",
-		Description: "Read a node subtree from a scene, or the cells of a TileMapLayer node; use read to read whole files",
-		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Name:         "read_node",
+		Title:        "Read Node",
+		Description:  "Read a node subtree from a scene, or the cells of a TileMapLayer node; use read to read whole files",
+		Annotations:  &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		OutputSchema: readEnvelopeSchema(readNodeTypes, true),
 		InputSchema: map[string]any{
 			"type": "object",
 			"properties": map[string]any{
@@ -104,8 +105,9 @@ func handleReadNode(ctx Context, raw json.RawMessage) (any, error) {
 		"nodePath":  args.NodePath,
 	}
 	fields := map[string]any{
-		"scenePath": args.Path,
-		"nodePath":  args.NodePath,
+		"kind":     args.Type,
+		"path":     args.Path,
+		"nodePath": args.NodePath,
 	}
 	return runHeadlessOperation(ctx, project, "read_tilemap", params, fields)
 }

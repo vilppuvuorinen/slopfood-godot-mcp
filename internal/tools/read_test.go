@@ -192,7 +192,7 @@ func TestReadResourcePathRejections(t *testing.T) {
 }
 
 func TestReadToolSuccess(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","children":[{"name":"Child","type":"Sprite2D"}]}\n<<<GODOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"scene","path":"scenes/main.tscn","data":{"root":{"name":"root","type":"Node2D","children":[{"name":"Child","type":"Sprite2D","children":[]}]},"connections":[]}}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
@@ -205,7 +205,7 @@ func TestReadToolSuccess(t *testing.T) {
 		t.Fatalf("content = %+v", result.Content)
 	}
 	text := result.Content[0].Text
-	for _, want := range []string{`"name": "root"`, `"type": "Node2D"`, `"name": "Child"`, `"type": "Sprite2D"`} {
+	for _, want := range []string{`"kind": "scene"`, `"path": "scenes/main.tscn"`, `"name": "root"`, `"type": "Node2D"`, `"name": "Child"`, `"type": "Sprite2D"`, `"connections": []`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
@@ -216,7 +216,7 @@ func TestReadToolSuccess(t *testing.T) {
 }
 
 func TestReadToolPreservesNestedPropertyValues(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"name":"root","type":"Node2D","properties":{"config":{"myKey":1,"nested":{"a":[1,2,3]}},"position":{"$type":"Vector2","x":0,"y":0}}}\n<<<GODOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"scene","path":"scenes/main.tscn","data":{"root":{"name":"root","type":"Node2D","properties":{"config":{"myKey":1,"nested":{"a":[1,2,3]}},"position":{"$type":"Vector2","x":0,"y":0}},"children":[]},"connections":[]}}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
@@ -236,9 +236,17 @@ func TestReadToolPreservesNestedPropertyValues(t *testing.T) {
 	if !ok {
 		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
 	}
-	props, ok := structured["properties"].(map[string]any)
+	data, ok := structured["data"].(map[string]any)
 	if !ok {
-		t.Fatalf("properties = %T, want object", structured["properties"])
+		t.Fatalf("data = %T, want object", structured["data"])
+	}
+	rootNode, ok := data["root"].(map[string]any)
+	if !ok {
+		t.Fatalf("data.root = %T, want object", data["root"])
+	}
+	props, ok := rootNode["properties"].(map[string]any)
+	if !ok {
+		t.Fatalf("properties = %T, want object", rootNode["properties"])
 	}
 	if got := props["config"].(map[string]any)["myKey"]; got != float64(1) {
 		t.Errorf("config.myKey = %v, want 1", got)
@@ -328,27 +336,27 @@ func TestReadResourceStructured(t *testing.T) {
 	}{
 		{
 			name: "animation",
-			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"path":"anims/walk.tres","length":2,"loopMode":"linear","levels":[]}\n<<<GODOT_MCP_JSON_END>>>\n'`,
+			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"animation","path":"anims/walk.tres","data":{"length":2,"loopMode":"linear","tracks":[]}}\n<<<GODOT_MCP_JSON_END>>>\n'`,
 			args: `{"type":"animation","path":"anims/walk.tres"}`,
-			want: `"loopMode": "linear"`,
+			want: `"kind": "animation"`,
 		},
 		{
 			name: "tileset",
-			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"path":"tiles/set.tres","tileShape":"square","sources":[]}\n<<<GODOT_MCP_JSON_END>>>\n'`,
+			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"tileset","path":"tiles/set.tres","data":{"tileShape":"square","sources":[]}}\n<<<GODOT_MCP_JSON_END>>>\n'`,
 			args: `{"type":"tileset","path":"tiles/set.tres"}`,
-			want: `"tileShape": "square"`,
+			want: `"kind": "tileset"`,
 		},
 		{
 			name: "theme",
-			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"path":"themes/main.tres","defaultFontSize":16,"types":[]}\n<<<GODOT_MCP_JSON_END>>>\n'`,
+			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"theme","path":"themes/main.tres","data":{"defaultFontSize":16,"types":[]}}\n<<<GODOT_MCP_JSON_END>>>\n'`,
 			args: `{"type":"theme","path":"themes/main.tres"}`,
-			want: `"defaultFontSize": 16`,
+			want: `"kind": "theme"`,
 		},
 		{
 			name: "resource",
-			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"resourcePath":"resources/data.res","resourceType":"Resource","properties":{"value":1}}\n<<<GODOT_MCP_JSON_END>>>\n'`,
+			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"resource","path":"resources/data.res","data":{"class":"Resource","properties":{"value":1}}}\n<<<GODOT_MCP_JSON_END>>>\n'`,
 			args: `{"type":"resource","path":"resources/data.res"}`,
-			want: `"value": 1`,
+			want: `"kind": "resource"`,
 		},
 	}
 	for _, tt := range tests {
@@ -372,7 +380,7 @@ func TestReadResourceStructured(t *testing.T) {
 	}
 }
 
-func TestReadResourceFallbackKeepsBridgeKey(t *testing.T) {
+func TestReadResourceFallbackUsesEnvelopeEcho(t *testing.T) {
 	t.Setenv(godot.PathEnv, fakeGodotOps(t, `echo "$@"`))
 	root := t.TempDir()
 	makeProject(t, root)
@@ -388,11 +396,33 @@ func TestReadResourceFallbackKeepsBridgeKey(t *testing.T) {
 	if !ok {
 		t.Fatalf("structuredContent = %T, want object", result.StructuredContent)
 	}
-	if got := structured["resourcePath"]; got != "anims/walk.tres" {
-		t.Errorf("resourcePath = %v, want the original path", got)
+	if got := structured["path"]; got != "anims/walk.tres" {
+		t.Errorf("path = %v, want the original path", got)
 	}
-	if _, ok := structured["path"]; ok {
-		t.Errorf("structuredContent uses the tool key: %v", structured)
+	if got := structured["kind"]; got != "animation" {
+		t.Errorf("kind = %v, want animation", got)
+	}
+	if _, ok := structured["resourcePath"]; ok {
+		t.Errorf("structuredContent still uses the bridge key: %v", structured)
+	}
+}
+
+func TestReadOutputSchemaAcceptsEnvelopeAndStatus(t *testing.T) {
+	tool := read()
+	value := jsonValue(t, map[string]any{
+		"kind": "resource",
+		"path": "resources/data.res",
+		"data": map[string]any{"class": "Resource", "properties": map[string]any{}},
+	})
+	if msg := schemaViolation(tool.OutputSchema, tool.OutputSchema, value, tool.Name); msg != "" {
+		t.Errorf("envelope rejected: %s", msg)
+	}
+	status := jsonValue(t, mcp.ErrorResult("boom", "try again").StructuredContent)
+	if msg := schemaViolation(tool.OutputSchema, tool.OutputSchema, status, tool.Name); msg != "" {
+		t.Errorf("status rejected: %s", msg)
+	}
+	if msg := schemaViolation(tool.OutputSchema, tool.OutputSchema, jsonValue(t, map[string]any{"kind": "resource"}), tool.Name); msg == "" {
+		t.Error("incomplete envelope accepted")
 	}
 }
 

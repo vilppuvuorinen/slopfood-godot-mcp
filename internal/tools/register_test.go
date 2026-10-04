@@ -66,12 +66,6 @@ func TestToolsUnique(t *testing.T) {
 	}
 }
 
-// schemaOptionalReads is the allowlist of self-describing reads with no output schema.
-var schemaOptionalReads = map[string]bool{
-	"read":      true,
-	"read_node": true,
-}
-
 func TestToolsAdvertiseMetadata(t *testing.T) {
 	for _, newTool := range allTools {
 		tool := newTool()
@@ -81,7 +75,7 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 		if tool.Annotations == nil {
 			t.Errorf("tool %q has no annotations", tool.Name)
 		}
-		if tool.OutputSchema == nil && !schemaOptionalReads[tool.Name] {
+		if tool.OutputSchema == nil {
 			t.Errorf("tool %q has no output schema", tool.Name)
 		}
 	}

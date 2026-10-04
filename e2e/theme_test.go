@@ -18,10 +18,15 @@ type testThemePayload struct {
 func readThemePayload(t *testing.T, session *mcp.ClientSession, resourcePath string) testThemePayload {
 	t.Helper()
 	text := requireToolText(t, session, "read", map[string]any{"type": "theme", "path": resourcePath})
-	var payload testThemePayload
-	if err := json.Unmarshal([]byte(text), &payload); err != nil {
+	var env readEnvelope[testThemePayload]
+	if err := json.Unmarshal([]byte(text), &env); err != nil {
 		t.Fatalf("unmarshal theme payload: %v\n%s", err, text)
 	}
+	if env.Kind != "theme" {
+		t.Fatalf("kind = %q, want theme\n%s", env.Kind, text)
+	}
+	payload := env.Data
+	payload.Path = env.Path
 	return payload
 }
 

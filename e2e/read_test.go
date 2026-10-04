@@ -75,6 +75,6 @@ func run():
 		if res != relative {
 			t.Errorf("res:// payload = %q, want %q", res, relative)
 		}
-		requireContains(t, res, `"type": "StandardMaterial3D"`, `"path": "resources/foo.res"`)
+		requireContains(t, res, `"kind": "resource"`, `"class": "StandardMaterial3D"`, `"path": "resources/foo.res"`)
 	})
 }

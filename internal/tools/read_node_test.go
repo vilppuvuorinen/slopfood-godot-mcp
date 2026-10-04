@@ -99,7 +99,7 @@ func TestReadNodeDispatchMapping(t *testing.T) {
 }
 
 func TestReadNodeTilemapStructured(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"scenePath":"scenes/level.tscn","nodePath":"root/Ground","tileSet":"tiles/set.tres","usedCells":[{"sourceId":0}]}\n<<<GODOT_MCP_JSON_END>>>\n'`))
+	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"tilemap","path":"scenes/level.tscn","nodePath":"root/Ground","data":{"tileSet":"tiles/set.tres","cells":[{"sourceId":0}]}}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "level.tscn"), "[gd_scene format=3]\n")
@@ -109,10 +109,35 @@ func TestReadNodeTilemapStructured(t *testing.T) {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
 	text := result.Content[0].Text
-	for _, want := range []string{`"tileSet": "tiles/set.tres"`, `"usedCells": [`, `"sourceId": 0`} {
+	for _, want := range []string{`"kind": "tilemap"`, `"nodePath": "root/Ground"`, `"tileSet": "tiles/set.tres"`, `"cells": [`, `"sourceId": 0`} {
 		if !strings.Contains(text, want) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
+	}
+	if strings.Contains(text, `"usedCells"`) {
+		t.Errorf("text = %q, want the cells key", text)
+	}
+}
+
+func TestReadNodeOutputSchemaAcceptsEnvelopeAndStatus(t *testing.T) {
+	tool := readNode()
+	value := jsonValue(t, map[string]any{
+		"kind":     "tilemap",
+		"path":     "scenes/level.tscn",
+		"nodePath": "root/Ground",
+		"data":     map[string]any{"tileSet": "tiles/set.tres", "cells": []any{}},
+	})
+	if msg := schemaViolation(tool.OutputSchema, tool.OutputSchema, value, tool.Name); msg != "" {
+		t.Errorf("envelope rejected: %s", msg)
+	}
+	status := jsonValue(t, mcp.ErrorResult("boom", "try again").StructuredContent)
+	if msg := schemaViolation(tool.OutputSchema, tool.OutputSchema, status, tool.Name); msg != "" {
+		t.Errorf("status rejected: %s", msg)
+	}
+	if msg := schemaViolation(tool.OutputSchema, tool.OutputSchema, jsonValue(t, map[string]any{
+		"kind": "tilemap", "path": "scenes/level.tscn", "data": map[string]any{},
+	}), tool.Name); msg == "" {
+		t.Error("envelope missing nodePath accepted")
 	}
 }
 

@@ -7,6 +7,22 @@ import (
 	"testing"
 )
 
+// readEnvelope is the self-identifying outer contract shared by read and
+// read_node: kind + path (+ nodePath when a node was addressed) wrapping a
+// kind-specific data body.
+type readEnvelope[T any] struct {
+	Kind     string `json:"kind"`
+	Path     string `json:"path"`
+	NodePath string `json:"nodePath"`
+	Data     T      `json:"data"`
+}
+
+type sceneData struct {
+	Root          sceneNode             `json:"root"`
+	BaseScenePath string                `json:"baseScenePath"`
+	Connections   []testSceneConnection `json:"connections"`
+}
+
 type sceneNode struct {
 	Name       string         `json:"name"`
 	Type       string         `json:"type"`
@@ -14,6 +30,15 @@ type sceneNode struct {
 	Groups     []string       `json:"groups"`
 	Properties map[string]any `json:"properties"`
 	Children   []sceneNode    `json:"children"`
+}
+
+func unmarshalSceneEnvelope(t *testing.T, text string) readEnvelope[sceneData] {
+	t.Helper()
+	var env readEnvelope[sceneData]
+	if err := json.Unmarshal([]byte(text), &env); err != nil {
+		t.Fatalf("unmarshal %q: %v", text, err)
+	}
+	return env
 }
 
 func TestReadSceneTool(t *testing.T) {
@@ -29,11 +54,11 @@ func TestReadSceneTool(t *testing.T) {
 			"path": "scenes/main.tscn",
 		})
 
-		var tree sceneNode
-		if err := json.Unmarshal([]byte(text), &tree); err != nil {
-			t.Fatalf("unmarshal %q: %v", text, err)
+		env := unmarshalSceneEnvelope(t, text)
+		if env.Kind != "scene" || env.Path != "scenes/main.tscn" {
+			t.Errorf("envelope = %+v, want kind scene at scenes/main.tscn", env)
 		}
-		if tree.Name != "root" || tree.Type != "Node2D" {
+		if tree := env.Data.Root; tree.Name != "root" || tree.Type != "Node2D" {
 			t.Errorf("root = %+v", tree)
 		}
 	})
@@ -47,10 +72,7 @@ func TestReadSceneTool(t *testing.T) {
 			"path": "scenes/tree.tscn",
 		})
 
-		var tree sceneNode
-		if err := json.Unmarshal([]byte(text), &tree); err != nil {
-			t.Fatalf("unmarshal %q: %v", text, err)
-		}
+		tree := unmarshalSceneEnvelope(t, text).Data.Root
 		if len(tree.Children) != 1 {
 			t.Fatalf("children = %+v", tree.Children)
 		}
@@ -69,10 +91,11 @@ func TestReadSceneTool(t *testing.T) {
 			"path":     "scenes/scope.tscn",
 			"nodePath": "root/Player",
 		})
-		var scoped sceneNode
-		if err := json.Unmarshal([]byte(text), &scoped); err != nil {
-			t.Fatalf("unmarshal %q: %v", text, err)
+		env := unmarshalSceneEnvelope(t, text)
+		if env.NodePath != "root/Player" {
+			t.Errorf("envelope nodePath = %q, want root/Player", env.NodePath)
 		}
+		scoped := env.Data.Root
 		if scoped.Name != "Player" {
 			t.Errorf("scoped root = %+v, want Player", scoped)
 		}
@@ -85,10 +108,7 @@ func TestReadSceneTool(t *testing.T) {
 			"path":  "scenes/scope.tscn",
 			"depth": 1,
 		})
-		var shallow sceneNode
-		if err := json.Unmarshal([]byte(text), &shallow); err != nil {
-			t.Fatalf("unmarshal %q: %v", text, err)
-		}
+		shallow := unmarshalSceneEnvelope(t, text).Data.Root
 		if len(shallow.Children) != 1 || shallow.Children[0].Name != "Player" {
 			t.Fatalf("depth-1 children = %+v, want Player", shallow.Children)
 		}
@@ -106,10 +126,7 @@ func TestReadSceneTool(t *testing.T) {
 			"path":  "scenes/depth0.tscn",
 			"depth": 0,
 		})
-		var tree sceneNode
-		if err := json.Unmarshal([]byte(text), &tree); err != nil {
-			t.Fatalf("unmarshal %q: %v", text, err)
-		}
+		tree := unmarshalSceneEnvelope(t, text).Data.Root
 		if tree.Name != "root" || len(tree.Children) != 0 {
 			t.Errorf("depth-0 tree = %+v, want the root with no children", tree)
 		}
@@ -123,10 +140,7 @@ func TestReadSceneTool(t *testing.T) {
 			"path":     "scenes/rootpath.tscn",
 			"nodePath": "root",
 		})
-		var tree sceneNode
-		if err := json.Unmarshal([]byte(text), &tree); err != nil {
-			t.Fatalf("unmarshal %q: %v", text, err)
-		}
+		tree := unmarshalSceneEnvelope(t, text).Data.Root
 		if tree.Name != "root" || tree.Type != "Node2D" {
 			t.Errorf("root = %+v", tree)
 		}
@@ -153,10 +167,7 @@ func TestReadSceneTool(t *testing.T) {
 			"type": "scene",
 			"path": "res://scenes/respath.tscn",
 		})
-		var tree sceneNode
-		if err := json.Unmarshal([]byte(text), &tree); err != nil {
-			t.Fatalf("unmarshal %q: %v", text, err)
-		}
+		tree := unmarshalSceneEnvelope(t, text).Data.Root
 		if tree.Name != "root" || tree.Type != "Node2D" {
 			t.Errorf("root = %+v", tree)
 		}
@@ -199,10 +210,7 @@ func TestReadSceneNestedProperties(t *testing.T) {
 		"path": "scenes/dict.tscn",
 	})
 
-	var tree sceneNode
-	if err := json.Unmarshal([]byte(text), &tree); err != nil {
-		t.Fatalf("unmarshal %q: %v", text, err)
-	}
+	tree := unmarshalSceneEnvelope(t, text).Data.Root
 	if tree.Script != "scripts/config.gd" {
 		t.Errorf("script = %q, want the project-relative scripts/config.gd", tree.Script)
 	}
@@ -243,10 +251,7 @@ func TestReadSceneGroups(t *testing.T) {
 		"type": "scene",
 		"path": "scenes/groups.tscn",
 	})
-	var tree sceneNode
-	if err := json.Unmarshal([]byte(text), &tree); err != nil {
-		t.Fatalf("unmarshal %q: %v", text, err)
-	}
+	tree := unmarshalSceneEnvelope(t, text).Data.Root
 	if !reflect.DeepEqual(tree.Groups, []string{"enemies"}) {
 		t.Errorf("root groups = %v, want [enemies]", tree.Groups)
 	}

@@ -530,15 +530,25 @@ func read_scene(result: Result, params) -> Result:
 
     var tree_data = _walk_scene_tree(start_node, depth)
 
+    var data = {
+        "root": tree_data,
+        "connections": _scene_connections(FileAccess.get_file_as_string(full_scene_path)),
+    }
     # The in-memory tree cannot reveal inheritance; the raw file is the only signal.
     var base_scene_path = _inherited_scene_base(full_scene_path)
     if not base_scene_path.is_empty():
-        tree_data["baseScenePath"] = base_scene_path
+        data["baseScenePath"] = base_scene_path
 
-    tree_data["connections"] = _scene_connections(FileAccess.get_file_as_string(full_scene_path))
+    var payload = {
+        "kind": "scene",
+        "path": project_relative(full_scene_path),
+        "data": data,
+    }
+    if params.has("nodePath") and params.nodePath != null and not str(params.nodePath).is_empty():
+        payload["nodePath"] = str(params.nodePath)
 
     result.out(JSON_START)
-    result.out(JSON.stringify(tree_data))
+    result.out(JSON.stringify(payload))
     result.out(JSON_END)
 
     return result
@@ -626,14 +636,12 @@ func _walk_scene_tree(node, depth := -1) -> Dictionary:
             group_names.append(str(g))
         info["groups"] = group_names
 
+    var children_arr = []
     if depth != 0:
         var child_depth = -1 if depth < 0 else depth - 1
-        var children_arr = []
         for child in node.get_children():
             children_arr.append(_walk_scene_tree(child, child_depth))
-
-        if children_arr.size() > 0:
-            info["children"] = children_arr
+    info["children"] = children_arr
 
     return info
 
@@ -903,7 +911,11 @@ func read_resource(result: Result, params) -> Result:
                 continue
             props[prop_name] = _variant_to_json(resource.get(prop_name))
     result.out(JSON_START)
-    result.out(JSON.stringify({"type": resource.get_class(), "path": project_relative(full_path), "properties": props}))
+    result.out(JSON.stringify({
+        "kind": "resource",
+        "path": project_relative(full_path),
+        "data": {"class": resource.get_class(), "properties": props},
+    }))
     result.out(JSON_END)
     return result
 
@@ -943,7 +955,7 @@ const ANIMATION_TRACK_TYPES = {
 const ANIMATION_LOOP_MODES = {
     "none": Animation.LOOP_NONE,
     "linear": Animation.LOOP_LINEAR,
-    "pingpong": Animation.LOOP_PINGPONG,
+    "ping_pong": Animation.LOOP_PINGPONG,
 }
 
 const ANIMATION_INTERPOLATIONS = {
@@ -999,11 +1011,14 @@ func read_animation(result: Result, params) -> Result:
     for index in range(animation.get_track_count()):
         tracks.append(_animation_track_to_json(animation, index))
     var payload = {
+        "kind": "animation",
         "path": project_relative(full_path),
-        "length": animation.length,
-        "loopMode": _loop_mode_name(animation.loop_mode),
-        "step": animation.step,
-        "tracks": tracks,
+        "data": {
+            "length": animation.length,
+            "loopMode": _loop_mode_name(animation.loop_mode),
+            "step": animation.step,
+            "tracks": tracks,
+        },
     }
     result.out(JSON_START)
     result.out(JSON.stringify(payload))
@@ -1094,13 +1109,16 @@ func read_tileset(result: Result, params) -> Result:
     for index in range(tile_set.get_source_count()):
         sources.append(_tileset_source_to_json(tile_set, tile_set.get_source_id(index)))
     var payload = {
+        "kind": "tileset",
         "path": project_relative(full_path),
-        "tileSize": _variant_to_json(tile_set.tile_size),
-        "tileShape": _enum_name(TILESET_SHAPES, tile_set.tile_shape),
-        "tileLayout": _enum_name(TILESET_LAYOUTS, tile_set.tile_layout),
-        "tileOffsetAxis": _enum_name(TILESET_OFFSET_AXES, tile_set.tile_offset_axis),
-        "uvClipping": tile_set.uv_clipping,
-        "sources": sources,
+        "data": {
+            "tileSize": _variant_to_json(tile_set.tile_size),
+            "tileShape": _enum_name(TILESET_SHAPES, tile_set.tile_shape),
+            "tileLayout": _enum_name(TILESET_LAYOUTS, tile_set.tile_layout),
+            "tileOffsetAxis": _enum_name(TILESET_OFFSET_AXES, tile_set.tile_offset_axis),
+            "uvClipping": tile_set.uv_clipping,
+            "sources": sources,
+        },
     }
     result.out(JSON_START)
     result.out(JSON.stringify(payload))
@@ -1202,11 +1220,14 @@ func read_theme(result: Result, params) -> Result:
     for type_name in theme.get_type_list():
         types.append(_theme_type_to_json(theme, type_name))
     var payload = {
+        "kind": "theme",
         "path": project_relative(full_path),
-        "defaultFont": _variant_to_json(theme.default_font),
-        "defaultFontSize": theme.default_font_size if theme.has_default_font_size() else null,
-        "defaultBaseScale": theme.default_base_scale if theme.has_default_base_scale() else null,
-        "types": types,
+        "data": {
+            "defaultFont": _variant_to_json(theme.default_font),
+            "defaultFontSize": theme.default_font_size if theme.has_default_font_size() else null,
+            "defaultBaseScale": theme.default_base_scale if theme.has_default_base_scale() else null,
+            "types": types,
+        },
     }
     result.out(JSON_START)
     result.out(JSON.stringify(payload))
@@ -1273,10 +1294,13 @@ func read_tilemap(result: Result, params) -> Result:
     if target.tile_set != null:
         tile_set_path = _source_resource_path(target.tile_set)
     var payload = {
-        "scenePath": project_relative(full_path),
+        "kind": "tilemap",
+        "path": project_relative(full_path),
         "nodePath": node_path,
-        "tileSet": tile_set_path,
-        "usedCells": cells,
+        "data": {
+            "tileSet": tile_set_path,
+            "cells": cells,
+        },
     }
     result.out(JSON_START)
     result.out(JSON.stringify(payload))
