@@ -10,33 +10,19 @@
 # named here (and not selected above) is explicitly disabled in the prompt, so
 # a shape is fully reproducible.
 #
-# `expect_alias` grades a shape with another shape's trajectory expectations.
-# The `*_nobash` shapes pair with their originals to isolate the shell escape
-# hatch: they expose the same tools the expectations name, so they reuse the
-# same `expect` block, and the pass-rate delta measures how often a run leaned
-# on `bash` to reach a result it could not reach through the graded tools.
+# `expect_alias` grades a shape with another shape's trajectory expectations, so
+# a variant that exposes a superset of the tools the expectations name can reuse
+# its parent's `expect` block instead of duplicating it per task.
 shapes:
   full:
     description: All MCP tools plus shell and file-writing built-ins.
     mcp: all
     builtin: [bash, edit, write, read, glob, grep]
 
-  full_nobash:
-    description: Same as full without bash, so scene edits cannot hide in a shell command.
-    mcp: all
-    builtin: [edit, write, read, glob, grep]
-    expect_alias: full
-
   script_escape:
     description: Default built-ins plus every MCP tool except the structured scene tools; mutation must go through run_script or raw edit/write/bash.
     mcp: all-except:add_node,attach_script,create_scene,duplicate_scene_node,modify_scene_node,move_scene_node,remove_scene_node,rename_scene_node
     builtin: [bash, edit, write, read, glob, grep]
-
-  script_escape_nobash:
-    description: Same as script_escape without bash.
-    mcp: all-except:add_node,attach_script,create_scene,duplicate_scene_node,modify_scene_node,move_scene_node,remove_scene_node,rename_scene_node
-    builtin: [edit, write, read, glob, grep]
-    expect_alias: script_escape
 
   read_only:
     description: Read-only control surface.

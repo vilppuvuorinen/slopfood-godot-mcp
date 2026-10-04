@@ -52,6 +52,12 @@ func _run_check(check: Dictionary) -> Dictionary:
 			var actual: Variant = _read_property(node, property)
 			passed = node != null and actual != null and _values_equal(actual, check.get("value"))
 			detail = "%s=%s want=%s" % [property, str(actual), str(check.get("value"))]
+		"resource_property":
+			var resource := _load_resource(String(check.get("path", "")))
+			var property := String(check.get("property", ""))
+			var actual: Variant = _read_property(resource, property)
+			passed = resource != null and actual != null and _values_equal(actual, check.get("value"))
+			detail = "%s=%s want=%s" % [property, str(actual), str(check.get("value"))]
 		"node_script":
 			var node := _node(check)
 			var script: Variant = null if node == null else node.get_script()
@@ -95,10 +101,10 @@ func _node(check: Dictionary) -> Node:
 # A dotted "property" walks nested objects, e.g. "shape.size" reads the embedded
 # Resource on a CollisionShape2D. A missing step yields null, which fails the
 # check.
-func _read_property(node: Node, property: String) -> Variant:
-	if node == null:
+func _read_property(root: Object, property: String) -> Variant:
+	if root == null:
 		return null
-	var current: Variant = node
+	var current: Variant = root
 	for part: String in property.split("."):
 		if current == null or not (current is Object):
 			return null
@@ -124,6 +130,15 @@ func _load_scene(check: Dictionary) -> Node:
 		return (resource as PackedScene).instantiate()
 	if resource is Node:
 		return resource as Node
+	return null
+
+
+func _load_resource(path: String) -> Object:
+	if path == "" or not ResourceLoader.exists(path):
+		return null
+	var resource: Variant = load(path)
+	if resource is Object:
+		return resource as Object
 	return null
 
 

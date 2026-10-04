@@ -30,6 +30,7 @@ KNOWN_CHECK_KINDS = {
     "node_not_exists",
     "node_type",
     "node_property",
+    "resource_property",
     "node_script",
     "scene_root_type",
     "file_exists",
@@ -67,11 +68,11 @@ def test_resolve_shape_rejects_unknown():
 def test_expect_parsing_and_defaults():
     task = config.Task.from_yaml(EVALS_DIR / "tasks" / "add_node.yaml")
     assert task.expect["full"].used_all == ("godot_add_node",)
-    assert task.expect["full"].used_none == ("edit", "write")
+    assert task.expect["full"].used_none == ()
     assert task.expect["script_escape"].used_all == ("godot_run_script",)
     read_answer = config.Task.from_yaml(EVALS_DIR / "tasks" / "read_answer.yaml")
     assert read_answer.expect["full"].used_any == ("godot_read", "godot_read_node")
-    assert read_answer.expect["full"].used_none == ("edit", "write")
+    assert read_answer.expect["full"].used_none == ()
 
 
 def test_entity_scoped_expect_parsing():
@@ -79,7 +80,10 @@ def test_entity_scoped_expect_parsing():
     assert task.expect["full"].file_edit_any == ("**/project.godot",)
     assert task.expect["full"].used_none == ("godot_run_script",)
     spawn = config.Task.from_yaml(EVALS_DIR / "tasks" / "spawn_pickup.yaml")
-    assert spawn.expect["full"].file_edit_none == ("**/main.tscn",)
+    assert spawn.expect["full"].file_edit_any == ("**/pickup.gd",)
+    assert spawn.expect["full"].file_edit_none == ()
+    binary = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_resource.yaml")
+    assert binary.expect["full"].file_edit_none == ("**/score.res",)
 
 
 def test_trajectory_checks_pass_and_fail():
@@ -93,7 +97,11 @@ def test_trajectory_checks_pass_and_fail():
     assert all(result.passed for result in passing)
     failing = runner._trajectory_checks(task, shape, ["godot_run_script", "edit"])
     assert not all(result.passed for result in failing)
-    assert any(result.id.endswith("used_none:edit") for result in failing if not result.passed)
+    assert any(
+        result.id.endswith("used_all:godot_rename_scene_node")
+        for result in failing
+        if not result.passed
+    )
 
 
 def test_file_edit_checks_are_entity_scoped():
@@ -105,19 +113,27 @@ def test_file_edit_checks_are_entity_scoped():
     ]
     checks = runner._trajectory_checks(task, shape, ["write", "godot_attach_script"], call_log)
     assert all(result.passed for result in checks)
-    # Editing the scene by hand fails the entity check even though it is not the
-    # named edit tool's own target.
+    # A run that never writes the file-editable script fails file_edit_any, even
+    # if it touched the scene.
     bad = runner._trajectory_checks(
         task,
         shape,
         ["write", "godot_attach_script"],
         [{"name": "write", "path": "res://main.tscn", "args": {}}],
     )
-    assert any(
-        not result.passed and "main.tscn" in result.detail for result in bad
-    )
     assert not any(
         result.id.endswith("file_edit_any:**/player.gd") and result.passed for result in bad
+    )
+    # A file with no text form is protected by file_edit_none.
+    binary = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_scene.yaml")
+    bad_binary = runner._trajectory_checks(
+        binary,
+        shape,
+        ["write", "godot_modify_scene_node"],
+        [{"name": "write", "path": "res://level.scn", "args": {}}],
+    )
+    assert any(
+        not result.passed and "level.scn" in result.detail for result in bad_binary
     )
 
 
@@ -142,7 +158,7 @@ def test_file_edit_targets_normalizes_res_prefix():
 
 def test_expect_alias_resolution():
     task = config.Task.from_yaml(EVALS_DIR / "tasks" / "project_setting.yaml")
-    aliased = config.Shape(name="full_nobash", description="", tools={}, expect_alias="full")
+    aliased = config.Shape(name="full-variant", description="", tools={}, expect_alias="full")
     assert config.resolve_expectation(task, aliased) is task.expect["full"]
     direct = config.Shape(name="full", description="", tools={})
     assert config.resolve_expectation(task, direct) is task.expect["full"]
@@ -361,9 +377,7 @@ def test_default_shapes_resolve_against_registered_tools():
     )
     assert set(shapes) == {
         "full",
-        "full_nobash",
         "script_escape",
-        "script_escape_nobash",
         "read_only",
     }
     assert shapes["full"].tools["bash"] is True
@@ -374,14 +388,6 @@ def test_default_shapes_resolve_against_registered_tools():
         assert shapes["full"].tools[name] is True
     for name in ("bash", "edit", "write"):
         assert shapes["read_only"].tools[name] is False
-    # The *_nobash variants differ from their parent only by the shell tool, and
-    # grade with the parent's expectations.
-    assert shapes["full_nobash"].tools["bash"] is False
-    assert shapes["full_nobash"].tools["godot_add_node"] is True
-    assert shapes["full_nobash"].expect_alias == "full"
-    assert shapes["script_escape_nobash"].tools["bash"] is False
-    assert shapes["script_escape_nobash"].tools["godot_run_script"] is True
-    assert shapes["script_escape_nobash"].expect_alias == "script_escape"
 
 
 def test_shapes_validate_expectations(tmp_path):

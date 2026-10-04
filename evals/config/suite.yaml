@@ -16,9 +16,7 @@ server_max_runs: 40
 
 shapes:
   - full
-  - full_nobash
   - script_escape
-  - script_escape_nobash
   - read_only
 
 tasks: all

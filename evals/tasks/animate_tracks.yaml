@@ -59,10 +59,8 @@ checks:
 expect:
   full:
     used_all: [godot_run_script]
-    used_none: [edit, write]
   script_escape:
     used_all: [godot_run_script]
-    used_none: [edit, write]
 rubric: |
   main.tscn has a direct child AnimationPlayer named Anim with three animations:
   "bob" (1.5s) tracking Sprite:position from (0, 0) to (0, -20), "pop" (0.5s)

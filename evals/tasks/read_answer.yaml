@@ -17,7 +17,6 @@ checks:
 expect:
   full:
     used_any: [godot_read, godot_read_node]
-    used_none: [edit, write]
   read_only:
     used_any: [godot_read, godot_read_node]
 rubric: |

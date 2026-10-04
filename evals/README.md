@@ -104,23 +104,29 @@ checks:
 expect:
   full:
     used_all: [godot_modify_scene_node]
-    used_none: [edit, write]
   script_escape:
     used_all: [godot_run_script]
 rubric: |
   The Sprite node keeps its type and position; only z_index changes.
 ```
 
+The `used_all` assertion requires the intended tool to run; it does not forbid
+also touching the `.tscn` as text, since a text scene stays valid however it is
+produced. Only non-text-serializable files get a `file_edit_none` ban (see
+`binary_resource` and `binary_scene`).
+
 A fixture normally ships a `project.godot`. Tasks that create the project
 themselves (e.g. `create_project`) set `bootstraps_project: true`; their fixture
 is then deliberately not a Godot project.
 
 Supported checks: `node_exists`, `node_not_exists`, `node_type`, `node_property`,
-`node_script`, `scene_root_type`, `file_exists`, `file_contains`,
-`script_has_method`, `project_setting`, `file_unchanged`, and `answer_contains`
-(the last two are evaluated in Python; `file_unchanged` compares the graded
-project against the fixture). A `node_property` `property` may be dotted to
-reach nested objects, e.g. `shape.size` on a `CollisionShape2D`.
+`resource_property`, `node_script`, `scene_root_type`, `file_exists`,
+`file_contains`, `script_has_method`, `project_setting`, `file_unchanged`, and
+`answer_contains` (the last two are evaluated in Python; `file_unchanged`
+compares the graded project against the fixture). A `node_property` or
+`resource_property` `property` may be dotted to reach nested objects, e.g.
+`shape.size` on a `CollisionShape2D`. `resource_property` loads an arbitrary
+`Resource` (not just a scene) and reads a property; both are evaluated in Godot.
 
 ### Partial credit for composite tasks
 
@@ -162,29 +168,33 @@ checks and part of pass/fail:
 
 - `used_all` — every listed tool must appear in the trajectory.
 - `used_any` — at least one of the listed tools must appear.
-- `used_none` — none of the listed tools may appear (e.g. `bash`/`edit`, to
-  catch a model that shells out to rewrite `.tscn` text instead of using the
-  structured tool).
+- `used_none` — none of the listed tools may appear (e.g. `godot_run_script`,
+  to keep a file-editable entity out of the script escape hatch).
 
 Tool-name checks say *which* tools ran, but not *what* they touched, so a
-trajectory that legitimately writes a script and illegitimately rewrites a scene
-both trip a blanket `used_none: [write]`. Two entity-scoped checks resolve that;
-they match against the path each `edit`/`write` call targeted (normalised both
-with and without the `res://` prefix):
+trajectory that legitimately writes a script and unnecessarily hand-writes a
+scene both trip a blanket `used_none: [write]`. Two entity-scoped checks resolve
+that; they match against the path each `edit`/`write` call targeted (normalised
+both with and without the `res://` prefix):
 
 - `file_edit_none` — no `edit`/`write` call may target a matching path. Use it
-  to protect a tool-editable entity (e.g. `["**/main.tscn"]`).
+  to protect a file that has no text form (a binary `.res`/`.scn`): rewriting
+  its bytes corrupts it, so it must go through a Godot process.
 - `file_edit_any` — at least one `edit`/`write` call must target a matching
   path. Use it to positively require that a file-editable entity (a `.gd`
   script, `project.godot`) is edited as a file.
 
-The split the suite measures: scenes and resources (`.tscn`/`.tres`) are
-tool-editable and must go through the `godot_*` tools; scripts, `project.godot`
-and importable source assets are file-editable and should go through `edit`/
-`write`. A task asserts both sides — `used_none: [godot_run_script]` keeps a
-file-editable entity out of `run_script`, while `file_edit_none` keeps a
-tool-editable entity out of the file tools. This catches the case a name-only
-`used_none` misses: a scene rewritten through `bash`.
+The split the suite measures: entities with no text form (binary `.res`/`.scn`)
+must be mutated through a Godot process — a `godot_*` tool or `run_script` —
+because a text edit corrupts them; scripts, `project.godot` and importable
+source assets are file-editable and should go through `edit`/`write`. This is
+the only place the no-hand-edit rule is enforced (`binary_resource` and
+`binary_scene`; see below). Text-serialized scenes and resources (`.tscn`/
+`.tres`) *can* be edited as text, so tasks no longer forbid it: instead each
+asserts the intended tool with `used_all` (`godot_add_node`, `run_script`, …),
+and the artifact checks decide whether the result is right regardless of route.
+The inverse direction is still asserted positively by `file_edit_any` and, where
+worth pinning, negatively by `used_none: [godot_run_script]`.
 
 Tool names are the fully-qualified opencode names: MCP tools carry the server
 prefix (`godot_add_node`, `godot_run_script`), built-ins do not (`edit`,
@@ -195,8 +205,8 @@ way, since it would pass vacuously.
 
 The call log (tool name, target path and trimmed arguments) is captured per run
 and handed to the judge, which is asked to flag edits that violate the legality
-rule — including a `bash` command that rewrites a `.tscn`, which the name-only
-checks cannot see. The judge verdict is reported, not enforced.
+rule — including a `bash` command that rewrites a binary `.res`/`.scn`, which
+the name-only checks cannot see. The judge verdict is reported, not enforced.
 
 ## Adding a toolset shape
 
@@ -207,12 +217,9 @@ A shape may also set `reps` to override the suite default (e.g. `read_only: 1`).
 A shape's `reps` takes precedence over `--reps`; `--reps` only overrides shapes
 that do not set their own.
 
-`full_nobash` and `script_escape_nobash` mirror their parents with the shell
-tool removed. They are the control for the `bash` escape hatch: shell commands
-can rewrite a `.tscn` without calling `edit`/`write`, so removing `bash`
-isolates how much of the score depends on that route. They expose the same
-tools the expectations name, so they grade with their parent's `expect` block
-via `expect_alias` rather than duplicating it per task.
+A shape may reuse another shape's trajectory expectations with `expect_alias`,
+so a variant that exposes a superset of the tools an `expect` block names does
+not have to duplicate it per task.
 
 ## Interpreting results
 

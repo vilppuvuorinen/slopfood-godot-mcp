@@ -1,0 +1,30 @@
+id: binary_scene
+description: Edit a binary packed scene that cannot be edited as text.
+fixture: binary_scene
+prompt: |
+  In res://level.scn, set the position of the node Level/Marker to
+  Vector2(64, 32). Keep the scene's binary format and do not rename or remove
+  any nodes.
+checks:
+  - kind: node_exists
+    scene: res://level.scn
+    path: Marker
+  - kind: node_property
+    scene: res://level.scn
+    path: Marker
+    property: position
+    value: Vector2(64, 32)
+expect:
+  # A binary .scn has no text form: edit/write would corrupt it, so it must be
+  # mutated through a Godot process (the structured scene tool, or run_script
+  # where that tool is not exposed).
+  full:
+    used_all: [godot_modify_scene_node]
+    file_edit_none: ["**/level.scn"]
+  script_escape:
+    used_all: [godot_run_script]
+    file_edit_none: ["**/level.scn"]
+rubric: |
+  res://level.scn still loads as a binary PackedScene with root Level (Node2D)
+  and child Marker (Sprite2D) at (64, 32).
+timeout_s: 300

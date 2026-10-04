@@ -18,16 +18,12 @@ checks:
     property: shape.size
     value: Vector2(10, 10)
 expect:
-  # No structured property tool can split a shared sub-resource; both shapes
-  # mutate the scene through run_script. The scene must never be hand-edited, so
-  # this holds even where edit/write and bash are available.
+  # No structured property tool can split a shared sub-resource, so both shapes
+  # mutate the scene through run_script.
   full:
-    file_edit_none: ["**/main.tscn"]
-    used_none: [edit, write]
+    used_all: [godot_run_script]
   script_escape:
     used_all: [godot_run_script]
-    file_edit_none: ["**/main.tscn"]
-    used_none: [edit, write]
 rubric: |
   WallA's CollisionShape2D uses its own RectangleShape2D of size (20, 20).
   WallB's CollisionShape2D is unchanged at (10, 10): the edit must not leak

@@ -18,10 +18,8 @@ checks:
 expect:
   full:
     used_all: [godot_create_scene]
-    used_none: [edit, write]
   script_escape:
     used_all: [godot_run_script]
-    used_none: [edit, write]
 rubric: |
   res://levels/level1.tscn exists and its root node is a Node2D named Level1.
 timeout_s: 240

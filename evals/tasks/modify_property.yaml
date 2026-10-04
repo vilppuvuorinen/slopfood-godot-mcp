@@ -18,10 +18,8 @@ checks:
 expect:
   full:
     used_all: [godot_modify_scene_node]
-    used_none: [edit, write]
   script_escape:
     used_all: [godot_run_script]
-    used_none: [edit, write]
 rubric: |
   Root/Sprite keeps its type and position; only z_index and rotation change as
   requested. Rotation is approximately pi/2 radians.

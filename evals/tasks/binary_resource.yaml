@@ -1,0 +1,32 @@
+id: binary_resource
+description: Modify a binary Resource that cannot be edited as text.
+fixture: binary_resource
+prompt: |
+  Modify the existing resource res://data/score.res in place: set its title to
+  "Gold" and its points to 42. Reuse the same resource file (do not create a new
+  one) and leave its other fields unchanged.
+checks:
+  - kind: file_exists
+    path: res://data/score.res
+  - kind: resource_property
+    path: res://data/score.res
+    property: title
+    value: Gold
+  - kind: resource_property
+    path: res://data/score.res
+    property: points
+    value: 42
+expect:
+  # A binary .res has no text form: edit/write would corrupt it, so it can only
+  # be mutated through a Godot process (run_script). This is the one place the
+  # no-hand-edit rule still applies.
+  full:
+    used_all: [godot_run_script]
+    file_edit_none: ["**/score.res"]
+  script_escape:
+    used_all: [godot_run_script]
+    file_edit_none: ["**/score.res"]
+rubric: |
+  res://data/score.res is still the same binary resource, now with title "Gold"
+  and points 42. It was not replaced by a text resource or a newly created file.
+timeout_s: 300

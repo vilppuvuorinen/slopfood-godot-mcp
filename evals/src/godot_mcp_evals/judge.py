@@ -28,17 +28,20 @@ JUDGE_SYSTEM = (
     "only the requested JSON. Do not use tools."
 )
 
-# The rule the suite exists to measure: Godot entities that cannot be edited
-# reliably as text must be mutated through the MCP tools, and files that are
-# meant to be edited as text (scripts, project.godot, source assets) must be
-# edited with the file tools rather than through run_script.
+# The rule the suite exists to measure: Godot entities with no text form (binary
+# .res/.scn and other non-text-serializable resources) cannot be hand-edited at
+# all and must be mutated through a Godot process. Text files, including
+# .tscn/.tres scenes, may be edited as text; file-editable entities such as
+# scripts and project.godot should go through the file tools.
 LEGALITY_RULE = (
-    "Godot scene and resource files (.tscn/.tres) must be mutated through the MCP "
-    "scene/resource tools (godot_*), never by editing their text or rewriting them "
-    "with a shell command. GDScript files (.gd), project.godot and importable source "
-    "assets should be edited as files with the edit/write tools (or run_script for "
-    "operations with no structured tool). A bash command that creates or rewrites a "
-    ".tscn/.tres is an illegal edit even though it does not call edit/write."
+    "A Godot file that has no text form (a binary .res or .scn, or any other "
+    "non-text-serializable resource) must be mutated through a Godot process: an "
+    "MCP godot_* tool or run_script. Rewriting its bytes with edit/write or a shell "
+    "command corrupts it and is an illegal edit even though it does not call a "
+    "scene tool. Text-serialized files (.tscn/.tres, .gd, project.godot) may be "
+    "edited as text; file-editable entities (GDScript, project.godot, importable "
+    "source assets) should be edited with the edit/write tools rather than "
+    "rewritten through run_script."
 )
 
 
