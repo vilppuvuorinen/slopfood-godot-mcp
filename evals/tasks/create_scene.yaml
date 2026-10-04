@@ -15,9 +15,6 @@ checks:
     path: "."
     property: name
     value: Level1
-expect:
-  full:
-    used_all: [godot_run_script]
 rubric: |
   res://levels/level1.tscn exists and its root node is a Node2D named Level1.
 timeout_s: 240

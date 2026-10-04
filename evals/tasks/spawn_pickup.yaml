@@ -63,12 +63,6 @@ targets:
     form: text
   - path: res://pickup.gd
     form: text
-expect:
-  # pickup.gd is file-editable; the text .tscn itself is not hand-edit
-  # restricted. The scene edit goes through run_script.
-  full:
-    used_all: [godot_run_script]
-    file_edit_any: ["**/pickup.gd"]
 rubric: |
   res://pickup.gd extends Area2D, declares signal collected, and defines
   collect(). main.tscn has a root-level Area2D named Pickup at (300, 150) with

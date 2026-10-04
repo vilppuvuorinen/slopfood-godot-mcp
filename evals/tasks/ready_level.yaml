@@ -64,9 +64,6 @@ targets:
     form: text
   - path: res://project.godot
     form: text
-expect:
-  full:
-    used_all: [godot_run_script]
 rubric: |
   level.tscn's former A is now Hero at (50, 50), formerly-B now sits under
   Hero, Enemy has a CharacterBody2D sibling Enemy2, Hero has a Camera2D child

@@ -7,9 +7,6 @@ prompt: |
 checks:
   - kind: file_exists
     path: res://exported/library.res
-expect:
-  full:
-    used_all: [godot_export_mesh_library]
 rubric: |
   res://exported/library.res exists and is a MeshLibrary built from the meshes
   in main.tscn.

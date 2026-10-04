@@ -14,9 +14,6 @@ checks:
   - kind: project_setting
     key: application/config/name
     value: Eval Forge
-expect:
-  full:
-    used_all: [godot_create_project, godot_validate_project]
 rubric: |
   project.godot exists and declares application/config/name = "Eval Forge".
   The project validates without parse errors.

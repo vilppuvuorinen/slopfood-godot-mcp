@@ -11,12 +11,6 @@ checks:
 targets:
   - path: res://project.godot
     form: text
-expect:
-  # project.godot is a file-editable entity, so it is edited with a file tool;
-  # the check rejects a run that reaches for run_script instead.
-  full:
-    file_edit_any: ["**/project.godot"]
-    used_none: [godot_run_script]
 rubric: |
   project.godot declares application/config/name = "Evals Suite". The change was
   made in a way that keeps project.godot valid.

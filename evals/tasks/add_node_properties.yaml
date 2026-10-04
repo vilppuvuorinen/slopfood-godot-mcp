@@ -20,9 +20,6 @@ checks:
     path: Icon
     property: z_index
     value: 3
-expect:
-  full:
-    used_all: [godot_run_script]
 rubric: |
   main.tscn has a direct child of the root named Icon of type Sprite2D with
   position (100, 50) and z_index 3, created with its properties already set.

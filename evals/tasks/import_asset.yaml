@@ -17,9 +17,6 @@ checks:
   - kind: file_contains
     path: res://icon.svg.import
     value: 'uid="uid://'
-expect:
-  full:
-    used_all: [godot_rescan_project]
 rubric: |
   res://icon.svg exists and was imported: res://icon.svg.import exists, names
   the texture importer, and carries a uid:// resource UID.

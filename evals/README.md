@@ -101,20 +101,15 @@ checks:
     path: Sprite
     property: z_index
     value: 5
-expect:
-  full:
-    used_all: [godot_run_script]
 rubric: |
   The Sprite node keeps its type and position; only z_index changes.
 ```
 
 Scene and node mutation has no dedicated tool: it goes through
-`godot_run_script`, so `full` pins it where the intent is to observe
-the scripted route. A text-serializable `.tscn` may equally be produced by a
-correct text edit, so the artifact checks are the verdict; only
-non-text-serializable files get a `file_edit_none` ban (see `binary_resource`
-and `binary_scene`), which is what makes `godot_run_script` genuinely required
-there.
+`godot_run_script` (or an equivalent text edit). The suite mandates no route,
+so the artifact checks are the verdict; a text-serializable `.tscn` may be
+produced either way. Only non-text-serializable files get a `file_edit_none`
+ban (see `binary_resource` and `binary_scene`).
 
 A fixture normally ships a `project.godot`. Tasks that create the project
 themselves (e.g. `create_project`) set `bootstraps_project: true`; their fixture
@@ -175,76 +170,59 @@ checks:
   the score is. Use it for load-bearing checks (the scene exists, the root
   type) so a run cannot pass by skipping the point of the task.
 
-Trajectory expectations (`used_all`/`used_none`/`used_any`) are always
-*required*: partial credit is for the artifact, never for tool choice, since
-tool choice is the signal the suite exists to measure. The report shows the
-mean weighted score per shape and task alongside pass@1.
+Trajectory gates are always *required*: partial credit is for the artifact,
+never for the route. The only gate the suite keeps is the editability invariant
+below. The report shows the mean weighted score per shape and task alongside
+pass@1.
 
 ### Trajectory expectations
 
-`expect` maps a shape name to tool-use assertions, graded alongside the artifact
-checks and part of pass/fail:
-
-- `used_all` — every listed tool must appear in the trajectory.
-- `used_any` — at least one of the listed tools must appear.
-- `used_none` — none of the listed tools may appear (e.g. `godot_run_script`,
-  to keep a file-editable entity out of the script escape hatch).
-
-Tool-name checks say *which* tools ran, but not *what* they touched, so a
-trajectory that legitimately writes a script and unnecessarily hand-writes a
-scene both trip a blanket `used_none: [write]`. Two entity-scoped checks resolve
-that; they match against the path each `edit`/`write` call targeted (normalised
-both with and without the `res://` prefix):
+`expect` maps a shape name to trajectory assertions, graded alongside the
+artifact checks and part of pass/fail. The suite mandates no tool call: any
+route that produces a correct artifact is accepted, and the deterministic
+checks are the verdict. The one invariant worth gating is editability, so the
+only supported key is:
 
 - `file_edit_none` — no `edit`/`write` call may target a matching path. Use it
   to protect a file that has no text form (a binary `.res`/`.scn`): rewriting
-  its bytes corrupts it, so it must go through a Godot process.
-- `file_edit_any` — at least one `edit`/`write` call must target a matching
-  path. Use it to positively require that a file-editable entity (a `.gd`
-  script, `project.godot`) is edited as a file.
+  its bytes corrupts it, so it must go through a Godot process. Paths are
+  normalised both with and without the `res://` prefix.
 
-The split the suite measures: entities with no text form (binary `.res`/`.scn`)
-must be mutated through `run_script`, because a text edit corrupts them;
-scripts, `project.godot` and importable source assets are file-editable and
-should go through `edit`/`write`. This is the only place the no-hand-edit rule
-is enforced (`binary_resource` and `binary_scene`; see below). Text-serialized
-scenes and resources (`.tscn`/`.tres`) *can* be edited as text, so the suite
-does not forbid it: the artifact checks decide whether the result is right
-regardless of route. `full` pins `godot_run_script` where the intent
-is to observe the scripted route (`used_all`); where a text edit is equally
-valid it asserts no tool. `godot_run_script` is also required where a binary
-target leaves no text route (`binary_resource`, `binary_scene`). The inverse
-direction is still asserted positively by `file_edit_any` and, where worth
-pinning, negatively by `used_none: [godot_run_script]`.
+Entities with no text form (binary `.res`/`.scn`) can only be mutated through a
+Godot process, so a `file_edit_none` on them is what makes the no-hand-edit rule
+enforceable (`binary_resource` and `binary_scene`). Text-serialized scenes and
+resources (`.tscn`/`.tres`), scripts and `project.godot` *can* be produced
+either way, so the suite does not gate them: the artifact checks decide whether
+the result is right regardless of route.
 
 Tool names are the fully-qualified opencode names: MCP tools carry the server
 prefix (`godot_run_script`, `godot_attach_script`), built-ins do not (`edit`,
-`write`). A required tool that the shape does not expose is a config error and
-fails the run loudly, so expectations cannot silently become unsatisfiable; an
-entity-scoped check in a shape with no file-editing tool is rejected the same
-way, since it would pass vacuously.
+`write`). An entity-scoped check in a shape with no file-editing tool is a
+config error and fails the run loudly, since it would pass vacuously. Removed
+gates (`used_all`/`used_any`/`used_none` and `file_edit_any`) are rejected at
+parse time rather than silently ignored.
 
 ### Target classification
 
-A task may declare each graded entity's form so the route gate can be checked
-against it:
+A task may declare each graded entity's form so the editability gate can be
+checked against it:
 
 ```yaml
 targets:
   - path: res://level.scn
-    form: opaque      # binary: no text route; file_edit_none + a load is the gate
+    form: opaque      # binary: no text route; file_edit_none is the gate
   - path: res://scripts/player.gd
-    form: text        # edit/write is the intended route
+    form: text        # text form: either route is fine
   - path: res://main.tscn
-    form: text        # either route is fine; the artifact checks decide
+    form: text        # text form: either route is fine; the artifact checks decide
 ```
 
-`opaque` targets (binary `.res`/`.scn`) have no text form, so
-`file_edit_any` on one is a config error and `file_edit_none` on one is the
-point. `text` targets (`.tscn`/`.tres`/`.gd`/`project.godot`) can be produced
-either way, so `file_edit_none` on one is rejected, and gating one on a tool
-name reports a warning (the artifact checks are the verdict; the route is a
-reported signal). Tasks without a `targets` block get no such validation.
+`opaque` targets (binary `.res`/`.scn`) have no text form, so a
+`file_edit_none` on one is the point. `text` targets
+(`.tscn`/`.tres`/`.gd`/`project.godot`) can be produced either way, so a
+`file_edit_none` on one is a config error (the artifact checks decide
+text-serializable files). Tasks without a `targets` block get no such
+validation.
 
 The call log (tool name, target path and trimmed arguments) is captured per run
 and handed to the judge, which is asked to flag edits that violate the legality
@@ -261,8 +239,7 @@ A shape's `reps` takes precedence over `--reps`; `--reps` only overrides shapes
 that do not set their own.
 
 A shape may reuse another shape's trajectory expectations with `expect_alias`,
-so a variant that exposes a superset of the tools an `expect` block names does
-not have to duplicate it per task.
+so a variant does not have to duplicate a task's `file_edit_none` gate.
 
 The shipped shapes are `full` (every MCP tool plus the file/shell built-ins) and
 `no_mcp` (the same built-ins with no MCP tools at all). `no_mcp` is the baseline

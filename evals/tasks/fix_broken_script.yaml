@@ -12,13 +12,6 @@ checks:
   - kind: file_contains
     path: res://player.gd
     value: extends Node
-expect:
-  # A broken GDScript is a file-editable entity: repair it as a file and use the
-  # MCP only to validate, rather than rewriting the script through run_script.
-  full:
-    used_all: [godot_validate_scripts]
-    file_edit_any: ["**/player.gd"]
-    used_none: [godot_run_script]
 rubric: |
   res://player.gd parses, extends Node, and exposes greet() returning "hi";
   validate_scripts reports every project script as valid.

@@ -100,7 +100,7 @@ def run_suite(options: RunOptions, console: Console | None = None) -> list[dict[
 
     _validate_selection(options, shapes)
     _validate_expectations(options, shapes)
-    _validate_targets(options, shapes, console)
+    _validate_targets(options, shapes)
 
     reps_by_shape = {
         name: effective_reps(shapes[name], options.reps, options.suite.reps)
@@ -285,10 +285,9 @@ def _validate_selection(options: RunOptions, shapes: dict[str, Shape]) -> None:
 def _validate_expectations(options: RunOptions, shapes: dict[str, Shape]) -> None:
     """Fail loudly when a task's trajectory expectation can never be met.
 
-    A required tool that the shape does not expose is a config bug: the run
-    would always fail for a reason unrelated to model behaviour. The same goes
-    for an entity-scoped check in a shape with no file-editing tool (the check
-    would be vacuously true and silently measure nothing).
+    The suite mandates no tool calls, so the only expectation is the editability
+    gate. ``file_edit_none`` in a shape with no file-editing tool would be
+    vacuously true and silently measure nothing, so reject it.
     """
     for name, shape in shapes.items():
         if shape.expect_alias and shape.expect_alias not in shapes:
@@ -309,32 +308,25 @@ def _validate_expectations(options: RunOptions, shapes: dict[str, Shape]) -> Non
             expectation = resolve_expectation(task, shape)
             if expectation is None:
                 continue
-            for tool in (*expectation.used_any, *expectation.used_all):
-                if not shape.tools.get(tool, False):
-                    raise ValueError(
-                        f"task {task_id!r} expects {tool!r} in shape {shape_name!r}, "
-                        "but that tool is not enabled"
-                    )
-            if expectation.file_edit_none or expectation.file_edit_any:
-                if not any(shape.tools.get(tool, False) for tool in FILE_EDIT_TOOLS):
-                    raise ValueError(
-                        f"task {task_id!r} uses file_edit_* in shape {shape_name!r}, "
-                        f"but none of {list(FILE_EDIT_TOOLS)} are enabled"
-                    )
+            if expectation.file_edit_none and not any(
+                shape.tools.get(tool, False) for tool in FILE_EDIT_TOOLS
+            ):
+                raise ValueError(
+                    f"task {task_id!r} uses file_edit_none in shape {shape_name!r}, "
+                    f"but none of {list(FILE_EDIT_TOOLS)} are enabled"
+                )
 
 
 def _validate_targets(
     options: RunOptions,
     shapes: dict[str, Shape],
-    console: Console | None = None,
 ) -> None:
-    """Check that trajectory gates agree with each target's ``form``.
+    """Check that the editability gate agrees with each target's ``form``.
 
     An ``opaque`` target (binary ``.res``/``.scn``) has no text route, so
-    requiring a hand edit (``file_edit_any``) is unsatisfiable and forbidding one
-    is the whole point. A ``text`` target can be produced either way, so gating
-    it on a specific tool name is a policy the suite no longer enforces: warn
-    rather than fail, since the artifact checks are the verdict.
+    ``file_edit_none`` on one is the whole point. A ``text`` target can be
+    produced either way, so forbidding a hand edit of one is a config error: the
+    artifact checks decide text-serializable files.
     """
     for task_id in options.selected_tasks:
         task = options.tasks[task_id]
@@ -345,17 +337,8 @@ def _validate_targets(
             expectation = resolve_expectation(task, shape)
             if expectation is None:
                 continue
-            text_paths: list[str] = []
             for target in task.targets:
                 aliases = _target_aliases(target.path)
-                for pattern in expectation.file_edit_any:
-                    if _pattern_hits(pattern, aliases):
-                        if target.form == "opaque":
-                            raise ValueError(
-                                f"task {task_id!r} shape {shape_name!r} requires a hand "
-                                f"edit (file_edit_any {pattern!r}) of opaque target "
-                                f"{target.path!r}; binary files have no text route"
-                            )
                 for pattern in expectation.file_edit_none:
                     if _pattern_hits(pattern, aliases) and target.form == "text":
                         raise ValueError(
@@ -363,16 +346,6 @@ def _validate_targets(
                             f"(file_edit_none {pattern!r}) of text target {target.path!r}; "
                             "the artifact checks decide text-serializable files"
                         )
-                if target.form == "text":
-                    text_paths.append(target.path)
-            if text_paths and console is not None:
-                gated = set(expectation.used_all) | set(expectation.used_any)
-                if gated:
-                    console.print(
-                        f"[yellow]warning:[/] task {task_id!r} shape {shape_name!r} "
-                        f"gates text target(s) {text_paths} on tool(s) {sorted(gated)}; "
-                        "the artifact checks are the verdict"
-                    )
 
 
 def _target_aliases(path: str) -> set[str]:
@@ -479,7 +452,7 @@ def _run_once(
         timeout_s=max(120, timeout_s),
     )
     check_results.extend(
-        _trajectory_checks(task, shape, run_metrics["tool_names"], run_metrics["call_log"])
+        _trajectory_checks(task, shape, run_metrics["call_log"])
     )
     threshold = task.min_score if task.min_score is not None else 1.0
     score = _weighted_score(check_results)
@@ -544,59 +517,20 @@ def _weighted_score(check_results: list[verifier.CheckResult]) -> float:
 def _trajectory_checks(
     task: Task,
     shape: Shape,
-    tool_names: list[str],
     call_log: list[dict[str, Any]] | None = None,
 ) -> list[verifier.CheckResult]:
-    """Grade which tools the agent reached for, per the task's shape expectation.
+    """Grade the one trajectory invariant the suite still enforces.
 
-    Trajectory checks are ``required``: a composite task may earn partial credit
-    on its artifact checks, but tool choice is the signal the suite exists to
-    measure, so it always gates the pass/fail verdict.
-
-    Tool-name checks (``used_*``) say *which* tools ran. Entity-scoped checks
-    (``file_edit_*``) additionally say *what* a file-editing tool targeted, so a
-    scene rewrite can be told apart from a script edit within one trajectory.
+    No tool call is mandatory: any route that produces a correct artifact is
+    accepted, and the deterministic checks are the verdict. The sole gate is
+    that a ``file_edit_none`` target with no text form (a binary ``.res``/``.scn``)
+    must not be rewritten by a file-editing built-in, which would corrupt it.
     """
     expectation = resolve_expectation(task, shape)
     if expectation is None:
         return []
-    used = set(tool_names)
     checks: list[verifier.CheckResult] = []
     prefix = f"{task.id}:trajectory:{shape.name}"
-
-    for tool in expectation.used_all:
-        checks.append(
-            verifier.CheckResult(
-                id=f"{prefix}:used_all:{tool}",
-                kind="tool_used",
-                passed=tool in used,
-                detail=f"{tool} {'used' if tool in used else 'not used'}",
-                required=True,
-            )
-        )
-    if expectation.used_any:
-        wanted = sorted(expectation.used_any)
-        hit = sorted(used.intersection(wanted))
-        checks.append(
-            verifier.CheckResult(
-                id=f"{prefix}:used_any",
-                kind="tool_used",
-                passed=bool(hit),
-                detail=f"wanted any of {wanted}; used {hit}",
-                required=True,
-            )
-        )
-    for tool in expectation.used_none:
-        checks.append(
-            verifier.CheckResult(
-                id=f"{prefix}:used_none:{tool}",
-                kind="tool_not_used",
-                passed=tool not in used,
-                detail=f"{tool} {'used' if tool in used else 'not used'}",
-                required=True,
-            )
-        )
-
     edited = _file_edit_targets(call_log or [])
     for pattern in expectation.file_edit_none:
         hits = sorted(path for path in edited if fnmatch.fnmatch(path, pattern))
@@ -609,21 +543,6 @@ def _trajectory_checks(
                     f"{pattern} untouched by {list(FILE_EDIT_TOOLS)}"
                     if not hits
                     else f"{pattern} edited as a file: {hits}"
-                ),
-                required=True,
-            )
-        )
-    for pattern in expectation.file_edit_any:
-        hits = sorted(path for path in edited if fnmatch.fnmatch(path, pattern))
-        checks.append(
-            verifier.CheckResult(
-                id=f"{prefix}:file_edit_any:{pattern}",
-                kind="file_edit",
-                passed=bool(hits),
-                detail=(
-                    f"{pattern} edited as a file: {hits}"
-                    if hits
-                    else f"{pattern} not edited by {list(FILE_EDIT_TOOLS)}"
                 ),
                 required=True,
             )

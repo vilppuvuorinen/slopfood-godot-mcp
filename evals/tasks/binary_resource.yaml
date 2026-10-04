@@ -21,11 +21,9 @@ targets:
   - path: res://data/score.res
     form: opaque
 expect:
-  # A binary .res has no text form: edit/write would corrupt it, so it can only
-  # be mutated through a Godot process (run_script). This is the one place the
-  # no-hand-edit rule still applies.
+  # A binary .res has no text form: edit/write would corrupt it, so it must be
+  # mutated through a Godot process. This is the one route gate the suite keeps.
   full:
-    used_all: [godot_run_script]
     file_edit_none: ["**/score.res"]
 rubric: |
   res://data/score.res is still the same binary resource, now with title "Gold"

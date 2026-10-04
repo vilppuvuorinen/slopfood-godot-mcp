@@ -19,9 +19,6 @@ checks:
     scene: res://main.tscn
     type: RectangleShape2D
     max: 0
-expect:
-  full:
-    used_all: [godot_run_script]
 rubric: |
   Enemy1 remains, a sibling Enemy1Copy exists, and Enemy2 is gone.
 timeout_s: 300

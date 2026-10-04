@@ -44,39 +44,31 @@ class Check:
 
 @dataclasses.dataclass(frozen=True)
 class Expectation:
-    """Per-shape trajectory expectations for a task.
+    """Per-shape trajectory expectation for a task.
 
-    Tool names are the fully-qualified names opencode exposes: MCP tools are
-    prefixed with the server name (``godot_add_node``), built-ins are bare
-    (``edit``). An empty expectation asserts nothing.
+    The suite grades no mandatory tool calls: any route that produces a correct
+    artifact is accepted, and the deterministic checks are the verdict. The one
+    invariant worth gating is editability: ``file_edit_none`` holds a list of
+    glob patterns matched against the path a file-editing built-in
+    (``edit``/``write``) targeted, and forbids touching a matched entity that has
+    no text form (a binary ``.res``/``.scn``), where a text edit would corrupt
+    it. An empty expectation asserts nothing.
     """
 
-    used_any: tuple[str, ...] = ()
-    used_all: tuple[str, ...] = ()
-    used_none: tuple[str, ...] = ()
-    # Entity-scoped checks: glob patterns matched against the path a file-editing
-    # tool (``edit``/``write``) targeted. ``file_edit_none`` forbids touching the
-    # matched entities by hand; ``file_edit_any`` requires at least one of them
-    # to be edited as a file. This distinguishes hand-editing a scene (illegal)
-    # from editing a script or project.godot (the intended file path).
     file_edit_none: tuple[str, ...] = ()
-    file_edit_any: tuple[str, ...] = ()
 
     @classmethod
     def from_mapping(cls, raw: dict[str, Any]) -> Expectation:
-        def names(key: str) -> tuple[str, ...]:
-            value = raw.get(key, [])
-            if not isinstance(value, (list, tuple)):
-                raise ValueError(f"expectation {key!r} must be a list, got {value!r}")
-            return tuple(str(name) for name in value)
-
-        return cls(
-            used_any=names("used_any"),
-            used_all=names("used_all"),
-            used_none=names("used_none"),
-            file_edit_none=names("file_edit_none"),
-            file_edit_any=names("file_edit_any"),
-        )
+        unknown = set(raw) - {"file_edit_none"}
+        if unknown:
+            raise ValueError(
+                f"unsupported expectation key(s) {sorted(unknown)}; only "
+                "'file_edit_none' is supported (no tool call is mandatory)"
+            )
+        value = raw.get("file_edit_none", [])
+        if not isinstance(value, (list, tuple)):
+            raise ValueError(f"expectation 'file_edit_none' must be a list, got {value!r}")
+        return cls(file_edit_none=tuple(str(pattern) for pattern in value))
 
 
 @dataclasses.dataclass(frozen=True)

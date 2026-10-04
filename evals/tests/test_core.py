@@ -65,76 +65,65 @@ def test_resolve_shape_rejects_unknown():
 
 
 def test_expect_parsing_and_defaults():
+    # No tool call is mandatory, so scene-mutation and read tasks assert no
+    # trajectory expectation.
     task = config.Task.from_yaml(EVALS_DIR / "tasks" / "add_node.yaml")
-    # Scene mutation now goes through run_script in every shape, so the task
-    # pins godot_run_script under full.
-    assert task.expect["full"].used_all == ("godot_run_script",)
-    assert task.expect["full"].used_none == ()
-    assert "script_escape" not in task.expect
-    binary = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_resource.yaml")
-    assert binary.expect["full"].used_all == ("godot_run_script",)
+    assert task.expect == {}
     read_answer = config.Task.from_yaml(EVALS_DIR / "tasks" / "read_answer.yaml")
-    assert read_answer.expect["full"].used_any == ("godot_read", "godot_read_node")
-    assert read_answer.expect["full"].used_none == ()
+    assert read_answer.expect == {}
+    # The editability gate is the only expectation the suite keeps.
+    binary = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_resource.yaml")
+    assert binary.expect["full"].file_edit_none == ("**/score.res",)
+    # Dropped tool-name gates are rejected loudly rather than silently ignored.
+    with pytest.raises(ValueError):
+        config.Expectation.from_mapping({"used_all": ["godot_run_script"]})
 
 
 def test_entity_scoped_expect_parsing():
-    task = config.Task.from_yaml(EVALS_DIR / "tasks" / "project_setting.yaml")
-    assert task.expect["full"].file_edit_any == ("**/project.godot",)
-    assert task.expect["full"].used_none == ("godot_run_script",)
-    spawn = config.Task.from_yaml(EVALS_DIR / "tasks" / "spawn_pickup.yaml")
-    assert spawn.expect["full"].file_edit_any == ("**/pickup.gd",)
-    assert spawn.expect["full"].file_edit_none == ()
+    project = config.Task.from_yaml(EVALS_DIR / "tasks" / "project_setting.yaml")
+    assert project.expect == {}
     binary = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_resource.yaml")
     assert binary.expect["full"].file_edit_none == ("**/score.res",)
+    scene = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_scene.yaml")
+    assert scene.expect["full"].file_edit_none == ("**/level.scn",)
 
 
-def test_trajectory_checks_pass_and_fail():
-    task = config.Task.from_yaml(EVALS_DIR / "tasks" / "rename_move.yaml")
+def test_trajectory_checks_flag_binary_hand_edits():
+    task = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_scene.yaml")
     shape = config.Shape(name="full", description="", tools={})
-    passing = runner._trajectory_checks(task, shape, ["godot_run_script"])
+    # A Godot-process rewrite does not touch the file as text and passes.
+    passing = runner._trajectory_checks(
+        task,
+        shape,
+        [{"name": "godot_run_script", "path": "res://level.scn", "args": {}}],
+    )
     assert all(result.passed for result in passing)
-    failing = runner._trajectory_checks(task, shape, ["edit"])
+    # A file-editing built-in targeting the binary scene corrupts it and fails.
+    failing = runner._trajectory_checks(
+        task,
+        shape,
+        [{"name": "write", "path": "res://level.scn", "args": {}}],
+    )
     assert not all(result.passed for result in failing)
     assert any(
-        result.id.endswith("used_all:godot_run_script")
+        result.id.endswith("file_edit_none:**/level.scn") and not result.passed
         for result in failing
-        if not result.passed
     )
 
 
 def test_file_edit_checks_are_entity_scoped():
-    task = config.Task.from_yaml(EVALS_DIR / "tasks" / "attach_script.yaml")
-    shape = config.Shape(name="full", description="", tools={})
-    call_log = [
-        {"name": "write", "path": "res://player.gd", "args": {}},
-        {"name": "godot_attach_script", "path": "res://main.tscn", "args": {}},
-    ]
-    checks = runner._trajectory_checks(task, shape, ["write", "godot_attach_script"], call_log)
-    assert all(result.passed for result in checks)
-    # A run that never writes the file-editable script fails file_edit_any, even
-    # if it touched the scene.
-    bad = runner._trajectory_checks(
-        task,
-        shape,
-        ["write", "godot_attach_script"],
-        [{"name": "write", "path": "res://main.tscn", "args": {}}],
-    )
-    assert not any(
-        result.id.endswith("file_edit_any:**/player.gd") and result.passed for result in bad
-    )
-    # A file with no text form is protected by file_edit_none.
     binary = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_scene.yaml")
-    binary_shape = config.Shape(name="full", description="", tools={})
-    bad_binary = runner._trajectory_checks(
-        binary,
-        binary_shape,
-        ["write", "godot_run_script"],
-        [{"name": "write", "path": "res://level.scn", "args": {}}],
+    shape = config.Shape(name="full", description="", tools={})
+    # Editing an unrelated file leaves the binary target untouched.
+    clean = runner._trajectory_checks(
+        binary, shape, [{"name": "write", "path": "res://player.gd", "args": {}}]
     )
-    assert any(
-        not result.passed and "level.scn" in result.detail for result in bad_binary
+    assert all(result.passed for result in clean)
+    # Hand-rewriting the binary scene fails the editability gate.
+    dirty = runner._trajectory_checks(
+        binary, shape, [{"name": "write", "path": "res://level.scn", "args": {}}]
     )
+    assert any(not result.passed and "level.scn" in result.detail for result in dirty)
 
 
 def test_file_edit_targets_normalizes_res_prefix():
@@ -157,7 +146,7 @@ def test_file_edit_targets_normalizes_res_prefix():
 
 
 def test_expect_alias_resolution():
-    task = config.Task.from_yaml(EVALS_DIR / "tasks" / "project_setting.yaml")
+    task = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_scene.yaml")
     aliased = config.Shape(name="full-variant", description="", tools={}, expect_alias="full")
     assert config.resolve_expectation(task, aliased) is task.expect["full"]
     direct = config.Shape(name="full", description="", tools={})
@@ -187,26 +176,10 @@ def test_target_parsing_rejects_bad_form(tmp_path):
         config.Task.from_yaml(task)
 
 
-def test_validate_targets_rejects_opaque_hand_edit():
+def test_validate_targets_rejects_text_hand_edit_ban():
     import types
 
-    bad = config.Task(
-        id="bad",
-        description="",
-        fixture="bad",
-        prompt="",
-        checks=[],
-        rubric="",
-        timeout_s=None,
-        expect={"full": config.Expectation(file_edit_any=("**/score.res",))},
-        targets=(config.Target(path="res://score.res", form="opaque"),),
-    )
     shape = config.Shape(name="full", description="", tools={"edit": True})
-    options = types.SimpleNamespace(
-        tasks={"bad": bad}, selected_tasks=["bad"], selected_shapes=["full"]
-    )
-    with pytest.raises(ValueError, match="opaque"):
-        runner._validate_targets(options, {"full": shape})
     # A text target must not be forbidden a hand edit.
     text_bad = config.Task(
         id="text",
