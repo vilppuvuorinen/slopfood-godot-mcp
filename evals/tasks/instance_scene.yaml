@@ -13,9 +13,21 @@ checks:
     scene: res://main.tscn
     path: Enemy
     value: CharacterBody2D
+  - kind: node_instance
+    scene: res://main.tscn
+    path: Enemy
+    scene_file: res://enemy.tscn
+    required: true
   - kind: file_contains
     path: res://main.tscn
     value: 'instance=ExtResource('
+  - kind: file_unchanged
+    path: res://enemy.tscn
+targets:
+  - path: res://main.tscn
+    form: text
+  - path: res://enemy.tscn
+    form: text
 expect:
   full:
     used_all: [godot_add_node]

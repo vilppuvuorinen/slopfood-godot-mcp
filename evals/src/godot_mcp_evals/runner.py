@@ -100,6 +100,7 @@ def run_suite(options: RunOptions, console: Console | None = None) -> list[dict[
 
     _validate_selection(options, shapes)
     _validate_expectations(options, shapes)
+    _validate_targets(options, shapes, console)
 
     reps_by_shape = {
         name: effective_reps(shapes[name], options.reps, options.suite.reps)
@@ -320,6 +321,71 @@ def _validate_expectations(options: RunOptions, shapes: dict[str, Shape]) -> Non
                         f"task {task_id!r} uses file_edit_* in shape {shape_name!r}, "
                         f"but none of {list(FILE_EDIT_TOOLS)} are enabled"
                     )
+
+
+def _validate_targets(
+    options: RunOptions,
+    shapes: dict[str, Shape],
+    console: Console | None = None,
+) -> None:
+    """Check that trajectory gates agree with each target's ``form``.
+
+    An ``opaque`` target (binary ``.res``/``.scn``) has no text route, so
+    requiring a hand edit (``file_edit_any``) is unsatisfiable and forbidding one
+    is the whole point. A ``text`` target can be produced either way, so gating
+    it on a specific tool name is a policy the suite no longer enforces: warn
+    rather than fail, since the artifact checks are the verdict.
+    """
+    for task_id in options.selected_tasks:
+        task = options.tasks[task_id]
+        if not task.targets:
+            continue
+        for shape_name in options.selected_shapes:
+            shape = shapes[shape_name]
+            expectation = resolve_expectation(task, shape)
+            if expectation is None:
+                continue
+            text_paths: list[str] = []
+            for target in task.targets:
+                aliases = _target_aliases(target.path)
+                for pattern in expectation.file_edit_any:
+                    if _pattern_hits(pattern, aliases):
+                        if target.form == "opaque":
+                            raise ValueError(
+                                f"task {task_id!r} shape {shape_name!r} requires a hand "
+                                f"edit (file_edit_any {pattern!r}) of opaque target "
+                                f"{target.path!r}; binary files have no text route"
+                            )
+                for pattern in expectation.file_edit_none:
+                    if _pattern_hits(pattern, aliases) and target.form == "text":
+                        raise ValueError(
+                            f"task {task_id!r} shape {shape_name!r} forbids a hand edit "
+                            f"(file_edit_none {pattern!r}) of text target {target.path!r}; "
+                            "the artifact checks decide text-serializable files"
+                        )
+                if target.form == "text":
+                    text_paths.append(target.path)
+            if text_paths and console is not None:
+                gated = set(expectation.used_all) | set(expectation.used_any)
+                if gated:
+                    console.print(
+                        f"[yellow]warning:[/] task {task_id!r} shape {shape_name!r} "
+                        f"gates text target(s) {text_paths} on tool(s) {sorted(gated)}; "
+                        "the artifact checks are the verdict"
+                    )
+
+
+def _target_aliases(path: str) -> set[str]:
+    aliases = {path}
+    if path.startswith("res://"):
+        aliases.add(path[len("res://") :])
+    else:
+        aliases.add(f"res://{path}")
+    return aliases
+
+
+def _pattern_hits(pattern: str, aliases: set[str]) -> bool:
+    return any(fnmatch.fnmatch(alias, pattern) for alias in aliases)
 
 
 def _run_once(

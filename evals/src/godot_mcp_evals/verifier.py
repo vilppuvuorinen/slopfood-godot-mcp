@@ -63,7 +63,14 @@ def run_checks(
 
     if engine_checks:
         results.extend(
-            _engine_checks(project_dir, godot, result_path, engine_checks, timeout_s)
+            _engine_checks(
+                project_dir,
+                godot,
+                result_path,
+                engine_checks,
+                timeout_s,
+                fixture_dir=fixture_dir,
+            )
         )
 
     order = {_check_id(task.id, i, c): i for i, c in indexed}
@@ -76,11 +83,29 @@ def _engine_checks(
     result_path: Path,
     checks: list[dict[str, object]],
     timeout_s: float,
+    *,
+    fixture_dir: Path | None = None,
 ) -> list[CheckResult]:
     checks_path = project_dir / "evals_checks.json"
     script_path = project_dir / "evals_verify.gd"
     checks_path.write_text(json.dumps(checks, indent=2))
     shutil.copyfile(verifier_script(), script_path)
+    # ``node_unchanged`` compares the graded node against its fixture
+    # counterpart. Expose the fixture inside the graded project under a fixed
+    # res:// path so the engine can load it; the engine resolves a check's
+    # ``scene`` relative to ``res://evals_fixture/``. Only pay for the copy when
+    # such a check is actually present.
+    fixture_copy = project_dir / "evals_fixture"
+    fixture_made = False
+    needs_fixture = any(check.get("kind") == "node_unchanged" for check in checks)
+    if (
+        needs_fixture
+        and fixture_dir is not None
+        and fixture_dir.is_dir()
+        and not fixture_copy.exists()
+    ):
+        shutil.copytree(fixture_dir, fixture_copy)
+        fixture_made = True
     try:
         completed = subprocess.run(
             [
@@ -111,6 +136,8 @@ def _engine_checks(
                 leftover.unlink()
             except FileNotFoundError:
                 pass
+        if fixture_made:
+            shutil.rmtree(fixture_copy, ignore_errors=True)
 
     result_path.write_text(
         f"# exit={completed.returncode}\n"

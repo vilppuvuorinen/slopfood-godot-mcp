@@ -80,6 +80,30 @@ class Expectation:
 
 
 @dataclasses.dataclass(frozen=True)
+class Target:
+    """One graded entity and whether it has a text form.
+
+    ``opaque`` entities (binary ``.res``/``.scn``) have no text route, so a
+    passing artifact load plus ``file_edit_none`` already proves a Godot process
+    wrote them; ``text`` entities (``.tscn``/``.tres``/``.gd``/``project.godot``)
+    can legitimately be produced by a hand edit, so the artifact checks decide.
+    ``form`` drives validation and is otherwise advisory.
+    """
+
+    path: str
+    form: str
+
+    @classmethod
+    def from_mapping(cls, raw: dict[str, Any], path: Path) -> Target:
+        if not isinstance(raw, dict) or "path" not in raw:
+            raise ValueError(f"{path}: each target needs a 'path': {raw!r}")
+        form = str(raw.get("form", ""))
+        if form not in ("text", "opaque"):
+            raise ValueError(f"{path}: target form must be 'text' or 'opaque', got {form!r}")
+        return cls(path=str(raw["path"]), form=form)
+
+
+@dataclasses.dataclass(frozen=True)
 class Task:
     id: str
     description: str
@@ -95,6 +119,8 @@ class Task:
     # True for tasks whose fixture is deliberately not yet a Godot project (e.g.
     # create_project); every other fixture must ship a project.godot.
     bootstraps_project: bool = False
+    # Entity classification for the route gate; see ``Target``.
+    targets: tuple[Target, ...] = ()
 
     @classmethod
     def from_yaml(cls, path: Path) -> Task:
@@ -117,7 +143,16 @@ class Task:
             expect=_parse_expect(data.get("expect"), path),
             min_score=min_score,
             bootstraps_project=bool(data.get("bootstraps_project", False)),
+            targets=_parse_targets(data.get("targets"), path),
         )
+
+
+def _parse_targets(raw: Any, path: Path) -> tuple[Target, ...]:
+    if raw is None:
+        return ()
+    if not isinstance(raw, (list, tuple)):
+        raise ValueError(f"{path}: 'targets' must be a list")
+    return tuple(Target.from_mapping(item, path) for item in raw)
 
 
 def _parse_expect(raw: Any, path: Path) -> dict[str, Expectation]:

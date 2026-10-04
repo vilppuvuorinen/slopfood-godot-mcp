@@ -20,6 +20,11 @@ checks:
     scene: res://main.tscn
     path: Player
     value: player.gd
+targets:
+  - path: res://player.gd
+    form: text
+  - path: res://main.tscn
+    form: text
 expect:
   # player.gd is file-editable and should be written as a file; attaching must
   # go through the structured tool. The text .tscn itself is not hand-edit

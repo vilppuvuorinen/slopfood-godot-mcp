@@ -52,6 +52,17 @@ checks:
     property: shape.radius
     value: 12
     weight: 2
+  # The prompt says to leave Player unchanged; compare its whole persisted
+  # property set against the fixture.
+  - kind: node_unchanged
+    scene: res://main.tscn
+    path: Player
+    required: true
+targets:
+  - path: res://main.tscn
+    form: text
+  - path: res://pickup.gd
+    form: text
 expect:
   # pickup.gd is file-editable; the text .tscn itself is not hand-edit
   # restricted. The scene edit must still go through the structured tools.

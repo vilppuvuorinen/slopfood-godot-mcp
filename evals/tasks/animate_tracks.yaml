@@ -14,30 +14,51 @@ prompt: |
 
   Save the scene.
 checks:
-  - kind: file_contains
-    path: res://main.tscn
-    value: 'type="AnimationPlayer"'
-  - kind: file_contains
-    path: res://main.tscn
-    value: 'name="Anim"'
-  - kind: file_contains
-    path: res://main.tscn
-    value: 'length = 1.5'
-  - kind: file_contains
-    path: res://main.tscn
-    value: 'length = 0.5'
-  - kind: file_contains
-    path: res://main.tscn
-    value: 'length = 1.25'
-  - kind: file_contains
-    path: res://main.tscn
-    value: 'NodePath("Sprite:position")'
-  - kind: file_contains
-    path: res://main.tscn
-    value: 'NodePath("Hero/Sprite:scale")'
-  - kind: file_contains
-    path: res://main.tscn
-    value: 'NodePath("Sprite:modulate")'
+  - kind: node_exists
+    scene: res://main.tscn
+    path: Anim
+    required: true
+  - kind: node_type
+    scene: res://main.tscn
+    path: Anim
+    value: AnimationPlayer
+  # Load the AnimationPlayer and inspect the Animation resources rather than
+  # trusting substrings in the serialized text: the artifact must actually be a
+  # well-formed AnimationPlayer with the named, correctly-shaped animations.
+  - kind: animation_exists
+    scene: res://main.tscn
+    node: Anim
+    name: bob
+    length: 1.5
+    tracks: 1
+    paths: ["Sprite:position"]
+    required: true
+    weight: 2
+  - kind: animation_exists
+    scene: res://main.tscn
+    node: Anim
+    name: pop
+    length: 0.5
+    tracks: 1
+    paths: ["Hero/Sprite:scale"]
+    required: true
+    weight: 2
+  - kind: animation_exists
+    scene: res://main.tscn
+    node: Anim
+    name: fade
+    length: 1.25
+    tracks: 1
+    paths: ["Sprite:modulate"]
+    required: true
+    weight: 2
+  # "bob" must be the autoplay animation.
+  - kind: node_property
+    scene: res://main.tscn
+    path: Anim
+    property: autoplay
+    value: bob
+  # Cheap diagnostics: the shipped text still carries the expected values.
   - kind: file_contains
     path: res://main.tscn
     value: 'Vector2(0, -20)'
@@ -47,15 +68,9 @@ checks:
   - kind: file_contains
     path: res://main.tscn
     value: 'Color(1, 0, 0, 1)'
-  - kind: file_contains
-    path: res://main.tscn
-    value: '&"bob"'
-  - kind: file_contains
-    path: res://main.tscn
-    value: '&"pop"'
-  - kind: file_contains
-    path: res://main.tscn
-    value: '&"fade"'
+targets:
+  - path: res://main.tscn
+    form: text
 rubric: |
   main.tscn has a direct child AnimationPlayer named Anim with three animations:
   "bob" (1.5s) tracking Sprite:position from (0, 0) to (0, -20), "pop" (0.5s)

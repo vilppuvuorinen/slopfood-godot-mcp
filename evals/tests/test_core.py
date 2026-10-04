@@ -39,6 +39,12 @@ KNOWN_CHECK_KINDS = {
     "project_setting",
     "answer_contains",
     "file_unchanged",
+    "resource_distinct",
+    "resource_same",
+    "resource_count",
+    "node_instance",
+    "node_unchanged",
+    "animation_exists",
 }
 
 
@@ -168,6 +174,97 @@ def test_expect_alias_resolution():
     assert config.resolve_expectation(task, direct) is task.expect["full"]
     other = config.Shape(name="unknown", description="", tools={})
     assert config.resolve_expectation(task, other) is None
+
+
+def test_targets_parsing_and_defaults():
+    binary = config.Task.from_yaml(EVALS_DIR / "tasks" / "binary_resource.yaml")
+    assert [(t.path, t.form) for t in binary.targets] == [
+        ("res://data/score.res", "opaque")
+    ]
+    unique = config.Task.from_yaml(EVALS_DIR / "tasks" / "unique_shape.yaml")
+    assert unique.targets[0].form == "text"
+    no_targets = config.Task.from_yaml(EVALS_DIR / "tasks" / "add_node.yaml")
+    assert no_targets.targets == ()
+
+
+def test_target_parsing_rejects_bad_form(tmp_path):
+    task = tmp_path / "t.yaml"
+    task.write_text(
+        "id: t\nfixture: t\nprompt: p\nchecks: []\n"
+        "targets:\n  - path: res://x.tscn\n    form: weird\n"
+    )
+    with pytest.raises(ValueError):
+        config.Task.from_yaml(task)
+
+
+def test_validate_targets_rejects_opaque_hand_edit():
+    import types
+
+    bad = config.Task(
+        id="bad",
+        description="",
+        fixture="bad",
+        prompt="",
+        checks=[],
+        rubric="",
+        timeout_s=None,
+        expect={"full": config.Expectation(file_edit_any=("**/score.res",))},
+        targets=(config.Target(path="res://score.res", form="opaque"),),
+    )
+    shape = config.Shape(name="full", description="", tools={"edit": True})
+    options = types.SimpleNamespace(
+        tasks={"bad": bad}, selected_tasks=["bad"], selected_shapes=["full"]
+    )
+    with pytest.raises(ValueError, match="opaque"):
+        runner._validate_targets(options, {"full": shape})
+    # A text target must not be forbidden a hand edit.
+    text_bad = config.Task(
+        id="text",
+        description="",
+        fixture="text",
+        prompt="",
+        checks=[],
+        rubric="",
+        timeout_s=None,
+        expect={"full": config.Expectation(file_edit_none=("**/main.tscn",))},
+        targets=(config.Target(path="res://main.tscn", form="text"),),
+    )
+    options = types.SimpleNamespace(
+        tasks={"text": text_bad}, selected_tasks=["text"], selected_shapes=["full"]
+    )
+    with pytest.raises(ValueError, match="text"):
+        runner._validate_targets(options, {"full": shape})
+
+
+def test_new_engine_check_params_round_trip():
+    check = config.Check.from_mapping(
+        {
+            "kind": "resource_distinct",
+            "scene": "res://main.tscn",
+            "path_a": "A",
+            "property_a": "shape",
+            "path_b": "B",
+            "property_b": "shape",
+            "weight": 2,
+            "required": True,
+        }
+    )
+    assert check.kind == "resource_distinct"
+    assert check.params["path_a"] == "A"
+    assert check.params["path_b"] == "B"
+    assert check.weight == 2
+    assert check.required is True
+    assert "weight" not in check.params and "required" not in check.params
+    anim = config.Check.from_mapping(
+        {
+            "kind": "animation_exists",
+            "scene": "s",
+            "node": "Anim",
+            "name": "bob",
+            "paths": ["Sprite:position"],
+        }
+    )
+    assert anim.params["paths"] == ["Sprite:position"]
 
 
 def test_check_weight_and_required_parsing():

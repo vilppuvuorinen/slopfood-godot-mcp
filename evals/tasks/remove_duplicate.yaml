@@ -14,6 +14,11 @@ checks:
   - kind: node_not_exists
     scene: res://main.tscn
     path: Enemy2
+  # No orphan sub-resource may be left behind by the duplicate/remove.
+  - kind: resource_count
+    scene: res://main.tscn
+    type: RectangleShape2D
+    max: 0
 expect:
   full:
     used_all: [godot_duplicate_scene_node, godot_remove_scene_node]

@@ -17,6 +17,23 @@ checks:
     path: WallB/CollisionShape2D
     property: shape.size
     value: Vector2(10, 10)
+  # The point of the task is to split the shared sub-resource: the two shapes
+  # must be distinct instances, and no orphan/leftover shape may remain.
+  - kind: resource_distinct
+    scene: res://main.tscn
+    path_a: WallA/CollisionShape2D
+    property_a: shape
+    path_b: WallB/CollisionShape2D
+    property_b: shape
+    required: true
+  - kind: resource_count
+    scene: res://main.tscn
+    type: RectangleShape2D
+    min: 2
+    max: 2
+targets:
+  - path: res://main.tscn
+    form: text
 rubric: |
   WallA's CollisionShape2D uses its own RectangleShape2D of size (20, 20).
   WallB's CollisionShape2D is unchanged at (10, 10): the edit must not leak

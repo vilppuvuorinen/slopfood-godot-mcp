@@ -59,6 +59,11 @@ checks:
     path: Trash
   - kind: file_unchanged
     path: res://project.godot
+targets:
+  - path: res://level.tscn
+    form: text
+  - path: res://project.godot
+    form: text
 expect:
   full:
     used_all:

@@ -8,6 +8,9 @@ checks:
   - kind: project_setting
     key: application/config/name
     value: Evals Suite
+targets:
+  - path: res://project.godot
+    form: text
 expect:
   # project.godot is a file-editable entity, so it is edited with a file tool in
   # both shapes; the check rejects a run that reaches for run_script instead.

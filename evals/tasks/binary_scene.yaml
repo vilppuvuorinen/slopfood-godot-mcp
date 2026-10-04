@@ -14,6 +14,10 @@ checks:
     path: Marker
     property: position
     value: Vector2(64, 32)
+targets:
+  # Binary .scn has no text form: a load plus file_edit_none is the route gate.
+  - path: res://level.scn
+    form: opaque
 expect:
   # A binary .scn has no text form: edit/write would corrupt it, so it must be
   # mutated through a Godot process (the structured scene tool, or run_script

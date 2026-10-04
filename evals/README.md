@@ -129,6 +129,24 @@ compares the graded project against the fixture). A `node_property` or
 `shape.size` on a `CollisionShape2D`. `resource_property` loads an arbitrary
 `Resource` (not just a scene) and reads a property; both are evaluated in Godot.
 
+Structural checks certifying an artifact's shape, not just a few requested
+values (all evaluated in Godot):
+
+- `resource_distinct` / `resource_same` — the (sub-)resources at two node paths
+  are different instances / the same instance (`path_a`/`property_a` and
+  `path_b`/`property_b`). Identity uses instance ids, not `==`, which
+  `Resource` overrides.
+- `resource_count` — the number of embedded `[sub_resource type=…]` entries of a
+  `type` in a scene is within `min`/`max`; counts the shipped text (and
+  corroborates with a load), so an orphaned sub-resource is caught.
+- `node_instance` — the node is a real instance whose `scene_file_path` equals
+  `scene_file`; an inlined copy fails.
+- `node_unchanged` — the node's persisted property set matches the fixture's
+  node at the same path (compared against a copy of the fixture exposed to the
+  engine as `res://evals_fixture/`).
+- `animation_exists` — the `AnimationPlayer` at `node` has an `Animation` named
+  `name` with the given `length`, `tracks` count and track `paths`.
+
 ### Partial credit for composite tasks
 
 Tasks whose `min_score` is set are graded on a weighted fraction of their
@@ -206,6 +224,28 @@ prefix (`godot_add_node`, `godot_run_script`), built-ins do not (`edit`,
 fails the run loudly, so expectations cannot silently become unsatisfiable; an
 entity-scoped check in a shape with no file-editing tool is rejected the same
 way, since it would pass vacuously.
+
+### Target classification
+
+A task may declare each graded entity's form so the route gate can be checked
+against it:
+
+```yaml
+targets:
+  - path: res://level.scn
+    form: opaque      # binary: no text route; file_edit_none + a load is the gate
+  - path: res://scripts/player.gd
+    form: text        # edit/write is the intended route
+  - path: res://main.tscn
+    form: text        # either route is fine; the artifact checks decide
+```
+
+`opaque` targets (binary `.res`/`.scn`) have no text form, so
+`file_edit_any` on one is a config error and `file_edit_none` on one is the
+point. `text` targets (`.tscn`/`.tres`/`.gd`/`project.godot`) can be produced
+either way, so `file_edit_none` on one is rejected, and gating one on a tool
+name reports a warning (the artifact checks are the verdict; the route is a
+reported signal). Tasks without a `targets` block get no such validation.
 
 The call log (tool name, target path and trimmed arguments) is captured per run
 and handed to the judge, which is asked to flag edits that violate the legality

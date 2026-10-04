@@ -79,6 +79,22 @@ checks:
     path: Player
     value: player.gd
     weight: 2
+  # "Leave project.godot untouched": enforce it, not just state it.
+  - kind: file_unchanged
+    path: res://project.godot
+  # Exactly the two requested colliders; no orphan or leftover shape.
+  - kind: resource_count
+    scene: res://levels/arena.tscn
+    type: RectangleShape2D
+    min: 2
+    max: 2
+targets:
+  - path: res://levels/arena.tscn
+    form: text
+  - path: res://scripts/player.gd
+    form: text
+  - path: res://project.godot
+    form: text
 expect:
   # The scene must be created through the structured tool; player.gd is
   # file-editable. The text .tscn itself is not hand-edit restricted.
