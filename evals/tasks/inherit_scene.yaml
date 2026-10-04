@@ -21,7 +21,7 @@ checks:
     scene: res://derived.tscn
     path: Icon
 expect:
-  script_escape:
+  full:
     used_all: [godot_run_script]
 rubric: |
   res://derived.tscn exists, instances res://base.tscn as its root, and still

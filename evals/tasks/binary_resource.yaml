@@ -27,9 +27,6 @@ expect:
   full:
     used_all: [godot_run_script]
     file_edit_none: ["**/score.res"]
-  script_escape:
-    used_all: [godot_run_script]
-    file_edit_none: ["**/score.res"]
 rubric: |
   res://data/score.res is still the same binary resource, now with title "Gold"
   and points 42. It was not replaced by a text resource or a newly created file.

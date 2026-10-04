@@ -16,7 +16,6 @@ server_max_runs: 40
 
 shapes:
   - full
-  - script_escape
-  - read_only
+  - no_mcp
 
 tasks: all

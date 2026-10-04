@@ -16,7 +16,7 @@ checks:
     property: name
     value: Level1
 expect:
-  script_escape:
+  full:
     used_all: [godot_run_script]
 rubric: |
   res://levels/level1.tscn exists and its root node is a Node2D named Level1.

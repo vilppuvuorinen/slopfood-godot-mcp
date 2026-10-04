@@ -13,7 +13,7 @@ checks:
     path: Player
     value: CharacterBody2D
 expect:
-  script_escape:
+  full:
     used_all: [godot_run_script]
 rubric: |
   main.tscn must contain a direct child of the root named Player whose native

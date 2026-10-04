@@ -17,8 +17,6 @@ checks:
 expect:
   full:
     used_any: [godot_read, godot_read_node]
-  read_only:
-    used_any: [godot_read, godot_read_node]
 rubric: |
   The final answer reports the Enemy node's native type as CharacterBody2D and
   the Label node's text as hello. No files should change.

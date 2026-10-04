@@ -18,8 +18,6 @@ checks:
 expect:
   full:
     used_all: [godot_read_node]
-  read_only:
-    used_all: [godot_read_node]
 rubric: |
   The final answer names Hero's direct children Body and Head, and no files
   change. The subtree was read with read_node rather than loading the whole

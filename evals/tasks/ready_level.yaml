@@ -65,7 +65,7 @@ targets:
   - path: res://project.godot
     form: text
 expect:
-  script_escape:
+  full:
     used_all: [godot_run_script]
 rubric: |
   level.tscn's former A is now Hero at (50, 50), formerly-B now sits under

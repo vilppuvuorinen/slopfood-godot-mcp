@@ -19,10 +19,6 @@ expect:
     used_all: [godot_validate_scripts]
     file_edit_any: ["**/player.gd"]
     used_none: [godot_run_script]
-  script_escape:
-    used_all: [godot_validate_scripts]
-    file_edit_any: ["**/player.gd"]
-    used_none: [godot_run_script]
 rubric: |
   res://player.gd parses, extends Node, and exposes greet() returning "hi";
   validate_scripts reports every project script as valid.

@@ -12,12 +12,9 @@ targets:
   - path: res://project.godot
     form: text
 expect:
-  # project.godot is a file-editable entity, so it is edited with a file tool in
-  # both shapes; the check rejects a run that reaches for run_script instead.
+  # project.godot is a file-editable entity, so it is edited with a file tool;
+  # the check rejects a run that reaches for run_script instead.
   full:
-    file_edit_any: ["**/project.godot"]
-    used_none: [godot_run_script]
-  script_escape:
     file_edit_any: ["**/project.godot"]
     used_none: [godot_run_script]
 rubric: |

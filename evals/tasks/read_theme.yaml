@@ -16,8 +16,6 @@ checks:
 expect:
   full:
     used_all: [godot_read]
-  read_only:
-    used_all: [godot_read]
 rubric: |
   The final answer reports the theme's default font size as 42. No files change.
 timeout_s: 240

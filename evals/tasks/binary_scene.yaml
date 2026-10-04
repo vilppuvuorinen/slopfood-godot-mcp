@@ -21,7 +21,7 @@ targets:
 expect:
   # A binary .scn has no text form: edit/write would corrupt it, so it must be
   # mutated through a Godot process (run_script).
-  script_escape:
+  full:
     used_all: [godot_run_script]
     file_edit_none: ["**/level.scn"]
 rubric: |

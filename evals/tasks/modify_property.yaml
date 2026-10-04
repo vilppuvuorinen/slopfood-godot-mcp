@@ -16,7 +16,7 @@ checks:
     property: rotation
     value: 1.5707963
 expect:
-  script_escape:
+  full:
     used_all: [godot_run_script]
 rubric: |
   Root/Sprite keeps its type and position; only z_index and rotation change as

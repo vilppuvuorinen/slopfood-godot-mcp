@@ -98,7 +98,7 @@ targets:
 expect:
   # The scene is created through run_script; player.gd is file-editable. The
   # text .tscn itself is not hand-edit restricted.
-  script_escape:
+  full:
     used_all: [godot_run_script]
     file_edit_any: ["**/scripts/player.gd"]
 rubric: |

@@ -66,7 +66,7 @@ targets:
 expect:
   # pickup.gd is file-editable; the text .tscn itself is not hand-edit
   # restricted. The scene edit goes through run_script.
-  script_escape:
+  full:
     used_all: [godot_run_script]
     file_edit_any: ["**/pickup.gd"]
 rubric: |

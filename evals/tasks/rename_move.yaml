@@ -18,7 +18,7 @@ checks:
     scene: res://main.tscn
     path: B
 expect:
-  script_escape:
+  full:
     used_all: [godot_run_script]
 rubric: |
   The root has a child named Hero (formerly A), B no longer sits directly under

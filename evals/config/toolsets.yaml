@@ -19,14 +19,7 @@ shapes:
     mcp: all
     builtin: [bash, edit, write, read, glob, grep]
 
-  script_escape:
-    description: Default built-ins plus every MCP tool except attach_script; scene and resource mutation goes through run_script or raw edit/write/bash.
-    mcp: all-except:attach_script
+  no_mcp:
+    description: No MCP tools; built-ins only. Control baseline for whether the server helps at all.
+    mcp: none
     builtin: [bash, edit, write, read, glob, grep]
-
-  read_only:
-    description: Read-only control surface.
-    mcp: [get_godot_version, read, read_node]
-    builtin: [read, glob, grep]
-    # Write tasks are expected to fail here; one rep is enough to characterise it.
-    reps: 1

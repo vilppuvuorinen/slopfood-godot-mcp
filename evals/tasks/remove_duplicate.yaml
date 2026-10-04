@@ -20,7 +20,7 @@ checks:
     type: RectangleShape2D
     max: 0
 expect:
-  script_escape:
+  full:
     used_all: [godot_run_script]
 rubric: |
   Enemy1 remains, a sibling Enemy1Copy exists, and Enemy2 is gone.

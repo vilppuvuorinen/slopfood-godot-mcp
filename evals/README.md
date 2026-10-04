@@ -102,14 +102,14 @@ checks:
     property: z_index
     value: 5
 expect:
-  script_escape:
+  full:
     used_all: [godot_run_script]
 rubric: |
   The Sprite node keeps its type and position; only z_index changes.
 ```
 
 Scene and node mutation has no dedicated tool: it goes through
-`godot_run_script`, so `script_escape` pins it where the intent is to observe
+`godot_run_script`, so `full` pins it where the intent is to observe
 the scripted route. A text-serializable `.tscn` may equally be produced by a
 correct text edit, so the artifact checks are the verdict; only
 non-text-serializable files get a `file_edit_none` ban (see `binary_resource`
@@ -210,7 +210,7 @@ should go through `edit`/`write`. This is the only place the no-hand-edit rule
 is enforced (`binary_resource` and `binary_scene`; see below). Text-serialized
 scenes and resources (`.tscn`/`.tres`) *can* be edited as text, so the suite
 does not forbid it: the artifact checks decide whether the result is right
-regardless of route. `script_escape` pins `godot_run_script` where the intent
+regardless of route. `full` pins `godot_run_script` where the intent
 is to observe the scripted route (`used_all`); where a text edit is equally
 valid it asserts no tool. `godot_run_script` is also required where a binary
 target leaves no text route (`binary_resource`, `binary_scene`). The inverse
@@ -256,13 +256,18 @@ the name-only checks cannot see. The judge verdict is reported, not enforced.
 Edit `config/toolsets.yaml`. `mcp` accepts `all`, `none`, a list of tool names,
 or `all-except:<name,name>`; `builtin` is a list of opencode built-in tools.
 The harness always sends a complete boolean map, so unspecified tools are off.
-A shape may also set `reps` to override the suite default (e.g. `read_only: 1`).
+A shape may also set `reps` to override the suite default.
 A shape's `reps` takes precedence over `--reps`; `--reps` only overrides shapes
 that do not set their own.
 
 A shape may reuse another shape's trajectory expectations with `expect_alias`,
 so a variant that exposes a superset of the tools an `expect` block names does
 not have to duplicate it per task.
+
+The shipped shapes are `full` (every MCP tool plus the file/shell built-ins) and
+`no_mcp` (the same built-ins with no MCP tools at all). `no_mcp` is the baseline
+control: comparing it against `full` is what shows whether the server helps
+rather than the built-ins alone.
 
 ## Interpreting results
 

@@ -21,7 +21,7 @@ checks:
     property: z_index
     value: 3
 expect:
-  script_escape:
+  full:
     used_all: [godot_run_script]
 rubric: |
   main.tscn has a direct child of the root named Icon of type Sprite2D with
