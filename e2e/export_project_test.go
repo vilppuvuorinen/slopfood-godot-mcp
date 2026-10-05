@@ -22,7 +22,7 @@ func TestExportProjectValidation(t *testing.T) {
 		requireToolError(t, session, "export_project", map[string]any{
 			"presetName": "Linux",
 			"outputPath": "../escape",
-		}, "Invalid path.")
+		}, "Path escapes the project root.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {

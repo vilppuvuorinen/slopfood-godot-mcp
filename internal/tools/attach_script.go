@@ -58,10 +58,15 @@ func handleAttachScript(ctx Context, raw json.RawMessage) (any, error) {
 	if args.ScenePath == "" || args.NodePath == "" || args.ScriptPath == "" {
 		return requiredArgsResult("scenePath", "nodePath", "scriptPath"), nil
 	}
-	sceneFull, sceneOK := confinePath(project, args.ScenePath)
-	_, scriptOK := confinePath(project, args.ScriptPath)
-	if !validPath(project) || !sceneOK || !scriptOK {
+	if !validPath(project) {
 		return invalidPathResult(), nil
+	}
+	sceneFull, sceneErr := confinePath(project, args.ScenePath)
+	if sceneErr != nil {
+		return invalidPathResultFor(sceneErr), nil
+	}
+	if _, scriptErr := confinePath(project, args.ScriptPath); scriptErr != nil {
+		return invalidPathResultFor(scriptErr), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
 		return notAProjectResult(project), nil

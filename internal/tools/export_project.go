@@ -63,9 +63,9 @@ func handleExportProject(ctx Context, raw json.RawMessage) (any, error) {
 	if !validPath(project) {
 		return invalidPathResult(), nil
 	}
-	outputPath, ok := confineAbsPath(project, args.OutputPath)
-	if !ok {
-		return invalidPathResult(), nil
+	outputPath, err := confineAbsPath(project, args.OutputPath)
+	if err != nil {
+		return invalidPathResultFor(err), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
 		return notAProjectResult(project), nil

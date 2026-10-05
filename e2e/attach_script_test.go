@@ -34,7 +34,7 @@ func TestAttachScriptErrors(t *testing.T) {
 			"scenePath":  "../escape",
 			"nodePath":   "root",
 			"scriptPath": "scripts/player.gd",
-		}, "Invalid path.")
+		}, "Path escapes the project root.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {

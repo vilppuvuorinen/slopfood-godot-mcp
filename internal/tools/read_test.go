@@ -149,7 +149,7 @@ func TestReadValidation(t *testing.T) {
 		{name: "negative depth", project: root, args: `{"type":"scene","path":"main.tscn","depth":-1}`, want: "depth must be zero or greater."},
 		{name: "invalid project path", project: "../escape", args: `{"type":"animation","path":"a.tres"}`, want: "Invalid path."},
 		{name: "invalid resource path", project: root, args: `{"type":"animation","path":"../escape.tres"}`, want: "Invalid path."},
-		{name: "absolute resource path", project: root, args: `{"type":"animation","path":"/etc/passwd.tres"}`, want: "Invalid path."},
+		{name: "absolute resource path", project: root, args: `{"type":"animation","path":"/etc/passwd.tres"}`, want: "Absolute paths are not allowed."},
 		{name: "normalized parent resource path", project: root, args: `{"type":"animation","path":"foo/../bar.tres"}`, want: "Invalid path."},
 		{name: "scene parent path", project: root, args: `{"type":"scene","path":"foo/../bar.tscn"}`, want: "Invalid path."},
 		{name: "scene escape path", project: root, args: `{"type":"scene","path":"../escape.tscn"}`, want: "Invalid path."},
@@ -177,14 +177,18 @@ func TestReadResourcePathRejections(t *testing.T) {
 	makeProject(t, root)
 
 	for _, readType := range []string{"animation", "tileset", "theme", "resource"} {
-		for _, path := range []string{"/etc/passwd.tres", "foo/../bar.tres"} {
-			t.Run(readType+" "+path, func(t *testing.T) {
-				result := callToolArgs(t, read(), root, fmt.Sprintf(`{"type":%q,"path":%q}`, readType, path))
+		for _, tt := range []struct{ path, want string }{
+			{path: "/etc/passwd.tres", want: "Absolute paths are not allowed."},
+			{path: "foo/../bar.tres", want: "Invalid path."},
+			{path: "user://save.tres", want: "user:// paths are not supported."},
+		} {
+			t.Run(readType+" "+tt.path, func(t *testing.T) {
+				result := callToolArgs(t, read(), root, fmt.Sprintf(`{"type":%q,"path":%q}`, readType, tt.path))
 				if !result.IsError {
 					t.Fatalf("expected an error result: %+v", result.Content)
 				}
-				if !strings.HasPrefix(result.Content[0].Text, "Invalid path.") {
-					t.Errorf("message = %q, want prefix %q", result.Content[0].Text, "Invalid path.")
+				if !strings.HasPrefix(result.Content[0].Text, tt.want) {
+					t.Errorf("message = %q, want prefix %q", result.Content[0].Text, tt.want)
 				}
 			})
 		}

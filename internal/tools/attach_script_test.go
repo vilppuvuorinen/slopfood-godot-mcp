@@ -95,9 +95,9 @@ func TestAttachScriptValidation(t *testing.T) {
 		{name: "missing params", args: `{}`, want: "scenePath, nodePath, and scriptPath are required."},
 		{name: "missing scriptPath", project: root, args: `{"scenePath":"main.tscn","nodePath":"root/Player"}`, want: "scenePath, nodePath, and scriptPath are required."},
 		{name: "invalid path", project: "../escape", args: `{"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Invalid path."},
-		{name: "unsafe scenePath", project: root, args: `{"scenePath":"../escape.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Invalid path."},
-		{name: "unsafe scriptPath", project: root, args: `{"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"../escape.gd"}`, want: "Invalid path."},
-		{name: "absolute scriptPath", project: root, args: `{"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"/etc/passwd.gd"}`, want: "Invalid path."},
+		{name: "unsafe scenePath", project: root, args: `{"scenePath":"../escape.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Path escapes the project root."},
+		{name: "unsafe scriptPath", project: root, args: `{"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"../escape.gd"}`, want: "Path escapes the project root."},
+		{name: "absolute scriptPath", project: root, args: `{"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"/etc/passwd.gd"}`, want: "Absolute paths are not allowed."},
 		{name: "not a project", project: notAProject, args: `{"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Not a valid Godot project: "},
 		{name: "missing scene", project: root, args: `{"scenePath":"missing.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Scene file does not exist: "},
 	}

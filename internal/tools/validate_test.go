@@ -1,7 +1,9 @@
 package tools
 
 import (
+	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -33,26 +35,41 @@ func TestConfinePath(t *testing.T) {
 	}{
 		{name: "relative", sub: "scenes/main.tscn", want: filepath.Join(root, "scenes", "main.tscn"), ok: true},
 		{name: "normalized", sub: "scenes/../player.gd", want: filepath.Join(root, "player.gd"), ok: true},
+		{name: "res scheme", sub: "res://scenes/main.tscn", want: filepath.Join(root, "scenes", "main.tscn"), ok: true},
 		{name: "empty", sub: "", ok: false},
 		{name: "parent", sub: "../escape", ok: false},
 		{name: "nested parent", sub: "a/../../escape", ok: false},
 		{name: "absolute", sub: filepath.Join(string(filepath.Separator), "etc", "passwd"), ok: false},
-		{name: "res scheme", sub: "res://scenes/main.tscn", ok: false},
 		{name: "user scheme", sub: "user://save.dat", ok: false},
+		{name: "res escape", sub: "res://../escape", ok: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := confinePath(root, tt.sub)
-			if ok != tt.ok {
-				t.Fatalf("confinePath(%q, %q) ok = %v, want %v", root, tt.sub, ok, tt.ok)
+			got, err := confinePath(root, tt.sub)
+			if (err == nil) != tt.ok {
+				t.Fatalf("confinePath(%q, %q) err = %v, want ok %v", root, tt.sub, err, tt.ok)
 			}
-			if ok && got != tt.want {
+			if tt.ok && got != tt.want {
 				t.Errorf("confinePath(%q, %q) = %q, want %q", root, tt.sub, got, tt.want)
 			}
 		})
 	}
-	if _, ok := confinePath("", "scenes/main.tscn"); ok {
-		t.Error("confinePath with empty root should not be ok")
+	if _, err := confinePath("", "scenes/main.tscn"); err == nil {
+		t.Error("confinePath with empty root should error")
+	}
+}
+
+func TestConfinePathUserSchemeHint(t *testing.T) {
+	_, err := confinePath("/proj", "user://save.dat")
+	var pe *pathError
+	if !errors.As(err, &pe) {
+		t.Fatalf("confinePath err = %v, want *pathError", err)
+	}
+	if !strings.Contains(pe.reason, "user://") {
+		t.Errorf("reason = %q, want it to mention user://", pe.reason)
+	}
+	if len(pe.hints) == 0 {
+		t.Error("user:// rejection should carry a recovery hint")
 	}
 }
 
@@ -67,27 +84,27 @@ func TestConfineAbsPath(t *testing.T) {
 	}{
 		{name: "relative", sub: "build/game.x86_64", want: filepath.Join(root, "build", "game.x86_64"), ok: true},
 		{name: "normalized", sub: "build/../game.x86_64", want: filepath.Join(root, "game.x86_64"), ok: true},
+		{name: "res scheme", sub: "res://build/game.x86_64", want: filepath.Join(root, "build", "game.x86_64"), ok: true},
 		{name: "absolute", sub: abs, want: abs, ok: true},
 		{name: "absolute parent", sub: filepath.Join(root, "..", "escape"), want: filepath.Join(string(filepath.Separator), "escape"), ok: true},
 		{name: "empty", sub: "", ok: false},
 		{name: "parent", sub: "../escape", ok: false},
 		{name: "nested parent", sub: "a/../../escape", ok: false},
-		{name: "res scheme", sub: "res://build/game.x86_64", ok: false},
 		{name: "user scheme", sub: "user://build/game.x86_64", ok: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := confineAbsPath(root, tt.sub)
-			if ok != tt.ok {
-				t.Fatalf("confineAbsPath(%q, %q) ok = %v, want %v", root, tt.sub, ok, tt.ok)
+			got, err := confineAbsPath(root, tt.sub)
+			if (err == nil) != tt.ok {
+				t.Fatalf("confineAbsPath(%q, %q) err = %v, want ok %v", root, tt.sub, err, tt.ok)
 			}
-			if ok && got != tt.want {
+			if tt.ok && got != tt.want {
 				t.Errorf("confineAbsPath(%q, %q) = %q, want %q", root, tt.sub, got, tt.want)
 			}
 		})
 	}
-	if _, ok := confineAbsPath("", "build/game.x86_64"); ok {
-		t.Error("confineAbsPath with empty root should not be ok")
+	if _, err := confineAbsPath("", "build/game.x86_64"); err == nil {
+		t.Error("confineAbsPath with empty root should error")
 	}
 }
 

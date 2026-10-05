@@ -13,9 +13,9 @@ import (
 //
 //nolint:unparam // the confined path is part of the shared pre-flight contract.
 func ensureReadableScene(project, scenePath string) (string, mcp.ToolResult, bool) {
-	full, ok := normalizeReadPath(project, scenePath)
-	if !ok {
-		return "", invalidPathResult(), false
+	full, err := normalizeReadPath(project, scenePath)
+	if err != nil {
+		return "", invalidPathResultFor(err), false
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
 		return "", notAProjectResult(project), false

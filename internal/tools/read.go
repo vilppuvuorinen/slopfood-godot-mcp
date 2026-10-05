@@ -118,8 +118,8 @@ func handleRead(ctx Context, raw json.RawMessage) (any, error) {
 		return readSceneThrough(ctx, project, args.Path, "", args.Depth)
 	}
 
-	if _, ok := normalizeReadPath(project, args.Path); !ok {
-		return invalidPathResult(), nil
+	if _, err := normalizeReadPath(project, args.Path); err != nil {
+		return invalidPathResultFor(err), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {
 		return notAProjectResult(project), nil

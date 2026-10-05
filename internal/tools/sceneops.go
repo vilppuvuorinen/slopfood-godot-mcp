@@ -3,6 +3,7 @@ package tools
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"sort"
 	"strings"
 
@@ -162,6 +163,16 @@ func invalidPathResult() mcp.ToolResult {
 		"Invalid path.",
 		`Provide a valid path without ".." or other potentially unsafe characters`,
 	)
+}
+
+// invalidPathResultFor surfaces the reason and recovery hints carried by a
+// confinePath/confineAbsPath rejection, falling back to the generic message.
+func invalidPathResultFor(err error) mcp.ToolResult {
+	var pe *pathError
+	if errors.As(err, &pe) {
+		return mcp.ErrorResult(pe.reason, pe.hints...)
+	}
+	return invalidPathResult()
 }
 
 func requiredArgsResult(fields ...string) mcp.ToolResult {

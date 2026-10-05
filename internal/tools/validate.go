@@ -11,11 +11,52 @@ func validPath(path string) bool {
 	return path != "" && !strings.Contains(path, "..")
 }
 
-// Godot resolves these virtual roots against the project directory, not the
-// host filesystem.
-var godotSchemes = []string{"res://", "user://"}
+// res:// anchors at the project directory; user:// points at the per-user data
+// directory, which is outside the project root.
+const (
+	resScheme  = "res://"
+	userScheme = "user://"
+)
 
-const resScheme = "res://"
+// pathError reports why a caller-supplied path was rejected. The reason and
+// hints are surfaced through the tool result so callers can correct the path.
+type pathError struct {
+	reason string
+	hints  []string
+}
+
+func (e *pathError) Error() string { return e.reason }
+
+func invalidPathError() *pathError {
+	return &pathError{
+		reason: "Invalid path.",
+		hints:  []string{`Provide a valid path without ".." or other potentially unsafe characters`},
+	}
+}
+
+func userSchemeError() *pathError {
+	return &pathError{
+		reason: "user:// paths are not supported.",
+		hints: []string{
+			"user:// resolves to the user data directory, outside the project root",
+			"Use a project-relative path, an absolute path, or res:// instead",
+		},
+	}
+}
+
+func absolutePathError() *pathError {
+	return &pathError{
+		reason: "Absolute paths are not allowed.",
+		hints:  []string{"Use a project-relative path or res:// (which anchors to the project root)"},
+	}
+}
+
+func escapesRootError() *pathError {
+	return &pathError{
+		reason: "Path escapes the project root.",
+		hints:  []string{"Provide a path inside the project root"},
+	}
+}
 
 // Rewrites a res:// path as project-relative; other paths are returned unchanged.
 func projectRelativePath(path string) string {
@@ -23,47 +64,44 @@ func projectRelativePath(path string) string {
 }
 
 // The check is lexical and deliberately not a security boundary; the external
-// sandbox remains the real line of defense.
-func confinePath(root, sub string) (string, bool) {
+// sandbox remains the real line of defense. res:// is accepted and anchored at
+// root; user:// is rejected because it names a directory outside root.
+func confinePath(root, sub string) (string, error) {
 	if root == "" || sub == "" {
-		return "", false
+		return "", invalidPathError()
 	}
-	for _, scheme := range godotSchemes {
-		if strings.HasPrefix(sub, scheme) {
-			return "", false
-		}
+	if strings.HasPrefix(sub, userScheme) {
+		return "", userSchemeError()
 	}
-	cleaned := filepath.Clean(sub)
+	cleaned := filepath.Clean(projectRelativePath(sub))
 	if filepath.IsAbs(cleaned) || filepath.VolumeName(cleaned) != "" {
-		return "", false
+		return "", absolutePathError()
 	}
 	full := filepath.Join(root, cleaned)
 	rel, err := filepath.Rel(filepath.Clean(root), full)
 	if err != nil {
-		return "", false
+		return "", invalidPathError()
 	}
 	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", false
+		return "", escapesRootError()
 	}
-	return full, true
+	return full, nil
 }
 
 // Like confinePath but permits legitimate absolute destinations such as a Godot
 // export output path; the check is still lexical, not a security boundary.
-func confineAbsPath(root, sub string) (string, bool) {
+func confineAbsPath(root, sub string) (string, error) {
 	if root == "" || sub == "" {
-		return "", false
+		return "", invalidPathError()
 	}
-	for _, scheme := range godotSchemes {
-		if strings.HasPrefix(sub, scheme) {
-			return "", false
-		}
+	if strings.HasPrefix(sub, userScheme) {
+		return "", userSchemeError()
 	}
-	cleaned := filepath.Clean(sub)
-	if filepath.IsAbs(cleaned) {
-		return cleaned, true
+	cleaned := filepath.Clean(projectRelativePath(sub))
+	if filepath.IsAbs(cleaned) || filepath.VolumeName(cleaned) != "" {
+		return cleaned, nil
 	}
-	return confinePath(root, sub)
+	return confinePath(root, cleaned)
 }
 
 var classNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)

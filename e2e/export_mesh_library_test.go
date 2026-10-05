@@ -187,14 +187,14 @@ func TestExportMeshLibraryErrors(t *testing.T) {
 		requireToolError(t, session, "export_mesh_library", map[string]any{
 			"scenePath":  "../escape",
 			"outputPath": "exported/meshlib.res",
-		}, "Invalid path.")
+		}, "Path escapes the project root.")
 	})
 
 	t.Run("parent output path", func(t *testing.T) {
 		requireToolError(t, session, "export_mesh_library", map[string]any{
 			"scenePath":  "scenes/main.tscn",
 			"outputPath": "../escape.res",
-		}, "Invalid path.")
+		}, "Path escapes the project root.")
 	})
 
 	t.Run("not a project", func(t *testing.T) {

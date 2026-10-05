@@ -59,10 +59,16 @@ func handleExportMeshLibrary(ctx Context, raw json.RawMessage) (any, error) {
 	if args.ScenePath == "" || args.OutputPath == "" {
 		return requiredArgsResult("scenePath", "outputPath"), nil
 	}
-	sceneFull, sceneOK := confinePath(project, args.ScenePath)
-	outputPath, outputOK := confineAbsPath(project, args.OutputPath)
-	if !validPath(project) || !sceneOK || !outputOK {
+	if !validPath(project) {
 		return invalidPathResult(), nil
+	}
+	sceneFull, sceneErr := confinePath(project, args.ScenePath)
+	if sceneErr != nil {
+		return invalidPathResultFor(sceneErr), nil
+	}
+	outputPath, outputErr := confineAbsPath(project, args.OutputPath)
+	if outputErr != nil {
+		return invalidPathResultFor(outputErr), nil
 	}
 
 	if !pathExists(filepath.Join(project, "project.godot")) {

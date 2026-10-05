@@ -165,7 +165,7 @@ func TestExportProjectValidation(t *testing.T) {
 		{name: "missing params", args: `{}`, want: "presetName and outputPath are required."},
 		{name: "missing outputPath", project: root, args: `{"presetName":"Linux"}`, want: "presetName and outputPath are required."},
 		{name: "invalid path", project: "../escape", args: `{"presetName":"Linux","outputPath":"out"}`, want: "Invalid path."},
-		{name: "invalid output path", project: root, args: `{"presetName":"Linux","outputPath":"../escape"}`, want: "Invalid path."},
+		{name: "invalid output path", project: root, args: `{"presetName":"Linux","outputPath":"../escape"}`, want: "Path escapes the project root."},
 		{name: "not a project", project: notAProject, args: `{"presetName":"Linux","outputPath":"out"}`, want: "Not a valid Godot project: "},
 	}
 	for _, tt := range tests {

@@ -28,11 +28,11 @@ func TestNormalizeReadPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, ok := normalizeReadPath(tt.project, tt.path)
-			if ok != tt.ok {
-				t.Fatalf("normalizeReadPath(%q, %q) ok = %v, want %v", tt.project, tt.path, ok, tt.ok)
+			got, err := normalizeReadPath(tt.project, tt.path)
+			if (err == nil) != tt.ok {
+				t.Fatalf("normalizeReadPath(%q, %q) err = %v, want ok %v", tt.project, tt.path, err, tt.ok)
 			}
-			if ok && got != tt.want {
+			if tt.ok && got != tt.want {
 				t.Errorf("normalizeReadPath(%q, %q) = %q, want %q", tt.project, tt.path, got, tt.want)
 			}
 		})
