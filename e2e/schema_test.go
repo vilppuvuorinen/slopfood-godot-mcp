@@ -18,7 +18,7 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireStringProps(t, "scenePath", "nodePath", "scriptPath")
 			schema.requirePropCount(t, 3)
 		}},
-		{"create_project", "Create a new Godot project from scratch", func(t *testing.T, schema toolSchema) {
+		{"create_project", "Create a new Godot project in the bound project root (additive; fails if project.godot already exists)", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "projectName")
 			schema.requireProps(t, "projectName", "dotnet")
 			schema.requireType(t, "dotnet", "boolean")

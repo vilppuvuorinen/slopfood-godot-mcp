@@ -90,7 +90,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	}
 	nonDestructive := map[string]bool{
 		"create_project": true,
-		"rescan_project": true,
 	}
 	idempotent := map[string]bool{
 		"attach_script":       true,

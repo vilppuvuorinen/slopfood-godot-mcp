@@ -72,7 +72,7 @@ func statusResult(project, message string, fields map[string]any) mcp.ToolResult
 // the decoder.
 var godotValueContract = "Engine-only types use a tagged object such as " +
 	`{"$type":"Vector2","x":1,"y":2}` + "; recognized $type tags: " +
-	strings.Join(godotconfig.ValueContractTags, ", ") + "."
+	strings.Join(godotconfig.ValueContractTags, ", ")
 
 func godotValueSchema(description string) map[string]any {
 	types := []string{"null", "boolean", "string", "number", "array", "object"}
@@ -139,11 +139,11 @@ func readEnvelopeSchema(kinds []string, nodeScoped bool) map[string]any {
 	}
 }
 
-const envelopeMessageContract = "Human-readable outcome: the success summary on success, or the failure reason on an error."
+const envelopeMessageContract = "Human-readable outcome: the success summary on success, or the failure reason on an error"
 
 const (
-	outputPathEchoDescription     = "The output path exactly as the caller supplied it."
-	resolvedOutputPathDescription = "Absolute host path the export was written to; a relative outputPath resolves against the project root."
+	outputPathEchoDescription     = "The output path exactly as the caller supplied it"
+	resolvedOutputPathDescription = "Absolute host path the export was written to; a relative outputPath resolves against the project root"
 )
 
 func statusProperties(properties map[string]any) map[string]any {

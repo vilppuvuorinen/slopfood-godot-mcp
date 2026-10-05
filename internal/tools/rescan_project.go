@@ -12,7 +12,7 @@ func rescanProject() mcp.Tool {
 		Name:        "rescan_project",
 		Title:       "Rescan Project",
 		Description: "Rescan a Godot project in the editor, generating .import sidecars and missing resource UIDs",
-		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type":        "object",
 			"description": "Runs the editor filesystem scan, which materializes .import sidecars for new sources and applies edits to existing ones.",

@@ -28,7 +28,7 @@ func exportMeshLibrary() mcp.Tool {
 				"meshItemNames": map[string]any{
 					"type":        "array",
 					"items":       map[string]any{"type": "string"},
-					"description": "Optional: Names of specific mesh items to include (defaults to all)",
+					"description": "Names of specific mesh items to include. Default: all",
 				},
 			},
 			"required": []string{"scenePath", "outputPath"},

@@ -38,7 +38,7 @@ func read() mcp.Tool {
 				},
 				"path": map[string]any{
 					"type":        "string",
-					"description": "File path (relative to project or res://)",
+					"description": "File path (relative to the project root, or a res:// path)",
 				},
 				"depth": map[string]any{
 					"type":        "integer",

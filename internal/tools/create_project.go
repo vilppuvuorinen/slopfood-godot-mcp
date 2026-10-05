@@ -29,7 +29,7 @@ func createProject() mcp.Tool {
 	return mcp.Tool{
 		Name:        "create_project",
 		Title:       "Create Project",
-		Description: "Create a new Godot project from scratch",
+		Description: "Create a new Godot project in the bound project root (additive; fails if project.godot already exists)",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(false), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",

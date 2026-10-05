@@ -28,14 +28,15 @@ func readNode() mcp.Tool {
 				},
 				"path": map[string]any{
 					"type":        "string",
-					"description": "Scene file path (relative to project or res://)",
+					"description": "Scene file path (relative to the project root, or a res:// path)",
 				},
 				"nodePath": map[string]any{
 					"type":        "string",
-					"description": `Path to the node within the scene, relative to the scene root (e.g., "root/Player")`,
+					"description": `Path to the node within the scene, relative to the scene root (e.g., "Player" or "Player/Sprite2D")`,
 				},
 				"depth": map[string]any{
 					"type":        "integer",
+					"minimum":     0,
 					"description": "Optional maximum number of child levels below the node; 0 returns the node without children, omitted means no limit; scene only",
 				},
 			},

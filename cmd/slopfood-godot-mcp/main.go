@@ -132,9 +132,10 @@ func (r *role) newServer() *mcp.Server {
 	}, r.logger)
 	instructions := fmt.Sprintf(
 		"Drives the Godot editor headlessly to inspect and modify the Godot project at %s. "+
-			"This server instance is bound to that project for its whole lifetime: every tool takes "+
-			"paths relative to it, and no tool accepts or changes the project directory. Read-only "+
-			"tools are safe to call freely; tools that write files may overwrite existing content.",
+			"This server instance is bound to that project for its whole lifetime: paths are "+
+			"relative to the project root unless a tool documents an absolute path, and no tool "+
+			"accepts or changes the project directory. Read-only tools are safe to call freely; "+
+			"tools that write files may overwrite existing content.",
 		r.root)
 	if engine, err := godot.Version(r.ctx, godot.Path()); err == nil {
 		instructions += " The bound engine is Godot " + engine + "."

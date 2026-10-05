@@ -19,15 +19,15 @@ func attachScript() mcp.Tool {
 			"properties": map[string]any{
 				"scenePath": map[string]any{
 					"type":        "string",
-					"description": "Scene file path (relative to project)",
+					"description": "Scene file path (relative to the project root)",
 				},
 				"nodePath": map[string]any{
 					"type":        "string",
-					"description": `Path to the node within the scene, relative to the scene root (e.g., "root/Player")`,
+					"description": `Path to the node within the scene, relative to the scene root (e.g., "Player" or "Player/Sprite2D")`,
 				},
 				"scriptPath": map[string]any{
 					"type":        "string",
-					"description": "Path to the .gd script file (relative to project)",
+					"description": "Path to the .gd script file (relative to the project root)",
 				},
 			},
 			"required": []string{"scenePath", "nodePath", "scriptPath"},
