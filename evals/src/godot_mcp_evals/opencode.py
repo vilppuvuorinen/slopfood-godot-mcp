@@ -22,6 +22,10 @@ class OpencodeError(RuntimeError):
     pass
 
 
+class OpencodeTimeout(OpencodeError):
+    """A request outran its per-task budget (distinct from a wrong artifact)."""
+
+
 def _free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -185,6 +189,8 @@ class OpencodeClient:
                 json=json_body,
                 timeout=timeout_s,
             )
+        except httpx.TimeoutException as exc:
+            raise OpencodeTimeout(f"{method} {path}: timed out") from exc
         except httpx.HTTPError as exc:
             raise OpencodeError(f"{method} {path}: {exc}") from exc
         if response.status_code >= 400:

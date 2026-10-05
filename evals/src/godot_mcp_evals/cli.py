@@ -49,7 +49,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--judge", help="judge model as provider/model")
     parser.add_argument("--no-judge", action="store_true", help="skip the LLM judge")
     parser.add_argument("--out", type=Path, help="output directory (default: results/<UTC>)")
-    parser.add_argument("--work-root", type=Path, help="directory for project sandboxes")
+    parser.add_argument(
+        "--work-root",
+        type=Path,
+        help="harness directory (judge sessions, server config and log); "
+        "each project gets its own private temp parent",
+    )
     parser.add_argument("--dry-run", action="store_true", help="print the plan without model calls")
     parser.add_argument("--keep-work", action="store_true", help="keep sandboxes after the run")
     return parser

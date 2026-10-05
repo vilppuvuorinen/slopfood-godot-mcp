@@ -59,18 +59,45 @@ summary is also printed to the terminal.
    executed in batches of that size, which bounds peak server memory.
 2. Up to `jobs` (default 4) cells run concurrently. For each (task × shape ×
    repetition):
-   - the task fixture is copied to a fresh project directory under the work
-     root (a temp directory outside the repository, so the host's `AGENTS.md`
-     and git state do not leak into the session);
+   - the task fixture is copied to a fresh project directory that lives in its
+     own private parent under `/tmp`, so `..` from the project exposes nothing
+     but the project itself — no sibling runs, judge sessions, server config or
+     server log (the harness material lives under a separate root);
+   - the session is prompted with a system instruction that names the project
+     directory and forbids reading, writing or running commands outside it;
    - a local MCP server is attached over `POST /mcp`, bound to that project
      (`--project <dir> --idle-timeout 2s`);
    - a session is created and prompted with the shape's tool map in the
      request body, so gating is per-prompt and needs no server restart;
    - all messages, tool calls, tokens and cost are collected;
+   - calls that still reach outside the project (a `..` traversal, an absolute
+     path, `$HOME`, or a shell token pointing elsewhere) are collected as
+     escapes and fail the run through a required, weightless
+     `sandbox:escape` check; the escape list is reported alongside the
+     artifact checks;
    - `POST /instance/dispose` closes the MCP process and its Godot daemon.
 3. The deterministic verifier runs the pinned Godot binary over a declarative
-   check list. The judge (optional) reads the task, the checks, the final
-   answer and the session diff, and returns a JSON verdict.
+   check list. Each run gets its task's `timeout_s` (falling back to the suite
+   default); a request that outruns it is recorded as `timed_out` and counted
+   separately from a wrong artifact. The judge (optional) reads the task, the
+   checks, the final answer and the session diff, and returns a JSON verdict.
+
+## Isolation
+
+Each run's project lives in its own `godot-mcp-evals-run-*` parent directory
+under `/tmp`, containing only `project/`. The harness root — `judge/`,
+`oc-config/` and `opencode-serve.log`, or whatever `--work-root` points at — is
+a sibling temp tree, not an ancestor, so a `..` walk from the project sees
+nothing the eval does not intend. The session is also given a system
+instruction naming the project directory and forbidding work outside it.
+
+Because the agent still has `bash`, isolation is measured as well as provided:
+every built-in file call and shell token is scanned lexically, and any target
+outside the project is recorded in the run's `escapes` list. Escapes fail the
+run via a required `sandbox:escape` check (weight 0, so a composite task's
+artifact score is unaffected) and are counted per shape and task in the report.
+MCP `godot_*` calls are exempt: the server confines them, and `res://`/`user://`
+paths resolve inside the project.
 
 ## Layout
 
@@ -114,6 +141,10 @@ ban (see `binary_resource` and `binary_scene`).
 A fixture normally ships a `project.godot`. Tasks that create the project
 themselves (e.g. `create_project`) set `bootstraps_project: true`; their fixture
 is then deliberately not a Godot project.
+
+`timeout_s` is the per-task budget for one session, overriding the suite
+default. A run that exhausts it records `timed_out: true` and is reported in the
+timeouts column rather than folded into ordinary artifact failures.
 
 Supported checks: `node_exists`, `node_not_exists`, `node_type`, `node_property`,
 `resource_property`, `node_script`, `scene_root_type`, `file_exists`,
@@ -252,3 +283,6 @@ The headline number is deterministic pass@1 per shape. Alongside it the report
 tracks mean judge score, MCP vs built-in tool calls, turns, input/output/
 reasoning/cache tokens, cost and wall time. Pass rates include a Wilson 95%
 interval; treat overlapping intervals across shapes as inconclusive at low reps.
+Timeouts and escapes are reported as separate counts per shape and task, so a
+session that ran out of budget or left its sandbox does not read as a plain
+wrong answer.

@@ -1,8 +1,10 @@
+import shutil
 from pathlib import Path
 
+import httpx
 import pytest
 
-from godot_mcp_evals import cli, config, judge, metrics, runner, verifier
+from godot_mcp_evals import cli, config, isolation, judge, metrics, opencode, runner, verifier
 
 EVALS_DIR = Path(__file__).resolve().parents[1]
 REGISTERED_MCP = [
@@ -506,3 +508,116 @@ def test_extract_records_call_log():
         "args": {"filePath": "res://a.gd", "content": "x"},
     }
     assert metrics_out["call_log"][1]["path"] == "res://main.tscn"
+
+
+def test_run_parent_is_private(tmp_path):
+    parent = isolation.run_parent()
+    try:
+        assert list(parent.iterdir()) == []
+        project = parent / "project"
+        project.mkdir()
+        assert [entry.name for entry in parent.iterdir()] == ["project"]
+        # No harness artifacts share the project's parent; ``..`` sees only the
+        # project, not judge sessions, server config or sibling runs.
+        assert not (parent / "judge").exists()
+        assert not (parent / "oc-config").exists()
+        assert not (parent / "opencode-serve.log").exists()
+    finally:
+        shutil.rmtree(parent, ignore_errors=True)
+
+
+def test_isolation_instruction_names_the_project(tmp_path):
+    text = isolation.instruction(tmp_path)
+    assert str(tmp_path) in text
+    assert "outside" in text
+
+
+def test_isolation_flags_calls_outside_the_project(tmp_path):
+    project = tmp_path / "run" / "project"
+    project.mkdir(parents=True)
+    (project / "main.tscn").write_text("x")
+    clean = [
+        {"name": "read", "args": {"filePath": str(project / "main.tscn")}},
+        {"name": "read", "args": {"filePath": "sub/../main.tscn"}},
+        {"name": "write", "args": {"filePath": "res://a.gd"}},
+        {"name": "bash", "args": {"command": "mkdir -p exported && cat main.tscn"}},
+        {"name": "bash", "args": {"command": "ls -la /dev/null"}},
+        {"name": "godot_run_script", "args": {"scenePath": "/elsewhere/x.tscn"}},
+    ]
+    assert isolation.escapes(project, clean) == []
+
+    escape_calls = [
+        {"name": "read", "args": {"filePath": str(tmp_path / "sibling" / "main.tscn")}},
+        {"name": "bash", "args": {"command": "ls -la .."}},
+        {"name": "bash", "args": {"command": "cat /etc/passwd"}},
+        {"name": "bash", "args": {"command": "grep -rn x /home/developer/sandboxes/go-dot-mcp"}},
+        {"name": "bash", "args": {"command": "find / -iname '*.res'"}},
+    ]
+    found = isolation.escapes(project, escape_calls)
+    assert len(found) == len(escape_calls)
+    assert all(entry.startswith(("read:", "bash:")) for entry in found)
+
+
+def test_sandbox_check_is_required_but_weightless():
+    clean = runner._sandbox_checks([])
+    assert clean[0].passed and clean[0].required and clean[0].weight == 0.0
+    dirty = runner._sandbox_checks(["bash: .."])
+    assert not dirty[0].passed and dirty[0].required and dirty[0].weight == 0.0
+    assert runner._weighted_score(
+        dirty + [verifier.CheckResult("a", "node_exists", True, "", weight=1.0)]
+    ) == pytest.approx(1.0)
+
+
+def test_request_timeout_raises_opencode_timeout(monkeypatch):
+    client = opencode.OpencodeClient("http://127.0.0.1:1")
+
+    def boom(*_args, **_kwargs):
+        raise httpx.ReadTimeout("timed out")
+
+    monkeypatch.setattr(client._client, "request", boom)
+    try:
+        with pytest.raises(opencode.OpencodeTimeout):
+            client.health()
+    finally:
+        client.close()
+
+
+def _metric_record(shape: str, *, timed_out: bool = False, escaped: bool = False) -> dict:
+    return {
+        "shape": shape,
+        "task": "t",
+        "passed": not (timed_out or escaped),
+        "score": 0.0 if (timed_out or escaped) else 1.0,
+        "judge": {},
+        "metrics": {
+            "mcp_tool_calls": 0,
+            "builtin_tool_calls": 0,
+            "turns": 0,
+            "total_tokens": 0,
+            "cost": 0.0,
+            "wall_ms": 0,
+            "errors": [],
+        },
+        "timed_out": timed_out,
+        "escaped": escaped,
+    }
+
+
+def test_aggregate_reports_timeouts_and_escapes_separately():
+    rows = metrics.aggregate(
+        [
+            _metric_record("full", timed_out=True),
+            _metric_record("full", escaped=True),
+            _metric_record("full"),
+        ],
+        "shape",
+    )
+    assert rows[0]["timeouts"] == 1
+    assert rows[0]["escapes"] == 1
+    assert rows[0]["runs"] == 3
+
+
+def test_every_task_defines_a_positive_timeout():
+    tasks = config.load_tasks(EVALS_DIR / "tasks")
+    for task in tasks.values():
+        assert task.timeout_s and task.timeout_s > 0, f"{task.id}: missing timeout_s"

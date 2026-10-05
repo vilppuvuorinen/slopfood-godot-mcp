@@ -195,6 +195,8 @@ def aggregate(records: list[dict[str, Any]], key: str) -> list[dict[str, Any]]:
                 "cost_mean": _mean([float(r["metrics"]["cost"]) for r in group]),
                 "wall_s_mean": _mean([float(r["metrics"]["wall_ms"]) / 1000 for r in group]),
                 "error_runs": sum(1 for r in group if r["metrics"]["errors"]),
+                "timeouts": sum(1 for r in group if r.get("timed_out")),
+                "escapes": sum(1 for r in group if r.get("escaped")),
             }
         )
     return rows

@@ -45,6 +45,8 @@ def _shape_table(records: list[dict[str, Any]]) -> Table:
         "tokens",
         "cost $",
         "wall s",
+        "timeouts",
+        "escapes",
     )
     for column in columns:
         table.add_column(column, justify="right" if column not in ("shape",) else "left")
@@ -62,6 +64,8 @@ def _shape_table(records: list[dict[str, Any]]) -> Table:
             f"{row['total_tokens_mean']:,.0f}",
             f"{row['cost_mean']:.4f}",
             f"{row['wall_s_mean']:.1f}",
+            str(row["timeouts"]),
+            str(row["escapes"]),
         )
     return table
 
@@ -73,6 +77,8 @@ def _task_table(records: list[dict[str, Any]]) -> Table:
     table.add_column("pass@1", justify="right")
     table.add_column("score", justify="right")
     table.add_column("shapes passing")
+    table.add_column("timeouts", justify="right")
+    table.add_column("escapes", justify="right")
     for row in aggregate(records, "task"):
         group = [r for r in records if r["task"] == row["task"]]
         shape_names = sorted({r["shape"] for r in group})
@@ -83,6 +89,8 @@ def _task_table(records: list[dict[str, Any]]) -> Table:
             f"{row['pass_rate']:.0%}",
             f"{row['score_mean']:.2f}",
             f"{len(passing)}/{len(shape_names)}",
+            str(row["timeouts"]),
+            str(row["escapes"]),
         )
     return table
 
@@ -102,10 +110,11 @@ def _markdown(records: list[dict[str, Any]], meta: dict[str, Any]) -> str:
     lines.append("")
     lines.append(
         "| shape | runs | pass@1 | 95% CI | score | judge | mcp calls | builtin calls | "
-        "turns | tokens | cost $ | wall s |"
+        "turns | tokens | cost $ | wall s | timeouts | escapes |"
     )
     lines.append(
-        "| --- | ---: | ---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"
+        "| --- | ---: | ---: | :---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: "
+        "| ---: | ---: |"
     )
     for row in aggregate(records, "shape"):
         judge = f"{row['judge_mean']:.2f}" if row["judge_scored"] else "-"
@@ -115,7 +124,8 @@ def _markdown(records: list[dict[str, Any]], meta: dict[str, Any]) -> str:
             f"{row['score_mean']:.2f} | {judge} | "
             f"{row['mcp_calls_mean']:.1f} | {row['builtin_calls_mean']:.1f} | "
             f"{row['turns_mean']:.1f} | {row['total_tokens_mean']:,.0f} | "
-            f"{row['cost_mean']:.4f} | {row['wall_s_mean']:.1f} |"
+            f"{row['cost_mean']:.4f} | {row['wall_s_mean']:.1f} | "
+            f"{row['timeouts']} | {row['escapes']} |"
         )
     lines.append("")
 

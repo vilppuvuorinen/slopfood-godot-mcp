@@ -12,8 +12,8 @@ from typing import Any
 
 from rich.console import Console
 
+from . import isolation, report, verifier
 from . import metrics as metrics_mod
-from . import report, verifier
 from .config import (
     FILE_EDIT_TOOLS,
     Shape,
@@ -24,7 +24,7 @@ from .config import (
 )
 from .judge import judge_run
 from .mcp_probe import discover_mcp_tools
-from .opencode import OpencodeClient, OpencodeError, OpencodeServer, parse_model
+from .opencode import OpencodeClient, OpencodeError, OpencodeServer, OpencodeTimeout, parse_model
 from .sandbox import materialize, remove_tree, short_runtime_dir
 
 DEFAULT_BUILTIN_TOOLS = [
@@ -376,11 +376,13 @@ def _run_once(
     timeout_s: float,
     console: Console,
 ) -> dict[str, Any]:
-    project = options.work_root / "runs" / run_id
+    run_parent = isolation.run_parent()
+    project = run_parent / "project"
     materialize(options.fixtures_dir / task.fixture, project)
     runtime = short_runtime_dir()
     session_id = ""
     error: str | None = None
+    timed_out = False
     messages: list[dict[str, Any]] = []
     diff: list[dict[str, Any]] = []
     wall_ms = 0
@@ -421,8 +423,12 @@ def _run_once(
                 agent="build",
                 tools=shape.tools,
                 parts=[{"type": "text", "text": task.prompt}],
+                system=isolation.instruction(project),
                 timeout_s=timeout_s,
             )
+        except OpencodeTimeout as exc:
+            error = str(exc)
+            timed_out = True
         except OpencodeError as exc:
             error = str(exc)
         wall_ms = int((time.monotonic() - started) * 1000)
@@ -451,9 +457,9 @@ def _run_once(
         fixture_dir=options.fixtures_dir / task.fixture,
         timeout_s=max(120, timeout_s),
     )
-    check_results.extend(
-        _trajectory_checks(task, shape, run_metrics["call_log"])
-    )
+    escape_list = isolation.escapes(project, run_metrics["call_log"])
+    check_results.extend(_sandbox_checks(escape_list))
+    check_results.extend(_trajectory_checks(task, shape, run_metrics["call_log"]))
     threshold = task.min_score if task.min_score is not None else 1.0
     score = _weighted_score(check_results)
     required_ok = all(result.passed for result in check_results if result.required)
@@ -491,6 +497,10 @@ def _run_once(
         "min_score": threshold,
         "required_ok": required_ok,
         "error": error,
+        "timed_out": timed_out,
+        "timeout_s": timeout_s,
+        "escaped": bool(escape_list),
+        "escapes": escape_list,
         "session_id": session_id,
         "project": str(project),
         "checks": [dataclasses.asdict(r) for r in check_results],
@@ -499,10 +509,28 @@ def _run_once(
     }
 
     if not options.keep_work:
-        remove_tree(project)
+        remove_tree(run_parent)
         remove_tree(runtime)
 
     return record
+
+
+def _sandbox_checks(escapes: list[str]) -> list[verifier.CheckResult]:
+    """Gate a run that reached outside its project.
+
+    The check is required (it can fail the run) but weightless, so it never
+    inflates or deflates a composite task's artifact score.
+    """
+    return [
+        verifier.CheckResult(
+            id="sandbox:escape",
+            kind="sandbox_escape",
+            passed=not escapes,
+            detail="no call reached outside the project" if not escapes else "; ".join(escapes),
+            weight=0.0,
+            required=True,
+        )
+    ]
 
 
 def _weighted_score(check_results: list[verifier.CheckResult]) -> float:
