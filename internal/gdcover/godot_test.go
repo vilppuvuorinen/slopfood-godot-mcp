@@ -251,7 +251,7 @@ func TestInstrumentedOperationsScriptReportsHits(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	_, stderr, exit, err := sess.Run(ctx, writeProject(t), "validate_project",
-		godot.OperationParams{"operation": "validate_project"})
+		map[string]any{"operation": "validate_project"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

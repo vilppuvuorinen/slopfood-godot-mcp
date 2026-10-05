@@ -1,10 +1,13 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -40,11 +43,28 @@ func (s *oneShotSession) Run(ctx context.Context, project, operation string, par
 	if err != nil {
 		return "", "", 0, fmt.Errorf("materialize operations script: %w", err)
 	}
-	stdout, stderr, exitCode, err = godot.RunOperation(ctx, godot.Path(), project, scriptPath, operation, params)
+	payload, err := json.Marshal(params)
 	if err != nil {
-		return stdout, stderr, exitCode, fmt.Errorf("run godot operation: %w", err)
+		return "", "", 0, fmt.Errorf("encode operation params: %w", err)
 	}
-	return stdout, stderr, exitCode, nil
+
+	cmd := exec.CommandContext(ctx, godot.Path(), //nolint:gosec // engine path is test-controlled via GODOT_PATH.
+		"--headless", "--path", project, "--script", scriptPath, operation, string(payload))
+	var stdoutBuf, stderrBuf bytes.Buffer
+	cmd.Stdout = &stdoutBuf
+	cmd.Stderr = &stderrBuf
+
+	runErr := cmd.Run()
+	stdout, stderr = stdoutBuf.String(), stderrBuf.String()
+
+	var exitErr *exec.ExitError
+	if errors.As(runErr, &exitErr) {
+		return stdout, stderr, exitErr.ExitCode(), nil
+	}
+	if runErr != nil {
+		return stdout, stderr, 0, fmt.Errorf("run godot operation: %w", runErr)
+	}
+	return stdout, stderr, 0, nil
 }
 
 func callToolArgs(t *testing.T, tool mcp.Tool, project, args string) mcp.ToolResult {

@@ -37,7 +37,7 @@ func TestDispatchSurvivesHandlerAbort(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	_, stderr, exitCode, err := sess.Run(ctx, project, "read_scene",
-		godot.OperationParams{"scenePath": 123})
+		map[string]any{"scenePath": 123})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

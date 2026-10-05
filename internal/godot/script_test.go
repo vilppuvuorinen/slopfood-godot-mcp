@@ -6,12 +6,12 @@ import (
 	"testing"
 )
 
-func TestRunScriptCapturesStreamsSeparately(t *testing.T) {
+func TestRunEngineCapturesStreamsSeparately(t *testing.T) {
 	bin := writeExecutable(t, "echo out\necho 'ERROR: boom' >&2\nexit 0")
 
-	stdout, stderr, exitCode, err := runScript(context.Background(), bin, nil)
+	stdout, stderr, exitCode, err := runEngine(context.Background(), bin)
 	if err != nil {
-		t.Fatalf("runScript: %v", err)
+		t.Fatalf("runEngine: %v", err)
 	}
 	if stdout != "out\n" {
 		t.Errorf("stdout = %q, want %q", stdout, "out\n")
