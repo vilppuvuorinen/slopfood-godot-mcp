@@ -9,7 +9,6 @@ import (
 )
 
 var errDaemonClosed = errors.New("daemon closed")
-var errPeerRejected = errors.New("connection rejected by peer authorization")
 
 type Daemon struct {
 	server *Server
@@ -110,23 +109,6 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		}
 		d.startConnection(ctx, conn)
 	}
-}
-
-// The daemon takes ownership of conn and closes it when the serve loop returns.
-func (d *Daemon) ServeConnection(ctx context.Context, conn Connection) error {
-	if d.isClosed() {
-		return errDaemonClosed
-	}
-	if !d.authorize(conn) {
-		_ = conn.Close()
-		return errPeerRejected
-	}
-	if !d.track(conn) {
-		return errDaemonClosed
-	}
-	defer d.untrack(conn)
-	defer func() { _ = conn.Close() }()
-	return d.server.Serve(ctx, conn, conn)
 }
 
 func (d *Daemon) Close() error {

@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,8 +14,15 @@ import (
 	"time"
 )
 
-func daemonListen(l Listener) ListenFunc {
+// fixedListen hands the daemon a pre-bound listener; the address is ignored.
+func fixedListen(l Listener) ListenFunc {
 	return func(string) (Listener, error) { return l, nil }
+}
+
+// failListen fails the test if the daemon ever binds; for tests that exercise
+// teardown or admit logic without serving.
+func failListen(string) (Listener, error) {
+	return nil, errors.New("daemon listen not expected in this test")
 }
 
 func stopDaemon(t *testing.T, d *Daemon, done <-chan error) {
@@ -35,12 +41,12 @@ func stopDaemon(t *testing.T, d *Daemon, done <-chan error) {
 }
 
 func TestDaemonServesAcceptedConnections(t *testing.T) {
-	l := NewInProcListener()
-	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	listen, dial := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listen, "tcp")
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
-	client, err := l.Dial()
+	client, err := dial("tcp")
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -60,27 +66,13 @@ func TestDaemonServesAcceptedConnections(t *testing.T) {
 	stopDaemon(t, d, done)
 }
 
-func TestDaemonServeConnectionServesStdio(t *testing.T) {
-	var out bytes.Buffer
-	conn := NewStdioConn(strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`+"\n"), &out)
-	d := NewDaemon(testServer(), nil, ListenInProc, "")
-	defer func() { _ = d.Close() }()
-
-	if err := d.ServeConnection(context.Background(), conn); err != nil {
-		t.Fatalf("ServeConnection: %v", err)
-	}
-	if !strings.Contains(out.String(), `"tools"`) {
-		t.Errorf("output = %s", out.String())
-	}
-}
-
 func TestDaemonCloseClosesActiveConnections(t *testing.T) {
-	l := NewInProcListener()
-	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	listen, dial := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listen, "tcp")
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
-	client, err := l.Dial()
+	client, err := dial("tcp")
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -121,15 +113,15 @@ func TestDaemonSerializesAcrossConnections(t *testing.T) {
 		},
 	})
 	queue := NewQueue(64, testQueueTimeout)
-	l := NewInProcListener()
-	d := NewDaemon(srv, queue, daemonListen(l), "inproc")
+	listen, dial := newTestEndpoint(t)
+	d := NewDaemon(srv, queue, listen, "tcp")
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
 	const clients = 4
 	var wg sync.WaitGroup
 	for range clients {
-		client, err := l.Dial()
+		client, err := dial("tcp")
 		if err != nil {
 			t.Fatalf("dial: %v", err)
 		}
@@ -158,7 +150,7 @@ func TestDaemonSerializesAcrossConnections(t *testing.T) {
 
 func TestDaemonCloseClosesQueue(t *testing.T) {
 	queue := NewQueue(1, testQueueTimeout)
-	d := NewDaemon(testServer(), queue, ListenInProc, "")
+	d := NewDaemon(testServer(), queue, failListen, "")
 
 	if err := d.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -169,7 +161,10 @@ func TestDaemonCloseClosesQueue(t *testing.T) {
 }
 
 func TestDaemonServeAfterCloseFails(t *testing.T) {
-	d := NewDaemon(testServer(), nil, ListenInProc, "")
+	// fakeListener is never accepted from; Serve short-circuits on closed before
+	// it reaches Accept.
+	l := &fakeListener{conns: make(chan Connection), closed: make(chan struct{})}
+	d := NewDaemon(testServer(), nil, fixedListen(l), "")
 	if err := d.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -179,15 +174,12 @@ func TestDaemonServeAfterCloseFails(t *testing.T) {
 	if err := d.Serve(context.Background()); !errors.Is(err, errDaemonClosed) {
 		t.Fatalf("Serve err = %v, want %v", err, errDaemonClosed)
 	}
-	if err := d.ServeConnection(context.Background(), &fakeConn{}); !errors.Is(err, errDaemonClosed) {
-		t.Fatalf("ServeConnection err = %v, want %v", err, errDaemonClosed)
-	}
 }
 
 func TestDaemonServeStopsOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	l := NewInProcListener()
-	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	listen, _ := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listen, "tcp")
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(ctx) }()
 	cancel()
@@ -228,12 +220,12 @@ func roundTripPing(t *testing.T, client io.ReadWriteCloser) {
 }
 
 func TestDaemonActiveConnections(t *testing.T) {
-	l := NewInProcListener()
-	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	listen, dial := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listen, "tcp")
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
-	client, err := l.Dial()
+	client, err := dial("tcp")
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -248,8 +240,8 @@ func TestDaemonActiveConnections(t *testing.T) {
 }
 
 func TestDaemonIdleExit(t *testing.T) {
-	l := NewInProcListener()
-	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	listen, _ := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listen, "tcp")
 	if err := d.SetIdleTimeout(10 * time.Millisecond); err != nil {
 		t.Fatalf("SetIdleTimeout: %v", err)
 	}
@@ -275,15 +267,15 @@ func TestDaemonIdleExit(t *testing.T) {
 }
 
 func TestDaemonConnectionDisarmsIdleTimer(t *testing.T) {
-	l := NewInProcListener()
-	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	listen, dial := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listen, "tcp")
 	if err := d.SetIdleTimeout(80 * time.Millisecond); err != nil {
 		t.Fatalf("SetIdleTimeout: %v", err)
 	}
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
-	client, err := l.Dial()
+	client, err := dial("tcp")
 	if err != nil {
 		t.Fatalf("dial: %v", err)
 	}
@@ -311,8 +303,8 @@ func TestDaemonConnectionDisarmsIdleTimer(t *testing.T) {
 }
 
 func TestDaemonIdleDisabledByDefault(t *testing.T) {
-	l := NewInProcListener()
-	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	listen, _ := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listen, "tcp")
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -325,8 +317,8 @@ func TestDaemonIdleDisabledByDefault(t *testing.T) {
 }
 
 func TestDaemonShutdownStopsServe(t *testing.T) {
-	l := NewInProcListener()
-	d := NewDaemon(testServer(), nil, daemonListen(l), "inproc")
+	listen, _ := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listen, "tcp")
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -349,105 +341,55 @@ func TestDaemonShutdownStopsServe(t *testing.T) {
 	}
 }
 
-func TestStdioConnAdaptsStreams(t *testing.T) {
-	var out bytes.Buffer
-	conn := NewStdioConn(strings.NewReader("hello"), &out)
-
-	buf := make([]byte, len("hello"))
-	if _, err := io.ReadFull(conn, buf); err != nil {
-		t.Fatalf("read: %v", err)
-	}
-	if string(buf) != "hello" {
-		t.Errorf("read %q, want hello", buf)
-	}
-	if _, err := conn.Write([]byte("world")); err != nil {
-		t.Fatalf("write: %v", err)
-	}
-	if out.String() != "world" {
-		t.Errorf("wrote %q, want world", out.String())
-	}
-	if err := conn.Close(); err != nil {
-		t.Fatalf("close: %v", err)
-	}
-	got, err := conn.PeerIdentity()
-	if err != nil {
-		t.Fatalf("PeerIdentity: %v", err)
-	}
-	if got != currentPeerIdentity() {
-		t.Errorf("peer = %+v, want current process %+v", got, currentPeerIdentity())
-	}
-}
-
 func TestDaemonRejectsUnidentifiedPeer(t *testing.T) {
-	d := NewDaemon(testServer(), nil, ListenInProc, "")
+	d := NewDaemon(testServer(), nil, failListen, "")
 	defer func() { _ = d.Close() }()
 
 	conn := &fakeConn{peerErr: errors.New("no credentials")}
-	if err := d.ServeConnection(context.Background(), conn); !errors.Is(err, errPeerRejected) {
-		t.Fatalf("ServeConnection err = %v, want %v", err, errPeerRejected)
-	}
-	if !conn.closed {
-		t.Error("rejected connection was not closed")
+	if d.authorize(conn) {
+		t.Error("authorize accepted a peer that could not be identified")
 	}
 }
 
 func TestDaemonRejectsDifferentUser(t *testing.T) {
-	d := NewDaemon(testServer(), nil, ListenInProc, "")
+	d := NewDaemon(testServer(), nil, failListen, "")
 	defer func() { _ = d.Close() }()
 
 	conn := &fakeConn{peer: PeerIdentity{UserID: currentPeerIdentity().UserID + 1}}
-	if err := d.ServeConnection(context.Background(), conn); !errors.Is(err, errPeerRejected) {
-		t.Fatalf("ServeConnection err = %v, want %v", err, errPeerRejected)
-	}
-	if !conn.closed {
-		t.Error("rejected connection was not closed")
+	if d.authorize(conn) {
+		t.Error("authorize accepted a peer owned by another user")
 	}
 }
 
 func TestDaemonRejectsAbsentPeerWithoutToken(t *testing.T) {
-	d := NewDaemon(testServer(), nil, ListenInProc, "")
+	d := NewDaemon(testServer(), nil, failListen, "")
 	defer func() { _ = d.Close() }()
 
 	conn := &authConn{authErr: errTCPTokenRejected}
-	if err := d.ServeConnection(context.Background(), conn); !errors.Is(err, errPeerRejected) {
-		t.Fatalf("ServeConnection err = %v, want %v", err, errPeerRejected)
-	}
-	if !conn.closed {
-		t.Error("rejected connection was not closed")
+	if d.authorize(conn) {
+		t.Error("authorize accepted a transport with no identity and no valid token")
 	}
 }
 
 func TestDaemonAllowsAuthenticatedAbsentPeer(t *testing.T) {
-	conn := &authConn{
-		fakeConn: fakeConn{in: strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n")},
-	}
-	d := NewDaemon(testServer(), nil, ListenInProc, "")
+	conn := &authConn{}
+	d := NewDaemon(testServer(), nil, failListen, "")
 	defer func() { _ = d.Close() }()
 
-	// ServeConnection does not run the pre-auth hook, so authenticate directly.
 	if err := conn.Authenticate(); err != nil {
 		t.Fatalf("Authenticate: %v", err)
 	}
-	if err := d.ServeConnection(context.Background(), conn); err != nil {
-		t.Fatalf("ServeConnection: %v", err)
-	}
-	if !strings.Contains(conn.out.String(), `"tools"`) {
-		t.Errorf("output = %s", conn.out.String())
+	if !d.authorize(conn) {
+		t.Error("authorize rejected a transport that authenticated with a token")
 	}
 }
 
 func TestDaemonAllowsUnsupportedPeerIdentity(t *testing.T) {
-	conn := &fakeConn{
-		in:      strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n"),
-		peerErr: errPeerIdentityUnsupported,
-	}
-	d := NewDaemon(testServer(), nil, ListenInProc, "")
+	d := NewDaemon(testServer(), nil, failListen, "")
 	defer func() { _ = d.Close() }()
 
-	if err := d.ServeConnection(context.Background(), conn); err != nil {
-		t.Fatalf("ServeConnection: %v", err)
-	}
-	if !strings.Contains(conn.out.String(), `"tools"`) {
-		t.Errorf("output = %s", conn.out.String())
+	conn := &fakeConn{peerErr: errPeerIdentityUnsupported}
+	if !d.authorize(conn) {
+		t.Error("authorize rejected a transport whose credentials are unsupported")
 	}
 }

@@ -117,20 +117,17 @@ func TestClientConnectStopsOnContextCancel(t *testing.T) {
 
 // A notification gets no response, so a synchronous relay would hang there.
 func TestClientRunPumpsNotificationsAndReplies(t *testing.T) {
-	endpoint := NewInProcEndpoint()
-	daemon := NewDaemon(testServer(), nil, endpoint.Listen, "inproc")
-	defer func() { _ = daemon.Close() }()
+	listen, dial := newTestEndpoint(t)
+	daemon := NewDaemon(testServer(), nil, listen, "test")
+	done := make(chan error, 1)
+	go func() {
+		if err := daemon.Serve(context.Background()); err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("daemon serve: %v", err)
+		}
+		close(done)
+	}()
 
-	spawn := func(ctx context.Context) error {
-		go func() {
-			if err := daemon.Serve(ctx); err != nil && !errors.Is(err, context.Canceled) {
-				t.Errorf("daemon serve: %v", err)
-			}
-		}()
-		return nil
-	}
-	client := NewClient(endpoint.Dial, spawn, "inproc", testClientLogger())
-	client.pollInterval = time.Millisecond
+	client := NewClient(dial, nil, "test", testClientLogger())
 
 	inR, inW := io.Pipe()
 	var out lockedBuffer
@@ -150,6 +147,13 @@ func TestClientRunPumpsNotificationsAndReplies(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Run did not return after stdin closed")
+	}
+
+	_ = daemon.Close()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("daemon did not stop after Close")
 	}
 }
 
