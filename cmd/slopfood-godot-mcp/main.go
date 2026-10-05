@@ -130,12 +130,16 @@ func (r *role) newServer() *mcp.Server {
 		Name:    "slopfood-godot-mcp",
 		Version: version,
 	}, r.logger)
-	srv.Instructions = fmt.Sprintf(
+	instructions := fmt.Sprintf(
 		"Drives the Godot editor headlessly to inspect and modify the Godot project at %s. "+
 			"This server instance is bound to that project for its whole lifetime: every tool takes "+
 			"paths relative to it, and no tool accepts or changes the project directory. Read-only "+
 			"tools are safe to call freely; tools that write files may overwrite existing content.",
 		r.root)
+	if engine, err := godot.Version(r.ctx, godot.Path()); err == nil {
+		instructions += " The bound engine is Godot " + engine + "."
+	}
+	srv.Instructions = instructions
 	tools.Register(srv, r.root)
 	return srv
 }

@@ -61,8 +61,8 @@ func TestToolsUnique(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	if len(seen) != 11 {
-		t.Errorf("registered %d tools, want 11", len(seen))
+	if len(seen) != 10 {
+		t.Errorf("registered %d tools, want 10", len(seen))
 	}
 }
 
@@ -83,11 +83,10 @@ func TestToolsAdvertiseMetadata(t *testing.T) {
 
 func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	readOnly := map[string]bool{
-		"get_godot_version": true,
-		"read":              true,
-		"read_node":         true,
-		"validate_project":  true,
-		"validate_scripts":  true,
+		"read":             true,
+		"read_node":        true,
+		"validate_project": true,
+		"validate_scripts": true,
 	}
 	nonDestructive := map[string]bool{
 		"create_project": true,

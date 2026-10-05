@@ -10,7 +10,6 @@ REGISTERED_MCP = [
     "create_project",
     "export_mesh_library",
     "export_project",
-    "get_godot_version",
     "read",
     "read_node",
     "rescan_project",

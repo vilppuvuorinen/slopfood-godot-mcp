@@ -13,23 +13,15 @@ import (
 // Mirrors the server's godot.DefaultMinor: the build used when GODOT_PATH is unset.
 const defaultGodotMinor = "4.7"
 
-// With GODOT_PATH set the tool must echo that engine's own --version; otherwise expect GODOT_MINOR or the server's default minor.
-func TestGetGodotVersionTool(t *testing.T) {
+// The server folds the bound engine's version into its initialize instructions,
+// so clients learn it without a dedicated tool call.
+func TestInstructionsIncludeGodotVersion(t *testing.T) {
 	t.Parallel()
 	session := connect(t)
-	findTool(t, session, "get_godot_version")
-
-	res := callTool(t, session, "get_godot_version", nil)
-	if res.IsError {
-		t.Fatalf("Godot unavailable: %+v", res.Content)
-	}
-	if len(res.Content) != 1 {
-		t.Fatalf("content = %+v", res.Content)
-	}
-	got := firstText(t, res)
+	instructions := session.InitializeResult().Instructions
 	if path := os.Getenv("GODOT_PATH"); path != "" {
-		if want := godotVersion(t, path); got != want {
-			t.Errorf("version = %q, want %q (GODOT_PATH=%q)", got, want, path)
+		if want := godotVersion(t, path); !strings.Contains(instructions, want) {
+			t.Errorf("instructions = %q, want version %q (GODOT_PATH=%q)", instructions, want, path)
 		}
 		return
 	}
@@ -37,8 +29,8 @@ func TestGetGodotVersionTool(t *testing.T) {
 	if minor == "" {
 		minor = defaultGodotMinor
 	}
-	if !strings.HasPrefix(got, minor+".") {
-		t.Errorf("version = %q, want a %s.x build (GODOT_PATH=%q)", got, minor, os.Getenv("GODOT_PATH"))
+	if !strings.Contains(instructions, minor+".") {
+		t.Errorf("instructions = %q, want a %s.x engine version", instructions, minor)
 	}
 }
 
@@ -99,8 +91,8 @@ func TestInitializeInstructions(t *testing.T) {
 
 func TestToolMetadata(t *testing.T) {
 	t.Parallel()
-	tool := findTool(t, connect(t), "get_godot_version")
-	if tool.Title != "Get Godot Version" {
+	tool := findTool(t, connect(t), "validate_project")
+	if tool.Title != "Validate Project" {
 		t.Errorf("title = %q", tool.Title)
 	}
 	if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
