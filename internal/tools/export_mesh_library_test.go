@@ -13,7 +13,7 @@ func TestExportMeshLibrarySchema(t *testing.T) {
 	if tool.Name != "export_mesh_library" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Export a scene as a MeshLibrary resource" {
+	if tool.Description != "Export a scene as a MeshLibrary resource, overwriting the output file if it exists" {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)

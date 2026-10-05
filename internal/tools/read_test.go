@@ -21,7 +21,7 @@ func TestReadSchema(t *testing.T) {
 	if tool.Title == "" {
 		t.Error("title is empty")
 	}
-	if tool.Description != "Read a scene, animation, tileset, theme, or binary resource file; use read_node to read a node subtree" {
+	if tool.Description != "Read a scene, animation, tileset, theme, or binary resource file; use read_node to read a node subtree. depth applies to scenes, propertyFilter to resources" {
 		t.Errorf("description = %q", tool.Description)
 	}
 	if !hasRequired(tool.InputSchema, "type", "path") {

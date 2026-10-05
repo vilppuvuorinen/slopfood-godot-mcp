@@ -13,7 +13,7 @@ func TestAttachScriptSchema(t *testing.T) {
 	if tool.Name != "attach_script" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Attach a GDScript to a scene node (headless)" {
+	if tool.Description != "Attach a GDScript to a scene node, editing the scene file in place" {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)
@@ -95,6 +95,9 @@ func TestAttachScriptValidation(t *testing.T) {
 		{name: "missing params", args: `{}`, want: "scenePath, nodePath, and scriptPath are required."},
 		{name: "missing scriptPath", project: root, args: `{"scenePath":"main.tscn","nodePath":"root/Player"}`, want: "scenePath, nodePath, and scriptPath are required."},
 		{name: "invalid path", project: "../escape", args: `{"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Invalid path."},
+		{name: "unsafe scenePath", project: root, args: `{"scenePath":"../escape.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Invalid path."},
+		{name: "unsafe scriptPath", project: root, args: `{"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"../escape.gd"}`, want: "Invalid path."},
+		{name: "absolute scriptPath", project: root, args: `{"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"/etc/passwd.gd"}`, want: "Invalid path."},
 		{name: "not a project", project: notAProject, args: `{"scenePath":"main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Not a valid Godot project: "},
 		{name: "missing scene", project: root, args: `{"scenePath":"missing.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`, want: "Scene file does not exist: "},
 	}

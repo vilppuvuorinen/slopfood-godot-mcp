@@ -12,7 +12,7 @@ func runScript() mcp.Tool {
 	return mcp.Tool{
 		Name:        "run_script",
 		Title:       "Run GDScript",
-		Description: "Run a GDScript function body in the live editor session and return its output",
+		Description: "Run a GDScript function body in the live editor session and return its output; the code runs with full access to the project and editor state",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",

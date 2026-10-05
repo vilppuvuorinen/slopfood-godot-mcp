@@ -139,6 +139,8 @@ func (r *role) newServer() *mcp.Server {
 		r.root)
 	if engine, err := godot.Version(r.ctx, godot.Path()); err == nil {
 		instructions += " The bound engine is Godot " + engine + "."
+	} else {
+		instructions += " The bound engine version could not be determined from the Godot binary."
 	}
 	srv.Instructions = instructions
 	tools.Register(srv, r.root)

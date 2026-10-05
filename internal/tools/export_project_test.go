@@ -13,7 +13,7 @@ func TestExportProjectSchema(t *testing.T) {
 	if tool.Name != "export_project" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Export a Godot project using a preset" {
+	if tool.Description != "Export a Godot project using a preset from export_presets.cfg, overwriting the output file if it exists" {
 		t.Errorf("description = %q", tool.Description)
 	}
 	required, ok := tool.InputSchema["required"].([]string)

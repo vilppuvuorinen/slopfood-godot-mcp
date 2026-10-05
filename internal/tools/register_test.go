@@ -93,7 +93,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 	}
 	idempotent := map[string]bool{
 		"attach_script":       true,
-		"create_project":      true,
 		"export_mesh_library": true,
 		"export_project":      true,
 		"rescan_project":      true,

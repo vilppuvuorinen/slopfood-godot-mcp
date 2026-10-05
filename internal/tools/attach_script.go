@@ -12,7 +12,7 @@ func attachScript() mcp.Tool {
 	return mcp.Tool{
 		Name:        "attach_script",
 		Title:       "Attach Script",
-		Description: "Attach a GDScript to a scene node (headless)",
+		Description: "Attach a GDScript to a scene node, editing the scene file in place",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
@@ -58,8 +58,9 @@ func handleAttachScript(ctx Context, raw json.RawMessage) (any, error) {
 	if args.ScenePath == "" || args.NodePath == "" || args.ScriptPath == "" {
 		return requiredArgsResult("scenePath", "nodePath", "scriptPath"), nil
 	}
-	sceneFull, pathOK := confinePath(project, args.ScenePath)
-	if !validPath(project) || !pathOK {
+	sceneFull, sceneOK := confinePath(project, args.ScenePath)
+	_, scriptOK := confinePath(project, args.ScriptPath)
+	if !validPath(project) || !sceneOK || !scriptOK {
 		return invalidPathResult(), nil
 	}
 	if !pathExists(filepath.Join(project, "project.godot")) {

@@ -15,7 +15,7 @@ func readNode() mcp.Tool {
 	return mcp.Tool{
 		Name:         "read_node",
 		Title:        "Read Node",
-		Description:  "Read a node subtree from a scene, or the cells of a TileMapLayer node; use read to read whole files",
+		Description:  "Read a node subtree from a scene, or the cells of a TileMapLayer node; use read to read whole files. nodePath selects the tilemap layer, and depth applies to scenes",
 		Annotations:  &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		OutputSchema: readEnvelopeSchema(readNodeTypes, true),
 		InputSchema: map[string]any{

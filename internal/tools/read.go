@@ -25,7 +25,7 @@ func read() mcp.Tool {
 	return mcp.Tool{
 		Name:         "read",
 		Title:        "Read",
-		Description:  "Read a scene, animation, tileset, theme, or binary resource file; use read_node to read a node subtree",
+		Description:  "Read a scene, animation, tileset, theme, or binary resource file; use read_node to read a node subtree. depth applies to scenes, propertyFilter to resources",
 		Annotations:  &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		OutputSchema: readEnvelopeSchema(readTypes, false),
 		InputSchema: map[string]any{

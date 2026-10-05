@@ -12,7 +12,7 @@ func exportMeshLibrary() mcp.Tool {
 	return mcp.Tool{
 		Name:        "export_mesh_library",
 		Title:       "Export Mesh Library",
-		Description: "Export a scene as a MeshLibrary resource",
+		Description: "Export a scene as a MeshLibrary resource, overwriting the output file if it exists",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
