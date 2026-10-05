@@ -3,8 +3,6 @@ package tools
 import (
 	"strings"
 	"testing"
-
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotconfig"
 )
 
 func hasRequired(schema map[string]any, keys ...string) bool {
@@ -31,7 +29,7 @@ func TestGodotValueSchemaAdvertisesContract(t *testing.T) {
 	if !strings.HasPrefix(description, local) {
 		t.Errorf("description = %v, want it to start with %q", schema["description"], local)
 	}
-	for _, tag := range godotconfig.ValueContractTags {
+	for _, tag := range valueContractTags {
 		if !strings.Contains(description, tag) {
 			t.Errorf("description omits $type tag %q", tag)
 		}

@@ -7,7 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotconfig"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
@@ -69,11 +68,36 @@ func statusResult(project, message string, fields map[string]any) mcp.ToolResult
 	return mcp.StructuredResult(message, value)
 }
 
-// Built from godotconfig.ValueContractTags so the advertised set stays next to
-// the decoder.
+// valueContractTags enumerates the engine-only $type tags the value contract
+// accepts; Resource is deliberately absent because the decoder rejects it.
+var valueContractTags = []string{
+	"StringName",
+	"Vector2",
+	"Vector2i",
+	"Vector3",
+	"Vector3i",
+	"Vector4",
+	"Vector4i",
+	"Color",
+	"Quaternion",
+	"Plane",
+	"Rect2",
+	"Rect2i",
+	"Transform2D",
+	"Basis",
+	"AABB",
+	"Transform3D",
+	"NodePath",
+	"PackedStringArray",
+	"Dictionary",
+	"GodotText",
+}
+
+// godotValueContract is the human-readable contract advertised in value
+// schemas.
 var godotValueContract = "Engine-only types use a tagged object such as " +
 	`{"$type":"Vector2","x":1,"y":2}` + "; recognized $type tags: " +
-	strings.Join(godotconfig.ValueContractTags, ", ")
+	strings.Join(valueContractTags, ", ")
 
 func godotValueSchema(description string) map[string]any {
 	types := []string{"null", "boolean", "string", "number", "array", "object"}
