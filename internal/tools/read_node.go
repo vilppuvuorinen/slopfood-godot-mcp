@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -42,7 +43,7 @@ func readNode() mcp.Tool {
 			},
 			"required": []string{"type", "path", "nodePath"},
 		},
-		Handler: withContext(handleReadNode),
+		Handler: handleReadNode,
 	}
 }
 
@@ -53,7 +54,7 @@ type readNodeArgs struct {
 	Depth    *int   `json:"depth"`
 }
 
-func handleReadNode(ctx Context, raw json.RawMessage) (any, error) {
+func handleReadNode(ctx context.Context, raw json.RawMessage) (any, error) {
 	var args readNodeArgs
 	// Presence, not value: an explicit null and an absent key both nil the
 	// typed depth field, so depth-on-tilemap is detected from the raw map.

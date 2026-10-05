@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -53,7 +54,7 @@ func read() mcp.Tool {
 			},
 			"required": []string{"type", "path"},
 		},
-		Handler: withContext(handleRead),
+		Handler: handleRead,
 	}
 }
 
@@ -64,7 +65,7 @@ type readArgs struct {
 	PropertyFilter []string `json:"propertyFilter"`
 }
 
-func handleRead(ctx Context, raw json.RawMessage) (any, error) {
+func handleRead(ctx context.Context, raw json.RawMessage) (any, error) {
 	var args readArgs
 	// Presence, not value: an explicit null and an absent key both nil the
 	// typed fields, so mismatched optional args are detected from the raw map.

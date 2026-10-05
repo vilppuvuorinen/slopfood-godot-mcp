@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -37,7 +38,7 @@ func attachScript() mcp.Tool {
 			"nodePath":   map[string]any{"type": "string"},
 			"scriptPath": map[string]any{"type": "string"},
 		}),
-		Handler: withContext(handleAttachScript),
+		Handler: handleAttachScript,
 	}
 }
 
@@ -47,7 +48,7 @@ type attachScriptArgs struct {
 	ScriptPath string `json:"scriptPath"`
 }
 
-func handleAttachScript(ctx Context, raw json.RawMessage) (any, error) {
+func handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
 	var args attachScriptArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

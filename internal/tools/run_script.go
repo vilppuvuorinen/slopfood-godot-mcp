@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -51,7 +52,7 @@ func runScript() mcp.Tool {
 				},
 			},
 		}),
-		Handler: withContext(handleRunScript),
+		Handler: handleRunScript,
 	}
 }
 
@@ -59,7 +60,7 @@ type runScriptArgs struct {
 	Body string `json:"body"`
 }
 
-func handleRunScript(ctx Context, raw json.RawMessage) (any, error) {
+func handleRunScript(ctx context.Context, raw json.RawMessage) (any, error) {
 	var args runScriptArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {
@@ -77,7 +78,7 @@ func handleRunScript(ctx Context, raw json.RawMessage) (any, error) {
 		return notAProjectResult(project), nil
 	}
 
-	stdout, stderr, exitCode, err := ctx.Run(project, "run_script", map[string]any{"body": args.Body})
+	stdout, stderr, exitCode, err := runEngine(ctx, project, "run_script", map[string]any{"body": args.Body})
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to run script: "+err.Error(),

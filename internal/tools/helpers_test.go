@@ -53,7 +53,7 @@ func callToolArgs(t *testing.T, tool mcp.Tool, project, args string) mcp.ToolRes
 	if project != "" {
 		ctx = withProject(ctx, project)
 	}
-	ctx = WithEngine(ctx, &oneShotSession{})
+	ctx = WithSession(ctx, &oneShotSession{})
 	out, err := tool.Handler(ctx, json.RawMessage(args))
 	if err != nil {
 		t.Fatalf("handler: %v", err)

@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -38,7 +39,7 @@ func exportMeshLibrary() mcp.Tool {
 			"outputPath":         map[string]any{"type": "string", "description": outputPathEchoDescription},
 			"resolvedOutputPath": map[string]any{"type": "string", "description": resolvedOutputPathDescription},
 		}),
-		Handler: withContext(handleExportMeshLibrary),
+		Handler: handleExportMeshLibrary,
 	}
 }
 
@@ -48,7 +49,7 @@ type exportMeshLibraryArgs struct {
 	MeshItemNames []string `json:"meshItemNames"`
 }
 
-func handleExportMeshLibrary(ctx Context, raw json.RawMessage) (any, error) {
+func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, error) {
 	var args exportMeshLibraryArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {
@@ -87,7 +88,7 @@ func handleExportMeshLibrary(ctx Context, raw json.RawMessage) (any, error) {
 		params["meshItemNames"] = args.MeshItemNames
 	}
 
-	stdout, stderr, exitCode, err := ctx.Run(project, "export_mesh_library", params)
+	stdout, stderr, exitCode, err := runEngine(ctx, project, "export_mesh_library", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to export mesh library: "+err.Error(),

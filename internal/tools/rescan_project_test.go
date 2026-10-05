@@ -48,7 +48,7 @@ func TestRescanProjectSuccess(t *testing.T) {
 	makeProject(t, root)
 
 	sess := &recordingSession{stdout: "Scanned project sources\n"}
-	ctx := WithEngine(withProject(context.Background(), root), sess)
+	ctx := WithSession(withProject(context.Background(), root), sess)
 	out, err := rescanProject().Handler(ctx, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
@@ -114,7 +114,7 @@ func TestRescanProjectScriptFailure(t *testing.T) {
 	makeProject(t, root)
 
 	sess := &recordingSession{stderr: "Failed to rescan project: boom", exit: 1}
-	ctx := WithEngine(withProject(context.Background(), root), sess)
+	ctx := WithSession(withProject(context.Background(), root), sess)
 	out, err := rescanProject().Handler(ctx, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
@@ -142,7 +142,7 @@ func TestRescanProjectSessionFailure(t *testing.T) {
 	makeProject(t, root)
 
 	sess := &recordingSession{err: context.DeadlineExceeded}
-	ctx := WithEngine(withProject(context.Background(), root), sess)
+	ctx := WithSession(withProject(context.Background(), root), sess)
 	out, err := rescanProject().Handler(ctx, json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)

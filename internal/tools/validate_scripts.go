@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -49,7 +50,7 @@ func validateScripts() mcp.Tool {
 				},
 			},
 		}),
-		Handler: withContext(handleValidateScripts),
+		Handler: handleValidateScripts,
 	}
 }
 
@@ -68,7 +69,7 @@ type validateScriptsReport struct {
 	Results         []any `json:"results"`
 }
 
-func handleValidateScripts(ctx Context, _ json.RawMessage) (any, error) {
+func handleValidateScripts(ctx context.Context, _ json.RawMessage) (any, error) {
 	project := projectRoot(ctx)
 	if !validPath(project) {
 		return invalidPathResult(), nil

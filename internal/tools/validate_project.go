@@ -31,7 +31,7 @@ func validateProject() mcp.Tool {
 				"items":       map[string]any{"type": "string"},
 			},
 		}),
-		Handler: withContext(handleValidateProject),
+		Handler: handleValidateProject,
 	}
 }
 
@@ -40,7 +40,7 @@ type validateProjectResult struct {
 	Errors []string `json:"errors"`
 }
 
-func handleValidateProject(ctx Context, _ json.RawMessage) (any, error) {
+func handleValidateProject(ctx context.Context, _ json.RawMessage) (any, error) {
 	project := projectRoot(ctx)
 	if !validPath(project) {
 		return invalidPathResult(), nil

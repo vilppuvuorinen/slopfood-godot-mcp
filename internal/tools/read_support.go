@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"path/filepath"
 
@@ -28,7 +29,7 @@ func ensureReadableScene(project, scenePath string) (string, mcp.ToolResult, boo
 
 // readSceneThrough runs ensureReadableScene and then the bespoke read_scene
 // payload handling.
-func readSceneThrough(ctx Context, project, scenePath, nodePath string, depth *int) (any, error) {
+func readSceneThrough(ctx context.Context, project, scenePath, nodePath string, depth *int) (any, error) {
 	if _, result, ok := ensureReadableScene(project, scenePath); !ok {
 		return result, nil
 	}
@@ -40,7 +41,7 @@ func readSceneThrough(ctx Context, project, scenePath, nodePath string, depth *i
 	if depth != nil {
 		params["depth"] = *depth
 	}
-	stdout, stderr, exitCode, err := ctx.Run(project, "read_scene", params)
+	stdout, stderr, exitCode, err := runEngine(ctx, project, "read_scene", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to read scene: "+err.Error(),

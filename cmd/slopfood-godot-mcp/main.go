@@ -268,7 +268,7 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 			role.logger.Warn("engine session close", "error", cerr)
 		}
 	}()
-	serveCtx := tools.WithEngine(role.ctx, session)
+	serveCtx := tools.WithSession(role.ctx, session)
 
 	queue := mcp.NewQueue(operationQueueDepth, operationQueueTimeout)
 	daemon := mcp.NewDaemon(

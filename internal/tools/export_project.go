@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -39,7 +40,7 @@ func exportProject() mcp.Tool {
 			"resolvedOutputPath": map[string]any{"type": "string", "description": resolvedOutputPathDescription},
 			"debug":              map[string]any{"type": "boolean"},
 		}),
-		Handler: withContext(handleExportProject),
+		Handler: handleExportProject,
 	}
 }
 
@@ -49,7 +50,7 @@ type exportProjectArgs struct {
 	Debug      bool   `json:"debug"`
 }
 
-func handleExportProject(ctx Context, raw json.RawMessage) (any, error) {
+func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) {
 	var args exportProjectArgs
 	if len(raw) > 0 && string(raw) != "null" {
 		if err := json.Unmarshal(raw, &args); err != nil {

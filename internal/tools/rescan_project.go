@@ -1,6 +1,7 @@
 package tools
 
 import (
+	"context"
 	"encoding/json"
 	"path/filepath"
 
@@ -22,11 +23,11 @@ func rescanProject() mcp.Tool {
 		OutputSchema: statusOutputSchema(map[string]any{
 			"projectPath": map[string]any{"type": "string"},
 		}),
-		Handler: withContext(handleRescanProject),
+		Handler: handleRescanProject,
 	}
 }
 
-func handleRescanProject(ctx Context, _ json.RawMessage) (any, error) {
+func handleRescanProject(ctx context.Context, _ json.RawMessage) (any, error) {
 	project := projectRoot(ctx)
 	if !validPath(project) {
 		return invalidPathResult(), nil
@@ -38,7 +39,7 @@ func handleRescanProject(ctx Context, _ json.RawMessage) (any, error) {
 
 	// Drives EditorFileSystem: ResourceSaver has no UID logic, and the text
 	// saver strips existing uid= references without it.
-	stdout, stderr, exitCode, err := ctx.Run(project, "rescan_project", nil)
+	stdout, stderr, exitCode, err := runEngine(ctx, project, "rescan_project", nil)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to rescan project: "+err.Error(),

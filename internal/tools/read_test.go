@@ -59,7 +59,7 @@ func TestReadSchema(t *testing.T) {
 func callReadSession(t *testing.T, project, args string) (*fakeSession, mcp.ToolResult) {
 	t.Helper()
 	sess := &fakeSession{}
-	ctx := WithEngine(context.Background(), sess)
+	ctx := WithSession(context.Background(), sess)
 	if project != "" {
 		ctx = withProject(ctx, project)
 	}
