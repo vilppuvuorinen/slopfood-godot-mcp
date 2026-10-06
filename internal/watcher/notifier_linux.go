@@ -27,6 +27,7 @@ const watcherMask = syscall.IN_CREATE | syscall.IN_CLOSE_WRITE | syscall.IN_MOVE
 type inotifyNotifier struct {
 	root    string
 	events  chan<- struct{}
+	record  func(path string)
 	fd      int
 	epfd    int
 	wakeR   int
@@ -57,6 +58,7 @@ func newNotifier(cfg notifierConfig) (notifier, error) {
 	n := &inotifyNotifier{
 		root:    cfg.root,
 		events:  cfg.events,
+		record:  cfg.record,
 		fd:      fd,
 		epfd:    epfd,
 		wakeR:   pipe[0],
@@ -195,9 +197,7 @@ func (n *inotifyNotifier) handle(wd uint32, mask uint32, name string) {
 		n.handleDir(path, mask)
 		return
 	}
-	if relevantPath(n.root, path) {
-		n.signal()
-	}
+	n.report(path)
 }
 
 func (n *inotifyNotifier) handleDir(path string, mask uint32) {
@@ -209,9 +209,23 @@ func (n *inotifyNotifier) handleDir(path string, mask uint32) {
 	case mask&(syscall.IN_DELETE|syscall.IN_MOVED_FROM|syscall.IN_DELETE_SELF) != 0:
 		n.forgetTree(path)
 	}
+	// A directory carries no sidecar of its own; signal so the burst still
+	// triggers a full scan when nothing else piled on.
 	if relevantPath(n.root, path) {
 		n.signal()
 	}
+}
+
+// report records a relevant changed file as a project-relative path and signals.
+func (n *inotifyNotifier) report(path string) {
+	rel, err := filepath.Rel(n.root, path)
+	if err != nil || !relevant(rel) {
+		return
+	}
+	if n.record != nil {
+		n.record(filepath.ToSlash(rel))
+	}
+	n.signal()
 }
 
 func (n *inotifyNotifier) signal() {

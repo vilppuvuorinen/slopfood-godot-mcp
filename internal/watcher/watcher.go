@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -22,7 +23,9 @@ type Config struct {
 	Root string
 	// Rescan runs once per settled burst of changes and blocks until the
 	// rescan finishes; the daemon uses it to submit onto the shared queue.
-	Rescan func(ctx context.Context)
+	// paths holds the project-relative paths seen during the burst, sorted;
+	// an empty slice means only the fact of a change was known.
+	Rescan func(ctx context.Context, paths []string)
 	// Debounce coalesces a burst into one rescan; zero uses the default.
 	Debounce time.Duration
 	// Interval is the poll period on platforms without inotify; zero uses the default.
@@ -31,15 +34,53 @@ type Config struct {
 
 // Watcher coalesces relevant project changes and drives rescans.
 type Watcher struct {
-	rescan   func(ctx context.Context)
+	rescan   func(ctx context.Context, paths []string)
 	debounce time.Duration
 	events   chan struct{}
 	notifier notifier
+	changes  *changeSet
 
 	ctx       context.Context
 	cancel    context.CancelFunc
 	wg        sync.WaitGroup
 	closeOnce sync.Once
+}
+
+// changeSet accumulates the project-relative paths seen within a burst. The
+// notifier records paths as they arrive while a separate event signal wakes the
+// loop, so paths cannot be lost when the buffered signal is full.
+type changeSet struct {
+	mu    sync.Mutex
+	paths map[string]struct{}
+}
+
+func newChangeSet() *changeSet {
+	return &changeSet{paths: make(map[string]struct{})}
+}
+
+func (c *changeSet) add(path string) {
+	if path == "" {
+		return
+	}
+	c.mu.Lock()
+	c.paths[path] = struct{}{}
+	c.mu.Unlock()
+}
+
+// drain returns the accumulated paths sorted and clears the set.
+func (c *changeSet) drain() []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if len(c.paths) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(c.paths))
+	for path := range c.paths {
+		out = append(out, path)
+	}
+	c.paths = make(map[string]struct{})
+	sort.Strings(out)
+	return out
 }
 
 // The platform seam: Linux uses inotify, other platforms poll the filesystem.
@@ -51,6 +92,8 @@ type notifierConfig struct {
 	root     string
 	interval time.Duration
 	events   chan<- struct{}
+	// record captures a changed project-relative path; it may be nil.
+	record func(path string)
 }
 
 func New(cfg Config) (*Watcher, error) {
@@ -64,22 +107,24 @@ func New(cfg Config) (*Watcher, error) {
 	if debounce <= 0 {
 		debounce = defaultDebounce
 	}
+	changes := newChangeSet()
 	events := make(chan struct{}, 1)
-	n, err := newNotifier(notifierConfig{root: cfg.Root, interval: cfg.Interval, events: events})
+	n, err := newNotifier(notifierConfig{root: cfg.Root, interval: cfg.Interval, events: events, record: changes.add})
 	if err != nil {
 		return nil, err
 	}
 	cfg.Debounce = debounce
-	return newWatcher(cfg, events, n), nil
+	return newWatcher(cfg, events, n, changes), nil
 }
 
-func newWatcher(cfg Config, events chan struct{}, n notifier) *Watcher {
+func newWatcher(cfg Config, events chan struct{}, n notifier, changes *changeSet) *Watcher {
 	ctx, cancel := context.WithCancel(context.Background())
 	w := &Watcher{
 		rescan:   cfg.Rescan,
 		debounce: cfg.Debounce,
 		events:   events,
 		notifier: n,
+		changes:  changes,
 		ctx:      ctx,
 		cancel:   cancel,
 	}
@@ -108,7 +153,7 @@ func (w *Watcher) loop() {
 		if !w.settle() {
 			return
 		}
-		w.rescan(w.ctx)
+		w.rescan(w.ctx, w.changes.drain())
 	}
 }
 

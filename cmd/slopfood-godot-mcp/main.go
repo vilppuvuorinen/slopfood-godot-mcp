@@ -300,8 +300,8 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	if !opts.noWatch {
 		watch, watchErr := watcher.New(watcher.Config{
 			Root: role.root,
-			Rescan: func(ctx context.Context) {
-				runAutoRescan(ctx, role.logger, queue, session, role.root)
+			Rescan: func(ctx context.Context, paths []string) {
+				runAutoRescan(ctx, role.logger, queue, session, role.root, paths)
 			},
 		})
 		if watchErr != nil {
@@ -323,13 +323,23 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 // runAutoRescan submits an automatic rescan to the shared queue so it runs
 // behind any in-flight tool call. It blocks until the queue finishes the job,
 // which coalesces a stream of file changes into ordered rescans; a full queue
-// or a stop drops the rescan rather than growing a backlog.
-func runAutoRescan(ctx context.Context, logger *slog.Logger, queue *mcp.Queue, session *godot.Session, root string) {
+// or a stop drops the rescan rather than growing a backlog. When the burst
+// reported concrete paths the rescan reconciles just those; otherwise, or when
+// a path needs discovery, the engine falls back to a full source scan.
+func runAutoRescan(ctx context.Context, logger *slog.Logger, queue *mcp.Queue, session *godot.Session, root string, paths []string) {
 	if _, err := os.Stat(filepath.Join(root, "project.godot")); err != nil {
 		return
 	}
+	params := map[string]any{}
+	if len(paths) > 0 {
+		resPaths := make([]string, 0, len(paths))
+		for _, path := range paths {
+			resPaths = append(resPaths, "res://"+filepath.ToSlash(path))
+		}
+		params["paths"] = resPaths
+	}
 	_, err := queue.Submit(ctx, func(ctx context.Context) (any, error) {
-		_, stderr, exitCode, err := session.Run(ctx, root, "rescan_project", nil)
+		_, stderr, exitCode, err := session.Run(ctx, root, "rescan_project", params)
 		if err != nil {
 			return nil, fmt.Errorf("auto rescan: %w", err)
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -88,6 +89,34 @@ func TestPollNotifierSignalsOnNewRelevantFile(t *testing.T) {
 	}
 }
 
+func TestPollNotifierReportsChangedPaths(t *testing.T) {
+	root := t.TempDir()
+	writeProjectFile(t, filepath.Join(root, "project.godot"), "config_version=5\n")
+
+	changes := make(chan struct{}, 1)
+	recorded := make(chan string, 4)
+	p := newPollNotifier(notifierConfig{
+		root:     root,
+		interval: 5 * time.Millisecond,
+		events:   changes,
+		record:   func(path string) { recorded <- path },
+	})
+	t.Cleanup(p.Close)
+
+	writeProjectFile(t, filepath.Join(root, "scripts", "player.gd"), "extends Node\n")
+	if !waitForChange(changes, time.Second) {
+		t.Fatal("new script did not signal a change")
+	}
+	select {
+	case got := <-recorded:
+		if got != "scripts/player.gd" {
+			t.Errorf("recorded path = %q, want scripts/player.gd", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("no changed path was recorded")
+	}
+}
+
 func TestPollNotifierSignalsOnModifiedFile(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "player.gd")
@@ -154,10 +183,10 @@ func TestWatcherCoalescesBurst(t *testing.T) {
 	cfg := Config{
 		Root:     t.TempDir(),
 		Debounce: 40 * time.Millisecond,
-		Rescan:   func(context.Context) { calls <- struct{}{} },
+		Rescan:   func(context.Context, []string) { calls <- struct{}{} },
 	}
 	notifier := &fakeNotifier{}
-	w := newWatcher(cfg, events, notifier)
+	w := newWatcher(cfg, events, notifier, newChangeSet())
 	defer w.Close()
 
 	events <- struct{}{}
@@ -179,5 +208,34 @@ func TestWatcherCoalescesBurst(t *testing.T) {
 	w.Close()
 	if !notifier.closed {
 		t.Error("Close did not close the notifier")
+	}
+}
+
+func TestWatcherPassesChangedPaths(t *testing.T) {
+	events := make(chan struct{}, 1)
+	type call struct{ paths []string }
+	calls := make(chan call, 4)
+	cfg := Config{
+		Root:     t.TempDir(),
+		Debounce: 30 * time.Millisecond,
+		Rescan:   func(_ context.Context, paths []string) { calls <- call{paths: paths} },
+	}
+	changes := newChangeSet()
+	w := newWatcher(cfg, events, &fakeNotifier{}, changes)
+	defer w.Close()
+
+	changes.add("assets/icon.svg")
+	changes.add("scripts/player.gd")
+	changes.add("assets/icon.svg")
+	events <- struct{}{}
+
+	select {
+	case got := <-calls:
+		want := []string{"assets/icon.svg", "scripts/player.gd"}
+		if !slices.Equal(got.paths, want) {
+			t.Errorf("rescan paths = %q, want %q", got.paths, want)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("a change did not produce a rescan")
 	}
 }

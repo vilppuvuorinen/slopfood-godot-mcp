@@ -190,9 +190,21 @@ func _reconcile_path(path: String) -> void:
         filesystem = EditorInterface.get_resource_filesystem()
         if filesystem == null:
             return
-    if not _apply_reconcile(path):
+    if _apply_reconcile(path):
+        return
+    # An untracked path gains its .import/.uid sidecar only from a scan, so
+    # request one (once per burst) and retry the path when the scan settles.
+    if _reconcile_paths_pending.is_empty() and not filesystem.is_scanning():
         filesystem.scan_sources()
-        _reconcile_paths_pending.append(path)
+    _reconcile_paths_pending.append(path)
+
+# A changed sidecar maps back to the source resource it describes.
+func _sidecar_source(path: String) -> String:
+    if path.ends_with(".import"):
+        return path.trim_suffix(".import")
+    if path.ends_with(".uid"):
+        return path.trim_suffix(".uid")
+    return path
 
 func _apply_reconcile(path: String) -> bool:
     var filesystem := _filesystem
@@ -200,12 +212,16 @@ func _apply_reconcile(path: String) -> bool:
         filesystem = EditorInterface.get_resource_filesystem()
     if filesystem == null:
         return false
-    if FileAccess.file_exists(path + ".import"):
-        filesystem.reimport_files(PackedStringArray([path]))
+    var source := _sidecar_source(path)
+    if FileAccess.file_exists(source + ".import"):
+        filesystem.reimport_files(PackedStringArray([source]))
         return true
-    filesystem.update_file(path)
-    # update_file silently no-ops on an untracked path; a tracked script gains its .uid.
-    return not path.ends_with(".gd") or FileAccess.file_exists(path + ".uid")
+    # The editor filesystem only knows a path after its scan, and update_file
+    # silently no-ops on anything untracked; report that so the caller scans.
+    if filesystem.get_file_type(source).is_empty():
+        return false
+    filesystem.update_file(source)
+    return true
 
 func _reconcile_paths(paths: PackedStringArray) -> void:
     for path in paths:

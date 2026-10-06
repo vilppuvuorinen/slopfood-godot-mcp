@@ -20,6 +20,7 @@ type pollNotifier struct {
 	root     string
 	interval time.Duration
 	events   chan<- struct{}
+	record   func(path string)
 	stop     chan struct{}
 	done     chan struct{}
 
@@ -36,6 +37,7 @@ func newPollNotifier(cfg notifierConfig) *pollNotifier {
 		root:     cfg.root,
 		interval: interval,
 		events:   cfg.events,
+		record:   cfg.record,
 		stop:     make(chan struct{}),
 		done:     make(chan struct{}),
 		baseline: snapshotProject(cfg.root),
@@ -64,6 +66,7 @@ func (p *pollNotifier) run() {
 			if snapshotsEqual(p.baseline, current) {
 				continue
 			}
+			p.reportChanges(p.baseline, current)
 			p.baseline = current
 			select {
 			case p.events <- struct{}{}:
@@ -71,6 +74,33 @@ func (p *pollNotifier) run() {
 			}
 		}
 	}
+}
+
+// reportChanges records the project-relative paths that appeared, changed, or
+// disappeared between two snapshots so the burst can be reconciled by path.
+func (p *pollNotifier) reportChanges(before, after map[string]fileStamp) {
+	if p.record == nil {
+		return
+	}
+	for path, stamp := range after {
+		if prev, ok := before[path]; ok && prev == stamp {
+			continue
+		}
+		p.recordPath(path)
+	}
+	for path := range before {
+		if _, ok := after[path]; !ok {
+			p.recordPath(path)
+		}
+	}
+}
+
+func (p *pollNotifier) recordPath(path string) {
+	rel, err := filepath.Rel(p.root, path)
+	if err != nil {
+		return
+	}
+	p.record(filepath.ToSlash(rel))
 }
 
 // snapshotProject stamps every relevant file under root. Walk and stat failures
