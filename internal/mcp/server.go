@@ -49,6 +49,14 @@ type ServerInfo struct {
 	Version string `json:"version"`
 }
 
+// A Barrier settles the project before each queued tool call: Flush runs before
+// the call is submitted so it does not start on an in-flight watcher scan. An
+// implementation may submit work to the queue, so Flush must not run on the
+// queue worker goroutine.
+type Barrier interface {
+	Flush(ctx context.Context) error
+}
+
 type Server struct {
 	info         ServerInfo
 	logger       *slog.Logger
@@ -56,7 +64,9 @@ type Server struct {
 	mu           sync.RWMutex
 	tools        map[string]Tool
 	// queue, when set, serializes tool calls across all connections; nil runs handlers inline.
-	queue   *Queue
+	queue *Queue
+	// barrier, when set, flushes pending watcher scans before each queued call.
+	barrier Barrier
 	writeMu sync.Mutex
 }
 
@@ -273,6 +283,14 @@ func (s *Server) SetQueue(q *Queue) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.queue = q
+}
+
+// SetBarrier installs the settle hook run before each queued call; nil disables
+// it. It must be set before Serve.
+func (s *Server) SetBarrier(b Barrier) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.barrier = b
 }
 
 // The reader runs on its own goroutine and cancels the connection context on
@@ -546,11 +564,12 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 	s.mu.RLock()
 	tool, ok := s.tools[p.Name]
 	queue := s.queue
+	barrier := s.barrier
 	s.mu.RUnlock()
 	if !ok {
 		return nil, errors.New("unknown tool: " + p.Name)
 	}
-	out, err := s.callHandler(ctx, queue, tool.Handler, p.Arguments)
+	out, err := s.callHandler(ctx, queue, barrier, tool.Handler, p.Arguments)
 	if err != nil {
 		return ErrorResult(err.Error()), nil
 	}
@@ -568,10 +587,17 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, err
 }
 
 // Submits to queue when installed so engine calls serialize; a queue timeout
-// cancels any engine work the handler started.
-func (s *Server) callHandler(ctx context.Context, queue *Queue, handler ToolHandler, args json.RawMessage) (any, error) {
+// cancels any engine work the handler started. With a barrier installed the
+// pending watcher scans are flushed before the call is submitted, so the
+// handler never starts on in-flight state.
+func (s *Server) callHandler(ctx context.Context, queue *Queue, barrier Barrier, handler ToolHandler, args json.RawMessage) (any, error) {
 	if queue == nil {
 		return handler(ctx, args)
+	}
+	if barrier != nil {
+		if err := barrier.Flush(ctx); err != nil {
+			return nil, fmt.Errorf("flush before tool call: %w", err)
+		}
 	}
 	return queue.Submit(ctx, func(ctx context.Context) (any, error) {
 		return handler(ctx, args)

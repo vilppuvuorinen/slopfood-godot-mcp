@@ -274,9 +274,10 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	}()
 	serveCtx := tools.WithSession(role.ctx, session)
 
+	server := role.newServer()
 	queue := mcp.NewQueue(operationQueueDepth, operationQueueTimeout)
 	daemon := mcp.NewDaemon(
-		role.newServer(),
+		server,
 		queue,
 		listen,
 		endpoint.addr(),
@@ -307,6 +308,9 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 		if watchErr != nil {
 			role.logger.Warn("file watcher unavailable; automatic rescans disabled", "error", watchErr)
 		} else {
+			// Flush pending watcher scans before each tool call so the call
+			// never starts on in-flight state.
+			server.SetBarrier(watch)
 			defer watch.Close()
 			role.logger.Info("watching project for changes", "project", role.root)
 		}

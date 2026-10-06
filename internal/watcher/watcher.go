@@ -5,6 +5,7 @@ package watcher
 import (
 	"context"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -39,6 +40,9 @@ type Watcher struct {
 	events   chan struct{}
 	notifier notifier
 	changes  *changeSet
+	// flushReqs carries flush requests to the loop, which waits out the current
+	// debounce and scan so a flush never overlaps one.
+	flushReqs chan chan struct{}
 
 	ctx       context.Context
 	cancel    context.CancelFunc
@@ -46,12 +50,15 @@ type Watcher struct {
 	closeOnce sync.Once
 }
 
-// changeSet accumulates the project-relative paths seen within a burst. The
-// notifier records paths as they arrive while a separate event signal wakes the
-// loop, so paths cannot be lost when the buffered signal is full.
+// changeSet accumulates the project-relative paths seen within a burst and
+// tracks whether anything is pending at all. The notifier records paths as they
+// arrive while a separate event signal wakes the loop, so paths cannot be lost
+// when the buffered signal is full. A directory change carries no path, so the
+// pending flag is what lets a flush run a scan without a concrete path.
 type changeSet struct {
 	mu    sync.Mutex
 	paths map[string]struct{}
+	dirty bool
 }
 
 func newChangeSet() *changeSet {
@@ -59,20 +66,39 @@ func newChangeSet() *changeSet {
 }
 
 func (c *changeSet) add(path string) {
-	if path == "" {
-		return
-	}
 	c.mu.Lock()
-	c.paths[path] = struct{}{}
+	c.dirty = true
+	if path != "" {
+		c.paths[path] = struct{}{}
+	}
 	c.mu.Unlock()
 }
 
-// drain returns the accumulated paths sorted and clears the set.
-func (c *changeSet) drain() []string {
+// mark records that a change happened without naming a path.
+func (c *changeSet) mark() {
+	c.mu.Lock()
+	c.dirty = true
+	c.mu.Unlock()
+}
+
+// isDirty reports whether anything is pending without clearing it.
+func (c *changeSet) isDirty() bool {
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	return c.dirty
+}
+
+// take reports whether anything is pending and returns the accumulated paths
+// sorted, clearing both the paths and the pending flag.
+func (c *changeSet) take() ([]string, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.dirty {
+		return nil, false
+	}
+	c.dirty = false
 	if len(c.paths) == 0 {
-		return nil
+		return nil, true
 	}
 	out := make([]string, 0, len(c.paths))
 	for path := range c.paths {
@@ -80,7 +106,7 @@ func (c *changeSet) drain() []string {
 	}
 	c.paths = make(map[string]struct{})
 	sort.Strings(out)
-	return out
+	return out, true
 }
 
 // The platform seam: Linux uses inotify, other platforms poll the filesystem.
@@ -120,17 +146,42 @@ func New(cfg Config) (*Watcher, error) {
 func newWatcher(cfg Config, events chan struct{}, n notifier, changes *changeSet) *Watcher {
 	ctx, cancel := context.WithCancel(context.Background())
 	w := &Watcher{
-		rescan:   cfg.Rescan,
-		debounce: cfg.Debounce,
-		events:   events,
-		notifier: n,
-		changes:  changes,
-		ctx:      ctx,
-		cancel:   cancel,
+		rescan:    cfg.Rescan,
+		debounce:  cfg.Debounce,
+		events:    events,
+		notifier:  n,
+		changes:   changes,
+		flushReqs: make(chan chan struct{}),
+		ctx:       ctx,
+		cancel:    cancel,
 	}
 	w.wg.Add(1)
 	go w.loop()
 	return w
+}
+
+// Flush blocks until any pending burst has been debounced and scanned, so the
+// project is settled when it returns. It is a no-op on an idle watcher. The
+// scan is submitted through the rescan callback, which the daemon routes onto
+// the shared queue, so Flush must be called off the queue worker goroutine to
+// avoid a self-deadlock.
+func (w *Watcher) Flush(ctx context.Context) error {
+	done := make(chan struct{})
+	select {
+	case w.flushReqs <- done:
+	case <-w.ctx.Done():
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("watcher flush: %w", ctx.Err())
+	}
+	select {
+	case <-done:
+		return nil
+	case <-w.ctx.Done():
+		return nil
+	case <-ctx.Done():
+		return fmt.Errorf("watcher flush: %w", ctx.Err())
+	}
 }
 
 // Close stops the watcher and blocks until its rescan returns.
@@ -149,15 +200,45 @@ func (w *Watcher) loop() {
 		case <-w.ctx.Done():
 			return
 		case <-w.events:
+			w.changes.mark()
+		case done := <-w.flushReqs:
+			// Let the burst debounce and scan naturally, so a flush waits out
+			// the same settle the watcher would do on its own. Draining a
+			// buffered signal first keeps a request from slipping ahead of it.
+			select {
+			case <-w.events:
+				w.changes.mark()
+			default:
+			}
+			if w.changes.isDirty() {
+				if !w.settle() {
+					close(done)
+					return
+				}
+				w.scan()
+			}
+			close(done)
+			continue
 		}
 		if !w.settle() {
 			return
 		}
-		w.rescan(w.ctx, w.changes.drain())
+		w.scan()
 	}
 }
 
-// settle waits out a burst of changes, returning false when the watcher stops.
+// scan runs a rescan for whatever is pending, or does nothing when the changes
+// were already consumed by a barrier.
+func (w *Watcher) scan() {
+	paths, dirty := w.changes.take()
+	if !dirty {
+		return
+	}
+	w.rescan(w.ctx, paths)
+}
+
+// settle waits out a burst of changes, resetting the timer as new events
+// arrive. It reports false when the watcher stops.
 func (w *Watcher) settle() bool {
 	timer := time.NewTimer(w.debounce)
 	defer timer.Stop()
@@ -166,6 +247,7 @@ func (w *Watcher) settle() bool {
 		case <-w.ctx.Done():
 			return false
 		case <-w.events:
+			w.changes.mark()
 			if !timer.Stop() {
 				select {
 				case <-timer.C:
