@@ -4,20 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"log/slog"
-	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
-
-type barrierFunc func(context.Context) error
-
-func (f barrierFunc) Flush(ctx context.Context) error { return f(ctx) }
 
 func testServer() *Server {
 	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
@@ -217,69 +211,6 @@ func TestServeToolsCallThroughQueue(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Serve did not return after the stream closed")
-	}
-}
-
-// A queued call is flushed before the handler runs, so it never starts on
-// in-flight state.
-func TestCallToolFlushesBeforeHandler(t *testing.T) {
-	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	var mu sync.Mutex
-	var order []string
-	record := func(event string) {
-		mu.Lock()
-		order = append(order, event)
-		mu.Unlock()
-	}
-	s.RegisterTool(Tool{
-		Name:        "mutate",
-		Description: "mutate",
-		InputSchema: map[string]any{"type": "object"},
-		Handler: func(context.Context, json.RawMessage) (any, error) {
-			record("handler")
-			return nil, nil
-		},
-	})
-
-	q := NewQueue(4, testQueueTimeout)
-	defer q.Close()
-	s.SetQueue(q)
-	s.SetBarrier(barrierFunc(func(context.Context) error {
-		record("flush")
-		return nil
-	}))
-
-	if _, err := s.callTool(context.Background(), json.RawMessage(`{"name":"mutate"}`)); err != nil {
-		t.Fatalf("callTool: %v", err)
-	}
-
-	mu.Lock()
-	got := append([]string(nil), order...)
-	mu.Unlock()
-	if want := []string{"flush", "handler"}; !slices.Equal(got, want) {
-		t.Errorf("order = %q, want %q", got, want)
-	}
-}
-
-// A pre-call barrier failure aborts the call before the handler runs.
-func TestCallToolBarrierFlushErrorSkipsHandler(t *testing.T) {
-	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	var ran atomic.Bool
-	handler := func(context.Context, json.RawMessage) (any, error) {
-		ran.Store(true)
-		return nil, nil
-	}
-
-	q := NewQueue(4, testQueueTimeout)
-	defer q.Close()
-	want := errors.New("flush failed")
-	barrier := barrierFunc(func(context.Context) error { return want })
-
-	if _, err := s.callHandler(context.Background(), q, barrier, handler, nil); !errors.Is(err, want) {
-		t.Fatalf("callHandler err = %v, want %v", err, want)
-	}
-	if ran.Load() {
-		t.Error("handler ran despite the barrier failure")
 	}
 }
 

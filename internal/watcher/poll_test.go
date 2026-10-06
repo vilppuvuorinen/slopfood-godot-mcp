@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"slices"
 	"testing"
 	"time"
 )
@@ -89,34 +88,6 @@ func TestPollNotifierSignalsOnNewRelevantFile(t *testing.T) {
 	}
 }
 
-func TestPollNotifierReportsChangedPaths(t *testing.T) {
-	root := t.TempDir()
-	writeProjectFile(t, filepath.Join(root, "project.godot"), "config_version=5\n")
-
-	changes := make(chan struct{}, 1)
-	recorded := make(chan string, 4)
-	p := newPollNotifier(notifierConfig{
-		root:     root,
-		interval: 5 * time.Millisecond,
-		events:   changes,
-		record:   func(path string) { recorded <- path },
-	})
-	t.Cleanup(p.Close)
-
-	writeProjectFile(t, filepath.Join(root, "scripts", "player.gd"), "extends Node\n")
-	if !waitForChange(changes, time.Second) {
-		t.Fatal("new script did not signal a change")
-	}
-	select {
-	case got := <-recorded:
-		if got != "scripts/player.gd" {
-			t.Errorf("recorded path = %q, want scripts/player.gd", got)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("no changed path was recorded")
-	}
-}
-
 func TestPollNotifierSignalsOnModifiedFile(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "player.gd")
@@ -183,10 +154,10 @@ func TestWatcherCoalescesBurst(t *testing.T) {
 	cfg := Config{
 		Root:     t.TempDir(),
 		Debounce: 40 * time.Millisecond,
-		Rescan:   func(context.Context, []string) { calls <- struct{}{} },
+		Rescan:   func(context.Context) { calls <- struct{}{} },
 	}
 	notifier := &fakeNotifier{}
-	w := newWatcher(cfg, events, notifier, newChangeSet())
+	w := newWatcher(cfg, events, notifier)
 	defer w.Close()
 
 	events <- struct{}{}
@@ -211,131 +182,20 @@ func TestWatcherCoalescesBurst(t *testing.T) {
 	}
 }
 
-func TestWatcherPassesChangedPaths(t *testing.T) {
-	events := make(chan struct{}, 1)
-	type call struct{ paths []string }
-	calls := make(chan call, 4)
-	cfg := Config{
-		Root:     t.TempDir(),
-		Debounce: 30 * time.Millisecond,
-		Rescan:   func(_ context.Context, paths []string) { calls <- call{paths: paths} },
-	}
-	changes := newChangeSet()
-	w := newWatcher(cfg, events, &fakeNotifier{}, changes)
-	defer w.Close()
-
-	changes.add("assets/icon.svg")
-	changes.add("scripts/player.gd")
-	changes.add("assets/icon.svg")
-	events <- struct{}{}
-
-	select {
-	case got := <-calls:
-		want := []string{"assets/icon.svg", "scripts/player.gd"}
-		if !slices.Equal(got.paths, want) {
-			t.Errorf("rescan paths = %q, want %q", got.paths, want)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("a change did not produce a rescan")
-	}
-}
-
-// Flush waits for a pending burst to debounce and scan before returning.
-func TestWatcherFlushScansPending(t *testing.T) {
-	events := make(chan struct{}, 1)
-	calls := make(chan []string, 4)
-	cfg := Config{
-		Root:     t.TempDir(),
-		Debounce: 10 * time.Millisecond,
-		Rescan:   func(_ context.Context, paths []string) { calls <- paths },
-	}
-	changes := newChangeSet()
-	w := newWatcher(cfg, events, &fakeNotifier{}, changes)
-	defer w.Close()
-
-	changes.add("scripts/player.gd")
-	events <- struct{}{}
-
-	if err := w.Flush(context.Background()); err != nil {
-		t.Fatalf("Flush: %v", err)
-	}
-	select {
-	case got := <-calls:
-		if want := []string{"scripts/player.gd"}; !slices.Equal(got, want) {
-			t.Errorf("rescan paths = %q, want %q", got, want)
-		}
-	default:
-		t.Fatal("Flush did not wait for the pending scan")
-	}
-	if len(calls) != 0 {
-		t.Fatal("Flush produced more than one scan")
-	}
-}
-
-// With nothing pending, a flush must not trigger a full scan.
-func TestWatcherFlushNoopWhenIdle(t *testing.T) {
+// A change is reported without a path; the rescan callback takes none.
+func TestWatcherRescanTakesNoPaths(t *testing.T) {
 	events := make(chan struct{}, 1)
 	calls := make(chan struct{}, 4)
 	cfg := Config{
 		Root:     t.TempDir(),
-		Debounce: 10 * time.Millisecond,
-		Rescan:   func(context.Context, []string) { calls <- struct{}{} },
+		Debounce: 30 * time.Millisecond,
+		Rescan:   func(context.Context) { calls <- struct{}{} },
 	}
-	w := newWatcher(cfg, events, &fakeNotifier{}, newChangeSet())
+	w := newWatcher(cfg, events, &fakeNotifier{})
 	defer w.Close()
 
-	if err := w.Flush(context.Background()); err != nil {
-		t.Fatalf("Flush: %v", err)
-	}
-	select {
-	case <-calls:
-		t.Fatal("Flush scanned with nothing pending")
-	default:
-	}
-}
-
-// Flush must block until an in-progress scan finishes.
-func TestWatcherFlushWaitsForScan(t *testing.T) {
-	events := make(chan struct{}, 1)
-	scanStarted := make(chan struct{}, 1)
-	scanRelease := make(chan struct{})
-	cfg := Config{
-		Root:     t.TempDir(),
-		Debounce: time.Millisecond,
-		Rescan: func(context.Context, []string) {
-			scanStarted <- struct{}{}
-			<-scanRelease
-		},
-	}
-	changes := newChangeSet()
-	w := newWatcher(cfg, events, &fakeNotifier{}, changes)
-	defer w.Close()
-
-	changes.add("a.gd")
 	events <- struct{}{}
-
-	select {
-	case <-scanStarted:
-	case <-time.After(time.Second):
-		t.Fatal("scan did not start")
-	}
-
-	flushDone := make(chan error, 1)
-	go func() { flushDone <- w.Flush(context.Background()) }()
-
-	select {
-	case <-flushDone:
-		t.Fatal("Flush returned while a scan was in progress")
-	case <-time.After(20 * time.Millisecond):
-	}
-
-	close(scanRelease)
-	select {
-	case err := <-flushDone:
-		if err != nil {
-			t.Fatalf("Flush: %v", err)
-		}
-	case <-time.After(time.Second):
-		t.Fatal("Flush did not return after the scan finished")
+	if !waitForChange(calls, time.Second) {
+		t.Fatal("a change did not produce a rescan")
 	}
 }

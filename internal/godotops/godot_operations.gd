@@ -104,11 +104,22 @@ var _ready_printed := false
 var _scan_seen := false
 var _quit_pending := false
 
-var _await_scan := false
-var _deferred_id := -1
-var _deferred_result: Result = null
+# The scan gate: every request is bracketed by an entry scan (before dispatch)
+# and a closing scan (before the response), so a handler never runs during a
+# scan and every response leaves a scanned tree. The driver's queue serializes
+# engine operations, so a single deferred slot is enough.
+var _scan_generation := 0
+var _scan_baseline := 0
+var _pending_request: Variant = null
+var _pending_result: Result = null
+var _entry_done := false
 
-var _reconcile_paths_pending: PackedStringArray = PackedStringArray()
+# The uid guard: every .uid file present at transaction entry, keyed by the
+# source it describes. A scan can unlink a .uid whose source was mid-write
+# (including an unlink+create replace); the guard rewrites the remembered
+# uid:// once the source is back. It is kept for the session so a create that
+# lands after its transaction settles is still repaired.
+var _uid_guard: Dictionary = {}
 
 func _bind_uds(socket_path: String) -> void:
     # A stale socket or regular file makes listen fail with EINVAL.
@@ -160,14 +171,7 @@ func _process(_delta: float) -> bool:
         if _transport == "tcp" and _peer.get_status() != StreamPeerSocket.STATUS_CONNECTED:
             return false
         _read_peer()
-    if _reconcile_paths_pending.size() > 0 and (_filesystem == null or not _filesystem.is_scanning()):
-        for path in _reconcile_paths_pending:
-            _apply_reconcile(path)
-        _reconcile_paths_pending = PackedStringArray()
-    if _deferred_result != null and (_filesystem == null or not _filesystem.is_scanning()):
-        _send_socket_response(_deferred_id, _deferred_result.ok, _deferred_result.stdout, _deferred_result.stderr)
-        _deferred_result = null
-        _deferred_id = -1
+    _advance_transaction()
     return false
 
 func _filesystem_ready() -> bool:
@@ -177,55 +181,88 @@ func _filesystem_ready() -> bool:
         _filesystem = EditorInterface.get_resource_filesystem()
         if _filesystem == null:
             return false
+        if not _filesystem.sources_changed.is_connected(_on_sources_changed):
+            _filesystem.sources_changed.connect(_on_sources_changed)
     if _filesystem.is_scanning():
         _scan_seen = true
         return false
     return _scan_seen
 
-func _reconcile_path(path: String) -> void:
-    if not Engine.is_editor_hint() or not path.begins_with("res://"):
+# Scan completion is tracked with a generation counter driven by the
+# sources_changed signal rather than a bare is_scanning() poll: a scan may not
+# have flipped is_scanning() true by the time the same frame checks it. A full
+# scan (rather than a mtime-gated scan_sources()) is the reconciler, so an
+# out-of-band write made in the same second as the previous scan is still seen.
+func _on_sources_changed(_exist: bool) -> void:
+    _scan_generation += 1
+    _restore_uids()
+
+# Begin a scan and remember the generation it must advance past. A scan already
+# running already proves a freshly settled tree, so it is waited out instead of
+# starting a second one.
+func _start_scan() -> void:
+    _scan_baseline = _scan_generation
+    if _filesystem == null:
+        _scan_generation += 1
         return
-    var filesystem := _filesystem
-    if filesystem == null:
-        filesystem = EditorInterface.get_resource_filesystem()
-        if filesystem == null:
-            return
-    if _apply_reconcile(path):
+    if not _filesystem.is_scanning():
+        _filesystem.scan()
+
+# One request at a time: entry scan, handler, closing scan, response.
+func _advance_transaction() -> void:
+    if _pending_request == null:
         return
-    # An untracked path gains its .import/.uid sidecar only from a scan, so
-    # request one (once per burst) and retry the path when the scan settles.
-    if _reconcile_paths_pending.is_empty() and not filesystem.is_scanning():
-        filesystem.scan_sources()
-    _reconcile_paths_pending.append(path)
+    if _scan_generation == _scan_baseline:
+        return
+    if not _entry_done:
+        _entry_done = true
+        _pending_result = dispatch(_pending_request["operation"], _pending_request["params"])
+        # The closing scan reconciles whatever the handler wrote.
+        _start_scan()
+        return
+    _send_socket_response(_pending_request["id"], _pending_result.ok, _pending_result.stdout, _pending_result.stderr)
+    _pending_request = null
+    _pending_result = null
+    _entry_done = false
 
-# A changed sidecar maps back to the source resource it describes.
-func _sidecar_source(path: String) -> String:
-    if path.ends_with(".import"):
-        return path.trim_suffix(".import")
-    if path.ends_with(".uid"):
-        return path.trim_suffix(".uid")
-    return path
+# The only place the bridge touches sidecar files. Snapshot the .uid files that
+# are present now, keyed by the source they describe, whether or not that source
+# is currently present, so a scan that drops one mid-transaction can be repaired.
+func _snapshot_uids() -> Dictionary:
+    var guard := {}
+    _collect_uids("res://", guard)
+    return guard
 
-func _apply_reconcile(path: String) -> bool:
-    var filesystem := _filesystem
-    if filesystem == null:
-        filesystem = EditorInterface.get_resource_filesystem()
-    if filesystem == null:
-        return false
-    var source := _sidecar_source(path)
-    if FileAccess.file_exists(source + ".import"):
-        filesystem.reimport_files(PackedStringArray([source]))
-        return true
-    # The editor filesystem only knows a path after its scan, and update_file
-    # silently no-ops on anything untracked; report that so the caller scans.
-    if filesystem.get_file_type(source).is_empty():
-        return false
-    filesystem.update_file(source)
-    return true
+func _collect_uids(path: String, guard: Dictionary) -> void:
+    var dir := DirAccess.open(path)
+    if dir == null:
+        return
+    dir.list_dir_begin()
+    var name := dir.get_next()
+    while name != "":
+        if dir.current_is_dir():
+            if name != "." and name != "..":
+                _collect_uids(path.path_join(name), guard)
+        elif name.ends_with(".uid"):
+            var source := path.path_join(name.trim_suffix(".uid"))
+            var content := FileAccess.get_file_as_string(source + ".uid")
+            if not content.is_empty():
+                guard[source] = content.strip_edges()
+        name = dir.get_next()
+    dir.list_dir_end()
 
-func _reconcile_paths(paths: PackedStringArray) -> void:
-    for path in paths:
-        _reconcile_path(path)
+# Rewrite a remembered uid only when its source exists and the sidecar is
+# missing. Skipping when the sidecar is present makes the correction a no-op on
+# a correct uid, so it converges instead of re-arming the watcher.
+func _restore_uids() -> void:
+    for source in _uid_guard:
+        if FileAccess.file_exists(source + ".uid"):
+            continue
+        if not FileAccess.file_exists(source):
+            continue
+        var sidecar := FileAccess.open(source + ".uid", FileAccess.WRITE)
+        if sidecar != null:
+            sidecar.store_line(_uid_guard[source])
 
 func _read_peer() -> void:
     var available := _peer.get_available_bytes()
@@ -278,13 +315,13 @@ func _handle_socket_request(line: String) -> bool:
     var params = request.get("params", {})
     if not (params is Dictionary):
         params = {}
-    var result := dispatch(operation, params)
-    if _await_scan or _reconcile_paths_pending.size() > 0:
-        _await_scan = false
-        _deferred_id = id
-        _deferred_result = result
-        return true
-    _send_socket_response(id, result.ok, result.stdout, result.stderr)
+    # Snapshot the uid files before the entry scan can disturb them, then let
+    # _process run the transaction to completion.
+    _uid_guard.merge(_snapshot_uids(), true)
+    _pending_request = {"id": id, "operation": operation, "params": params}
+    _pending_result = null
+    _entry_done = false
+    _start_scan()
     return true
 
 func _send_socket_response(id: int, ok: bool, stdout: String, stderr: String) -> void:
@@ -372,26 +409,15 @@ func _free_temp_nodes():
             node.free()
     _temp_nodes.clear()
 
-func rescan_project(result: Result, params) -> Result:
+func rescan_project(result: Result, _params) -> Result:
     if not Engine.is_editor_hint():
         result.err("rescan_project requires the editor filesystem; run it through the editor session")
         return result.fail()
-    var filesystem := _filesystem
-    if filesystem == null:
-        filesystem = EditorInterface.get_resource_filesystem()
-        if filesystem == null:
-            result.err("rescan_project requires the editor filesystem; run it through the editor session")
-            return result.fail()
-    var touched = params.get("paths", [])
-    if touched is Array and touched.size() > 0:
-        var paths := PackedStringArray()
-        for path in touched:
-            paths.append(str(path))
-        _reconcile_paths(paths)
-        result.out("Reconciled " + str(paths.size()) + " path(s) with the editor filesystem")
-        return result
-    filesystem.scan_sources()
-    _await_scan = true
+    if _filesystem == null:
+        result.err("rescan_project requires the editor filesystem; run it through the editor session")
+        return result.fail()
+    # The transaction's entry and closing scans are the reconciler; this handler
+    # only has to acknowledge that a settle was requested.
     result.out("Scanned project sources")
     return result
 
@@ -488,7 +514,6 @@ func export_mesh_library(result: Result, params) -> Result:
     if item_id > 0:
         var error = ResourceSaver.save(mesh_library, full_output_path)
         if error == OK:
-            _reconcile_path(full_output_path)
             result.out("MeshLibrary exported successfully with " + str(item_id) + " items to: " + full_output_path)
         else:
             result.err("Failed to save MeshLibrary: " + str(error))
@@ -840,8 +865,6 @@ func attach_script(result: Result, params) -> Result:
         result.err("Failed to save scene after attaching script: " + str(save_error))
         return result.fail()
 
-    _reconcile_path(full_script_path)
-    _reconcile_path(full_scene_path)
     result.out("Script '" + full_script_path + "' attached successfully to node in: " + full_scene_path)
     return result
 

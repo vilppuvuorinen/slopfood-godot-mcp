@@ -42,6 +42,20 @@ func TestAutoRescanAppliesSidecarEdit(t *testing.T) {
 	waitForContains(t, sidecar, "compress/mode=1", 20*time.Second)
 }
 
+// A tool call made immediately after an out-of-band save returns with the
+// project scanned: the new script's .uid sidecar is present.
+func TestToolCallSeesOutOfBandSave(t *testing.T) {
+	t.Parallel()
+	root, session := seedScene(t, "scenes/main.tscn")
+
+	writeE2EFile(t, filepath.Join(root, "late.gd"), "extends Node\n")
+	requireToolText(t, session, "read", map[string]any{"type": "scene", "path": "scenes/main.tscn"})
+
+	if _, err := os.Stat(filepath.Join(root, "late.gd.uid")); err != nil {
+		t.Fatalf("late.gd.uid missing after the tool call: %v", err)
+	}
+}
+
 func waitForFile(t *testing.T, path string, within time.Duration) {
 	t.Helper()
 	if !pollUntil(within, func() bool {
