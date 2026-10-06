@@ -18,6 +18,7 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/tools"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/watcher"
 )
 
 var version = "dev"
@@ -64,6 +65,8 @@ type options struct {
 	idleTimeout time.Duration
 	logFile     string
 	detach      bool
+	// noWatch disables the project file watcher that queues automatic rescans.
+	noWatch bool
 	// transport is only settable in dev builds; a release binary always resolves auto.
 	transport string
 	// transportSet gates forwarding --transport to a child that can accept it.
@@ -79,6 +82,7 @@ func newFlags(name string) (*flag.FlagSet, *options) {
 	fs.DurationVar(&opts.idleTimeout, "idle-timeout", defaultIdleTimeout, "daemon: exit after this long with no clients (0 disables)")
 	fs.StringVar(&opts.logFile, "log-file", "", "daemon: log file (default: a per-project path under the runtime directory)")
 	fs.BoolVar(&opts.detach, "detach", false, "daemon: re-exec as a detached child and exit")
+	fs.BoolVar(&opts.noWatch, "no-watch", false, "daemon: disable automatic rescans on project file changes")
 	registerTransportFlag(fs, opts)
 	return fs, opts
 }
@@ -291,10 +295,50 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 		}
 	}()
 
+	// Registered after daemon.Close so LIFO stops the watcher first and no
+	// automatic rescan starts while the daemon is shutting down.
+	if !opts.noWatch {
+		watch, watchErr := watcher.New(watcher.Config{
+			Root: role.root,
+			Rescan: func(ctx context.Context) {
+				runAutoRescan(ctx, role.logger, queue, session, role.root)
+			},
+		})
+		if watchErr != nil {
+			role.logger.Warn("file watcher unavailable; automatic rescans disabled", "error", watchErr)
+		} else {
+			defer watch.Close()
+			role.logger.Info("watching project for changes", "project", role.root)
+		}
+	}
+
 	role.logger.Info("daemon listening", "project", role.root, "transport", transport, "endpoint", endpoint.addr(), "log", logPath)
 	if err := daemon.Serve(serveCtx); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("daemon serve: %w", err)
 	}
 	role.logger.Info("daemon stopped", "project", role.root)
 	return nil
+}
+
+// runAutoRescan submits an automatic rescan to the shared queue so it runs
+// behind any in-flight tool call. It blocks until the queue finishes the job,
+// which coalesces a stream of file changes into ordered rescans; a full queue
+// or a stop drops the rescan rather than growing a backlog.
+func runAutoRescan(ctx context.Context, logger *slog.Logger, queue *mcp.Queue, session *godot.Session, root string) {
+	if _, err := os.Stat(filepath.Join(root, "project.godot")); err != nil {
+		return
+	}
+	_, err := queue.Submit(ctx, func(ctx context.Context) (any, error) {
+		_, stderr, exitCode, err := session.Run(ctx, root, "rescan_project", nil)
+		if err != nil {
+			return nil, fmt.Errorf("auto rescan: %w", err)
+		}
+		if exitCode != 0 {
+			return nil, fmt.Errorf("rescan failed: %s", strings.TrimSpace(stderr))
+		}
+		return nil, nil
+	})
+	if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, mcp.ErrQueueClosed) {
+		logger.Warn("automatic rescan failed", "error", err)
+	}
 }

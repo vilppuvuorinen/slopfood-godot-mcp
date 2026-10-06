@@ -103,6 +103,14 @@ func TestDaemonChildArgs(t *testing.T) {
 	}
 }
 
+func TestDaemonChildArgsForwardsNoWatch(t *testing.T) {
+	opts := &options{noWatch: true}
+	got := daemonChildArgs("/tmp/project", opts, "/tmp/project.log")
+	if !slices.Contains(got, "--no-watch") {
+		t.Errorf("daemonChildArgs = %q, want it to contain --no-watch", got)
+	}
+}
+
 func TestRunDaemonRejectsNegativeIdleTimeout(t *testing.T) {
 	var stdout, stderr strings.Builder
 	if err := run([]string{daemonSubcommand, "--idle-timeout", "-1s"}, strings.NewReader(""), &stdout, &stderr); err == nil {

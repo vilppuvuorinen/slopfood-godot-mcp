@@ -14,7 +14,7 @@ var (
 )
 
 func daemonChildArgs(root string, opts *options, logPath string) []string {
-	args := make([]string, 0, 12)
+	args := make([]string, 0, 13)
 	args = append(args,
 		daemonSubcommand,
 		"--project", root,
@@ -22,6 +22,9 @@ func daemonChildArgs(root string, opts *options, logPath string) []string {
 		"--log-file", logPath,
 		"--idle-timeout", opts.idleTimeout.String(),
 	)
+	if opts.noWatch {
+		args = append(args, "--no-watch")
+	}
 	// Forward --transport only when set, so a release child never sees an unknown flag.
 	if opts.transportSet {
 		args = append(args, "--transport", opts.transport)
