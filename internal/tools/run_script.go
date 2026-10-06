@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"path/filepath"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
@@ -61,21 +59,16 @@ type runScriptArgs struct {
 }
 
 func handleRunScript(ctx context.Context, raw json.RawMessage) (any, error) {
-	var args runScriptArgs
-	if len(raw) > 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
+	args, _, err := decodeArgs[runScriptArgs](raw)
+	if err != nil {
+		return nil, err
 	}
 	project := projectRoot(ctx)
-	if args.Body == "" {
-		return requiredArgsResult("body"), nil
+	if result, missing := requireFields(args, "body"); missing {
+		return result, nil
 	}
-	if !validPath(project) {
-		return invalidPathResult(), nil
-	}
-	if !pathExists(filepath.Join(project, "project.godot")) {
-		return notAProjectResult(project), nil
+	if result, ok := requireProject(project); !ok {
+		return result, nil
 	}
 
 	stdout, stderr, exitCode, err := runEngine(ctx, project, "run_script", map[string]any{"body": args.Body})

@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -55,21 +54,15 @@ type readNodeArgs struct {
 }
 
 func handleReadNode(ctx context.Context, raw json.RawMessage) (any, error) {
-	var args readNodeArgs
 	// Presence, not value: an explicit null and an absent key both nil the
 	// typed depth field, so depth-on-tilemap is detected from the raw map.
-	var present map[string]json.RawMessage
-	if len(raw) > 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
-		if err := json.Unmarshal(raw, &present); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
+	args, present, err := decodeArgs[readNodeArgs](raw)
+	if err != nil {
+		return nil, err
 	}
 	project := projectRoot(ctx)
-	if args.Type == "" {
-		return requiredArgsResult("type"), nil
+	if result, missing := requireFields(args, "type"); missing {
+		return result, nil
 	}
 	if !slices.Contains(readNodeTypes, args.Type) {
 		return mcp.ErrorResult(
@@ -77,11 +70,11 @@ func handleReadNode(ctx context.Context, raw json.RawMessage) (any, error) {
 			"type must be one of "+strings.Join(readNodeTypes, ", "),
 		), nil
 	}
-	if args.Path == "" {
-		return requiredArgsResult("path"), nil
+	if result, missing := requireFields(args, "path"); missing {
+		return result, nil
 	}
-	if args.NodePath == "" {
-		return requiredArgsResult("nodePath"), nil
+	if result, missing := requireFields(args, "nodePath"); missing {
+		return result, nil
 	}
 	if _, ok := present["depth"]; ok && args.Type == "tilemap" {
 		return mcp.ErrorResult(
@@ -99,7 +92,7 @@ func handleReadNode(ctx context.Context, raw json.RawMessage) (any, error) {
 		return readSceneThrough(ctx, project, args.Path, args.NodePath, args.Depth)
 	}
 
-	if _, result, ok := ensureReadableScene(project, args.Path); !ok {
+	if result, ok := ensureReadableScene(project, args.Path); !ok {
 		return result, nil
 	}
 	params := map[string]any{

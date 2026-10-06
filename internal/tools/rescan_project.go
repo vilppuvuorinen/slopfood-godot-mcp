@@ -3,7 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
@@ -29,12 +28,8 @@ func rescanProject() mcp.Tool {
 
 func handleRescanProject(ctx context.Context, _ json.RawMessage) (any, error) {
 	project := projectRoot(ctx)
-	if !validPath(project) {
-		return invalidPathResult(), nil
-	}
-
-	if !pathExists(filepath.Join(project, "project.godot")) {
-		return notAProjectResult(project), nil
+	if result, ok := requireProject(project); !ok {
+		return result, nil
 	}
 
 	// Drives EditorFileSystem: ResourceSaver has no UID logic, and the text

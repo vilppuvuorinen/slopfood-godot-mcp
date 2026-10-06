@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"path/filepath"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
@@ -49,18 +47,16 @@ type attachScriptArgs struct {
 }
 
 func handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
-	var args attachScriptArgs
-	if len(raw) > 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
+	args, _, err := decodeArgs[attachScriptArgs](raw)
+	if err != nil {
+		return nil, err
 	}
 	project := projectRoot(ctx)
-	if args.ScenePath == "" || args.NodePath == "" || args.ScriptPath == "" {
-		return requiredArgsResult("scenePath", "nodePath", "scriptPath"), nil
+	if result, missing := requireFields(args, "scenePath", "nodePath", "scriptPath"); missing {
+		return result, nil
 	}
-	if !validPath(project) {
-		return invalidPathResult(), nil
+	if result, ok := requireProject(project); !ok {
+		return result, nil
 	}
 	sceneFull, sceneErr := confinePath(project, args.ScenePath)
 	if sceneErr != nil {
@@ -68,9 +64,6 @@ func handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
 	}
 	if _, scriptErr := confinePath(project, args.ScriptPath); scriptErr != nil {
 		return invalidPathResultFor(scriptErr), nil
-	}
-	if !pathExists(filepath.Join(project, "project.godot")) {
-		return notAProjectResult(project), nil
 	}
 	if !pathExists(sceneFull) {
 		return sceneMissingResult(args.ScenePath), nil

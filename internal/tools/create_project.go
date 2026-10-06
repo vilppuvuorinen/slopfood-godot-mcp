@@ -60,15 +60,13 @@ type createProjectArgs struct {
 }
 
 func handleCreateProject(ctx context.Context, raw json.RawMessage) (any, error) {
-	var args createProjectArgs
-	if len(raw) > 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
+	args, _, err := decodeArgs[createProjectArgs](raw)
+	if err != nil {
+		return nil, err
 	}
 	project := projectRoot(ctx)
-	if args.ProjectName == "" {
-		return requiredArgsResult("projectName"), nil
+	if result, missing := requireFields(args, "projectName"); missing {
+		return result, nil
 	}
 	if !validPath(project) {
 		return invalidPathResult(), nil

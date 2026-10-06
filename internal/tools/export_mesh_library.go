@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
@@ -50,18 +49,16 @@ type exportMeshLibraryArgs struct {
 }
 
 func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, error) {
-	var args exportMeshLibraryArgs
-	if len(raw) > 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
+	args, _, err := decodeArgs[exportMeshLibraryArgs](raw)
+	if err != nil {
+		return nil, err
 	}
 	project := projectRoot(ctx)
-	if args.ScenePath == "" || args.OutputPath == "" {
-		return requiredArgsResult("scenePath", "outputPath"), nil
+	if result, missing := requireFields(args, "scenePath", "outputPath"); missing {
+		return result, nil
 	}
-	if !validPath(project) {
-		return invalidPathResult(), nil
+	if result, ok := requireProject(project); !ok {
+		return result, nil
 	}
 	sceneFull, sceneErr := confinePath(project, args.ScenePath)
 	if sceneErr != nil {
@@ -71,11 +68,6 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 	if outputErr != nil {
 		return invalidPathResultFor(outputErr), nil
 	}
-
-	if !pathExists(filepath.Join(project, "project.godot")) {
-		return notAProjectResult(project), nil
-	}
-
 	if !pathExists(sceneFull) {
 		return sceneMissingResult(args.ScenePath), nil
 	}

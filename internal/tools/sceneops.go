@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -222,6 +223,19 @@ func joinFieldNames(fields []string) string {
 	default:
 		return strings.Join(fields[:len(fields)-1], ", ") + ", and " + fields[len(fields)-1]
 	}
+}
+
+// requireProject validates the bound project root and confirms a project.godot
+// exists. It is the shared pre-flight for every tool that runs an engine
+// operation against an existing project.
+func requireProject(project string) (mcp.ToolResult, bool) {
+	if !validPath(project) {
+		return invalidPathResult(), false
+	}
+	if !pathExists(filepath.Join(project, "project.godot")) {
+		return notAProjectResult(project), false
+	}
+	return mcp.ToolResult{}, true
 }
 
 func sceneMissingResult(scenePath string) mcp.ToolResult {

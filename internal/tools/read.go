@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -66,21 +64,15 @@ type readArgs struct {
 }
 
 func handleRead(ctx context.Context, raw json.RawMessage) (any, error) {
-	var args readArgs
 	// Presence, not value: an explicit null and an absent key both nil the
 	// typed fields, so mismatched optional args are detected from the raw map.
-	var present map[string]json.RawMessage
-	if len(raw) > 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
-		if err := json.Unmarshal(raw, &present); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
+	args, present, err := decodeArgs[readArgs](raw)
+	if err != nil {
+		return nil, err
 	}
 	project := projectRoot(ctx)
-	if args.Type == "" {
-		return requiredArgsResult("type"), nil
+	if result, missing := requireFields(args, "type"); missing {
+		return result, nil
 	}
 	if !slices.Contains(readTypes, args.Type) {
 		return mcp.ErrorResult(
@@ -88,8 +80,8 @@ func handleRead(ctx context.Context, raw json.RawMessage) (any, error) {
 			"type must be one of "+strings.Join(readTypes, ", "),
 		), nil
 	}
-	if args.Path == "" {
-		return requiredArgsResult("path"), nil
+	if result, missing := requireFields(args, "path"); missing {
+		return result, nil
 	}
 	if _, ok := present["nodePath"]; ok {
 		return mcp.ErrorResult(
@@ -122,8 +114,8 @@ func handleRead(ctx context.Context, raw json.RawMessage) (any, error) {
 	if _, err := normalizeReadPath(project, args.Path); err != nil {
 		return invalidPathResultFor(err), nil
 	}
-	if !pathExists(filepath.Join(project, "project.godot")) {
-		return notAProjectResult(project), nil
+	if result, ok := requireProject(project); !ok {
+		return result, nil
 	}
 	if args.Type == "resource" && strings.HasSuffix(strings.ToLower(args.Path), ".tres") {
 		return mcp.ErrorResult(

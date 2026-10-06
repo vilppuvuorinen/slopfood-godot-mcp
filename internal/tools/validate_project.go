@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"time"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
@@ -42,11 +41,8 @@ type validateProjectResult struct {
 
 func handleValidateProject(ctx context.Context, _ json.RawMessage) (any, error) {
 	project := projectRoot(ctx)
-	if !validPath(project) {
-		return invalidPathResult(), nil
-	}
-	if !pathExists(filepath.Join(project, "project.godot")) {
-		return notAProjectResult(project), nil
+	if result, ok := requireProject(project); !ok {
+		return result, nil
 	}
 
 	// Godot logs parse diagnostics to stderr but still exits 0, so validity is

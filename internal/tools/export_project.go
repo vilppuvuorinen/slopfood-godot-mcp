@@ -3,8 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"path/filepath"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
@@ -51,25 +49,20 @@ type exportProjectArgs struct {
 }
 
 func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) {
-	var args exportProjectArgs
-	if len(raw) > 0 && string(raw) != "null" {
-		if err := json.Unmarshal(raw, &args); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
+	args, _, err := decodeArgs[exportProjectArgs](raw)
+	if err != nil {
+		return nil, err
 	}
 	project := projectRoot(ctx)
-	if args.PresetName == "" || args.OutputPath == "" {
-		return requiredArgsResult("presetName", "outputPath"), nil
+	if result, missing := requireFields(args, "presetName", "outputPath"); missing {
+		return result, nil
 	}
-	if !validPath(project) {
-		return invalidPathResult(), nil
+	if result, ok := requireProject(project); !ok {
+		return result, nil
 	}
 	outputPath, err := confineAbsPath(project, args.OutputPath)
 	if err != nil {
 		return invalidPathResultFor(err), nil
-	}
-	if !pathExists(filepath.Join(project, "project.godot")) {
-		return notAProjectResult(project), nil
 	}
 
 	stdout, stderr, exitCode, err := godot.Export(ctx, godot.Path(), project, args.PresetName, outputPath, args.Debug)

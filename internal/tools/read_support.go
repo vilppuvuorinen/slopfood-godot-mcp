@@ -3,34 +3,30 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"path/filepath"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-// ensureReadableScene normalizes scenePath, checks the project and scene
-// exist, and returns the confined absolute path. It is the single pre-flight
-// for every scene/tilemap read.
-//
-//nolint:unparam // the confined path is part of the shared pre-flight contract.
-func ensureReadableScene(project, scenePath string) (string, mcp.ToolResult, bool) {
+// ensureReadableScene normalizes scenePath and checks the project and scene
+// exist. It is the single pre-flight for every scene/tilemap read.
+func ensureReadableScene(project, scenePath string) (mcp.ToolResult, bool) {
 	full, err := normalizeReadPath(project, scenePath)
 	if err != nil {
-		return "", invalidPathResultFor(err), false
+		return invalidPathResultFor(err), false
 	}
-	if !pathExists(filepath.Join(project, "project.godot")) {
-		return "", notAProjectResult(project), false
+	if result, ok := requireProject(project); !ok {
+		return result, false
 	}
 	if !pathExists(full) {
-		return "", sceneMissingResult(scenePath), false
+		return sceneMissingResult(scenePath), false
 	}
-	return full, mcp.ToolResult{}, true
+	return mcp.ToolResult{}, true
 }
 
 // readSceneThrough runs ensureReadableScene and then the bespoke read_scene
 // payload handling.
 func readSceneThrough(ctx context.Context, project, scenePath, nodePath string, depth *int) (any, error) {
-	if _, result, ok := ensureReadableScene(project, scenePath); !ok {
+	if result, ok := ensureReadableScene(project, scenePath); !ok {
 		return result, nil
 	}
 
