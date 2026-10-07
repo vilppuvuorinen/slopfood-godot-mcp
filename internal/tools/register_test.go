@@ -61,8 +61,8 @@ func TestToolsUnique(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	if len(seen) != 10 {
-		t.Errorf("registered %d tools, want 10", len(seen))
+	if len(seen) != 9 {
+		t.Errorf("registered %d tools, want 9", len(seen))
 	}
 }
 
@@ -95,7 +95,6 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"attach_script":       true,
 		"export_mesh_library": true,
 		"export_project":      true,
-		"rescan_project":      true,
 	}
 	for _, newTool := range allTools {
 		tool := newTool()

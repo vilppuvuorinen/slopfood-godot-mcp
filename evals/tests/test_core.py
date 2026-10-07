@@ -14,7 +14,6 @@ REGISTERED_MCP = [
     "export_project",
     "read",
     "read_node",
-    "rescan_project",
     "run_script",
     "validate_project",
     "validate_scripts",
@@ -427,7 +426,6 @@ def test_default_shapes_resolve_against_registered_tools():
         ["read", "glob", "grep", "bash", "edit", "write"],
     )
     assert shapes["full"].tools["godot_run_script"] is True
-    assert shapes["full"].tools["godot_rescan_project"] is True
     assert all(
         shapes["full"].tools[name] is True
         for name in (

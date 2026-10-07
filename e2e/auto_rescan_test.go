@@ -3,13 +3,14 @@ package e2e
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 )
 
 // The daemon watches the project and emits import sidecars for new sources
-// without an explicit rescan_project call.
+// without an explicit rescan call.
 func TestAutoRescanEmitsSidecarForNewAsset(t *testing.T) {
 	t.Parallel()
 	root := newProject(t)
@@ -24,7 +25,7 @@ func TestAutoRescanEmitsSidecarForNewAsset(t *testing.T) {
 }
 
 // A hand-edited import sidecar is reconciled by the watcher without an explicit
-// rescan_project call.
+// rescan call.
 func TestAutoRescanAppliesSidecarEdit(t *testing.T) {
 	t.Parallel()
 	root := newProject(t)
@@ -54,6 +55,51 @@ func TestToolCallSeesOutOfBandSave(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(root, "late.gd.uid")); err != nil {
 		t.Fatalf("late.gd.uid missing after the tool call: %v", err)
 	}
+}
+
+// The automatic rescan generates a .uid sidecar for a new source while leaving
+// an existing UID referenced by a scene intact.
+func TestAutoRescanGeneratesMissingUIDs(t *testing.T) {
+	t.Parallel()
+	root, _ := seedScene(t, "scenes/main.tscn")
+
+	scriptPath := filepath.Join(root, "player.gd")
+	writeE2EFile(t, scriptPath, "extends Node\n")
+
+	usedPath := filepath.Join(root, "used.gd")
+	writeE2EFile(t, usedPath, "extends Node\n")
+	writeE2EFile(t, usedPath+".uid", "uid://e2euseduid\n")
+
+	scenePath := filepath.Join(root, "scenes", "main.tscn")
+	beforeScene := "[gd_scene load_steps=2 format=3 uid=\"uid://e2esceneuid\"]\n\n" +
+		"[ext_resource type=\"Script\" uid=\"uid://e2euseduid\" path=\"res://used.gd\" id=\"1_used\"]\n\n" +
+		"[node name=\"root\" type=\"Node2D\"]\nscript = ExtResource(\"1_used\")\n"
+	writeE2EFile(t, scenePath, beforeScene)
+
+	waitForFile(t, scriptPath+".uid", 20*time.Second)
+
+	generated := strings.TrimSpace(readFile(t, scriptPath+".uid"))
+	if !strings.HasPrefix(generated, "uid://") {
+		t.Errorf("generated uid = %q, want a uid:// value", generated)
+	}
+
+	afterScene := readFile(t, scenePath)
+	if afterScene != beforeScene {
+		t.Errorf("existing UIDs were changed by the scan:\nbefore:\n%s\nafter:\n%s", beforeScene, afterScene)
+	}
+	requireContains(t, afterScene, `uid="uid://e2euseduid"`)
+}
+
+func setImportParam(sidecar, key, value string) string {
+	line := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(key) + `=.*$`)
+	if line.MatchString(sidecar) {
+		return line.ReplaceAllString(sidecar, key+"="+value)
+	}
+	header := regexp.MustCompile(`(?m)^\[params\]\s*$`)
+	if header.MatchString(sidecar) {
+		return header.ReplaceAllString(sidecar, "[params]\n\n"+key+"="+value)
+	}
+	return sidecar + "\n[params]\n\n" + key + "=" + value + "\n"
 }
 
 func waitForFile(t *testing.T, path string, within time.Duration) {

@@ -79,10 +79,6 @@ func TestToolSchemas(t *testing.T) {
 				}
 			}
 		}},
-		{"rescan_project", "Rescan a Godot project in the editor, generating .import sidecars and missing resource UIDs", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t)
-			schema.requirePropCount(t, 0)
-		}},
 		{"run_script", "Run a GDScript function body in the live editor session and return its output; the code runs with full access to the project and editor state", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "body")
 			schema.requireStringProps(t, "body")

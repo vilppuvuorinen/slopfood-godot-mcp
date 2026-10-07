@@ -195,9 +195,6 @@ func TestResourceThemeConvertsTypes(t *testing.T) {
 	requireScriptSave(t, session, `DirAccess.make_dir_recursive_absolute("res://themes")
 return ResourceSaver.save(StyleBoxFlat.new(), "res://themes/panel_box.res")
 `)
-	// run_script does not reconcile the filesystem, so the referenced resource
-	// needs a scan to register its UID before the theme can load it.
-	requireToolText(t, session, "rescan_project", nil)
 
 	requireScriptSave(t, session, `var theme := Theme.new()
 theme.set_theme_item(Theme.DATA_TYPE_COLOR, "font_color", "Label", Color(1, 0, 0, 1))
@@ -253,7 +250,6 @@ func TestResourceThemeMoreCategories(t *testing.T) {
 	requireScriptSave(t, session, `DirAccess.make_dir_recursive_absolute("res://themes")
 return ResourceSaver.save(SystemFont.new(), "res://themes/font.res")
 `)
-	requireToolText(t, session, "rescan_project", nil)
 
 	requireScriptSave(t, session, `var theme := Theme.new()
 theme.set_theme_item(Theme.DATA_TYPE_CONSTANT, "outline_size", "Label", 4)

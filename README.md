@@ -28,9 +28,11 @@ What it does differently from upstream:
   themes, animations, and generic resources are mutated. A few engine-owned
   operations stay as dedicated tools: project scaffolding (`create_project`),
   script attachment (`attach_script`), export mutation (`export_project`,
-  `export_mesh_library`), validation (`validate_project`, `validate_scripts`),
-  and rescan (`rescan_project`). Upstream's runtime tools (`run_project`,
-  `stop_project`, `get_debug_output`, `launch_editor`) are not present.
+  `export_mesh_library`), and validation (`validate_project`,
+  `validate_scripts`). Imports and UID sidecars are reconciled automatically by
+  the editor session, so there is no explicit rescan tool. Upstream's runtime
+  tools (`run_project`, `stop_project`, `get_debug_output`, `launch_editor`) are
+  not present.
 - **No runtime dependencies.** The server is built from the Go standard library
   only.
 

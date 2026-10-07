@@ -76,28 +76,3 @@ func TestAttachScriptReconcilesInPlace(t *testing.T) {
 		t.Fatalf("session runs = %+v", sess.runs)
 	}
 }
-
-func TestRescanProjectReconcilesSession(t *testing.T) {
-	root := t.TempDir()
-	makeProject(t, root)
-
-	sess := &fakeSession{}
-	ctx := WithSession(withProject(context.Background(), root), sess)
-	out, err := rescanProject().Handler(ctx, json.RawMessage(`{}`))
-	if err != nil {
-		t.Fatalf("handler: %v", err)
-	}
-	result, ok := out.(mcp.ToolResult)
-	if !ok {
-		t.Fatalf("result type %T", out)
-	}
-	if result.IsError {
-		t.Fatalf("unexpected error: %+v", result.Content)
-	}
-	if len(sess.runs) != 1 || sess.runs[0].operation != "rescan_project" {
-		t.Fatalf("session runs = %+v, want one rescan_project", sess.runs)
-	}
-	if sess.runs[0].project != root {
-		t.Errorf("session project = %q, want %q", sess.runs[0].project, root)
-	}
-}
