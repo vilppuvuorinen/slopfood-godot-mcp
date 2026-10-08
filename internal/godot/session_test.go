@@ -40,6 +40,13 @@ const defaultSocketResponse = `
 // response is a Python snippet run per request with req, conn, and send() in scope.
 func newSocketSessionFake(t *testing.T, response string) *socketSessionFake {
 	t.Helper()
+	return newSocketSessionFakeStderr(t, response, "")
+}
+
+// newSocketSessionFakeStderr additionally runs a shell snippet before the
+// bridge starts, so tests can simulate engine startup diagnostics.
+func newSocketSessionFakeStderr(t *testing.T, response, preStderr string) *socketSessionFake {
+	t.Helper()
 	dir := t.TempDir()
 	f := &socketSessionFake{
 		bin:    filepath.Join(dir, "godot"),
@@ -54,6 +61,7 @@ printf '%s\n' "$*" >> '` + f.args + `'
 echo start >> '` + f.starts + `'
 printf '%s' "$GDCOVER_FILE" > '` + f.env + `'
 echo 'Godot Engine v4.7 fake'
+` + preStderr + `
 exec python3 - "$@" <<'PY'
 import json, os, socket, sys
 args = sys.argv[1:]
@@ -384,8 +392,7 @@ func TestSessionProjectChangeRestarts(t *testing.T) {
 	}
 }
 
-// A project.godot change is reconciled by a rescan before the next operation, not a restart.
-func TestSessionFingerprintRescans(t *testing.T) {
+func TestSessionProjectGodotChangeRestarts(t *testing.T) {
 	shortRuntimeDir(t)
 	ops := filepath.Join(t.TempDir(), "ops")
 	response := `
@@ -414,8 +421,52 @@ func TestSessionFingerprintRescans(t *testing.T) {
 	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
+	if got := f.startCount(t); got != 2 {
+		t.Errorf("starts = %d, want 2: a project.godot change must respawn", got)
+	}
+
+	data, err := os.ReadFile(ops)
+	if err != nil {
+		t.Fatalf("read ops: %v", err)
+	}
+	got := strings.Fields(string(data))
+	want := []string{"op", "op"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Errorf("operations = %v, want %v (no rescan for project.godot)", got, want)
+	}
+}
+
+// A class cache change is still reconciled by a rescan in the warm editor.
+func TestSessionClassCacheRescans(t *testing.T) {
+	shortRuntimeDir(t)
+	ops := filepath.Join(t.TempDir(), "ops")
+	response := `
+        open('` + ops + `', "a").write(req["operation"] + "\n")
+        send(conn, req["id"], True, "out-" + str(req["id"]), "")`
+	f := newSocketSessionFake(t, response)
+	s := NewSession(f.bin, "/ops.gd")
+	defer s.Close()
+	project := t.TempDir()
+
+	cacheDir := filepath.Join(project, ".godot")
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
+		t.Fatalf("mkdir .godot: %v", err)
+	}
+	cacheFile := filepath.Join(cacheDir, "global_script_class_cache.cfg")
+	if err := os.WriteFile(cacheFile, []byte("config_version=5\n"), 0o644); err != nil { //nolint:gosec // test fixture.
+		t.Fatalf("write class cache: %v", err)
+	}
+	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if err := os.WriteFile(cacheFile, []byte("config_version=5\n[class]\n"), 0o644); err != nil { //nolint:gosec // test fixture.
+		t.Fatalf("rewrite class cache: %v", err)
+	}
+	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
 	if got := f.startCount(t); got != 1 {
-		t.Errorf("starts = %d, want 1: a fingerprint change must rescan, not respawn", got)
+		t.Errorf("starts = %d, want 1: a class cache change must rescan, not respawn", got)
 	}
 
 	data, err := os.ReadFile(ops)
@@ -426,6 +477,38 @@ func TestSessionFingerprintRescans(t *testing.T) {
 	want := []string{"op", "rescan_project", "op"}
 	if strings.Join(got, ",") != strings.Join(want, ",") {
 		t.Errorf("operations = %v, want %v", got, want)
+	}
+}
+
+// A broken project.godot leaves the session unusable: every call reports the
+// parse error without respawning again until the file changes.
+func TestSessionBrokenProjectGodotFails(t *testing.T) {
+	shortRuntimeDir(t)
+	const parseErr = `echo "ERROR: Error parsing '/proj/project.godot' at line 2" >&2`
+	f := newSocketSessionFakeStderr(t, defaultSocketResponse, parseErr)
+	s := NewSession(f.bin, "/ops.gd")
+	defer s.Close()
+	project := t.TempDir()
+
+	projectFile := filepath.Join(project, "project.godot")
+	if err := os.WriteFile(projectFile, []byte("config_version=5\n"), 0o644); err != nil { //nolint:gosec // test fixture.
+		t.Fatalf("write project.godot: %v", err)
+	}
+
+	_, _, _, err := s.Run(context.Background(), project, "op", nil)
+	if err == nil {
+		t.Fatal("Run succeeded on a broken project.godot, want an error")
+	}
+	if !strings.Contains(err.Error(), "project.godot failed to load") || !strings.Contains(err.Error(), "Error parsing") {
+		t.Errorf("err = %v, want the project.godot parse diagnostic", err)
+	}
+	starts := f.startCount(t)
+
+	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err == nil {
+		t.Fatal("second Run succeeded, want the remembered parse error")
+	}
+	if got := f.startCount(t); got != starts {
+		t.Errorf("starts = %d, want %d: the broken project must not respawn on every call", got, starts)
 	}
 }
 

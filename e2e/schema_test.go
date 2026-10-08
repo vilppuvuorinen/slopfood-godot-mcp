@@ -84,11 +84,7 @@ func TestToolSchemas(t *testing.T) {
 			schema.requireStringProps(t, "body")
 			schema.requirePropCount(t, 1)
 		}},
-		{"validate_project", "Load project.godot with the Godot engine and report whether it parsed", func(t *testing.T, schema toolSchema) {
-			schema.requireRequired(t)
-			schema.requirePropCount(t, 0)
-		}},
-		{"validate_scripts", "Validate every GDScript file in the project", func(t *testing.T, schema toolSchema) {
+		{"validate", "Validate project.godot and every GDScript file in the project, returning all diagnostics", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t)
 			schema.requirePropCount(t, 0)
 		}},

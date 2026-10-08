@@ -17,8 +17,8 @@ What it does differently from upstream:
   domain socket (loopback TCP on Windows). That process owns
   `EditorFileSystem`, so imports, `.uid` sidecars, and the global class cache
   are reconciled by the same engine that serves the edits. A few tools that
-  need their own engine boot (`export_project`, `validate_project`,
-  `validate_scripts`) instead spawn a one-shot `--headless` process per call.
+  need their own engine boot (`export_project`, `validate`) instead spawn a
+  one-shot `--headless` process per call.
 - **Augmenting, not replacing, text edits.** The server does not wrap every
   read and write; it fills the gaps a text editor leaves. `read` and
   `read_node` expose state that is awkward or impossible to read as text:
@@ -28,9 +28,12 @@ What it does differently from upstream:
   themes, animations, and generic resources are mutated. A few engine-owned
   operations stay as dedicated tools: project scaffolding (`create_project`),
   script attachment (`attach_script`), export mutation (`export_project`,
-  `export_mesh_library`), and validation (`validate_project`,
-  `validate_scripts`). Imports and UID sidecars are reconciled automatically by
-  the editor session, so there is no explicit rescan tool. Upstream's runtime
+  `export_mesh_library`), and validation (`validate`). A `project.godot` change
+  restarts the editor session; if the file no longer parses, every session tool
+  call fails with the engine's parse error until it is fixed, and `validate`
+  reports both the project and script diagnostics. Imports and UID sidecars are
+  reconciled automatically by the editor session, so there is no explicit
+  rescan tool. Upstream's runtime
   tools (`run_project`, `stop_project`, `get_debug_output`, `launch_editor`) are
   not present.
 - **No runtime dependencies.** The server is built from the Go standard library

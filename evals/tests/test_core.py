@@ -15,8 +15,7 @@ REGISTERED_MCP = [
     "read",
     "read_node",
     "run_script",
-    "validate_project",
-    "validate_scripts",
+    "validate",
 ]
 KNOWN_CHECK_KINDS = {
     "node_exists",

@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -23,6 +24,15 @@ import (
 
 // Recycles the engine after a fixed number of operations so accumulated state cannot grow without bound.
 const defaultOperationCap = 100
+
+// Bounds the stderr lines retained for startup diagnostics so a chatty engine
+// cannot grow the session without bound.
+const startupStderrMaxLines = 200
+
+// How long a fresh start waits for the engine to report a project.godot parse
+// error before concluding the project loaded. The engine writes the diagnostic
+// during startup, well before it is ready, so this is only a scheduling margin.
+const startupParseGrace = 250 * time.Millisecond
 
 // Bounds how long Close waits for a graceful quit before killing a wedged bridge.
 const closeQuitTimeout = 5 * time.Second
@@ -45,6 +55,14 @@ type Session struct {
 	proc   *sessionProc
 	nextID int
 	closed bool
+
+	// The project.godot stamp last attempted, so a fresh start only probes for a
+	// parse error when the file changed, and a broken project is remembered
+	// until the file changes again.
+	lastProjectStamp fileStamp
+	brokenErr        error
+	brokenProject    string
+	brokenStamp      fileStamp
 
 	// procRef mirrors proc so Close can kill the engine without taking mu, which
 	// a stuck operation may hold. closeTimeout is the production default, a
@@ -80,6 +98,11 @@ type sessionProc struct {
 	errOnce sync.Once
 	errMu   sync.Mutex
 	err     error
+
+	// Startup stderr is retained so a project.godot parse error can be reported
+	// back through the session error instead of being logged and dropped.
+	stderrMu    sync.Mutex
+	stderrLines []string
 
 	stopOnce sync.Once
 
@@ -130,16 +153,32 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 		return "", "", 0, fmt.Errorf("engine session: %w", os.ErrClosed)
 	}
 
+	stamp := stampFile(filepath.Join(project, "project.godot"))
+
+	// A project.godot that failed to load at this stamp keeps failing for every
+	// session call until the file changes, so the model can investigate with the
+	// validate tool instead of retrying blindly.
+	if s.brokenErr != nil {
+		if s.brokenProject == project && s.brokenStamp == stamp {
+			return "", "", 0, s.brokenErr
+		}
+		s.brokenErr = nil
+	}
+
 	if s.restartNeeded(project) {
 		s.stopLocked()
 	}
 
-	p, err := s.ensureStartedLocked(project)
+	// Only probe for a startup parse error when project.godot changed since the
+	// last start; an operation-cap recycle reuses the same valid file.
+	checkStartup := stamp != s.lastProjectStamp
+	p, err := s.startLocked(project, stamp, checkStartup)
 	if err != nil {
 		return "", "", 0, err
 	}
 
-	// A changed fingerprint is reconciled by a rescan in the warm editor, not a respawn.
+	// A changed class cache is reconciled by a rescan in the warm editor; a
+	// changed project.godot is handled by a restart in restartNeeded.
 	if s.consumeRescan(project) {
 		if rescanErr := s.runRescanLocked(ctx, p); rescanErr != nil {
 			return "", "", 0, rescanErr
@@ -165,7 +204,7 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 	// A failed write means the process died; respawn once and retry before erroring.
 	if err = p.socket.writeRequest(line); err != nil {
 		s.stopLocked()
-		p, err = s.ensureStartedLocked(project)
+		p, err = s.startLocked(project, stamp, false)
 		if err != nil {
 			return "", "", 0, err
 		}
@@ -265,7 +304,9 @@ func (s *Session) recvFrameLocked(ctx context.Context, p *sessionProc, id int) (
 	}
 }
 
-// A dirty project-global view is not a restart; it is reconciled by a rescan.
+// A changed project root or project.godot needs a respawn: the editor binds the
+// project settings at startup and a rescan cannot apply a broken file. A dirty
+// class cache is reconciled by a rescan instead.
 func (s *Session) restartNeeded(project string) bool {
 	p := s.proc
 	if p == nil {
@@ -279,15 +320,21 @@ func (s *Session) restartNeeded(project string) bool {
 	if p.project != project {
 		return true
 	}
+	if p.fingerprint.projectGodot != stampFile(filepath.Join(project, "project.godot")) {
+		return true
+	}
 	return p.ops >= s.operationCap
 }
 
+// consumeRescan reports whether the class cache changed since the last scan.
+// project.godot is deliberately excluded: a change there restarts the session
+// (see restartNeeded) because a rescan cannot recover from a parse error.
 func (s *Session) consumeRescan(project string) bool {
 	if s.proc == nil {
 		return false
 	}
 	fingerprint := fingerprintProject(project)
-	if s.proc.fingerprint == fingerprint {
+	if s.proc.fingerprint.classCache == fingerprint.classCache {
 		return false
 	}
 	s.proc.fingerprint = fingerprint
@@ -321,14 +368,24 @@ func (s *Session) runRescanLocked(ctx context.Context, p *sessionProc) error {
 	return nil
 }
 
-func (s *Session) ensureStartedLocked(project string) (*sessionProc, error) {
+// startLocked starts the engine if needed and records a broken project.godot so
+// later calls fail fast with the same parse diagnostic until the file changes.
+func (s *Session) startLocked(project string, stamp fileStamp, checkStartup bool) (*sessionProc, error) {
 	if s.proc != nil {
 		return s.proc, nil
 	}
-	p, err := startSessionProc(s.executable, s.script, project, s.transport)
+	p, err := startSessionProc(s.executable, s.script, project, s.transport, checkStartup)
 	if err != nil {
+		s.lastProjectStamp = stamp
+		var broken *projectBrokenError
+		if errors.As(err, &broken) {
+			s.brokenProject = project
+			s.brokenStamp = stamp
+			s.brokenErr = err
+		}
 		return nil, err
 	}
+	s.lastProjectStamp = stamp
 	s.proc = p
 	s.procRef.Store(p)
 	return p, nil
@@ -364,7 +421,7 @@ func engineLaunch(project string, transport Transport) (args []string, socketPat
 	return nil, "", fmt.Errorf("engine session: unsupported transport %q", transport)
 }
 
-func startSessionProc(executable, script, project string, transport Transport) (*sessionProc, error) {
+func startSessionProc(executable, script, project string, transport Transport, checkStartup bool) (*sessionProc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	launchArgs, socketPath, err := engineLaunch(project, transport)
 	if err != nil {
@@ -403,23 +460,35 @@ func startSessionProc(executable, script, project string, transport Transport) (
 		fingerprint:  fingerprintProject(project),
 	}
 
+	// Drain stderr from the start so a startup parse error is captured even
+	// though the process is only declared broken after it is ready.
+	p.wg.Add(1)
+	go p.readStderr()
+
 	info, err := readReadiness(p.stdoutReader, cancel)
 	if err != nil {
-		cancel()
-		_ = cmd.Wait()
-		return nil, err
+		p.stop()
+		return nil, startupError(err, p)
 	}
 	socket, dialPath, err := dialReady(ctx, info, socketPath)
 	if err != nil {
-		cancel()
-		_ = cmd.Wait()
-		return nil, err
+		p.stop()
+		return nil, startupError(err, p)
 	}
 	p.socket = socket
 	p.socketPath = dialPath
-	p.wg.Add(3)
+
+	// A project.godot that fails to parse still lets the editor boot with
+	// defaults; reject that session so every call reports the parse error.
+	if checkStartup {
+		if diagnostics := awaitProjectParseErrors(p); len(diagnostics) > 0 {
+			p.stop()
+			return nil, &projectBrokenError{diagnostics: diagnostics}
+		}
+	}
+
+	p.wg.Add(2)
 	go p.readStdout()
-	go p.readStderr()
 	go p.readSocketFrames()
 
 	go func() {
@@ -427,6 +496,44 @@ func startSessionProc(executable, script, project string, transport Transport) (
 		p.doneOnce.Do(func() { close(p.done) })
 	}()
 	return p, nil
+}
+
+// startupError keeps the engine's startup stderr attached to the failure so a
+// project.godot parse error is visible to the caller.
+func startupError(err error, p *sessionProc) error {
+	if diagnostics := ProjectParseErrors(p.stderrText()); len(diagnostics) > 0 {
+		return &projectBrokenError{diagnostics: diagnostics}
+	}
+	if text := strings.TrimSpace(p.stderrText()); text != "" {
+		return fmt.Errorf("%w: %s", err, text)
+	}
+	return err
+}
+
+// projectBrokenError reports that project.godot failed to load. It is returned
+// for every session operation until the file changes.
+type projectBrokenError struct {
+	diagnostics []string
+}
+
+func (e *projectBrokenError) Error() string {
+	return "engine session: project.godot failed to load: " + strings.Join(e.diagnostics, "; ")
+}
+
+// awaitProjectParseErrors polls the captured startup stderr for a parse
+// diagnostic. The engine emits it before readiness, so the first poll usually
+// finds it; the grace covers the reader goroutine's scheduling.
+func awaitProjectParseErrors(p *sessionProc) []string {
+	deadline := time.Now().Add(startupParseGrace)
+	for {
+		if diagnostics := ProjectParseErrors(p.stderrText()); len(diagnostics) > 0 {
+			return diagnostics
+		}
+		if !time.Now().Before(deadline) {
+			return nil
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func dialReady(ctx context.Context, info *readyInfo, socketPath string) (*engineSocket, string, error) {
@@ -508,7 +615,7 @@ func (p *sessionProc) readSocketFrames() {
 	}
 }
 
-// Process stderr is diagnostics only: the frame carries the handler's stderr, and editor exit leak warnings are expected.
+// Process stderr is diagnostics only: the frame carries the handler's stderr, and editor exit leak warnings are expected. It is still retained so a startup project.godot parse error can be surfaced through the session error.
 func (p *sessionProc) readStderr() {
 	defer p.wg.Done()
 	r := bufio.NewReader(p.stderr)
@@ -516,12 +623,28 @@ func (p *sessionProc) readStderr() {
 		line, err := r.ReadString('\n')
 		if text := strings.TrimRight(line, "\r\n"); text != "" {
 			log.Printf("engine stderr: %s", text)
+			p.appendStderr(text)
 		}
 		if err != nil {
 			p.noteReadErr(err)
 			return
 		}
 	}
+}
+
+func (p *sessionProc) appendStderr(line string) {
+	p.stderrMu.Lock()
+	defer p.stderrMu.Unlock()
+	if len(p.stderrLines) >= startupStderrMaxLines {
+		return
+	}
+	p.stderrLines = append(p.stderrLines, line)
+}
+
+func (p *sessionProc) stderrText() string {
+	p.stderrMu.Lock()
+	defer p.stderrMu.Unlock()
+	return strings.Join(p.stderrLines, "\n")
 }
 
 func (p *sessionProc) sendFrame(f *responseFrame) bool {

@@ -91,8 +91,8 @@ func TestInitializeInstructions(t *testing.T) {
 
 func TestToolMetadata(t *testing.T) {
 	t.Parallel()
-	tool := findTool(t, connect(t), "validate_project")
-	if tool.Title != "Validate Project" {
+	tool := findTool(t, connect(t), "validate")
+	if tool.Title != "Validate" {
 		t.Errorf("title = %q", tool.Title)
 	}
 	if tool.Annotations == nil || !tool.Annotations.ReadOnlyHint {
@@ -109,9 +109,9 @@ func TestStructuredContent(t *testing.T) {
 	seedProject(t, root)
 	session := connectProject(t, root)
 
-	res := callTool(t, session, "validate_project", map[string]any{})
+	res := callTool(t, session, "validate", map[string]any{})
 	if res.IsError {
-		t.Fatalf("validate_project error: %s", firstText(t, res))
+		t.Fatalf("validate error: %s", firstText(t, res))
 	}
 	structured, ok := res.StructuredContent.(map[string]any)
 	if !ok {
@@ -119,6 +119,12 @@ func TestStructuredContent(t *testing.T) {
 	}
 	if _, ok := structured["valid"].(bool); !ok {
 		t.Fatalf("valid type %T", structured["valid"])
+	}
+	if _, ok := structured["project"].(map[string]any); !ok {
+		t.Fatalf("project type %T", structured["project"])
+	}
+	if _, ok := structured["scripts"].(map[string]any); !ok {
+		t.Fatalf("scripts type %T", structured["scripts"])
 	}
 }
 

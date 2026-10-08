@@ -14,5 +14,5 @@ checks:
     value: extends Node
 rubric: |
   res://player.gd parses, extends Node, and exposes greet() returning "hi";
-  validate_scripts reports every project script as valid.
+  validate reports every project script as valid.
 timeout_s: 300
