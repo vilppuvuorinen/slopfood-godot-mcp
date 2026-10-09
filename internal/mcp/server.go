@@ -124,18 +124,6 @@ func JSONResult(text string) ToolResult {
 	return result
 }
 
-func ImageContent(data, mimeType string) Content {
-	return Content{Type: "image", Data: data, MimeType: mimeType}
-}
-
-func AudioContent(data, mimeType string) Content {
-	return Content{Type: "audio", Data: data, MimeType: mimeType}
-}
-
-func ResourceLinkContent(uri, name string) Content {
-	return Content{Type: "resource_link", URI: uri, Name: name}
-}
-
 // Mirrors the Coding-Solo response shape; the structured envelope keeps a
 // declared mutation outputSchema valid even for an error.
 func ErrorResult(message string, possibleSolutions ...string) ToolResult {
@@ -498,10 +486,6 @@ func (s *Server) withStatelessMeta(result any) any {
 		r.ResultType = resultTypeComplete
 		r.Meta = meta
 		return r
-	case *ToolResult:
-		r.ResultType = resultTypeComplete
-		r.Meta = meta
-		return r
 	case map[string]any:
 		if _, ok := r["resultType"]; !ok {
 			r["resultType"] = resultTypeComplete
@@ -538,31 +522,28 @@ type callParams struct {
 	Arguments json.RawMessage `json:"arguments"`
 }
 
-func (s *Server) callTool(ctx context.Context, params json.RawMessage) (any, error) {
+func (s *Server) callTool(ctx context.Context, params json.RawMessage) (ToolResult, error) {
 	var p callParams
 	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, fmt.Errorf("invalid params: %w", err)
+		return ToolResult{}, fmt.Errorf("invalid params: %w", err)
 	}
 	s.mu.RLock()
 	tool, ok := s.tools[p.Name]
 	queue := s.queue
 	s.mu.RUnlock()
 	if !ok {
-		return nil, errors.New("unknown tool: " + p.Name)
+		return ToolResult{}, errors.New("unknown tool: " + p.Name)
 	}
 	out, err := s.callHandler(ctx, queue, tool.Handler, p.Arguments)
 	if err != nil {
 		return ErrorResult(err.Error()), nil
 	}
-	switch result := out.(type) {
-	case ToolResult:
+	if result, ok := out.(ToolResult); ok {
 		return result, nil
-	case *ToolResult:
-		return *result, nil
 	}
 	text, err := json.Marshal(out)
 	if err != nil {
-		return nil, fmt.Errorf("encode tool result: %w", err)
+		return ToolResult{}, fmt.Errorf("encode tool result: %w", err)
 	}
 	return TextResult(string(text)), nil
 }

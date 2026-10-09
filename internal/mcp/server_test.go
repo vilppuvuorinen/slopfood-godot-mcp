@@ -365,13 +365,9 @@ func TestCallToolQueueTimeoutIsToolError(t *testing.T) {
 		},
 	})
 
-	out, err := s.callTool(context.Background(), json.RawMessage(`{"name":"hang"}`))
+	result, err := s.callTool(context.Background(), json.RawMessage(`{"name":"hang"}`))
 	if err != nil {
 		t.Fatalf("callTool: %v", err)
-	}
-	result, ok := out.(ToolResult)
-	if !ok {
-		t.Fatalf("result type %T, want ToolResult", out)
 	}
 	if !result.IsError {
 		t.Fatalf("IsError = false, want a tool error")
