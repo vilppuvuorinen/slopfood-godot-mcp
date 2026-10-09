@@ -41,17 +41,35 @@ var headlessSolutions = []string{
 	"Verify the project path is accessible",
 }
 
+// engineCall runs one engine operation and returns its raw streams.
+type engineCall func(ctx context.Context) (stdout, stderr string, exitCode int, err error)
+
+// runEngineCall executes call, maps a start failure or unexpected stderr to a
+// ready error result, and extracts the marker payload when the engine emitted
+// one. When failed is true the caller returns failure; otherwise it renders
+// hasPayload/payload or its own fallback from stdout.
+func runEngineCall(ctx context.Context, call engineCall, label string, solutions []string) (stdout, payload string, hasPayload bool, failure mcp.ToolResult, failed bool) {
+	stdout, stderr, exitCode, err := call(ctx)
+	if err != nil {
+		return stdout, "", false, mcp.ErrorResult(label+": "+err.Error(), solutions...), true
+	}
+	if scriptFailed(exitCode, stderr) {
+		return stdout, "", false, mcp.ErrorResult(label+": "+stderr, solutions...), true
+	}
+	payload, hasPayload = markerJSON(stdout)
+	return stdout, payload, hasPayload, mcp.ToolResult{}, false
+}
+
 // Callers validate arguments, paths, and project/scene existence first; benign
 // engine stderr is allowlisted per tool via scriptFailed (see stderr.go).
 func (t *toolset) runHeadlessOperation(ctx context.Context, operation string, params, fields map[string]any) (any, error) {
-	stdout, stderr, exitCode, err := t.runEngine(ctx, operation, params)
-	if err != nil {
-		return mcp.ErrorResult(operation+" failed: "+err.Error(), headlessSolutions...), nil //nolint:nilerr // the failure is reported through the tool result.
+	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (string, string, int, error) {
+		return t.runEngine(ctx, operation, params)
+	}, operation+" failed", headlessSolutions)
+	if failed {
+		return failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	if scriptFailed(exitCode, stderr) {
-		return mcp.ErrorResult(operation+" failed: "+stderr, headlessSolutions...), nil
-	}
-	if payload, ok := markerJSON(stdout); ok {
+	if hasPayload {
 		return mcp.JSONResult(payload), nil
 	}
 	return statusResult(t.project, operation+" succeeded.\n\nOutput: "+stdout, fields), nil
