@@ -34,7 +34,9 @@ type Daemon struct {
 }
 
 func NewDaemon(server *Server, queue *Queue, listen ListenFunc, addr string) *Daemon {
-	server.SetQueue(queue)
+	if queue != nil {
+		server.SetSubmit(queue.Submit)
+	}
 	lifeCtx, lifeCancel := context.WithCancel(context.Background())
 	return &Daemon{
 		server:     server,

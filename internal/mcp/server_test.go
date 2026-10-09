@@ -193,7 +193,7 @@ func TestServeToolsCallThroughQueue(t *testing.T) {
 	s := testServer()
 	q := NewQueue(4, testQueueTimeout)
 	defer q.Close()
-	s.SetQueue(q)
+	s.SetSubmit(q.Submit)
 
 	inR, inW := io.Pipe()
 	var out lockedBuffer
@@ -310,7 +310,7 @@ func TestCallToolSerializesThroughQueue(t *testing.T) {
 	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	q := NewQueue(64, testQueueTimeout)
 	defer q.Close()
-	s.SetQueue(q)
+	s.SetSubmit(q.Submit)
 
 	var active, maxActive int64
 	s.RegisterTool(Tool{
@@ -353,7 +353,7 @@ func TestCallToolQueueTimeoutIsToolError(t *testing.T) {
 	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	q := NewQueue(4, 20*time.Millisecond)
 	defer q.Close()
-	s.SetQueue(q)
+	s.SetSubmit(q.Submit)
 
 	s.RegisterTool(Tool{
 		Name:        "hang",

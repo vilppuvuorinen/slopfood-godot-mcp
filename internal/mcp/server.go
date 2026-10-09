@@ -55,10 +55,13 @@ type Server struct {
 	Instructions string
 	mu           sync.RWMutex
 	tools        map[string]Tool
-	// queue, when set, serializes tool calls across all connections; nil runs handlers inline.
-	queue   *Queue
+	// submit, when set, serializes tool calls across all connections; nil runs handlers inline.
+	submit  SubmitFunc
 	writeMu sync.Mutex
 }
+
+// SubmitFunc runs a job, possibly serialized by an operation queue.
+type SubmitFunc func(context.Context, Job) (any, error)
 
 type Tool struct {
 	Name         string           `json:"name"`
@@ -256,11 +259,11 @@ func (s *Server) RegisterTool(t Tool) {
 	s.tools[t.Name] = t
 }
 
-// With a queue installed, concurrent calls run one at a time; nil runs inline.
-func (s *Server) SetQueue(q *Queue) {
+// With a submit function installed, concurrent calls run one at a time; nil runs inline.
+func (s *Server) SetSubmit(fn SubmitFunc) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.queue = q
+	s.submit = fn
 }
 
 // The reader runs on its own goroutine and cancels the connection context on
@@ -529,12 +532,12 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (ToolResu
 	}
 	s.mu.RLock()
 	tool, ok := s.tools[p.Name]
-	queue := s.queue
+	submit := s.submit
 	s.mu.RUnlock()
 	if !ok {
 		return ToolResult{}, errors.New("unknown tool: " + p.Name)
 	}
-	out, err := s.callHandler(ctx, queue, tool.Handler, p.Arguments)
+	out, err := s.callHandler(ctx, submit, tool.Handler, p.Arguments)
 	if err != nil {
 		return ErrorResult(err.Error()), nil
 	}
@@ -548,14 +551,15 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (ToolResu
 	return TextResult(string(text)), nil
 }
 
-// Submits to queue when installed so engine calls serialize; a queue timeout
-// cancels any engine work the handler started. Consistency is the engine's:
-// the bridge brackets every request in a scan, so Go does no pre-call settle.
-func (s *Server) callHandler(ctx context.Context, queue *Queue, handler ToolHandler, args json.RawMessage) (any, error) {
-	if queue == nil {
+// Submits through the installed submit function so engine calls serialize; a
+// queue timeout cancels any engine work the handler started. Consistency is the
+// engine's: the bridge brackets every request in a scan, so Go does no pre-call
+// settle.
+func (s *Server) callHandler(ctx context.Context, submit SubmitFunc, handler ToolHandler, args json.RawMessage) (any, error) {
+	if submit == nil {
 		return handler(ctx, args)
 	}
-	return queue.Submit(ctx, func(ctx context.Context) (any, error) {
+	return submit(ctx, func(ctx context.Context) (any, error) {
 		return handler(ctx, args)
 	})
 }
