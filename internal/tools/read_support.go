@@ -39,7 +39,7 @@ func (t *toolset) readSceneThrough(ctx context.Context, scenePath, nodePath stri
 	}
 	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (string, string, int, error) {
 		return t.runEngine(ctx, "read_scene", params)
-	}, "Failed to read scene", headlessSolutions)
+	}, "Failed to read scene", headlessSolutions, headlessSolutions)
 	if failed {
 		return failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}

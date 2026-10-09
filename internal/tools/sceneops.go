@@ -48,13 +48,13 @@ type engineCall func(ctx context.Context) (stdout, stderr string, exitCode int, 
 // ready error result, and extracts the marker payload when the engine emitted
 // one. When failed is true the caller returns failure; otherwise it renders
 // hasPayload/payload or its own fallback from stdout.
-func runEngineCall(ctx context.Context, call engineCall, label string, solutions []string) (stdout, payload string, hasPayload bool, failure mcp.ToolResult, failed bool) {
+func runEngineCall(ctx context.Context, call engineCall, label string, startSolutions, stderrSolutions []string) (stdout, payload string, hasPayload bool, failure mcp.ToolResult, failed bool) {
 	stdout, stderr, exitCode, err := call(ctx)
 	if err != nil {
-		return stdout, "", false, mcp.ErrorResult(label+": "+err.Error(), solutions...), true
+		return stdout, "", false, mcp.ErrorResult(label+": "+err.Error(), startSolutions...), true
 	}
 	if scriptFailed(exitCode, stderr) {
-		return stdout, "", false, mcp.ErrorResult(label+": "+stderr, solutions...), true
+		return stdout, "", false, mcp.ErrorResult(label+": "+stderr, stderrSolutions...), true
 	}
 	payload, hasPayload = markerJSON(stdout)
 	return stdout, payload, hasPayload, mcp.ToolResult{}, false
@@ -65,7 +65,7 @@ func runEngineCall(ctx context.Context, call engineCall, label string, solutions
 func (t *toolset) runHeadlessOperation(ctx context.Context, operation string, params, fields map[string]any) (any, error) {
 	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (string, string, int, error) {
 		return t.runEngine(ctx, operation, params)
-	}, operation+" failed", headlessSolutions)
+	}, operation+" failed", headlessSolutions, headlessSolutions)
 	if failed {
 		return failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}

@@ -73,7 +73,7 @@ func (t *toolset) handleRunScript(ctx context.Context, raw json.RawMessage) (any
 
 	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (string, string, int, error) {
 		return t.runEngine(ctx, "run_script", map[string]any{"body": args.Body})
-	}, "Failed to run script", headlessSolutions)
+	}, "Failed to run script", headlessSolutions, headlessSolutions)
 	if failed {
 		return failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}

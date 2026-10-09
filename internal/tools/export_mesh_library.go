@@ -80,22 +80,15 @@ func (t *toolset) handleExportMeshLibrary(ctx context.Context, raw json.RawMessa
 		params["meshItemNames"] = args.MeshItemNames
 	}
 
-	stdout, stderr, exitCode, err := t.runEngine(ctx, "export_mesh_library", params)
-	if err != nil {
-		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
-			"Failed to export mesh library: "+err.Error(),
-			"Ensure Godot is installed correctly",
-			"Check if the GODOT_PATH environment variable is set correctly",
-			"Verify the project path is accessible",
-		), nil
-	}
-	if scriptFailed(exitCode, stderr) {
-		return mcp.ErrorResult(
-			"Failed to export mesh library: "+stderr,
-			"Check if the scene contains valid 3D meshes",
-			"Ensure the output path is valid",
-			"Verify the scene file is valid",
-		), nil
+	stdout, _, _, failure, failed := runEngineCall(ctx, func(ctx context.Context) (string, string, int, error) {
+		return t.runEngine(ctx, "export_mesh_library", params)
+	}, "Failed to export mesh library", headlessSolutions, []string{
+		"Check if the scene contains valid 3D meshes",
+		"Ensure the output path is valid",
+		"Verify the scene file is valid",
+	})
+	if failed {
+		return failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 
 	message := fmt.Sprintf("MeshLibrary exported successfully to: %s\n\nOutput: %s", outputPath, stdout)
