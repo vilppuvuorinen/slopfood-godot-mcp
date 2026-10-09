@@ -132,7 +132,9 @@ func (f *socketSessionFake) argLines(t *testing.T) []string {
 	return strings.Split(strings.TrimSpace(string(data)), "\n")
 }
 
-func (f *socketSessionFake) envValue(t *testing.T) string {
+// envValue is exercised by the gdcover-tagged session test, so it reads as
+// unused in a normal build.
+func (f *socketSessionFake) envValue(t *testing.T) string { //nolint:unused // used by the gdcover-tagged session test.
 	t.Helper()
 	data, err := os.ReadFile(f.env)
 	if err != nil {
@@ -676,24 +678,5 @@ func TestSessionCloseQuitAndFailsRuns(t *testing.T) {
 	}
 	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err == nil {
 		t.Fatal("Run after Close succeeded, want an error")
-	}
-}
-
-func TestSessionAppliesEngineEnv(t *testing.T) {
-	shortRuntimeDir(t)
-	SetEngineEnv(func(env []string) []string {
-		return append(env, "GDCOVER_FILE=keyed/hits.txt")
-	})
-	t.Cleanup(func() { SetEngineEnv(nil) })
-
-	f := newSocketSessionFake(t, defaultSocketResponse)
-	s := NewSession(f.bin, "/ops.gd")
-	defer s.Close()
-
-	if _, _, _, err := s.Run(context.Background(), t.TempDir(), "op", nil); err != nil {
-		t.Fatalf("Run: %v", err)
-	}
-	if got := f.envValue(t); got != "keyed/hits.txt" {
-		t.Errorf("GDCOVER_FILE = %q, want keyed/hits.txt", got)
 	}
 }

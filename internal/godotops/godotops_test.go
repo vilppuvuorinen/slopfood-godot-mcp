@@ -98,20 +98,16 @@ func TestScriptsMatchEmbedded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("OperationsScript: %v", err)
 	}
-	want := operationsScript
-	if instrumentBridge != nil {
-		if want, err = instrumentBridge(operationsScript); err != nil {
-			t.Fatalf("instrumentBridge: %v", err)
-		}
+	want, err := instrumentOperations(operationsScript)
+	if err != nil {
+		t.Fatalf("instrumentOperations: %v", err)
 	}
 	if got, readErr := os.ReadFile(op); readErr != nil || string(got) != want {
 		t.Fatalf("operations script mismatch (err=%v)", readErr)
 	}
-	wantValidate := validateScript
-	if instrumentValidate != nil {
-		if wantValidate, err = instrumentValidate(validateScript); err != nil {
-			t.Fatalf("instrumentValidate: %v", err)
-		}
+	wantValidate, err := instrumentValidateScript(validateScript)
+	if err != nil {
+		t.Fatalf("instrumentValidateScript: %v", err)
 	}
 	val, err := ValidateScript()
 	if err != nil {

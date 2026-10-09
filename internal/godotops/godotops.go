@@ -46,20 +46,12 @@ const (
 	ValidateHitsEnv   = "GDCOVER_VALIDATE_FILE"
 )
 
-var instrumentBridge func(string) (string, error)
-
-var instrumentValidate func(string) (string, error)
-
 func OperationsScript() (string, error) {
 	once.Do(func() {
-		content := operationsScript
-		if instrumentBridge != nil {
-			rewritten, instrumentErr := instrumentBridge(content)
-			if instrumentErr != nil {
-				err = fmt.Errorf("instrument operations script: %w", instrumentErr)
-				return
-			}
-			content = rewritten
+		content, instrumentErr := instrumentOperations(operationsScript)
+		if instrumentErr != nil {
+			err = fmt.Errorf("instrument operations script: %w", instrumentErr)
+			return
 		}
 		path, err = materialize("godot_operations", content)
 	})
@@ -68,14 +60,10 @@ func OperationsScript() (string, error) {
 
 func ValidateScript() (string, error) {
 	validateOnce.Do(func() {
-		content := validateScript
-		if instrumentValidate != nil {
-			rewritten, instrumentErr := instrumentValidate(content)
-			if instrumentErr != nil {
-				validateErr = fmt.Errorf("instrument validate script: %w", instrumentErr)
-				return
-			}
-			content = rewritten
+		content, instrumentErr := instrumentValidateScript(validateScript)
+		if instrumentErr != nil {
+			validateErr = fmt.Errorf("instrument validate script: %w", instrumentErr)
+			return
 		}
 		validatePath, validateErr = materialize("validate_script", content)
 	})

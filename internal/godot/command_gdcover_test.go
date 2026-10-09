@@ -1,3 +1,5 @@
+//go:build gdcover
+
 package godot
 
 import (

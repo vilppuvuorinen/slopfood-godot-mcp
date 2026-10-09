@@ -1,4 +1,4 @@
-package gdcover
+package gdcover_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/gdcover"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
 )
@@ -103,7 +104,7 @@ func runInstrumentedAt(t *testing.T, engine, project, script, hitsPath string) {
 	t.Helper()
 	cmd := exec.CommandContext(context.Background(), engine, //nolint:gosec // engine is the test's own binary.
 		"--headless", "--path", project, "--script", script)
-	cmd.Env = append(os.Environ(), FileEnv+"="+hitsPath)
+	cmd.Env = append(os.Environ(), gdcover.FileEnv+"="+hitsPath)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("run instrumented script: %v\n%s", err, out)
 	}
@@ -140,11 +141,11 @@ func _init():
     quit(0)
 `
 
-	firstResult, err := Instrument([]byte(first))
+	firstResult, err := gdcover.Instrument([]byte(first))
 	if err != nil {
 		t.Fatalf("Instrument first: %v", err)
 	}
-	secondResult, err := Instrument([]byte(second))
+	secondResult, err := gdcover.Instrument([]byte(second))
 	if err != nil {
 		t.Fatalf("Instrument second: %v", err)
 	}
@@ -190,7 +191,7 @@ func _init():
     print("done")  # covered
     quit(0)  # covered
 `
-	result, err := Instrument([]byte(src))
+	result, err := gdcover.Instrument([]byte(src))
 	if err != nil {
 		t.Fatalf("Instrument: %v", err)
 	}
@@ -217,7 +218,7 @@ func instrumentedOperationsScript(t *testing.T) (path string, original []byte) {
 	if err != nil {
 		t.Fatalf("read operations script: %v", err)
 	}
-	result, err := Instrument(original)
+	result, err := gdcover.Instrument(original)
 	if err != nil {
 		t.Fatalf("Instrument: %v", err)
 	}
@@ -244,7 +245,7 @@ func TestInstrumentedOperationsScriptReportsHits(t *testing.T) {
 	engine := requireGodot(t)
 	script, original := instrumentedOperationsScript(t)
 	hits := filepath.Join(t.TempDir(), "hits.txt")
-	t.Setenv(FileEnv, hits)
+	t.Setenv(gdcover.FileEnv, hits)
 
 	sess := godot.NewSession(engine, script)
 	defer func() { _ = sess.Close() }()
