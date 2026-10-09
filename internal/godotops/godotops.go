@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/fsutil"
 )
 
 //go:embed godot_operations.gd
@@ -98,34 +100,12 @@ func materialize(name, content string) (string, error) {
 		return dst, nil
 	}
 
-	tmp, err := os.CreateTemp(dir, name+"-*.tmp")
-	if err != nil {
-		return "", fmt.Errorf("create %s script: %w", name, err)
-	}
-	tmpName := tmp.Name()
-	cleanup := func() {
-		tmp.Close()
-		os.Remove(tmpName)
-	}
-	if _, err := tmp.WriteString(content); err != nil {
-		cleanup()
-		return "", fmt.Errorf("write %s script: %w", name, err)
-	}
-	if err := tmp.Chmod(0o644); err != nil { //nolint:gosec // script is read-only and lives in a 0700 cache dir.
-		cleanup()
-		return "", fmt.Errorf("write %s script: %w", name, err)
-	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpName)
-		return "", fmt.Errorf("write %s script: %w", name, err)
-	}
-	if err := os.Rename(tmpName, dst); err != nil {
-		// On Windows a lost rename race fails instead of overwriting.
+	if err := fsutil.Write(dst, []byte(content), 0o644); err != nil {
+		// On Windows a lost rename race fails instead of overwriting; accept
+		// the winner's file when it already landed complete.
 		if complete(dst, content) {
-			os.Remove(tmpName)
 			return dst, nil
 		}
-		os.Remove(tmpName)
 		return "", fmt.Errorf("install %s script: %w", name, err)
 	}
 	return dst, nil

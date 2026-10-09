@@ -210,19 +210,8 @@ func decodeLine(t *testing.T, line string) map[string]any {
 	return decoded
 }
 
-func TestPrepareSocketDirAndSecureSocket(t *testing.T) {
-	socketPath := filepath.Join(t.TempDir(), "nested", "engine.sock")
-	if err := prepareSocketDir(socketPath); err != nil {
-		t.Fatalf("prepareSocketDir: %v", err)
-	}
-	dirInfo, statErr := os.Stat(filepath.Dir(socketPath))
-	if statErr != nil {
-		t.Fatalf("stat dir: %v", statErr)
-	}
-	if dirInfo.Mode().Perm() != 0o700 {
-		t.Errorf("socket dir mode = %o, want 700", dirInfo.Mode().Perm())
-	}
-
+func TestSecureSocket(t *testing.T) {
+	socketPath := filepath.Join(t.TempDir(), "engine.sock")
 	if err := os.WriteFile(socketPath, nil, 0o600); err != nil { //nolint:gosec // the mode is widened on the next line to model Godot's socket.
 		t.Fatalf("write socket file: %v", err)
 	}
@@ -238,16 +227,6 @@ func TestPrepareSocketDirAndSecureSocket(t *testing.T) {
 	}
 	if socketInfo.Mode().Perm() != 0o600 {
 		t.Errorf("socket mode = %o, want 600", socketInfo.Mode().Perm())
-	}
-
-	if err := removeStaleSocket(socketPath); err != nil {
-		t.Fatalf("removeStaleSocket: %v", err)
-	}
-	if _, statErr := os.Stat(socketPath); !os.IsNotExist(statErr) {
-		t.Errorf("socket still exists after removeStaleSocket: %v", statErr)
-	}
-	if err := removeStaleSocket(socketPath); err != nil {
-		t.Errorf("removeStaleSocket on a missing file: %v", err)
 	}
 }
 

@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"syscall"
+
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/fsutil"
 )
 
 // Opens path with exclusive share mode so only the first opener wins; the OS releases it when the process dies.
-func OpenTCPLock(path string) (io.Closer, error) {
-	if err := ensureEndpointDir(path); err != nil {
-		return nil, err
+func OpenListenerLock(path string) (io.Closer, error) {
+	if err := fsutil.EnsurePrivateDir(filepath.Dir(path)); err != nil {
+		return nil, fmt.Errorf("prepare lock directory for %q: %w", path, err)
 	}
 	pathPtr, err := syscall.UTF16PtrFromString(path)
 	if err != nil {
@@ -28,7 +31,7 @@ func OpenTCPLock(path string) (io.Closer, error) {
 		0,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("lock tcp %q: another daemon owns the endpoint: %w", path, err)
+		return nil, fmt.Errorf("lock %q: another daemon owns it: %w", path, err)
 	}
 	return os.NewFile(uintptr(handle), path), nil
 }

@@ -57,7 +57,7 @@ func (e *daemonEndpoint) listenFunc() (mcp.ListenFunc, error) {
 	if e.transport != godot.TransportTCP {
 		return mcp.ListenUnix, nil
 	}
-	lock, err := mcp.OpenTCPLock(e.endpointPath + ".lock")
+	lock, err := mcp.OpenListenerLock(e.endpointPath + ".lock")
 	if err != nil {
 		return nil, fmt.Errorf("open tcp endpoint lock: %w", err)
 	}

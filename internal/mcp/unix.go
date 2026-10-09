@@ -10,35 +10,21 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"syscall"
+
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/fsutil"
 )
 
 // Creates the socket directory 0700, takes an exclusive flock on addr+".lock"
 // for the listener's life, reclaims a stale socket, and creates the socket 0600.
 func ListenUnix(addr string) (Listener, error) {
 	dir := filepath.Dir(addr)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("create socket directory %q: %w", dir, err)
-	}
-	// MkdirAll leaves an existing directory's mode alone, so tighten it in case
-	// an older version created it world-readable.
-	if err := os.Chmod(dir, 0o700); err != nil {
-		return nil, fmt.Errorf("tighten socket directory %q: %w", dir, err)
+	if err := fsutil.EnsurePrivateDir(dir); err != nil {
+		return nil, fmt.Errorf("prepare socket directory %q: %w", dir, err)
 	}
 
-	//nolint:gosec // the lock path is derived from the bound project, not user input.
-	lock, err := os.OpenFile(addr+".lock", os.O_CREATE|os.O_RDWR, 0o600)
+	lock, err := OpenListenerLock(addr + ".lock")
 	if err != nil {
-		return nil, fmt.Errorf("open lock file for %q: %w", addr, err)
-	}
-	if chmodErr := lock.Chmod(0o600); chmodErr != nil {
-		_ = lock.Close()
-		return nil, fmt.Errorf("secure lock file for %q: %w", addr, chmodErr)
-	}
-	//nolint:gosec // the fd comes from a live *os.File.
-	if flockErr := syscall.Flock(int(lock.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); flockErr != nil {
-		_ = lock.Close()
-		return nil, fmt.Errorf("lock %q: another daemon owns the address: %w", addr, flockErr)
+		return nil, err
 	}
 
 	// The lock says we are the only holder, so a live listener means a duplicate
@@ -48,9 +34,9 @@ func ListenUnix(addr string) (Listener, error) {
 		_ = lock.Close()
 		return nil, fmt.Errorf("listen unix %q: already listening", addr)
 	}
-	if removeErr := os.Remove(addr); removeErr != nil && !os.IsNotExist(removeErr) {
+	if removeErr := fsutil.RemoveIfExists(addr); removeErr != nil {
 		_ = lock.Close()
-		return nil, fmt.Errorf("remove stale socket %q: %w", addr, removeErr)
+		return nil, fmt.Errorf("remove stale socket: %w", removeErr)
 	}
 	ln, err := net.Listen("unix", addr) //nolint:noctx // the ListenFunc seam carries no context; binding is local and fast.
 	if err != nil {
@@ -84,7 +70,7 @@ func DialUnix(addr string) (io.ReadWriteCloser, error) {
 // unlink the socket and release the lock.
 type unixListener struct {
 	ln   *net.UnixListener
-	lock *os.File
+	lock io.Closer
 	path string
 	once sync.Once
 	err  error
@@ -105,8 +91,8 @@ func (l *unixListener) Close() error {
 		if err := l.ln.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("close unix listener %q: %w", l.path, err))
 		}
-		if err := os.Remove(l.path); err != nil && !os.IsNotExist(err) {
-			errs = append(errs, fmt.Errorf("remove socket %q: %w", l.path, err))
+		if err := fsutil.RemoveIfExists(l.path); err != nil {
+			errs = append(errs, fmt.Errorf("remove socket: %w", err))
 		}
 		if err := l.lock.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("close lock file %q: %w", l.path+".lock", err))

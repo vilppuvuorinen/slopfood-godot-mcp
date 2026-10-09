@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 )
@@ -147,22 +146,6 @@ func (c *engineSocket) readFrameLine() ([]byte, error) {
 func (c *engineSocket) Close() error {
 	if err := c.conn.Close(); err != nil {
 		return fmt.Errorf("engine session: close socket: %w", err)
-	}
-	return nil
-}
-
-// The directory is the access gate for the socket: Godot creates the socket 0755 and GDScript cannot chmod it.
-func prepareSocketDir(socketPath string) error {
-	if err := os.MkdirAll(filepath.Dir(socketPath), 0o700); err != nil {
-		return fmt.Errorf("engine session: create socket directory: %w", err)
-	}
-	return nil
-}
-
-// Unlinks a stale file left by a previous crash so a fresh bind does not fail with EINVAL.
-func removeStaleSocket(socketPath string) error {
-	if err := os.Remove(socketPath); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("engine session: remove stale socket: %w", err)
 	}
 	return nil
 }

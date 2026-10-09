@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/daemonpath"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/fsutil"
 )
 
 // Recycles the engine after a fixed number of operations so accumulated state cannot grow without bound.
@@ -410,11 +411,11 @@ func engineLaunch(project string, transport Transport) (args []string, socketPat
 		if err != nil {
 			return nil, "", fmt.Errorf("engine session: derive socket path: %w", err)
 		}
-		if err = prepareSocketDir(socketPath); err != nil {
-			return nil, "", err
+		if err = fsutil.EnsurePrivateDir(filepath.Dir(socketPath)); err != nil {
+			return nil, "", fmt.Errorf("engine session: prepare socket directory: %w", err)
 		}
-		if err = removeStaleSocket(socketPath); err != nil {
-			return nil, "", err
+		if err = fsutil.RemoveIfExists(socketPath); err != nil {
+			return nil, "", fmt.Errorf("engine session: remove stale socket: %w", err)
 		}
 		return []string{"--gd-socket", socketPath}, socketPath, nil
 	}

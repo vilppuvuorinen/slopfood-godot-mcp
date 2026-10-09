@@ -17,9 +17,9 @@ import (
 func newTCPListenerForTest(t *testing.T) *TCPListener {
 	t.Helper()
 	endpointPath := filepath.Join(t.TempDir(), "runtime", "proj.endpoint")
-	lock, err := OpenTCPLock(endpointPath + ".lock")
+	lock, err := OpenListenerLock(endpointPath + ".lock")
 	if err != nil {
-		t.Fatalf("OpenTCPLock: %v", err)
+		t.Fatalf("OpenListenerLock: %v", err)
 	}
 	listener, err := ListenTCP("", endpointPath, lock)
 	if err != nil {
@@ -59,18 +59,18 @@ func TestTCPEndpointRecordAndLock(t *testing.T) {
 		t.Errorf("record = %+v, want a populated tcp record", record)
 	}
 
-	lock, err := OpenTCPLock(listener.endpointPath + ".lock")
+	lock, err := OpenListenerLock(listener.endpointPath + ".lock")
 	if err == nil {
 		_ = lock.Close()
-		t.Fatal("second OpenTCPLock succeeded, want the lock to reject it")
+		t.Fatal("second OpenListenerLock succeeded, want the lock to reject it")
 	}
 }
 
 func TestTCPCloseRemovesEndpoint(t *testing.T) {
 	endpointPath := filepath.Join(t.TempDir(), "runtime", "proj.endpoint")
-	lock, err := OpenTCPLock(endpointPath + ".lock")
+	lock, err := OpenListenerLock(endpointPath + ".lock")
 	if err != nil {
-		t.Fatalf("OpenTCPLock: %v", err)
+		t.Fatalf("OpenListenerLock: %v", err)
 	}
 	listener, err := ListenTCP("", endpointPath, lock)
 	if err != nil {
@@ -86,9 +86,9 @@ func TestTCPCloseRemovesEndpoint(t *testing.T) {
 	if _, statErr := os.Stat(endpointPath); !os.IsNotExist(statErr) {
 		t.Errorf("endpoint still present after Close: %v", statErr)
 	}
-	secondLock, lockErr := OpenTCPLock(endpointPath + ".lock")
+	secondLock, lockErr := OpenListenerLock(endpointPath + ".lock")
 	if lockErr != nil {
-		t.Fatalf("OpenTCPLock after Close: %v", lockErr)
+		t.Fatalf("OpenListenerLock after Close: %v", lockErr)
 	}
 	_ = secondLock.Close()
 }

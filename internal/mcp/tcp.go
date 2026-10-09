@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/fsutil"
 )
 
 // One newline-delimited JSON line sent before the MCP stream; the read is
@@ -34,19 +36,6 @@ type endpointRecord struct {
 	Token     string `json:"token"`
 }
 
-// Creates path's parent 0700 and tightens an existing one, since the endpoint
-// carries the token.
-func ensureEndpointDir(path string) error {
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create tcp endpoint directory %q: %w", dir, err)
-	}
-	if err := os.Chmod(dir, 0o700); err != nil {
-		return fmt.Errorf("tighten tcp endpoint directory %q: %w", dir, err)
-	}
-	return nil
-}
-
 // Loopback-TCP backend: binds 127.0.0.1:0, generates the token, and publishes
 // the endpoint record; Close removes the file before releasing the lock.
 type TCPListener struct {
@@ -61,8 +50,8 @@ type TCPListener struct {
 // Binds an ephemeral 127.0.0.1 port and publishes endpointPath; addr is
 // ignored. The caller opens the lock separately so the OS handle stays build-tagged.
 func ListenTCP(_ string, endpointPath string, lock io.Closer) (*TCPListener, error) {
-	if err := ensureEndpointDir(endpointPath); err != nil {
-		return nil, err
+	if err := fsutil.EnsurePrivateDir(filepath.Dir(endpointPath)); err != nil {
+		return nil, fmt.Errorf("prepare tcp endpoint directory: %w", err)
 	}
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0") //nolint:noctx // the ListenFunc seam carries no context; binding is local and fast.
@@ -214,30 +203,8 @@ func publishEndpoint(path string, record endpointRecord) error {
 	if err != nil {
 		return fmt.Errorf("encode endpoint record: %w", err)
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".tmp")
-	if err != nil {
-		return fmt.Errorf("create endpoint temp file: %w", err)
-	}
-	tmpName := tmp.Name()
-	cleanup := func() {
-		_ = tmp.Close()
-		_ = os.Remove(tmpName)
-	}
-	if _, err := tmp.Write(data); err != nil {
-		cleanup()
-		return fmt.Errorf("write endpoint record: %w", err)
-	}
-	if err := tmp.Chmod(0o600); err != nil {
-		cleanup()
-		return fmt.Errorf("secure endpoint record: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		_ = os.Remove(tmpName)
-		return fmt.Errorf("close endpoint record: %w", err)
-	}
-	if err := os.Rename(tmpName, path); err != nil {
-		_ = os.Remove(tmpName)
-		return fmt.Errorf("install endpoint record: %w", err)
+	if err := fsutil.Write(path, data, 0o600); err != nil {
+		return fmt.Errorf("publish endpoint record: %w", err)
 	}
 	return nil
 }
