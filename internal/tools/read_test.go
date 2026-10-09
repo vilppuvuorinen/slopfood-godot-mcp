@@ -14,7 +14,7 @@ import (
 )
 
 func TestReadSchema(t *testing.T) {
-	tool := read()
+	tool := newToolset("", nil).read()
 	if tool.Name != "read" {
 		t.Errorf("name = %q", tool.Name)
 	}
@@ -59,11 +59,7 @@ func TestReadSchema(t *testing.T) {
 func callReadSession(t *testing.T, project, args string) (*fakeSession, mcp.ToolResult) {
 	t.Helper()
 	sess := &fakeSession{}
-	ctx := WithSession(context.Background(), sess)
-	if project != "" {
-		ctx = withProject(ctx, project)
-	}
-	out, err := read().Handler(ctx, json.RawMessage(args))
+	out, err := newToolset(project, sess).read().Handler(context.Background(), json.RawMessage(args))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -117,7 +113,7 @@ func TestReadToolForwardsScopeOptions(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, read(), root, `{"type":"scene","path":"scenes/main.tscn","depth":1}`)
+	result := callToolArgs(t, (*toolset).read, root, `{"type":"scene","path":"scenes/main.tscn","depth":1}`)
 	if !result.IsError {
 		t.Fatalf("expected the markerless echo to fail: %+v", result.Content)
 	}
@@ -159,7 +155,7 @@ func TestReadValidation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, read(), tt.project, tt.args)
+			result := callToolArgs(t, (*toolset).read, tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -183,7 +179,7 @@ func TestReadResourcePathRejections(t *testing.T) {
 			{path: "user://save.tres", want: "user:// paths are not supported."},
 		} {
 			t.Run(readType+" "+tt.path, func(t *testing.T) {
-				result := callToolArgs(t, read(), root, fmt.Sprintf(`{"type":%q,"path":%q}`, readType, tt.path))
+				result := callToolArgs(t, (*toolset).read, root, fmt.Sprintf(`{"type":%q,"path":%q}`, readType, tt.path))
 				if !result.IsError {
 					t.Fatalf("expected an error result: %+v", result.Content)
 				}
@@ -201,7 +197,7 @@ func TestReadToolSuccess(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, read(), root, `{"type":"scene","path":"scenes/main.tscn"}`)
+	result := callToolArgs(t, (*toolset).read, root, `{"type":"scene","path":"scenes/main.tscn"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -225,7 +221,7 @@ func TestReadToolPreservesNestedPropertyValues(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, read(), root, `{"type":"scene","path":"scenes/main.tscn"}`)
+	result := callToolArgs(t, (*toolset).read, root, `{"type":"scene","path":"scenes/main.tscn"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -267,7 +263,7 @@ func TestReadToolNoMarkersIsError(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, read(), root, `{"type":"scene","path":"main.tscn"}`)
+	result := callToolArgs(t, (*toolset).read, root, `{"type":"scene","path":"main.tscn"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -285,7 +281,7 @@ func TestReadToolInvalidJSONIsError(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, read(), root, `{"type":"scene","path":"main.tscn"}`)
+	result := callToolArgs(t, (*toolset).read, root, `{"type":"scene","path":"main.tscn"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -304,7 +300,7 @@ func TestReadToolScriptFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, read(), root, `{"type":"scene","path":"main.tscn"}`)
+	result := callToolArgs(t, (*toolset).read, root, `{"type":"scene","path":"main.tscn"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -322,7 +318,7 @@ func TestReadToolSpawnFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, read(), root, `{"type":"scene","path":"main.tscn"}`)
+	result := callToolArgs(t, (*toolset).read, root, `{"type":"scene","path":"main.tscn"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -369,7 +365,7 @@ func TestReadResourceStructured(t *testing.T) {
 			root := t.TempDir()
 			makeProject(t, root)
 
-			result := callToolArgs(t, read(), root, tt.args)
+			result := callToolArgs(t, (*toolset).read, root, tt.args)
 			if result.IsError {
 				t.Fatalf("unexpected error: %+v", result.Content)
 			}
@@ -389,7 +385,7 @@ func TestReadResourceFallbackUsesEnvelopeEcho(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, read(), root, `{"type":"animation","path":"anims/walk.tres"}`)
+	result := callToolArgs(t, (*toolset).read, root, `{"type":"animation","path":"anims/walk.tres"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -412,7 +408,7 @@ func TestReadResourceFallbackUsesEnvelopeEcho(t *testing.T) {
 }
 
 func TestReadOutputSchemaAcceptsEnvelopeAndStatus(t *testing.T) {
-	tool := read()
+	tool := newToolset("", nil).read()
 	value := jsonValue(t, map[string]any{
 		"kind": "resource",
 		"path": "resources/data.res",
@@ -448,7 +444,7 @@ func TestReadResourceScriptFailure(t *testing.T) {
 			root := t.TempDir()
 			makeProject(t, root)
 
-			result := callToolArgs(t, read(), root, tt.args)
+			result := callToolArgs(t, (*toolset).read, root, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestExportProjectSchema(t *testing.T) {
-	tool := exportProject()
+	tool := newToolset("", nil).exportProject()
 	if tool.Name != "export_project" {
 		t.Errorf("name = %q", tool.Name)
 	}
@@ -41,7 +41,7 @@ func TestExportProjectSuccess(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
+	result := callToolArgs(t, (*toolset).exportProject, root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -72,7 +72,7 @@ func TestExportProjectAbsoluteOutputPath(t *testing.T) {
 	makeProject(t, root)
 	out := filepath.Join(t.TempDir(), "game.x86_64")
 
-	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":`+jsonString(out)+`}`)
+	result := callToolArgs(t, (*toolset).exportProject, root, `{"presetName":"Linux","outputPath":`+jsonString(out)+`}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -86,7 +86,7 @@ func TestExportProjectDebug(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":"build/game.x86_64","debug":true}`)
+	result := callToolArgs(t, (*toolset).exportProject, root, `{"presetName":"Linux","outputPath":"build/game.x86_64","debug":true}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -100,7 +100,7 @@ func TestExportProjectUsesOutputPathWhenStdoutEmpty(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
+	result := callToolArgs(t, (*toolset).exportProject, root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -114,7 +114,7 @@ func TestExportProjectNonZeroExit(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
+	result := callToolArgs(t, (*toolset).exportProject, root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -128,7 +128,7 @@ func TestExportProjectUnexpectedStderrFails(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
+	result := callToolArgs(t, (*toolset).exportProject, root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
 	if !result.IsError {
 		t.Fatalf("unexpected stderr must fail even on exit 0: %+v", result.Content)
 	}
@@ -142,7 +142,7 @@ func TestExportProjectSpawnFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, exportProject(), root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
+	result := callToolArgs(t, (*toolset).exportProject, root, `{"presetName":"Linux","outputPath":"build/game.x86_64"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -170,7 +170,7 @@ func TestExportProjectValidation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, exportProject(), tt.project, tt.args)
+			result := callToolArgs(t, (*toolset).exportProject, tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}

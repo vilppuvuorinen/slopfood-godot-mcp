@@ -20,7 +20,7 @@ var readResourceOperations = map[string]string{
 	"resource":  "read_resource",
 }
 
-func read() mcp.Tool {
+func (t *toolset) read() mcp.Tool {
 	return mcp.Tool{
 		Name:         "read",
 		Title:        "Read",
@@ -52,7 +52,7 @@ func read() mcp.Tool {
 			},
 			"required": []string{"type", "path"},
 		},
-		Handler: handleRead,
+		Handler: t.handleRead,
 	}
 }
 
@@ -63,14 +63,14 @@ type readArgs struct {
 	PropertyFilter []string `json:"propertyFilter"`
 }
 
-func handleRead(ctx context.Context, raw json.RawMessage) (any, error) {
+func (t *toolset) handleRead(ctx context.Context, raw json.RawMessage) (any, error) {
 	// Presence, not value: an explicit null and an absent key both nil the
 	// typed fields, so mismatched optional args are detected from the raw map.
 	args, present, err := decodeArgs[readArgs](raw)
 	if err != nil {
 		return nil, err
 	}
-	project := projectRoot(ctx)
+	project := t.project
 	if result, missing := requireFields(args, "type"); missing {
 		return result, nil
 	}
@@ -108,7 +108,7 @@ func handleRead(ctx context.Context, raw json.RawMessage) (any, error) {
 				"Omit depth to return the whole subtree",
 			), nil
 		}
-		return readSceneThrough(ctx, project, args.Path, "", args.Depth)
+		return t.readSceneThrough(ctx, args.Path, "", args.Depth)
 	}
 
 	if _, err := normalizeReadPath(project, args.Path); err != nil {
@@ -129,5 +129,5 @@ func handleRead(ctx context.Context, raw json.RawMessage) (any, error) {
 	if args.Type == "resource" && len(args.PropertyFilter) > 0 {
 		params["propertyFilter"] = args.PropertyFilter
 	}
-	return runHeadlessOperation(ctx, project, readResourceOperations[args.Type], params, fields)
+	return t.runHeadlessOperation(ctx, readResourceOperations[args.Type], params, fields)
 }

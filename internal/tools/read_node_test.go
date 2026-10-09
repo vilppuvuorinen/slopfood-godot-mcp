@@ -13,7 +13,7 @@ import (
 )
 
 func TestReadNodeSchema(t *testing.T) {
-	tool := readNode()
+	tool := newToolset("", nil).readNode()
 	if tool.Name != "read_node" {
 		t.Errorf("name = %q", tool.Name)
 	}
@@ -51,11 +51,7 @@ func TestReadNodeSchema(t *testing.T) {
 func callReadNodeSession(t *testing.T, project, args string) (*fakeSession, mcp.ToolResult) {
 	t.Helper()
 	sess := &fakeSession{}
-	ctx := WithSession(context.Background(), sess)
-	if project != "" {
-		ctx = withProject(ctx, project)
-	}
-	out, err := readNode().Handler(ctx, json.RawMessage(args))
+	out, err := newToolset(project, sess).readNode().Handler(context.Background(), json.RawMessage(args))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -104,7 +100,7 @@ func TestReadNodeTilemapStructured(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "level.tscn"), "[gd_scene format=3]\n")
 
-	result := callToolArgs(t, readNode(), root, `{"type":"tilemap","path":"scenes/level.tscn","nodePath":"root/Ground"}`)
+	result := callToolArgs(t, (*toolset).readNode, root, `{"type":"tilemap","path":"scenes/level.tscn","nodePath":"root/Ground"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -120,7 +116,7 @@ func TestReadNodeTilemapStructured(t *testing.T) {
 }
 
 func TestReadNodeOutputSchemaAcceptsEnvelopeAndStatus(t *testing.T) {
-	tool := readNode()
+	tool := newToolset("", nil).readNode()
 	value := jsonValue(t, map[string]any{
 		"kind":     "tilemap",
 		"path":     "scenes/level.tscn",
@@ -147,7 +143,7 @@ func TestReadNodeTilemapScriptFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "level.tscn"), "[gd_scene format=3]\n")
 
-	result := callToolArgs(t, readNode(), root, `{"type":"tilemap","path":"scenes/level.tscn","nodePath":"root/Ground"}`)
+	result := callToolArgs(t, (*toolset).readNode, root, `{"type":"tilemap","path":"scenes/level.tscn","nodePath":"root/Ground"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -175,7 +171,7 @@ func TestReadNodeValidation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, readNode(), tt.project, tt.args)
+			result := callToolArgs(t, (*toolset).readNode, tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}

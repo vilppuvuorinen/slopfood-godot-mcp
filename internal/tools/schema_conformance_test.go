@@ -231,7 +231,7 @@ func TestSchemaValidatorRejectsViolations(t *testing.T) {
 func TestErrorResultMatchesStatusOutputSchema(t *testing.T) {
 	envelope := jsonValue(t, mcp.ErrorResult("boom", "try again").StructuredContent)
 	for _, newTool := range allTools {
-		tool := newTool()
+		tool := newTool(newToolset("", nil))
 		if !hasRequired(tool.OutputSchema, "success", "message") {
 			continue
 		}
@@ -244,19 +244,19 @@ func TestErrorResultMatchesStatusOutputSchema(t *testing.T) {
 func TestSuccessResultsMatchOutputSchema(t *testing.T) {
 	tests := []struct {
 		name  string
-		tool  func() mcp.Tool
+		tool  func(*toolset) mcp.Tool
 		args  string
 		setup func(t *testing.T) string
 	}{
-		{name: "create_project", tool: createProject, args: `{"projectName":"Demo"}`, setup: func(t *testing.T) string { t.Helper(); return t.TempDir() }},
+		{name: "create_project", tool: (*toolset).createProject, args: `{"projectName":"Demo"}`, setup: func(t *testing.T) string { t.Helper(); return t.TempDir() }},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, tt.tool(), tt.setup(t), tt.args)
+			result := callToolArgs(t, tt.tool, tt.setup(t), tt.args)
 			if result.IsError {
 				t.Fatalf("unexpected error: %+v", result.Content)
 			}
-			tool := tt.tool()
+			tool := tt.tool(newToolset("", nil))
 			value := jsonValue(t, result.StructuredContent)
 			if msg := schemaViolation(tool.OutputSchema, tool.OutputSchema, value, tool.Name); msg != "" {
 				t.Errorf("tool %q result violates its outputSchema: %s", tool.Name, msg)

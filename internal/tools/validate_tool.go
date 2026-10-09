@@ -12,7 +12,7 @@ import (
 
 const projectValidationTimeout = 30 * time.Second
 
-func validate() mcp.Tool {
+func (t *toolset) validate() mcp.Tool {
 	return mcp.Tool{
 		Name:        "validate",
 		Title:       "Validate",
@@ -79,7 +79,7 @@ func validate() mcp.Tool {
 				"required": []string{"fileCount", "filesWithErrors", "allValid", "results"},
 			},
 		}),
-		Handler: handleValidate,
+		Handler: t.handleValidate,
 	}
 }
 
@@ -110,8 +110,8 @@ type validateReport struct {
 	Scripts validateScriptsReport `json:"scripts"`
 }
 
-func handleValidate(ctx context.Context, _ json.RawMessage) (any, error) {
-	project := projectRoot(ctx)
+func (t *toolset) handleValidate(ctx context.Context, _ json.RawMessage) (any, error) {
+	project := t.project
 	if result, ok := requireProject(project); !ok {
 		return result, nil
 	}

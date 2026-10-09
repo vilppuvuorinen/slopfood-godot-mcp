@@ -11,7 +11,7 @@ import (
 
 var readNodeTypes = []string{"scene", "tilemap"}
 
-func readNode() mcp.Tool {
+func (t *toolset) readNode() mcp.Tool {
 	return mcp.Tool{
 		Name:         "read_node",
 		Title:        "Read Node",
@@ -42,7 +42,7 @@ func readNode() mcp.Tool {
 			},
 			"required": []string{"type", "path", "nodePath"},
 		},
-		Handler: handleReadNode,
+		Handler: t.handleReadNode,
 	}
 }
 
@@ -53,14 +53,14 @@ type readNodeArgs struct {
 	Depth    *int   `json:"depth"`
 }
 
-func handleReadNode(ctx context.Context, raw json.RawMessage) (any, error) {
+func (t *toolset) handleReadNode(ctx context.Context, raw json.RawMessage) (any, error) {
 	// Presence, not value: an explicit null and an absent key both nil the
 	// typed depth field, so depth-on-tilemap is detected from the raw map.
 	args, present, err := decodeArgs[readNodeArgs](raw)
 	if err != nil {
 		return nil, err
 	}
-	project := projectRoot(ctx)
+	project := t.project
 	if result, missing := requireFields(args, "type"); missing {
 		return result, nil
 	}
@@ -89,7 +89,7 @@ func handleReadNode(ctx context.Context, raw json.RawMessage) (any, error) {
 				"Omit depth to return the whole subtree",
 			), nil
 		}
-		return readSceneThrough(ctx, project, args.Path, args.NodePath, args.Depth)
+		return t.readSceneThrough(ctx, args.Path, args.NodePath, args.Depth)
 	}
 
 	if result, ok := ensureReadableScene(project, args.Path); !ok {
@@ -104,5 +104,5 @@ func handleReadNode(ctx context.Context, raw json.RawMessage) (any, error) {
 		"path":     args.Path,
 		"nodePath": args.NodePath,
 	}
-	return runHeadlessOperation(ctx, project, "read_tilemap", params, fields)
+	return t.runHeadlessOperation(ctx, "read_tilemap", params, fields)
 }

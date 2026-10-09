@@ -27,13 +27,12 @@ func TestRunScriptDelegatesToSession(t *testing.T) {
 
 	payload := `{"compiled":true,"result":{"answer":42},"logs":["hi"],"errors":[]}`
 	sess := &runScriptSession{output: jsonStartMarker + "\n" + payload + "\n" + jsonEndMarker}
-	ctx := WithSession(withProject(context.Background(), root), sess)
 	body := "return 42\n"
 	raw, err := json.Marshal(map[string]any{"body": body})
 	if err != nil {
 		t.Fatalf("marshal args: %v", err)
 	}
-	out, err := runScript().Handler(ctx, raw)
+	out, err := newToolset(root, sess).runScript().Handler(context.Background(), raw)
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -62,8 +61,7 @@ func TestRunScriptDelegatesToSession(t *testing.T) {
 func TestRunScriptRequiresBody(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
-	ctx := WithSession(withProject(context.Background(), root), &fakeSession{})
-	out, err := runScript().Handler(ctx, json.RawMessage(`{}`))
+	out, err := newToolset(root, &fakeSession{}).runScript().Handler(context.Background(), json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -78,8 +76,7 @@ func TestRunScriptRequiresBody(t *testing.T) {
 
 func TestRunScriptNotAProject(t *testing.T) {
 	root := t.TempDir()
-	ctx := WithSession(withProject(context.Background(), root), &fakeSession{})
-	out, err := runScript().Handler(ctx, json.RawMessage(`{"body":"return 0\n"}`))
+	out, err := newToolset(root, &fakeSession{}).runScript().Handler(context.Background(), json.RawMessage(`{"body":"return 0\n"}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}

@@ -25,8 +25,8 @@ func ensureReadableScene(project, scenePath string) (mcp.ToolResult, bool) {
 
 // readSceneThrough runs ensureReadableScene and then the bespoke read_scene
 // payload handling.
-func readSceneThrough(ctx context.Context, project, scenePath, nodePath string, depth *int) (any, error) {
-	if result, ok := ensureReadableScene(project, scenePath); !ok {
+func (t *toolset) readSceneThrough(ctx context.Context, scenePath, nodePath string, depth *int) (any, error) {
+	if result, ok := ensureReadableScene(t.project, scenePath); !ok {
 		return result, nil
 	}
 
@@ -37,7 +37,7 @@ func readSceneThrough(ctx context.Context, project, scenePath, nodePath string, 
 	if depth != nil {
 		params["depth"] = *depth
 	}
-	stdout, stderr, exitCode, err := runEngine(ctx, project, "read_scene", params)
+	stdout, stderr, exitCode, err := t.runEngine(ctx, "read_scene", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to read scene: "+err.Error(),

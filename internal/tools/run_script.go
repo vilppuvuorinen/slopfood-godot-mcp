@@ -7,7 +7,7 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-func runScript() mcp.Tool {
+func (t *toolset) runScript() mcp.Tool {
 	return mcp.Tool{
 		Name:        "run_script",
 		Title:       "Run GDScript",
@@ -50,7 +50,7 @@ func runScript() mcp.Tool {
 				},
 			},
 		}),
-		Handler: handleRunScript,
+		Handler: t.handleRunScript,
 	}
 }
 
@@ -58,12 +58,12 @@ type runScriptArgs struct {
 	Body string `json:"body"`
 }
 
-func handleRunScript(ctx context.Context, raw json.RawMessage) (any, error) {
+func (t *toolset) handleRunScript(ctx context.Context, raw json.RawMessage) (any, error) {
 	args, _, err := decodeArgs[runScriptArgs](raw)
 	if err != nil {
 		return nil, err
 	}
-	project := projectRoot(ctx)
+	project := t.project
 	if result, missing := requireFields(args, "body"); missing {
 		return result, nil
 	}
@@ -71,7 +71,7 @@ func handleRunScript(ctx context.Context, raw json.RawMessage) (any, error) {
 		return result, nil
 	}
 
-	stdout, stderr, exitCode, err := runEngine(ctx, project, "run_script", map[string]any{"body": args.Body})
+	stdout, stderr, exitCode, err := t.runEngine(ctx, "run_script", map[string]any{"body": args.Body})
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to run script: "+err.Error(),

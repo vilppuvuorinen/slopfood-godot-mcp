@@ -47,7 +47,7 @@ func TestValidProjectName(t *testing.T) {
 
 func TestCreateProjectEscapesName(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "game")
-	result := callToolArgs(t, createProject(), dir, `{"projectName":"Evil\" config/name=\"pwned"}`)
+	result := callToolArgs(t, (*toolset).createProject, dir, `{"projectName":"Evil\" config/name=\"pwned"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -65,7 +65,7 @@ func TestCreateProjectEscapesName(t *testing.T) {
 
 func TestCreateProjectRejectsControlChars(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "game")
-	result := callToolArgs(t, createProject(), dir, `{"projectName":"Evil\nconfig/name=\"pwned"}`)
+	result := callToolArgs(t, (*toolset).createProject, dir, `{"projectName":"Evil\nconfig/name=\"pwned"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

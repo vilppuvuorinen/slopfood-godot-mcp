@@ -27,7 +27,7 @@ func (f *fakeSession) Run(_ context.Context, project, operation string, params m
 }
 
 func TestRunEngineRequiresSession(t *testing.T) {
-	_, _, _, err := runEngine(context.Background(), "/proj", "attach_script", nil)
+	_, _, _, err := (&toolset{}).runEngine(context.Background(), "attach_script", nil)
 	if err == nil {
 		t.Fatal("runEngine with no session: err = nil, want an error")
 	}
@@ -38,9 +38,9 @@ func TestRunEngineRequiresSession(t *testing.T) {
 
 func TestRunEngineDelegates(t *testing.T) {
 	sess := &fakeSession{}
-	ctx := WithSession(context.Background(), sess)
+	ts := newToolset("/proj", sess)
 
-	if _, _, _, err := runEngine(ctx, "/proj", "read_scene", map[string]any{"scenePath": "main.tscn"}); err != nil {
+	if _, _, _, err := ts.runEngine(context.Background(), "read_scene", map[string]any{"scenePath": "main.tscn"}); err != nil {
 		t.Fatalf("runEngine: %v", err)
 	}
 	if len(sess.runs) != 1 {
@@ -59,8 +59,7 @@ func TestAttachScriptReconcilesInPlace(t *testing.T) {
 	seedFile(t, filepath.Join(root, "player.gd"), "extends Node\n")
 
 	sess := &fakeSession{}
-	ctx := WithSession(withProject(context.Background(), root), sess)
-	out, err := attachScript().Handler(ctx, json.RawMessage(
+	out, err := newToolset(root, sess).attachScript().Handler(context.Background(), json.RawMessage(
 		`{"scenePath":"scenes/main.tscn","nodePath":"root","scriptPath":"player.gd"}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)

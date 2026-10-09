@@ -43,8 +43,8 @@ var headlessSolutions = []string{
 
 // Callers validate arguments, paths, and project/scene existence first; benign
 // engine stderr is allowlisted per tool via scriptFailed (see stderr.go).
-func runHeadlessOperation(ctx context.Context, projectPath, operation string, params, fields map[string]any) (any, error) {
-	stdout, stderr, exitCode, err := runEngine(ctx, projectPath, operation, params)
+func (t *toolset) runHeadlessOperation(ctx context.Context, operation string, params, fields map[string]any) (any, error) {
+	stdout, stderr, exitCode, err := t.runEngine(ctx, operation, params)
 	if err != nil {
 		return mcp.ErrorResult(operation+" failed: "+err.Error(), headlessSolutions...), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
@@ -54,7 +54,7 @@ func runHeadlessOperation(ctx context.Context, projectPath, operation string, pa
 	if payload, ok := markerJSON(stdout); ok {
 		return mcp.JSONResult(payload), nil
 	}
-	return statusResult(projectPath, operation+" succeeded.\n\nOutput: "+stdout, fields), nil
+	return statusResult(t.project, operation+" succeeded.\n\nOutput: "+stdout, fields), nil
 }
 
 func statusResult(project, message string, fields map[string]any) mcp.ToolResult {

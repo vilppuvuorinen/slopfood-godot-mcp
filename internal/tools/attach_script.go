@@ -7,7 +7,7 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-func attachScript() mcp.Tool {
+func (t *toolset) attachScript() mcp.Tool {
 	return mcp.Tool{
 		Name:        "attach_script",
 		Title:       "Attach Script",
@@ -36,7 +36,7 @@ func attachScript() mcp.Tool {
 			"nodePath":   map[string]any{"type": "string"},
 			"scriptPath": map[string]any{"type": "string"},
 		}),
-		Handler: handleAttachScript,
+		Handler: t.handleAttachScript,
 	}
 }
 
@@ -46,12 +46,12 @@ type attachScriptArgs struct {
 	ScriptPath string `json:"scriptPath"`
 }
 
-func handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
+func (t *toolset) handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
 	args, _, err := decodeArgs[attachScriptArgs](raw)
 	if err != nil {
 		return nil, err
 	}
-	project := projectRoot(ctx)
+	project := t.project
 	if result, missing := requireFields(args, "scenePath", "nodePath", "scriptPath"); missing {
 		return result, nil
 	}
@@ -74,7 +74,7 @@ func handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
 		"nodePath":   args.NodePath,
 		"scriptPath": args.ScriptPath,
 	}
-	result, err := runHeadlessOperation(ctx, project, "attach_script", params, map[string]any{
+	result, err := t.runHeadlessOperation(ctx, "attach_script", params, map[string]any{
 		"scenePath":  args.ScenePath,
 		"nodePath":   args.NodePath,
 		"scriptPath": args.ScriptPath,

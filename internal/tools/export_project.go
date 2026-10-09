@@ -8,7 +8,7 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-func exportProject() mcp.Tool {
+func (t *toolset) exportProject() mcp.Tool {
 	return mcp.Tool{
 		Name:        "export_project",
 		Title:       "Export Project",
@@ -38,7 +38,7 @@ func exportProject() mcp.Tool {
 			"resolvedOutputPath": map[string]any{"type": "string", "description": resolvedOutputPathDescription},
 			"debug":              map[string]any{"type": "boolean"},
 		}),
-		Handler: handleExportProject,
+		Handler: t.handleExportProject,
 	}
 }
 
@@ -48,12 +48,12 @@ type exportProjectArgs struct {
 	Debug      bool   `json:"debug"`
 }
 
-func handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) {
+func (t *toolset) handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) {
 	args, _, err := decodeArgs[exportProjectArgs](raw)
 	if err != nil {
 		return nil, err
 	}
-	project := projectRoot(ctx)
+	project := t.project
 	if result, missing := requireFields(args, "presetName", "outputPath"); missing {
 		return result, nil
 	}

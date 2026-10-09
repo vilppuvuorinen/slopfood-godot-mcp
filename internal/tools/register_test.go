@@ -16,7 +16,7 @@ import (
 func registeredToolNames(t *testing.T) map[string]bool {
 	t.Helper()
 	server := mcp.NewServer(mcp.ServerInfo{Name: "test"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	Register(server, "")
+	Register(server, "", nil)
 
 	in := strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n")
 	var out bytes.Buffer
@@ -55,7 +55,7 @@ func TestRegisterAllTools(t *testing.T) {
 func TestToolsUnique(t *testing.T) {
 	seen := make(map[string]bool)
 	for _, newTool := range allTools {
-		tool := newTool()
+		tool := newTool(newToolset("", nil))
 		if seen[tool.Name] {
 			t.Errorf("tool %q registered more than once", tool.Name)
 		}
@@ -68,7 +68,7 @@ func TestToolsUnique(t *testing.T) {
 
 func TestToolsAdvertiseMetadata(t *testing.T) {
 	for _, newTool := range allTools {
-		tool := newTool()
+		tool := newTool(newToolset("", nil))
 		if tool.Title == "" {
 			t.Errorf("tool %q has no title", tool.Name)
 		}
@@ -96,7 +96,7 @@ func TestToolAnnotationsMatchBehavior(t *testing.T) {
 		"export_project":      true,
 	}
 	for _, newTool := range allTools {
-		tool := newTool()
+		tool := newTool(newToolset("", nil))
 		if tool.Annotations == nil {
 			t.Errorf("tool %q has no annotations", tool.Name)
 			continue
@@ -133,7 +133,7 @@ var schemaKeywords = []string{
 
 func TestToolsAdvertiseValueTypes(t *testing.T) {
 	for _, newTool := range allTools {
-		tool := newTool()
+		tool := newTool(newToolset("", nil))
 		assertTypedSchemas(t, tool.Name, "inputSchema", tool.InputSchema)
 		assertTypedSchemas(t, tool.Name, "outputSchema", tool.OutputSchema)
 	}
@@ -168,7 +168,7 @@ func assertTypedSchemas(t *testing.T, toolName, path string, node any) {
 
 func TestToolsConstrainAdvertisedStatus(t *testing.T) {
 	for _, newTool := range allTools {
-		tool := newTool()
+		tool := newTool(newToolset("", nil))
 		props, _ := tool.OutputSchema["properties"].(map[string]any)
 		if _, ok := props["success"]; !ok {
 			continue

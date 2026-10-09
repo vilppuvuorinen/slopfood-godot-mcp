@@ -67,14 +67,10 @@ func (s *oneShotSession) Run(ctx context.Context, project, operation string, par
 	return stdout, stderr, 0, nil
 }
 
-func callToolArgs(t *testing.T, tool mcp.Tool, project, args string) mcp.ToolResult {
+func callToolArgs(t *testing.T, build func(*toolset) mcp.Tool, project, args string) mcp.ToolResult {
 	t.Helper()
-	ctx := context.Background()
-	if project != "" {
-		ctx = withProject(ctx, project)
-	}
-	ctx = WithSession(ctx, &oneShotSession{})
-	out, err := tool.Handler(ctx, json.RawMessage(args))
+	tool := build(newToolset(project, &oneShotSession{}))
+	out, err := tool.Handler(context.Background(), json.RawMessage(args))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}

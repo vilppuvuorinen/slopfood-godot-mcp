@@ -9,7 +9,7 @@ import (
 )
 
 func TestExportMeshLibrarySchema(t *testing.T) {
-	tool := exportMeshLibrary()
+	tool := newToolset("", nil).exportMeshLibrary()
 	if tool.Name != "export_mesh_library" {
 		t.Errorf("name = %q", tool.Name)
 	}
@@ -40,7 +40,7 @@ func TestExportMeshLibrarySuccess(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, exportMeshLibrary(), root, `{"scenePath":"scenes/main.tscn","outputPath":"exported/meshlib.res"}`)
+	result := callToolArgs(t, (*toolset).exportMeshLibrary, root, `{"scenePath":"scenes/main.tscn","outputPath":"exported/meshlib.res"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -74,7 +74,7 @@ func TestExportMeshLibraryAbsoluteOutputPath(t *testing.T) {
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
 	output := filepath.Join(t.TempDir(), "build", "meshlib.res")
-	result := callToolArgs(t, exportMeshLibrary(), root,
+	result := callToolArgs(t, (*toolset).exportMeshLibrary, root,
 		`{"scenePath":"scenes/main.tscn","outputPath":`+jsonString(output)+`}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
@@ -101,7 +101,7 @@ func TestExportMeshLibraryMeshItemNames(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, exportMeshLibrary(), root, `{"scenePath":"scenes/main.tscn","outputPath":"exported/meshlib.res","meshItemNames":["A","B"]}`)
+	result := callToolArgs(t, (*toolset).exportMeshLibrary, root, `{"scenePath":"scenes/main.tscn","outputPath":"exported/meshlib.res","meshItemNames":["A","B"]}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -130,7 +130,7 @@ func TestExportMeshLibraryValidation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, exportMeshLibrary(), tt.project, tt.args)
+			result := callToolArgs(t, (*toolset).exportMeshLibrary, tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -147,7 +147,7 @@ func TestExportMeshLibraryScriptFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, exportMeshLibrary(), root, `{"scenePath":"scenes/main.tscn","outputPath":"exported/meshlib.res"}`)
+	result := callToolArgs(t, (*toolset).exportMeshLibrary, root, `{"scenePath":"scenes/main.tscn","outputPath":"exported/meshlib.res"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -168,7 +168,7 @@ func TestExportMeshLibrarySpawnFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, exportMeshLibrary(), root, `{"scenePath":"scenes/main.tscn","outputPath":"exported/meshlib.res"}`)
+	result := callToolArgs(t, (*toolset).exportMeshLibrary, root, `{"scenePath":"scenes/main.tscn","outputPath":"exported/meshlib.res"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestAttachScriptSchema(t *testing.T) {
-	tool := attachScript()
+	tool := newToolset("", nil).attachScript()
 	if tool.Name != "attach_script" {
 		t.Errorf("name = %q", tool.Name)
 	}
@@ -41,7 +41,7 @@ func TestAttachScriptSuccess(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, attachScript(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
+	result := callToolArgs(t, (*toolset).attachScript, root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -65,7 +65,7 @@ func TestAttachScriptStructuredContent(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, attachScript(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
+	result := callToolArgs(t, (*toolset).attachScript, root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -103,7 +103,7 @@ func TestAttachScriptValidation(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, attachScript(), tt.project, tt.args)
+			result := callToolArgs(t, (*toolset).attachScript, tt.project, tt.args)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
@@ -120,7 +120,7 @@ func TestAttachScriptScriptFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, attachScript(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root","scriptPath":"scripts/player.gd"}`)
+	result := callToolArgs(t, (*toolset).attachScript, root, `{"scenePath":"scenes/main.tscn","nodePath":"root","scriptPath":"scripts/player.gd"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -141,7 +141,7 @@ func TestAttachScriptSpawnFailure(t *testing.T) {
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "scene")
 
-	result := callToolArgs(t, attachScript(), root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
+	result := callToolArgs(t, (*toolset).attachScript, root, `{"scenePath":"scenes/main.tscn","nodePath":"root/Player","scriptPath":"scripts/player.gd"}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}

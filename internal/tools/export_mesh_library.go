@@ -8,7 +8,7 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-func exportMeshLibrary() mcp.Tool {
+func (t *toolset) exportMeshLibrary() mcp.Tool {
 	return mcp.Tool{
 		Name:        "export_mesh_library",
 		Title:       "Export Mesh Library",
@@ -38,7 +38,7 @@ func exportMeshLibrary() mcp.Tool {
 			"outputPath":         map[string]any{"type": "string", "description": outputPathEchoDescription},
 			"resolvedOutputPath": map[string]any{"type": "string", "description": resolvedOutputPathDescription},
 		}),
-		Handler: handleExportMeshLibrary,
+		Handler: t.handleExportMeshLibrary,
 	}
 }
 
@@ -48,12 +48,12 @@ type exportMeshLibraryArgs struct {
 	MeshItemNames []string `json:"meshItemNames"`
 }
 
-func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, error) {
+func (t *toolset) handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, error) {
 	args, _, err := decodeArgs[exportMeshLibraryArgs](raw)
 	if err != nil {
 		return nil, err
 	}
-	project := projectRoot(ctx)
+	project := t.project
 	if result, missing := requireFields(args, "scenePath", "outputPath"); missing {
 		return result, nil
 	}
@@ -80,7 +80,7 @@ func handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, err
 		params["meshItemNames"] = args.MeshItemNames
 	}
 
-	stdout, stderr, exitCode, err := runEngine(ctx, project, "export_mesh_library", params)
+	stdout, stderr, exitCode, err := t.runEngine(ctx, "export_mesh_library", params)
 	if err != nil {
 		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
 			"Failed to export mesh library: "+err.Error(),

@@ -25,7 +25,7 @@ const (
 	defaultDotnetTargetFramework = "net8.0"
 )
 
-func createProject() mcp.Tool {
+func (t *toolset) createProject() mcp.Tool {
 	return mcp.Tool{
 		Name:        "create_project",
 		Title:       "Create Project",
@@ -50,7 +50,7 @@ func createProject() mcp.Tool {
 			"projectName": map[string]any{"type": "string"},
 			"dotnet":      map[string]any{"type": "boolean"},
 		}),
-		Handler: handleCreateProject,
+		Handler: t.handleCreateProject,
 	}
 }
 
@@ -59,12 +59,12 @@ type createProjectArgs struct {
 	Dotnet      bool   `json:"dotnet"`
 }
 
-func handleCreateProject(ctx context.Context, raw json.RawMessage) (any, error) {
+func (t *toolset) handleCreateProject(ctx context.Context, raw json.RawMessage) (any, error) {
 	args, _, err := decodeArgs[createProjectArgs](raw)
 	if err != nil {
 		return nil, err
 	}
-	project := projectRoot(ctx)
+	project := t.project
 	if result, missing := requireFields(args, "projectName"); missing {
 		return result, nil
 	}

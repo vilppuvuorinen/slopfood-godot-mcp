@@ -129,7 +129,7 @@ func newLogger(logLevel string, stderr io.Writer) (*slog.Logger, error) {
 	return slog.New(slog.NewJSONHandler(stderr, &slog.HandlerOptions{Level: level})), nil
 }
 
-func (r *role) newServer() *mcp.Server {
+func (r *role) newServer(session tools.Session) *mcp.Server {
 	srv := mcp.NewServer(mcp.ServerInfo{
 		Name:    "slopfood-godot-mcp",
 		Version: version,
@@ -147,7 +147,7 @@ func (r *role) newServer() *mcp.Server {
 		instructions += " The bound engine version could not be determined from the Godot binary."
 	}
 	srv.Instructions = instructions
-	tools.Register(srv, r.root)
+	tools.Register(srv, r.root, session)
 	return srv
 }
 
@@ -272,9 +272,8 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 			role.logger.Warn("engine session close", "error", cerr)
 		}
 	}()
-	serveCtx := tools.WithSession(role.ctx, session)
 
-	server := role.newServer()
+	server := role.newServer(session)
 	queue := mcp.NewQueue(operationQueueDepth, operationQueueTimeout)
 	daemon := mcp.NewDaemon(
 		server,
@@ -314,7 +313,7 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	}
 
 	role.logger.Info("daemon listening", "project", role.root, "transport", transport, "endpoint", endpoint.addr(), "log", logPath)
-	if err := daemon.Serve(serveCtx); err != nil && !errors.Is(err, context.Canceled) {
+	if err := daemon.Serve(role.ctx); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("daemon serve: %w", err)
 	}
 	role.logger.Info("daemon stopped", "project", role.root)

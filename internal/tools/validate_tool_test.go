@@ -69,7 +69,7 @@ fi
 exit $status`
 
 func TestValidateSchema(t *testing.T) {
-	tool := validate()
+	tool := newToolset("", nil).validate()
 	if tool.Name != "validate" {
 		t.Errorf("name = %q", tool.Name)
 	}
@@ -96,7 +96,7 @@ func TestValidateValidProject(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, validate(), root, `{}`)
+	result := callToolArgs(t, (*toolset).validate, root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -123,7 +123,7 @@ fi`)
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, validate(), root, `{}`)
+	result := callToolArgs(t, (*toolset).validate, root, `{}`)
 	if result.IsError {
 		t.Fatalf("expected a non-error result: %+v", result.Content)
 	}
@@ -144,7 +144,7 @@ func TestValidateReportsBrokenAndValidScripts(t *testing.T) {
 	seedFile(t, filepath.Join(root, "valid.gd"), "extends Node\n")
 	seedFile(t, filepath.Join(root, "invalid.gd"), "extends Node\nfunc b(\n")
 
-	result := callToolArgs(t, validate(), root, `{}`)
+	result := callToolArgs(t, (*toolset).validate, root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -208,7 +208,7 @@ exit $status`)
 	seedFile(t, filepath.Join(root, ".import", "f.gd"), "extends Node\n")
 	seedFile(t, filepath.Join(root, ".hidden", "g.gd"), "extends Node\n")
 
-	result := callToolArgs(t, validate(), root, `{}`)
+	result := callToolArgs(t, (*toolset).validate, root, `{}`)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -239,7 +239,7 @@ exit 0`)
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "valid.gd"), "extends Node\n")
 
-	result := callToolArgs(t, validate(), root, `{}`)
+	result := callToolArgs(t, (*toolset).validate, root, `{}`)
 	if result.IsError {
 		t.Fatalf("expected a structured report: %+v", result.Content)
 	}
@@ -258,7 +258,7 @@ func TestValidateEngineFailure(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
 
-	result := callToolArgs(t, validate(), root, `{}`)
+	result := callToolArgs(t, (*toolset).validate, root, `{}`)
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -280,7 +280,7 @@ func TestValidateErrors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := callToolArgs(t, validate(), tt.project, `{}`)
+			result := callToolArgs(t, (*toolset).validate, tt.project, `{}`)
 			if !result.IsError {
 				t.Fatalf("expected an error result: %+v", result.Content)
 			}
