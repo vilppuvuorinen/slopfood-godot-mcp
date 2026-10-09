@@ -56,12 +56,12 @@ type readNodeArgs struct {
 func (t *toolset) handleReadNode(ctx context.Context, raw json.RawMessage) (any, error) {
 	// Presence, not value: an explicit null and an absent key both nil the
 	// typed depth field, so depth-on-tilemap is detected from the raw map.
-	args, present, err := decodeArgs[readNodeArgs](raw)
+	args, present, err := decodeArgsPresent[readNodeArgs](raw)
 	if err != nil {
 		return nil, err
 	}
 	project := t.project
-	if result, missing := requireFields(args, "type"); missing {
+	if result, missing := requireFields("type", args.Type); missing {
 		return result, nil
 	}
 	if !slices.Contains(readNodeTypes, args.Type) {
@@ -70,10 +70,10 @@ func (t *toolset) handleReadNode(ctx context.Context, raw json.RawMessage) (any,
 			"type must be one of "+strings.Join(readNodeTypes, ", "),
 		), nil
 	}
-	if result, missing := requireFields(args, "path"); missing {
+	if result, missing := requireFields("path", args.Path); missing {
 		return result, nil
 	}
-	if result, missing := requireFields(args, "nodePath"); missing {
+	if result, missing := requireFields("nodePath", args.NodePath); missing {
 		return result, nil
 	}
 	if _, ok := present["depth"]; ok && args.Type == "tilemap" {

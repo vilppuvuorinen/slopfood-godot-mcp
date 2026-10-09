@@ -59,12 +59,12 @@ type runScriptArgs struct {
 }
 
 func (t *toolset) handleRunScript(ctx context.Context, raw json.RawMessage) (any, error) {
-	args, _, err := decodeArgs[runScriptArgs](raw)
+	args, err := decodeArgs[runScriptArgs](raw)
 	if err != nil {
 		return nil, err
 	}
 	project := t.project
-	if result, missing := requireFields(args, "body"); missing {
+	if result, missing := requireFields("body", args.Body); missing {
 		return result, nil
 	}
 	if result, ok := requireProject(project); !ok {

@@ -66,12 +66,12 @@ type readArgs struct {
 func (t *toolset) handleRead(ctx context.Context, raw json.RawMessage) (any, error) {
 	// Presence, not value: an explicit null and an absent key both nil the
 	// typed fields, so mismatched optional args are detected from the raw map.
-	args, present, err := decodeArgs[readArgs](raw)
+	args, present, err := decodeArgsPresent[readArgs](raw)
 	if err != nil {
 		return nil, err
 	}
 	project := t.project
-	if result, missing := requireFields(args, "type"); missing {
+	if result, missing := requireFields("type", args.Type); missing {
 		return result, nil
 	}
 	if !slices.Contains(readTypes, args.Type) {
@@ -80,7 +80,7 @@ func (t *toolset) handleRead(ctx context.Context, raw json.RawMessage) (any, err
 			"type must be one of "+strings.Join(readTypes, ", "),
 		), nil
 	}
-	if result, missing := requireFields(args, "path"); missing {
+	if result, missing := requireFields("path", args.Path); missing {
 		return result, nil
 	}
 	if _, ok := present["nodePath"]; ok {

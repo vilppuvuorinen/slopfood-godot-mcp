@@ -49,12 +49,12 @@ type exportProjectArgs struct {
 }
 
 func (t *toolset) handleExportProject(ctx context.Context, raw json.RawMessage) (any, error) {
-	args, _, err := decodeArgs[exportProjectArgs](raw)
+	args, err := decodeArgs[exportProjectArgs](raw)
 	if err != nil {
 		return nil, err
 	}
 	project := t.project
-	if result, missing := requireFields(args, "presetName", "outputPath"); missing {
+	if result, missing := requireFields("presetName", args.PresetName, "outputPath", args.OutputPath); missing {
 		return result, nil
 	}
 	if result, ok := requireProject(project); !ok {

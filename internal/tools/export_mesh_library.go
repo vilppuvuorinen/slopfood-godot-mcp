@@ -49,12 +49,12 @@ type exportMeshLibraryArgs struct {
 }
 
 func (t *toolset) handleExportMeshLibrary(ctx context.Context, raw json.RawMessage) (any, error) {
-	args, _, err := decodeArgs[exportMeshLibraryArgs](raw)
+	args, err := decodeArgs[exportMeshLibraryArgs](raw)
 	if err != nil {
 		return nil, err
 	}
 	project := t.project
-	if result, missing := requireFields(args, "scenePath", "outputPath"); missing {
+	if result, missing := requireFields("scenePath", args.ScenePath, "outputPath", args.OutputPath); missing {
 		return result, nil
 	}
 	if result, ok := requireProject(project); !ok {

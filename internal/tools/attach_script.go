@@ -47,12 +47,12 @@ type attachScriptArgs struct {
 }
 
 func (t *toolset) handleAttachScript(ctx context.Context, raw json.RawMessage) (any, error) {
-	args, _, err := decodeArgs[attachScriptArgs](raw)
+	args, err := decodeArgs[attachScriptArgs](raw)
 	if err != nil {
 		return nil, err
 	}
 	project := t.project
-	if result, missing := requireFields(args, "scenePath", "nodePath", "scriptPath"); missing {
+	if result, missing := requireFields("scenePath", args.ScenePath, "nodePath", args.NodePath, "scriptPath", args.ScriptPath); missing {
 		return result, nil
 	}
 	if result, ok := requireProject(project); !ok {

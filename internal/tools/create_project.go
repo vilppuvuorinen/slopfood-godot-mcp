@@ -60,12 +60,12 @@ type createProjectArgs struct {
 }
 
 func (t *toolset) handleCreateProject(ctx context.Context, raw json.RawMessage) (any, error) {
-	args, _, err := decodeArgs[createProjectArgs](raw)
+	args, err := decodeArgs[createProjectArgs](raw)
 	if err != nil {
 		return nil, err
 	}
 	project := t.project
-	if result, missing := requireFields(args, "projectName"); missing {
+	if result, missing := requireFields("projectName", args.ProjectName); missing {
 		return result, nil
 	}
 	if !validPath(project) {
