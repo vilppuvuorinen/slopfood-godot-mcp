@@ -111,7 +111,10 @@ func (t *toolset) handleRead(ctx context.Context, raw json.RawMessage) (any, err
 		return t.readSceneThrough(ctx, args.Path, "", args.Depth)
 	}
 
-	if _, err := normalizeReadPath(project, args.Path); err != nil {
+	if !validPath(project) || !validPath(args.Path) {
+		return invalidPathResultFor(invalidPathError()), nil
+	}
+	if _, err := confinePath(project, args.Path); err != nil {
 		return invalidPathResultFor(err), nil
 	}
 	if result, ok := requireProject(project); !ok {

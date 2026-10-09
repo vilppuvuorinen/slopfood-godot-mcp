@@ -10,7 +10,10 @@ import (
 // ensureReadableScene normalizes scenePath and checks the project and scene
 // exist. It is the single pre-flight for every scene/tilemap read.
 func ensureReadableScene(project, scenePath string) (mcp.ToolResult, bool) {
-	full, err := normalizeReadPath(project, scenePath)
+	if !validPath(project) || !validPath(scenePath) {
+		return invalidPathResultFor(invalidPathError()), false
+	}
+	full, err := confinePath(project, scenePath)
 	if err != nil {
 		return invalidPathResultFor(err), false
 	}

@@ -17,6 +17,10 @@ func TestValidPath(t *testing.T) {
 		{path: "", want: false},
 		{path: "../escape", want: false},
 		{path: "res://../escape", want: false},
+		{path: "foo..bar.tscn", want: false},
+		{path: "scenes/..", want: false},
+		{path: "foo/../bar.tscn", want: false},
+		{path: "../proj", want: false},
 	}
 	for _, tt := range tests {
 		if got := validPath(tt.path); got != tt.want {
