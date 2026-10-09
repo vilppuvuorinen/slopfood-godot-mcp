@@ -21,23 +21,37 @@ var validateScript string
 //go:embed project_probe.gd
 var projectProbeScript string
 
-var (
-	once sync.Once
-	path string
-	err  error
-)
+// cachedScript materializes one embedded operation script at most once and
+// remembers the resulting path, matching the previous per-script sync.Once.
+type cachedScript struct {
+	once       sync.Once
+	label      string // used in the instrument error message
+	base       string // materialize base name
+	content    string
+	instrument func(string) (string, error) // nil to skip instrumentation
+	path       string
+	err        error
+}
 
-var (
-	validateOnce sync.Once
-	validatePath string
-	validateErr  error
-)
+func (c *cachedScript) get() (string, error) {
+	c.once.Do(func() {
+		content := c.content
+		if c.instrument != nil {
+			rewritten, instrumentErr := c.instrument(content)
+			if instrumentErr != nil {
+				c.err = fmt.Errorf("instrument %s script: %w", c.label, instrumentErr)
+				return
+			}
+			content = rewritten
+		}
+		c.path, c.err = materialize(c.base, content)
+	})
+	return c.path, c.err
+}
 
-var (
-	probeOnce sync.Once
-	probePath string
-	probeErr  error
-)
+var operationsCached = cachedScript{label: "operations", base: "godot_operations", content: operationsScript, instrument: instrumentOperations}
+var validateCached = cachedScript{label: "validate", base: "validate_script", content: validateScript, instrument: instrumentValidateScript}
+var probeCached = cachedScript{label: "project_probe", base: "project_probe", content: projectProbeScript}
 
 var userCacheDir = os.UserCacheDir
 
@@ -46,36 +60,9 @@ const (
 	ValidateHitsEnv   = "GDCOVER_VALIDATE_FILE"
 )
 
-func OperationsScript() (string, error) {
-	once.Do(func() {
-		content, instrumentErr := instrumentOperations(operationsScript)
-		if instrumentErr != nil {
-			err = fmt.Errorf("instrument operations script: %w", instrumentErr)
-			return
-		}
-		path, err = materialize("godot_operations", content)
-	})
-	return path, err
-}
-
-func ValidateScript() (string, error) {
-	validateOnce.Do(func() {
-		content, instrumentErr := instrumentValidateScript(validateScript)
-		if instrumentErr != nil {
-			validateErr = fmt.Errorf("instrument validate script: %w", instrumentErr)
-			return
-		}
-		validatePath, validateErr = materialize("validate_script", content)
-	})
-	return validatePath, validateErr
-}
-
-func ProjectProbeScript() (string, error) {
-	probeOnce.Do(func() {
-		probePath, probeErr = materialize("project_probe", projectProbeScript)
-	})
-	return probePath, probeErr
-}
+func OperationsScript() (string, error)   { return operationsCached.get() }
+func ValidateScript() (string, error)     { return validateCached.get() }
+func ProjectProbeScript() (string, error) { return probeCached.get() }
 
 func materialize(name, content string) (string, error) {
 	dir, err := cacheDir()
