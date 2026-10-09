@@ -32,40 +32,34 @@ func ProjectHash(root string) string {
 	return hex.EncodeToString(sum[:8])
 }
 
-func SocketPath(root string) (string, error) {
+// projectPath returns the per-project path for the given suffix inside the
+// runtime directory, sharing the project hash with the other helpers.
+func projectPath(root, suffix string) (string, error) {
 	dir, err := RuntimeDir()
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, ProjectHash(root)+".sock"), nil
+	return filepath.Join(dir, ProjectHash(root)+suffix), nil
+}
+
+func SocketPath(root string) (string, error) {
+	return projectPath(root, ".sock")
 }
 
 // EngineSocketPath returns the bridge's socket path; it shares the runtime
 // directory and project hash with SocketPath but uses a distinct .engine.sock
 // suffix, short enough to stay under the Linux sun_path limit.
 func EngineSocketPath(root string) (string, error) {
-	dir, err := RuntimeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, ProjectHash(root)+".engine.sock"), nil
+	return projectPath(root, ".engine.sock")
 }
 
 func LogPath(root string) (string, error) {
-	dir, err := RuntimeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, ProjectHash(root)+".log"), nil
+	return projectPath(root, ".log")
 }
 
 // EndpointPath returns the TCP transport's endpoint record path. The record
 // carries the per-spawn token, so the runtime directory must be 0700 and the
 // file 0600; the lock file is EndpointPath(root)+".lock".
 func EndpointPath(root string) (string, error) {
-	dir, err := RuntimeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, ProjectHash(root)+".endpoint"), nil
+	return projectPath(root, ".endpoint")
 }
