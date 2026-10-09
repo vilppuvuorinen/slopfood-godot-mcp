@@ -71,23 +71,16 @@ func (t *toolset) handleRunScript(ctx context.Context, raw json.RawMessage) (any
 		return result, nil
 	}
 
-	stdout, stderr, exitCode, err := t.runEngine(ctx, "run_script", map[string]any{"body": args.Body})
-	if err != nil {
-		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
-			"Failed to run script: "+err.Error(),
-			headlessSolutions...,
-		), nil
-	}
-	if scriptFailed(exitCode, stderr) {
-		return mcp.ErrorResult(
-			"Failed to run script: "+stderr,
-			headlessSolutions...,
-		), nil
+	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (string, string, int, error) {
+		return t.runEngine(ctx, "run_script", map[string]any{"body": args.Body})
+	}, "Failed to run script", headlessSolutions)
+	if failed {
+		return failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 
 	// The bridge reports compile and runtime failures inside the payload, so a
 	// non-error result must still carry the declared shape.
-	if payload, ok := markerJSON(stdout); ok {
+	if hasPayload {
 		return mcp.JSONResult(payload), nil
 	}
 	return mcp.ErrorResult(

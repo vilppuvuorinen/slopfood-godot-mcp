@@ -37,23 +37,16 @@ func (t *toolset) readSceneThrough(ctx context.Context, scenePath, nodePath stri
 	if depth != nil {
 		params["depth"] = *depth
 	}
-	stdout, stderr, exitCode, err := t.runEngine(ctx, "read_scene", params)
-	if err != nil {
-		return mcp.ErrorResult( //nolint:nilerr // the failure is reported through the tool result.
-			"Failed to read scene: "+err.Error(),
-			headlessSolutions...,
-		), nil
-	}
-	if scriptFailed(exitCode, stderr) {
-		return mcp.ErrorResult(
-			"Failed to read scene: "+stderr,
-			headlessSolutions...,
-		), nil
+	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (string, string, int, error) {
+		return t.runEngine(ctx, "read_scene", params)
+	}, "Failed to read scene", headlessSolutions)
+	if failed {
+		return failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 
 	// A non-error result always carries the declared node tree, so markerless or
 	// invalid output is a failure; the raw output stays in the message.
-	if payload, ok := markerJSON(stdout); ok {
+	if hasPayload {
 		if json.Valid([]byte(payload)) {
 			return mcp.JSONResult(payload), nil
 		}
