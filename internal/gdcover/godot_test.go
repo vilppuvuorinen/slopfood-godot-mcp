@@ -247,7 +247,7 @@ func TestInstrumentedOperationsScriptReportsHits(t *testing.T) {
 	hits := filepath.Join(t.TempDir(), "hits.txt")
 	t.Setenv(gdcover.FileEnv, hits)
 
-	sess := godot.NewSession(engine, script)
+	sess := godot.NewSessionTransport(engine, script, godot.EngineTransportAuto)
 	defer func() { _ = sess.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()

@@ -32,7 +32,7 @@ func TestDispatchSurvivesHandlerAbort(t *testing.T) {
 		t.Fatalf("write project.godot: %v", writeErr)
 	}
 
-	sess := godot.NewSession(engine, script)
+	sess := godot.NewSessionTransport(engine, script, godot.EngineTransportAuto)
 	defer func() { _ = sess.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -62,7 +62,7 @@ func newBridge(t *testing.T) (string, *godot.Session, context.Context) {
 	if err := os.WriteFile(filepath.Join(project, "project.godot"), []byte("config_version=5\n"), 0o644); err != nil { //nolint:gosec // test fixture.
 		t.Fatalf("write project.godot: %v", err)
 	}
-	sess := godot.NewSession(engine, script)
+	sess := godot.NewSessionTransport(engine, script, godot.EngineTransportAuto)
 	t.Cleanup(func() { _ = sess.Close() })
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	t.Cleanup(cancel)

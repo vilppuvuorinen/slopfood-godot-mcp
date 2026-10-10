@@ -11,21 +11,21 @@ import (
 )
 
 func init() {
-	instrumentBridge = func(src string) (string, error) {
+	InstrumentBridge = func(src string) (string, error) {
 		result, err := gdcover.InstrumentEnv([]byte(src), OperationsHitsEnv)
 		if err != nil {
 			return "", err
 		}
 		return string(result.Source), nil
 	}
-	instrumentValidate = func(src string) (string, error) {
+	InstrumentValidate = func(src string) (string, error) {
 		result, err := gdcover.InstrumentEnv([]byte(src), ValidateHitsEnv)
 		if err != nil {
 			return "", err
 		}
 		return string(result.Source), nil
 	}
-	godot.SetEngineEnv(suffixHitsWithPID)
+	godot.EngineEnv = suffixHitsWithPID
 }
 
 func suffixHitsWithPID(env []string) []string {

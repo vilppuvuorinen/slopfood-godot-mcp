@@ -182,7 +182,7 @@ func (f *socketSessionFake) quitRecorded(t *testing.T) bool {
 func TestSessionRoundTripFraming(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 	project := t.TempDir()
 
@@ -258,7 +258,7 @@ func TestSessionFramesRecorded(t *testing.T) {
         open('` + reqs + `', "a").write(json.dumps(req, separators=(",", ":")) + "\n")
         send(conn, req["id"], True, "out-" + str(req["id"]), "")`
 	f := newSocketSessionFake(t, response)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 	project := t.TempDir()
 
@@ -298,7 +298,7 @@ func TestSessionStderrDiagnosticsOnly(t *testing.T) {
         print("engine diagnostic " + str(req["id"]), file=sys.stderr, flush=True)
         send(conn, req["id"], True, "ok", "frame stderr line")`
 	f := newSocketSessionFake(t, response)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 
 	run, err := s.Run(context.Background(), t.TempDir(), "op", nil)
@@ -319,7 +319,7 @@ func TestSessionStderrDiagnosticsOnly(t *testing.T) {
 func TestSessionSkipsNonFrameStdout(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 
 	run, err := s.Run(context.Background(), t.TempDir(), "op", nil)
@@ -334,7 +334,7 @@ func TestSessionSkipsNonFrameStdout(t *testing.T) {
 func TestSessionRescanProjectDrivesScan(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 	project := t.TempDir()
 
@@ -356,7 +356,7 @@ func TestSessionRescanProjectDrivesScan(t *testing.T) {
 func TestSessionOperationCapRestarts(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	s.operationCap = 2
 	defer s.Close()
 	project := t.TempDir()
@@ -380,7 +380,7 @@ func TestSessionOperationCapRestarts(t *testing.T) {
 func TestSessionProjectChangeRestarts(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 
 	if _, err := s.Run(context.Background(), t.TempDir(), "op", nil); err != nil {
@@ -401,7 +401,7 @@ func TestSessionProjectGodotChangeRestarts(t *testing.T) {
         open('` + ops + `', "a").write(req["operation"] + "\n")
         send(conn, req["id"], True, "out-" + str(req["id"]), "")`
 	f := newSocketSessionFake(t, response)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 	project := t.TempDir()
 
@@ -446,7 +446,7 @@ func TestSessionClassCacheRescans(t *testing.T) {
         open('` + ops + `', "a").write(req["operation"] + "\n")
         send(conn, req["id"], True, "out-" + str(req["id"]), "")`
 	f := newSocketSessionFake(t, response)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 	project := t.TempDir()
 
@@ -488,7 +488,7 @@ func TestSessionBrokenProjectGodotFails(t *testing.T) {
 	shortRuntimeDir(t)
 	const parseErr = `echo "ERROR: Error parsing '/proj/project.godot' at line 2" >&2`
 	f := newSocketSessionFakeStderr(t, defaultSocketResponse, parseErr)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 	project := t.TempDir()
 
@@ -517,7 +517,7 @@ func TestSessionBrokenProjectGodotFails(t *testing.T) {
 func TestSessionEOFRespawn(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse+"\n        sys.exit(0)")
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 	project := t.TempDir()
 
@@ -537,7 +537,7 @@ func TestSessionEOFRespawn(t *testing.T) {
 func TestSessionRetriesOnceOnWriteFailure(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 	project := t.TempDir()
 
@@ -571,7 +571,7 @@ func TestSessionResponseIDDesyncAborts(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, `
         send(conn, req["id"] + 100, True, "wrong", "")`)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 	project := t.TempDir()
 
@@ -593,7 +593,7 @@ func TestSessionResponseIDDesyncAborts(t *testing.T) {
 func TestSessionContextCancelKill(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, "\n        pass")
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 	project := t.TempDir()
 
@@ -618,7 +618,7 @@ func TestSessionContextCancelKill(t *testing.T) {
 // A stuck operation holding the session lock must not keep Close from returning:
 // past the grace period the engine is force-killed.
 func TestSessionCloseBoundedWhenLocked(t *testing.T) {
-	s := NewSession("godot", "/ops.gd")
+	s := NewSessionTransport("godot", "/ops.gd", EngineTransportAuto)
 	s.closeTimeout = 50 * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -661,7 +661,7 @@ func TestSessionCloseBoundedWhenLocked(t *testing.T) {
 func TestSessionCloseQuitAndFailsRuns(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	project := t.TempDir()
 
 	if _, err := s.Run(context.Background(), project, "op", nil); err != nil {

@@ -11,7 +11,7 @@ import (
 
 // newTestEndpoint binds the production Unix-socket transport, the default on
 // this platform, and returns its listener and dial function.
-func newTestEndpoint(t *testing.T) (transport.Listener, transport.DialFunc) {
+func newTestEndpoint(t *testing.T) (transport.Listener, func(string) (io.ReadWriteCloser, error)) {
 	t.Helper()
 	sock := shortSocketPath(t)
 	l, err := transport.ListenUnix(sock)

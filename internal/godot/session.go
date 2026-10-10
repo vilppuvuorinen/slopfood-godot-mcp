@@ -142,10 +142,6 @@ type projectFingerprint struct {
 	classCache   fileStamp
 }
 
-func NewSession(executable, script string) *Session {
-	return NewSessionTransport(executable, script, EngineTransportAuto)
-}
-
 func NewSessionTransport(executable, script string, transport EngineTransport) *Session {
 	return &Session{
 		executable:   executable,

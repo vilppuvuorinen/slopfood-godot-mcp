@@ -10,10 +10,10 @@ import (
 
 // The engine environment hook must reach the spawned process (a coverage build keys hit traces by PID).
 func TestRunEngineAppliesEngineEnv(t *testing.T) {
-	SetEngineEnv(func(env []string) []string {
+	EngineEnv = func(env []string) []string {
 		return append(env, "GDCOVER_FILE=keyed/hits.txt")
-	})
-	t.Cleanup(func() { SetEngineEnv(nil) })
+	}
+	t.Cleanup(func() { EngineEnv = nil })
 
 	bin := writeExecutable(t, `printf '%s' "$GDCOVER_FILE"`)
 	stdout, _, _, err := runEngine(context.Background(), bin, "op")

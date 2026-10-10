@@ -16,5 +16,3 @@ func ListenUnix(string) (Listener, error) {
 func DialUnix(string) (io.ReadWriteCloser, error) {
 	return nil, errUnixUnsupported
 }
-
-var _ DialFunc = DialUnix

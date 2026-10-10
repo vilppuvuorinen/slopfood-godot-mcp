@@ -172,7 +172,7 @@ func DialTCP(endpointPath string) (io.ReadWriteCloser, error) {
 		return nil, err
 	}
 	address := net.JoinHostPort(record.Host, strconv.Itoa(record.Port))
-	conn, err := net.Dial("tcp", address) //nolint:noctx // the DialFunc seam carries no context; the dial is local and fast.
+	conn, err := net.Dial("tcp", address) //nolint:noctx // the dial is local and fast and carries no context.
 	if err != nil {
 		return nil, fmt.Errorf("dial tcp %q: %w", address, err)
 	}
@@ -257,11 +257,5 @@ func trimSuffixByte(line []byte, b byte) []byte {
 var (
 	_ Connection      = (*tcpConn)(nil)
 	_ Listener        = (*TCPListener)(nil)
-	_ PortNamer       = (*TCPListener)(nil)
 	_ TokenConnection = (*tcpConn)(nil)
 )
-
-// Implemented by a Listener that can report its bound ephemeral port.
-type PortNamer interface {
-	Port() int
-}

@@ -49,6 +49,25 @@ func (c *cachedScript) get() (string, error) {
 	return c.path, c.err
 }
 
+// InstrumentBridge and InstrumentValidate are the coverage-build instrumentation
+// hooks; both are nil outside coverage builds, leaving the embedded script as is.
+var InstrumentBridge func(string) (string, error)
+var InstrumentValidate func(string) (string, error)
+
+func instrumentOperations(content string) (string, error) {
+	if InstrumentBridge == nil {
+		return content, nil
+	}
+	return InstrumentBridge(content)
+}
+
+func instrumentValidateScript(content string) (string, error) {
+	if InstrumentValidate == nil {
+		return content, nil
+	}
+	return InstrumentValidate(content)
+}
+
 var operationsCached = cachedScript{label: "operations", base: "godot_operations", content: operationsScript, instrument: instrumentOperations}
 var validateCached = cachedScript{label: "validate", base: "validate_script", content: validateScript, instrument: instrumentValidateScript}
 var probeCached = cachedScript{label: "project_probe", base: "project_probe", content: projectProbeScript}

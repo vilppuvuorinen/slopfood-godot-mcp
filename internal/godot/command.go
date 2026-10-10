@@ -5,12 +5,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 )
 
+// EngineEnv rewrites the environment for spawned engines when non-nil; a
+// coverage build installs it so each engine keys its GDScript hit traces by PID.
+var EngineEnv func([]string) []string
+
 func newCommand(ctx context.Context, executable string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, executable, args...) //nolint:gosec // executable is operator-controlled via GODOT_PATH.
-	applyEngineEnv(cmd)
+	if EngineEnv != nil {
+		cmd.Env = EngineEnv(os.Environ())
+	}
 	return cmd
 }
 

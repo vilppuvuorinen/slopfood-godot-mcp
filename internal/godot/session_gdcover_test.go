@@ -9,13 +9,13 @@ import (
 
 func TestSessionAppliesEngineEnv(t *testing.T) {
 	shortRuntimeDir(t)
-	SetEngineEnv(func(env []string) []string {
+	EngineEnv = func(env []string) []string {
 		return append(env, "GDCOVER_FILE=keyed/hits.txt")
-	})
-	t.Cleanup(func() { SetEngineEnv(nil) })
+	}
+	t.Cleanup(func() { EngineEnv = nil })
 
 	f := newSocketSessionFake(t, defaultSocketResponse)
-	s := NewSession(f.bin, "/ops.gd")
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
 	defer s.Close()
 
 	if _, err := s.Run(context.Background(), t.TempDir(), "op", nil); err != nil {

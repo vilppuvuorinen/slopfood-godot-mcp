@@ -59,7 +59,7 @@ func ListenUnix(addr string) (Listener, error) {
 
 // A failed dial means no daemon is listening yet, which drives the spawn path.
 func DialUnix(addr string) (io.ReadWriteCloser, error) {
-	conn, err := net.Dial("unix", addr) //nolint:noctx // the DialFunc seam carries no context; the dial is local and fast.
+	conn, err := net.Dial("unix", addr) //nolint:noctx // the dial is local and fast and carries no context.
 	if err != nil {
 		return nil, fmt.Errorf("dial unix %q: %w", addr, err)
 	}
@@ -114,5 +114,4 @@ func (c *unixConn) PeerIdentity() (PeerIdentity, error) {
 var (
 	_ Connection = (*unixConn)(nil)
 	_ Listener   = (*unixListener)(nil)
-	_ DialFunc   = DialUnix
 )

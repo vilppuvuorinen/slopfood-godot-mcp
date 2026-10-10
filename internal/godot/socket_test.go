@@ -276,7 +276,7 @@ func TestSocketSessionDrivesRealBridge(t *testing.T) {
 		t.Fatalf("write project.godot: %v", writeErr)
 	}
 
-	session := NewSession(engine, script)
+	session := NewSessionTransport(engine, script, EngineTransportAuto)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
@@ -546,7 +546,7 @@ func TestSocketSessionGatesEditorFilesystem(t *testing.T) {
 		t.Fatalf("write icon.png: %v", writeErr)
 	}
 
-	session := NewSession(engine, script)
+	session := NewSessionTransport(engine, script, EngineTransportAuto)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 

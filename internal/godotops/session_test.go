@@ -23,7 +23,7 @@ func TestSessionDrivesRealBridge(t *testing.T) {
 		t.Fatalf("write project.godot: %v", writeErr)
 	}
 
-	session := godot.NewSession(engine, script)
+	session := godot.NewSessionTransport(engine, script, godot.EngineTransportAuto)
 	defer session.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)

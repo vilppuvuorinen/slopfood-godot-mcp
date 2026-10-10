@@ -40,6 +40,3 @@ type Listener interface {
 	Accept() (Connection, error)
 	Close() error
 }
-
-// Opens a client connection; an error means no daemon is listening yet.
-type DialFunc func(addr string) (io.ReadWriteCloser, error)
