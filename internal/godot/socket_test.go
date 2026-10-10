@@ -350,7 +350,7 @@ func TestSocketSessionDrivesRealBridgeTCP(t *testing.T) {
 		t.Fatalf("write project.godot: %v", writeErr)
 	}
 
-	session := NewSessionTransport(engine, script, TransportTCP)
+	session := NewSessionTransport(engine, script, EngineTransportTCP)
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 

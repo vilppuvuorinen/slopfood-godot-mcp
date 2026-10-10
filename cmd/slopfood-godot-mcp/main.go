@@ -168,11 +168,11 @@ func runClient(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	}
 	defer role.stop()
 
-	transport, err := parseTransport(opts.transport)
+	tr, err := parseTransport(opts.transport)
 	if err != nil {
 		return err
 	}
-	endpoint, err := newDaemonEndpoint(role.root, transport)
+	endpoint, err := newDaemonEndpoint(role.root, tr.daemon)
 	if err != nil {
 		return fmt.Errorf("resolve daemon endpoint: %w", err)
 	}
@@ -181,7 +181,7 @@ func runClient(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		return fmt.Errorf("resolve daemon log: %w", err)
 	}
 
-	role.logger.Info("bound project", "project", role.root, "transport", transport, "endpoint", endpoint.addr())
+	role.logger.Info("bound project", "project", role.root, "transport", tr.daemon, "endpoint", endpoint.addr())
 
 	spawn := func(_ context.Context) error {
 		exe, exeErr := executablePath()
@@ -248,11 +248,11 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	}
 	defer role.stop()
 
-	transport, err := parseTransport(opts.transport)
+	tr, err := parseTransport(opts.transport)
 	if err != nil {
 		return err
 	}
-	endpoint, err := newDaemonEndpoint(role.root, transport)
+	endpoint, err := newDaemonEndpoint(role.root, tr.daemon)
 	if err != nil {
 		return fmt.Errorf("resolve daemon endpoint: %w", err)
 	}
@@ -271,7 +271,7 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	// The engine path is resolved once here, at startup, and threaded into the
 	// engine rather than rediscovered per request.
 	enginePath := godot.Path()
-	session := godot.NewSessionTransport(enginePath, script, transport)
+	session := godot.NewSessionTransport(enginePath, script, tr.engine)
 	defer func() {
 		if cerr := session.Close(); cerr != nil {
 			role.logger.Warn("engine session close", "error", cerr)
@@ -317,7 +317,7 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 		}
 	}
 
-	role.logger.Info("daemon listening", "project", role.root, "transport", transport, "endpoint", endpoint.addr(), "log", logPath)
+	role.logger.Info("daemon listening", "project", role.root, "transport", tr.daemon, "endpoint", endpoint.addr(), "log", logPath)
 	if err := d.Serve(role.ctx); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("daemon serve: %w", err)
 	}

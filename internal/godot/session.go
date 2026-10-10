@@ -49,7 +49,7 @@ type Session struct {
 	executable string
 	script     string
 
-	transport Transport
+	transport EngineTransport
 
 	operationCap int
 
@@ -143,10 +143,10 @@ type projectFingerprint struct {
 }
 
 func NewSession(executable, script string) *Session {
-	return NewSessionTransport(executable, script, TransportAuto)
+	return NewSessionTransport(executable, script, EngineTransportAuto)
 }
 
-func NewSessionTransport(executable, script string, transport Transport) *Session {
+func NewSessionTransport(executable, script string, transport EngineTransport) *Session {
 	return &Session{
 		executable:   executable,
 		script:       script,
@@ -417,11 +417,11 @@ func (s *Session) stopLocked() {
 	p.stop()
 }
 
-func engineLaunch(project string, transport Transport) (args []string, socketPath string, err error) {
+func engineLaunch(project string, transport EngineTransport) (args []string, socketPath string, err error) {
 	switch ResolveTransport(transport) {
-	case TransportTCP:
+	case EngineTransportTCP:
 		return []string{"--gd-tcp", "127.0.0.1:0"}, "", nil
-	case TransportUDS, TransportAuto:
+	case EngineTransportUDS, EngineTransportAuto:
 		socketPath, err = daemonpath.EngineSocketPath(project)
 		if err != nil {
 			return nil, "", fmt.Errorf("engine session: derive socket path: %w", err)
@@ -437,7 +437,7 @@ func engineLaunch(project string, transport Transport) (args []string, socketPat
 	return nil, "", fmt.Errorf("engine session: unsupported transport %q", transport)
 }
 
-func startSessionProc(executable, script, project string, transport Transport, checkStartup bool) (*sessionProc, error) {
+func startSessionProc(executable, script, project string, transport EngineTransport, checkStartup bool) (*sessionProc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	launchArgs, socketPath, err := engineLaunch(project, transport)
 	if err != nil {

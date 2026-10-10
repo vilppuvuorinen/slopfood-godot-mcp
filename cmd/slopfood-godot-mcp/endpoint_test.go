@@ -7,25 +7,27 @@ import (
 	"testing"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
 func TestParseTransport(t *testing.T) {
 	cases := []struct {
-		value   string
-		want    godot.Transport
-		wantErr bool
+		value      string
+		wantEngine godot.EngineTransport
+		wantDaemon transport.Protocol
+		wantErr    bool
 	}{
-		{"", godot.TransportAuto, false},
-		{"auto", godot.TransportAuto, false},
-		{"tcp", godot.TransportTCP, false},
-		{"uds", godot.TransportUDS, runtime.GOOS == "windows"},
-		{"pipe", "", true},
+		{"", godot.EngineTransportAuto, transport.ProtocolAuto, false},
+		{"auto", godot.EngineTransportAuto, transport.ProtocolAuto, false},
+		{"tcp", godot.EngineTransportTCP, transport.ProtocolTCP, false},
+		{"uds", godot.EngineTransportUDS, transport.ProtocolUDS, runtime.GOOS == "windows"},
+		{"pipe", "", "", true},
 	}
 	for _, tc := range cases {
 		got, err := parseTransport(tc.value)
 		if tc.wantErr {
 			if err == nil {
-				t.Errorf("parseTransport(%q) = %q, want an error", tc.value, got)
+				t.Errorf("parseTransport(%q) = %+v, want an error", tc.value, got)
 			}
 			continue
 		}
@@ -33,25 +35,26 @@ func TestParseTransport(t *testing.T) {
 			t.Errorf("parseTransport(%q): %v", tc.value, err)
 			continue
 		}
-		if got != tc.want {
-			t.Errorf("parseTransport(%q) = %q, want %q", tc.value, got, tc.want)
+		if got.engine != tc.wantEngine || got.daemon != tc.wantDaemon {
+			t.Errorf("parseTransport(%q) = engine %q daemon %q, want engine %q daemon %q",
+				tc.value, got.engine, got.daemon, tc.wantEngine, tc.wantDaemon)
 		}
 	}
 }
 
 func TestResolveTransportAuto(t *testing.T) {
-	want := godot.TransportUDS
+	want := godot.EngineTransportUDS
 	if runtime.GOOS == "windows" {
-		want = godot.TransportTCP
+		want = godot.EngineTransportTCP
 	}
-	if got := godot.ResolveTransport(godot.TransportAuto); got != want {
+	if got := godot.ResolveTransport(godot.EngineTransportAuto); got != want {
 		t.Errorf("ResolveTransport(auto) = %q, want %q", got, want)
 	}
-	if got := godot.ResolveTransport(godot.TransportTCP); got != godot.TransportTCP {
+	if got := godot.ResolveTransport(godot.EngineTransportTCP); got != godot.EngineTransportTCP {
 		t.Errorf("ResolveTransport(tcp) = %q, want tcp", got)
 	}
 	if runtime.GOOS != "windows" {
-		if got := godot.ResolveTransport(godot.TransportUDS); got != godot.TransportUDS {
+		if got := godot.ResolveTransport(godot.EngineTransportUDS); got != godot.EngineTransportUDS {
 			t.Errorf("ResolveTransport(uds) = %q, want uds", got)
 		}
 	}
@@ -63,11 +66,11 @@ func TestEndpointFactoryUDS(t *testing.T) {
 	}
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 
-	endpoint, err := newDaemonEndpoint("/tmp/project", godot.TransportAuto)
+	endpoint, err := newDaemonEndpoint("/tmp/project", transport.ProtocolAuto)
 	if err != nil {
 		t.Fatalf("newDaemonEndpoint: %v", err)
 	}
-	if endpoint.transport != godot.TransportUDS {
+	if endpoint.transport != transport.ProtocolUDS {
 		t.Fatalf("transport = %q, want uds", endpoint.transport)
 	}
 	if got := filepath.Ext(endpoint.addr()); got != ".sock" {
@@ -78,11 +81,11 @@ func TestEndpointFactoryUDS(t *testing.T) {
 func TestEndpointFactoryTCP(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 
-	endpoint, err := newDaemonEndpoint("/tmp/project", godot.TransportTCP)
+	endpoint, err := newDaemonEndpoint("/tmp/project", transport.ProtocolTCP)
 	if err != nil {
 		t.Fatalf("newDaemonEndpoint: %v", err)
 	}
-	if endpoint.transport != godot.TransportTCP {
+	if endpoint.transport != transport.ProtocolTCP {
 		t.Fatalf("transport = %q, want tcp", endpoint.transport)
 	}
 	if got := filepath.Ext(endpoint.addr()); got != ".endpoint" {
@@ -99,7 +102,7 @@ func TestEndpointFactoryTCP(t *testing.T) {
 		t.Errorf("endpoint record missing after bind: %v", statErr)
 	}
 
-	second, err := newDaemonEndpoint("/tmp/project", godot.TransportTCP)
+	second, err := newDaemonEndpoint("/tmp/project", transport.ProtocolTCP)
 	if err != nil {
 		t.Fatalf("second newDaemonEndpoint: %v", err)
 	}
@@ -111,7 +114,7 @@ func TestEndpointFactoryTCP(t *testing.T) {
 func TestEndpointFactoryTCPCloseReleasesEndpoint(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 
-	endpoint, err := newDaemonEndpoint("/tmp/project", godot.TransportTCP)
+	endpoint, err := newDaemonEndpoint("/tmp/project", transport.ProtocolTCP)
 	if err != nil {
 		t.Fatalf("newDaemonEndpoint: %v", err)
 	}

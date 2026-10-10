@@ -225,7 +225,7 @@ func TestSessionRoundTripFraming(t *testing.T) {
 func TestSessionForcedTCPFraming(t *testing.T) {
 	shortRuntimeDir(t)
 	f := newSocketSessionFake(t, defaultSocketResponse)
-	s := NewSessionTransport(f.bin, "/ops.gd", TransportTCP)
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportTCP)
 	defer s.Close()
 	project := t.TempDir()
 
