@@ -17,6 +17,7 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/client"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/daemon"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/tools"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/watcher"
@@ -192,7 +193,7 @@ func runClient(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		}
 		return nil
 	}
-	client := mcp.NewClient(endpoint.dialFunc(), spawn, endpoint.addr(), role.logger)
+	client := client.NewClient(endpoint.dialFunc(), spawn, endpoint.addr(), role.logger)
 
 	if err := client.Run(role.ctx, stdin, stdout); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("client: %w", err)

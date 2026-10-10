@@ -610,3 +610,40 @@ func TestServeStatelessRequiresCapabilities(t *testing.T) {
 		t.Fatalf("error = %+v, want invalid params", resp.Error)
 	}
 }
+
+// Concurrency-safe io.Writer: the server's reply copy writes while the test reads.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p) //nolint:wrapcheck // a test buffer passes the writer's errors through unchanged.
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+func awaitCondition(t *testing.T, cond func() bool, what string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", what)
+}
+
+func writeLine(t *testing.T, w io.Writer, line string) {
+	t.Helper()
+	if _, err := io.WriteString(w, line+"\n"); err != nil {
+		t.Fatalf("write %q: %v", line, err)
+	}
+}
