@@ -8,6 +8,11 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
+// fixedListen hands a pre-bound listener to a consumer that ignores the address.
+func fixedListen(l transport.Listener) transport.ListenFunc {
+	return func(string) (transport.Listener, error) { return l, nil }
+}
+
 // In-memory Connection; PeerIdentity reports whatever the test configured.
 type fakeConn struct {
 	in      io.Reader

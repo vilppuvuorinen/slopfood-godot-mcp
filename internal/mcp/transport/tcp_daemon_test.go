@@ -10,13 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/daemon"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
 func TestTCPServesProtocol(t *testing.T) {
 	listener, endpointPath := newTCPEndpointForTest(t)
-	d := mcp.NewDaemon(testServer(), nil, func(string) (transport.Listener, error) { return listener, nil }, "tcp")
+	d := daemon.NewDaemon(testServer(), nil, func(string) (transport.Listener, error) { return listener, nil }, "tcp")
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -42,7 +42,7 @@ func TestTCPServesProtocol(t *testing.T) {
 
 func TestTCPTokenRejectClosesWithoutServing(t *testing.T) {
 	listener, endpointPath := newTCPEndpointForTest(t)
-	d := mcp.NewDaemon(testServer(), nil, func(string) (transport.Listener, error) { return listener, nil }, "tcp")
+	d := daemon.NewDaemon(testServer(), nil, func(string) (transport.Listener, error) { return listener, nil }, "tcp")
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -69,7 +69,7 @@ func TestTCPTokenRejectClosesWithoutServing(t *testing.T) {
 
 func TestTCPMissingTokenRejected(t *testing.T) {
 	listener, endpointPath := newTCPEndpointForTest(t)
-	d := mcp.NewDaemon(testServer(), nil, func(string) (transport.Listener, error) { return listener, nil }, "tcp")
+	d := daemon.NewDaemon(testServer(), nil, func(string) (transport.Listener, error) { return listener, nil }, "tcp")
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 

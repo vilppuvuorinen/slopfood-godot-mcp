@@ -118,13 +118,23 @@ func TestClientConnectStopsOnContextCancel(t *testing.T) {
 // A notification gets no response, so a synchronous relay would hang there.
 func TestClientRunPumpsNotificationsAndReplies(t *testing.T) {
 	listen, dial := newTestEndpoint(t)
-	daemon := NewDaemon(testServer(), nil, listen, "test")
-	done := make(chan error, 1)
+	l, err := listen("test")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer func() { _ = l.Close() }()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	served := make(chan struct{})
 	go func() {
-		if err := daemon.Serve(context.Background()); err != nil && !errors.Is(err, context.Canceled) {
-			t.Errorf("daemon serve: %v", err)
+		defer close(served)
+		conn, acceptErr := l.Accept()
+		if acceptErr != nil {
+			return
 		}
-		close(done)
+		defer func() { _ = conn.Close() }()
+		_ = testServer().Serve(ctx, conn, conn)
 	}()
 
 	client := NewClient(dial, nil, "test", testClientLogger())
@@ -149,11 +159,12 @@ func TestClientRunPumpsNotificationsAndReplies(t *testing.T) {
 		t.Fatal("Run did not return after stdin closed")
 	}
 
-	_ = daemon.Close()
+	cancel()
+	_ = l.Close()
 	select {
-	case <-done:
+	case <-served:
 	case <-time.After(time.Second):
-		t.Fatal("daemon did not stop after Close")
+		t.Fatal("server did not stop after the client disconnected")
 	}
 }
 
@@ -219,6 +230,18 @@ func TestPumpStopsOnContextCancel(t *testing.T) {
 	if err := <-done; !errors.Is(err, context.Canceled) {
 		t.Fatalf("Pump err = %v, want %v", err, context.Canceled)
 	}
+}
+
+func awaitCondition(t *testing.T, cond func() bool, what string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %s", what)
 }
 
 func writeLine(t *testing.T, w io.Writer, line string) {

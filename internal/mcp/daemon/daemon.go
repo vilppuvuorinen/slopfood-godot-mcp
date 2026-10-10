@@ -1,4 +1,4 @@
-package mcp
+package daemon
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
@@ -26,8 +27,8 @@ func currentPeerIdentity() transport.PeerIdentity {
 }
 
 type Daemon struct {
-	server *Server
-	queue  *Queue
+	server *mcp.Server
+	queue  *mcp.Queue
 	listen transport.ListenFunc
 	addr   string
 
@@ -48,7 +49,7 @@ type Daemon struct {
 	connWG sync.WaitGroup
 }
 
-func NewDaemon(server *Server, queue *Queue, listen transport.ListenFunc, addr string) *Daemon {
+func NewDaemon(server *mcp.Server, queue *mcp.Queue, listen transport.ListenFunc, addr string) *Daemon {
 	if queue != nil {
 		server.SetSubmit(queue.Submit)
 	}

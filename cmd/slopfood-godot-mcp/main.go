@@ -17,6 +17,7 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godotops"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/daemon"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/tools"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/watcher"
 )
@@ -278,7 +279,7 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 
 	server := role.newServer(session, enginePath)
 	queue := mcp.NewQueue(operationQueueDepth, operationQueueTimeout)
-	daemon := mcp.NewDaemon(
+	d := daemon.NewDaemon(
 		server,
 		queue,
 		listen,
@@ -287,13 +288,13 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	// Continuing with a quarantined queue risks two writers on the project.
 	queue.SetOnStuck(func(err error) {
 		role.logger.Error("operation queue stuck; shutting down so the daemon can restart", "error", err)
-		daemon.Shutdown()
+		d.Shutdown()
 	})
-	if err := daemon.SetIdleTimeout(opts.idleTimeout); err != nil {
+	if err := d.SetIdleTimeout(opts.idleTimeout); err != nil {
 		return fmt.Errorf("set idle timeout: %w", err)
 	}
 	defer func() {
-		if cerr := daemon.Close(); cerr != nil {
+		if cerr := d.Close(); cerr != nil {
 			role.logger.Warn("daemon close", "error", cerr)
 		}
 	}()
@@ -316,7 +317,7 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	}
 
 	role.logger.Info("daemon listening", "project", role.root, "transport", transport, "endpoint", endpoint.addr(), "log", logPath)
-	if err := daemon.Serve(role.ctx); err != nil && !errors.Is(err, context.Canceled) {
+	if err := d.Serve(role.ctx); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("daemon serve: %w", err)
 	}
 	role.logger.Info("daemon stopped", "project", role.root)

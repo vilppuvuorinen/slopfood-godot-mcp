@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/daemon"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
@@ -53,7 +54,7 @@ func blockingServer() (*mcp.Server, <-chan struct{}, <-chan struct{}) {
 	return s, started, canceled
 }
 
-func stopDaemon(t *testing.T, d *mcp.Daemon, done <-chan error) {
+func stopDaemon(t *testing.T, d *daemon.Daemon, done <-chan error) {
 	t.Helper()
 	if err := d.Close(); err != nil {
 		t.Fatalf("Close: %v", err)

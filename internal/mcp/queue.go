@@ -147,6 +147,10 @@ func (q *Queue) SetOnStuck(fn func(error)) {
 	q.mu.Unlock()
 }
 
+// Depth reports the number of jobs queued behind the one running; safe to call
+// concurrently with Submit and Close.
+func (q *Queue) Depth() int { return len(q.jobs) }
+
 // Fails fast with ErrQueueFull, ErrQueueClosed, or ErrQueueStuck, and returns
 // the context error if ctx is canceled before the result is delivered.
 func (q *Queue) Submit(ctx context.Context, run Job) (any, error) {

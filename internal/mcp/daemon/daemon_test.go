@@ -1,4 +1,4 @@
-package mcp
+package daemon
 
 import (
 	"bufio"
@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
@@ -95,9 +96,9 @@ func TestDaemonCloseClosesActiveConnections(t *testing.T) {
 }
 
 func TestDaemonSerializesAcrossConnections(t *testing.T) {
-	srv := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv := mcp.NewServer(mcp.ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	var active, maxActive int64
-	srv.RegisterTool(Tool{
+	srv.RegisterTool(mcp.Tool{
 		Name:        "engine",
 		Description: "engine",
 		InputSchema: map[string]any{"type": "object"},
@@ -114,7 +115,7 @@ func TestDaemonSerializesAcrossConnections(t *testing.T) {
 			return nil, nil
 		},
 	})
-	queue := NewQueue(64, testQueueTimeout)
+	queue := mcp.NewQueue(64, testQueueTimeout)
 	listen, dial := newTestEndpoint(t)
 	d := NewDaemon(srv, queue, listen, "tcp")
 	done := make(chan error, 1)
@@ -151,14 +152,14 @@ func TestDaemonSerializesAcrossConnections(t *testing.T) {
 }
 
 func TestDaemonCloseClosesQueue(t *testing.T) {
-	queue := NewQueue(1, testQueueTimeout)
+	queue := mcp.NewQueue(1, testQueueTimeout)
 	d := NewDaemon(testServer(), queue, failListen, "")
 
 	if err := d.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
-	if _, err := queue.Submit(context.Background(), func(context.Context) (any, error) { return nil, nil }); !errors.Is(err, ErrQueueClosed) {
-		t.Fatalf("Submit err = %v, want %v", err, ErrQueueClosed)
+	if _, err := queue.Submit(context.Background(), func(context.Context) (any, error) { return nil, nil }); !errors.Is(err, mcp.ErrQueueClosed) {
+		t.Fatalf("Submit err = %v, want %v", err, mcp.ErrQueueClosed)
 	}
 }
 

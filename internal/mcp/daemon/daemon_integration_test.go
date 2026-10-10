@@ -1,6 +1,6 @@
 //go:build !windows
 
-package mcp
+package daemon
 
 import (
 	"bufio"
@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
@@ -50,8 +51,8 @@ func TestUnixDaemonConcurrentClientsSerialize(t *testing.T) {
 	// read; the socket round trip is not a happens-before edge for -race.
 	completed := make(chan struct{}, calls)
 
-	srv := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	srv.RegisterTool(Tool{
+	srv := mcp.NewServer(mcp.ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv.RegisterTool(mcp.Tool{
 		Name:        "mutate",
 		Description: "mutate",
 		InputSchema: map[string]any{"type": "object"},
@@ -72,7 +73,7 @@ func TestUnixDaemonConcurrentClientsSerialize(t *testing.T) {
 		},
 	})
 
-	q := NewQueue(calls, testQueueTimeout)
+	q := mcp.NewQueue(calls, testQueueTimeout)
 	d := NewDaemon(srv, q, func(string) (transport.Listener, error) { return l, nil }, sock)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
@@ -122,8 +123,8 @@ func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 
 	var startedOnce sync.Once
 	started := make(chan struct{})
-	srv := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
-	srv.RegisterTool(Tool{
+	srv := mcp.NewServer(mcp.ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	srv.RegisterTool(mcp.Tool{
 		Name:        "block",
 		Description: "block",
 		InputSchema: map[string]any{"type": "object"},
@@ -134,7 +135,7 @@ func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 		},
 	})
 
-	q := NewQueue(1, testQueueTimeout)
+	q := mcp.NewQueue(1, testQueueTimeout)
 	d := NewDaemon(srv, q, func(string) (transport.Listener, error) { return l, nil }, sock)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
@@ -158,7 +159,7 @@ func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 
 	second := dial()
 	writeLine(t, second, toolCallLine("block"))
-	awaitCondition(t, func() bool { return len(q.jobs) == 1 }, "the depth-1 backlog to fill")
+	awaitCondition(t, func() bool { return q.Depth() == 1 }, "the depth-1 backlog to fill")
 
 	third := dial()
 	writeLine(t, third, toolCallLine("block"))
@@ -180,8 +181,8 @@ func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 	if !resp.Result.IsError {
 		t.Fatalf("overload response isError = false: %s", line)
 	}
-	if len(resp.Result.Content) == 0 || !strings.Contains(resp.Result.Content[0].Text, ErrQueueFull.Error()) {
-		t.Errorf("overload content = %+v, want a message containing %q", resp.Result.Content, ErrQueueFull.Error())
+	if len(resp.Result.Content) == 0 || !strings.Contains(resp.Result.Content[0].Text, mcp.ErrQueueFull.Error()) {
+		t.Errorf("overload content = %+v, want a message containing %q", resp.Result.Content, mcp.ErrQueueFull.Error())
 	}
 
 	_ = first.Close()

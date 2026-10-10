@@ -14,12 +14,13 @@ import (
 	"time"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/daemon"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
 func TestUnixSocketServesProtocol(t *testing.T) {
 	listen, dial := newTestEndpoint(t)
-	d := mcp.NewDaemon(testServer(), nil, listen, "test")
+	d := daemon.NewDaemon(testServer(), nil, listen, "test")
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -132,7 +133,7 @@ func TestUnixDisconnectCancelsEngine(t *testing.T) {
 	}
 
 	q := mcp.NewQueue(4, testQueueTimeout)
-	d := mcp.NewDaemon(s, q, func(string) (transport.Listener, error) { return l, nil }, sock)
+	d := daemon.NewDaemon(s, q, func(string) (transport.Listener, error) { return l, nil }, sock)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
