@@ -116,7 +116,7 @@ func (t *toolset) handleValidate(ctx context.Context, _ json.RawMessage) (any, e
 		return result, nil
 	}
 
-	projectReport, err := validateProjectSection(ctx, project)
+	projectReport, err := validateProjectSection(ctx, t.headless, project)
 	if err != nil {
 		return mcp.ErrorResult("Failed to validate: "+err.Error(), headlessSolutions...), nil //nolint:nilerr // the failure is reported through the tool result.
 	}
@@ -124,7 +124,7 @@ func (t *toolset) handleValidate(ctx context.Context, _ json.RawMessage) (any, e
 	// A project.godot parse error also shows up on the script checker's stderr,
 	// so the sweep is still attempted and its failure recorded rather than
 	// discarding the project diagnostics.
-	scriptsReport := validateScriptsSection(ctx, project)
+	scriptsReport := validateScriptsSection(ctx, t.headless, project)
 
 	report := validateReport{
 		Valid:   projectReport.Valid && scriptsReport.Error == "" && scriptsReport.AllValid,
@@ -138,12 +138,12 @@ func (t *toolset) handleValidate(ctx context.Context, _ json.RawMessage) (any, e
 	return mcp.StructuredResult(string(data), report), nil
 }
 
-func validateProjectSection(ctx context.Context, project string) (validateProjectReport, error) {
+func validateProjectSection(ctx context.Context, headless Headless, project string) (validateProjectReport, error) {
 	// Godot logs parse diagnostics to stderr but still exits 0, so validity is
 	// reported as structured data rather than through isError.
 	probeCtx, cancel := context.WithTimeout(ctx, projectValidationTimeout)
 	defer cancel()
-	probe, err := probeProjectWithGodot(probeCtx, project)
+	probe, err := probeProjectWithGodot(probeCtx, headless, project)
 	if err != nil {
 		return validateProjectReport{}, err
 	}
@@ -164,9 +164,9 @@ func validateProjectSection(ctx context.Context, project string) (validateProjec
 	return report, nil
 }
 
-func validateScriptsSection(ctx context.Context, project string) validateScriptsReport {
+func validateScriptsSection(ctx context.Context, headless Headless, project string) validateScriptsReport {
 	candidates := listAllGdFiles(project)
-	groups, err := runGDScriptChecks(ctx, project, candidates)
+	groups, err := runGDScriptChecks(ctx, headless, project, candidates)
 	if err != nil {
 		// A broken project.godot makes the checker's stderr look like a failure;
 		// the project section already carries the underlying parse diagnostics.
