@@ -231,7 +231,7 @@ func TestSchemaValidatorRejectsViolations(t *testing.T) {
 func TestErrorResultMatchesStatusOutputSchema(t *testing.T) {
 	envelope := jsonValue(t, mcp.ErrorResult("boom", "try again").StructuredContent)
 	for _, newTool := range allTools {
-		tool := newTool(newToolset("", nil, nil))
+		tool := newTool(newToolset("", nil))
 		if !hasRequired(tool.OutputSchema, "success", "message") {
 			continue
 		}
@@ -256,7 +256,7 @@ func TestSuccessResultsMatchOutputSchema(t *testing.T) {
 			if result.IsError {
 				t.Fatalf("unexpected error: %+v", result.Content)
 			}
-			tool := tt.tool(newToolset("", nil, nil))
+			tool := tt.tool(newToolset("", nil))
 			value := jsonValue(t, result.StructuredContent)
 			if msg := schemaViolation(tool.OutputSchema, tool.OutputSchema, value, tool.Name); msg != "" {
 				t.Errorf("tool %q result violates its outputSchema: %s", tool.Name, msg)

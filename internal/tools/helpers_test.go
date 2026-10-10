@@ -67,9 +67,21 @@ func (s *oneShotSession) Run(ctx context.Context, project, operation string, par
 	return stdout, stderr, 0, nil
 }
 
+func (s *oneShotSession) RunHeadless(ctx context.Context, project, scriptPath string, extraArgs ...string) (stdout, stderr string, exitCode int, err error) {
+	return godot.RunScript(ctx, godot.Path(), project, scriptPath, extraArgs...) //nolint:wrapcheck // godot errors are already caller-facing.
+}
+
+func (s *oneShotSession) Export(ctx context.Context, project, presetName, outputPath string, debug bool) (stdout, stderr string, exitCode int, err error) {
+	return godot.Export(ctx, godot.Path(), project, presetName, outputPath, debug) //nolint:wrapcheck // godot errors are already caller-facing.
+}
+
+func (s *oneShotSession) Version(ctx context.Context) (string, error) {
+	return godot.Version(ctx, godot.Path()) //nolint:wrapcheck // godot errors are already caller-facing.
+}
+
 func callToolArgs(t *testing.T, build func(*toolset) mcp.Tool, project, args string) mcp.ToolResult {
 	t.Helper()
-	tool := build(newToolset(project, &oneShotSession{}, NewGodotHeadless(godot.Path())))
+	tool := build(newToolset(project, &oneShotSession{}))
 	out, err := tool.Handler(context.Background(), json.RawMessage(args))
 	if err != nil {
 		t.Fatalf("handler: %v", err)

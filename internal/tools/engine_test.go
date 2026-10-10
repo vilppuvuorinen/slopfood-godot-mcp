@@ -26,10 +26,22 @@ func (f *fakeSession) Run(_ context.Context, project, operation string, params m
 	return "", "", 0, nil
 }
 
-func TestRunEngineRequiresSession(t *testing.T) {
+func (f *fakeSession) RunHeadless(context.Context, string, string, ...string) (string, string, int, error) {
+	return "", "", 0, nil
+}
+
+func (f *fakeSession) Export(context.Context, string, string, string, bool) (string, string, int, error) {
+	return "", "", 0, nil
+}
+
+func (f *fakeSession) Version(context.Context) (string, error) {
+	return "", nil
+}
+
+func TestRunEngineRequiresEngine(t *testing.T) {
 	_, _, _, err := (&toolset{}).runEngine(context.Background(), "attach_script", nil)
 	if err == nil {
-		t.Fatal("runEngine with no session: err = nil, want an error")
+		t.Fatal("runEngine with no engine: err = nil, want an error")
 	}
 	if got := err.Error(); !strings.Contains(got, "engine session required") {
 		t.Errorf("err = %q, want the session-required message", got)
@@ -38,7 +50,7 @@ func TestRunEngineRequiresSession(t *testing.T) {
 
 func TestRunEngineDelegates(t *testing.T) {
 	sess := &fakeSession{}
-	ts := newToolset("/proj", sess, nil)
+	ts := newToolset("/proj", sess)
 
 	if _, _, _, err := ts.runEngine(context.Background(), "read_scene", map[string]any{"scenePath": "main.tscn"}); err != nil {
 		t.Fatalf("runEngine: %v", err)
@@ -59,7 +71,7 @@ func TestAttachScriptReconcilesInPlace(t *testing.T) {
 	seedFile(t, filepath.Join(root, "player.gd"), "extends Node\n")
 
 	sess := &fakeSession{}
-	out, err := newToolset(root, sess, nil).attachScript().Handler(context.Background(), json.RawMessage(
+	out, err := newToolset(root, sess).attachScript().Handler(context.Background(), json.RawMessage(
 		`{"scenePath":"scenes/main.tscn","nodePath":"root","scriptPath":"player.gd"}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)

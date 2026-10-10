@@ -11,6 +11,7 @@ import (
 )
 
 type runScriptSession struct {
+	fakeSession
 	run    fakeSessionRun
 	output string
 }
@@ -32,7 +33,7 @@ func TestRunScriptDelegatesToSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("marshal args: %v", err)
 	}
-	out, err := newToolset(root, sess, nil).runScript().Handler(context.Background(), raw)
+	out, err := newToolset(root, sess).runScript().Handler(context.Background(), raw)
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -61,7 +62,7 @@ func TestRunScriptDelegatesToSession(t *testing.T) {
 func TestRunScriptRequiresBody(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
-	out, err := newToolset(root, &fakeSession{}, nil).runScript().Handler(context.Background(), json.RawMessage(`{}`))
+	out, err := newToolset(root, &fakeSession{}).runScript().Handler(context.Background(), json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -76,7 +77,7 @@ func TestRunScriptRequiresBody(t *testing.T) {
 
 func TestRunScriptNotAProject(t *testing.T) {
 	root := t.TempDir()
-	out, err := newToolset(root, &fakeSession{}, nil).runScript().Handler(context.Background(), json.RawMessage(`{"body":"return 0\n"}`))
+	out, err := newToolset(root, &fakeSession{}).runScript().Handler(context.Background(), json.RawMessage(`{"body":"return 0\n"}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}

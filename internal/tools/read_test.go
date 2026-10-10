@@ -14,7 +14,7 @@ import (
 )
 
 func TestReadSchema(t *testing.T) {
-	tool := newToolset("", nil, nil).read()
+	tool := newToolset("", nil).read()
 	if tool.Name != "read" {
 		t.Errorf("name = %q", tool.Name)
 	}
@@ -59,7 +59,7 @@ func TestReadSchema(t *testing.T) {
 func callReadSession(t *testing.T, project, args string) (*fakeSession, mcp.ToolResult) {
 	t.Helper()
 	sess := &fakeSession{}
-	out, err := newToolset(project, sess, nil).read().Handler(context.Background(), json.RawMessage(args))
+	out, err := newToolset(project, sess).read().Handler(context.Background(), json.RawMessage(args))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -408,7 +408,7 @@ func TestReadResourceFallbackUsesEnvelopeEcho(t *testing.T) {
 }
 
 func TestReadOutputSchemaAcceptsEnvelopeAndStatus(t *testing.T) {
-	tool := newToolset("", nil, nil).read()
+	tool := newToolset("", nil).read()
 	value := jsonValue(t, map[string]any{
 		"kind": "resource",
 		"path": "resources/data.res",

@@ -9,7 +9,7 @@ import (
 )
 
 func TestExportProjectSchema(t *testing.T) {
-	tool := newToolset("", nil, nil).exportProject()
+	tool := newToolset("", nil).exportProject()
 	if tool.Name != "export_project" {
 		t.Errorf("name = %q", tool.Name)
 	}

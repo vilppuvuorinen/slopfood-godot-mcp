@@ -88,7 +88,7 @@ func parseGodotScriptDiagnosticGroups(output string) map[string][]scriptDiagnost
 // exits 0 when a target script fails to compile. Every path is checked in one
 // engine process, so a batch costs a single engine startup instead of one per
 // file.
-func runGDScriptChecks(ctx context.Context, headless Headless, projectPath string, scriptRelPaths []string) (map[string][]scriptDiagnostic, error) {
+func runGDScriptChecks(ctx context.Context, engine Engine, projectPath string, scriptRelPaths []string) (map[string][]scriptDiagnostic, error) {
 	if len(scriptRelPaths) == 0 {
 		return map[string][]scriptDiagnostic{}, nil
 	}
@@ -100,7 +100,7 @@ func runGDScriptChecks(ctx context.Context, headless Headless, projectPath strin
 	for _, rel := range scriptRelPaths {
 		resPaths = append(resPaths, resScheme+filepath.ToSlash(rel))
 	}
-	_, stderr, exitCode, err := headless.CheckScripts(ctx, projectPath, checkerPath, resPaths)
+	_, stderr, exitCode, err := engine.RunHeadless(ctx, projectPath, checkerPath, resPaths...)
 	if err != nil {
 		return nil, fmt.Errorf("run script checker: %w", err)
 	}

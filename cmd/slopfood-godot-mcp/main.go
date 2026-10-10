@@ -131,7 +131,7 @@ func newLogger(logLevel string, stderr io.Writer) (*slog.Logger, error) {
 	return slog.New(slog.NewJSONHandler(stderr, &slog.HandlerOptions{Level: level})), nil
 }
 
-func (r *role) newServer(session tools.Session, enginePath string) *mcp.Server {
+func (r *role) newServer(engine tools.Engine) *mcp.Server {
 	srv := mcp.NewServer(mcp.ServerInfo{
 		Name:    "slopfood-godot-mcp",
 		Version: version,
@@ -143,13 +143,13 @@ func (r *role) newServer(session tools.Session, enginePath string) *mcp.Server {
 			"accepts or changes the project directory. Read-only tools are safe to call freely; "+
 			"tools that write files may overwrite existing content.",
 		r.root)
-	if engine, err := godot.Version(r.ctx, enginePath); err == nil {
-		instructions += " The bound engine is Godot " + engine + "."
+	if engineVersion, err := engine.Version(r.ctx); err == nil {
+		instructions += " The bound engine is Godot " + engineVersion + "."
 	} else {
 		instructions += " The bound engine version could not be determined from the Godot binary."
 	}
 	srv.Instructions = instructions
-	tools.Register(srv, r.root, session, tools.NewGodotHeadless(enginePath))
+	tools.Register(srv, r.root, engine)
 	return srv
 }
 
@@ -268,8 +268,8 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("materialize operations script: %w", err)
 	}
-	// The engine path is resolved once here, at startup, and threaded into both
-	// seams rather than rediscovered per request.
+	// The engine path is resolved once here, at startup, and threaded into the
+	// engine rather than rediscovered per request.
 	enginePath := godot.Path()
 	session := godot.NewSessionTransport(enginePath, script, transport)
 	defer func() {
@@ -278,7 +278,8 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 		}
 	}()
 
-	server := role.newServer(session, enginePath)
+	engine := tools.NewGodotEngine(session, enginePath)
+	server := role.newServer(engine)
 	queue := mcp.NewQueue(operationQueueDepth, operationQueueTimeout)
 	d := daemon.NewDaemon(
 		server,

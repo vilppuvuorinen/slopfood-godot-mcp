@@ -9,7 +9,7 @@ import (
 )
 
 func TestExportMeshLibrarySchema(t *testing.T) {
-	tool := newToolset("", nil, nil).exportMeshLibrary()
+	tool := newToolset("", nil).exportMeshLibrary()
 	if tool.Name != "export_mesh_library" {
 		t.Errorf("name = %q", tool.Name)
 	}

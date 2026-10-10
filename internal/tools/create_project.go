@@ -173,7 +173,7 @@ func generateCsprojContent(projectName, sdkVersion, targetFramework string) stri
 }
 
 func (t *toolset) detectGodotNetSDKVersion(ctx context.Context) string {
-	out, err := t.headless.Version(ctx)
+	out, err := t.engine.Version(ctx)
 	if err != nil {
 		return defaultGodotNetSDKVersion
 	}

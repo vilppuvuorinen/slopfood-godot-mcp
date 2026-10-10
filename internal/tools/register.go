@@ -15,8 +15,8 @@ var allTools = []func(*toolset) mcp.Tool{
 	(*toolset).readNode,
 }
 
-func Register(s *mcp.Server, project string, session Session, headless Headless) {
-	ts := newToolset(project, session, headless)
+func Register(s *mcp.Server, project string, engine Engine) {
+	ts := newToolset(project, engine)
 	for _, newTool := range allTools {
 		s.RegisterTool(newTool(ts))
 	}

@@ -9,7 +9,7 @@ import (
 )
 
 func TestAttachScriptSchema(t *testing.T) {
-	tool := newToolset("", nil, nil).attachScript()
+	tool := newToolset("", nil).attachScript()
 	if tool.Name != "attach_script" {
 		t.Errorf("name = %q", tool.Name)
 	}
