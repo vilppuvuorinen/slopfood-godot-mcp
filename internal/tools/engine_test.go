@@ -38,7 +38,7 @@ func TestRunEngineRequiresSession(t *testing.T) {
 
 func TestRunEngineDelegates(t *testing.T) {
 	sess := &fakeSession{}
-	ts := newToolset("/proj", sess)
+	ts := newToolset("/proj", sess, nil)
 
 	if _, _, _, err := ts.runEngine(context.Background(), "read_scene", map[string]any{"scenePath": "main.tscn"}); err != nil {
 		t.Fatalf("runEngine: %v", err)
@@ -59,7 +59,7 @@ func TestAttachScriptReconcilesInPlace(t *testing.T) {
 	seedFile(t, filepath.Join(root, "player.gd"), "extends Node\n")
 
 	sess := &fakeSession{}
-	out, err := newToolset(root, sess).attachScript().Handler(context.Background(), json.RawMessage(
+	out, err := newToolset(root, sess, nil).attachScript().Handler(context.Background(), json.RawMessage(
 		`{"scenePath":"scenes/main.tscn","nodePath":"root","scriptPath":"player.gd"}`))
 	if err != nil {
 		t.Fatalf("handler: %v", err)

@@ -129,7 +129,7 @@ func newLogger(logLevel string, stderr io.Writer) (*slog.Logger, error) {
 	return slog.New(slog.NewJSONHandler(stderr, &slog.HandlerOptions{Level: level})), nil
 }
 
-func (r *role) newServer(session tools.Session) *mcp.Server {
+func (r *role) newServer(session tools.Session, enginePath string) *mcp.Server {
 	srv := mcp.NewServer(mcp.ServerInfo{
 		Name:    "slopfood-godot-mcp",
 		Version: version,
@@ -141,13 +141,13 @@ func (r *role) newServer(session tools.Session) *mcp.Server {
 			"accepts or changes the project directory. Read-only tools are safe to call freely; "+
 			"tools that write files may overwrite existing content.",
 		r.root)
-	if engine, err := godot.Version(r.ctx, godot.Path()); err == nil {
+	if engine, err := godot.Version(r.ctx, enginePath); err == nil {
 		instructions += " The bound engine is Godot " + engine + "."
 	} else {
 		instructions += " The bound engine version could not be determined from the Godot binary."
 	}
 	srv.Instructions = instructions
-	tools.Register(srv, r.root, session)
+	tools.Register(srv, r.root, session, tools.NewGodotHeadless(enginePath))
 	return srv
 }
 
@@ -266,14 +266,17 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("materialize operations script: %w", err)
 	}
-	session := godot.NewSessionTransport(godot.Path(), script, transport)
+	// The engine path is resolved once here, at startup, and threaded into both
+	// seams rather than rediscovered per request.
+	enginePath := godot.Path()
+	session := godot.NewSessionTransport(enginePath, script, transport)
 	defer func() {
 		if cerr := session.Close(); cerr != nil {
 			role.logger.Warn("engine session close", "error", cerr)
 		}
 	}()
 
-	server := role.newServer(session)
+	server := role.newServer(session, enginePath)
 	queue := mcp.NewQueue(operationQueueDepth, operationQueueTimeout)
 	daemon := mcp.NewDaemon(
 		server,

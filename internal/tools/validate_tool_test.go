@@ -69,7 +69,7 @@ fi
 exit $status`
 
 func TestValidateSchema(t *testing.T) {
-	tool := newToolset("", nil).validate()
+	tool := newToolset("", nil, nil).validate()
 	if tool.Name != "validate" {
 		t.Errorf("name = %q", tool.Name)
 	}

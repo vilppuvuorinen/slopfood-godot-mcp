@@ -13,7 +13,7 @@ import (
 )
 
 func TestReadNodeSchema(t *testing.T) {
-	tool := newToolset("", nil).readNode()
+	tool := newToolset("", nil, nil).readNode()
 	if tool.Name != "read_node" {
 		t.Errorf("name = %q", tool.Name)
 	}
@@ -51,7 +51,7 @@ func TestReadNodeSchema(t *testing.T) {
 func callReadNodeSession(t *testing.T, project, args string) (*fakeSession, mcp.ToolResult) {
 	t.Helper()
 	sess := &fakeSession{}
-	out, err := newToolset(project, sess).readNode().Handler(context.Background(), json.RawMessage(args))
+	out, err := newToolset(project, sess, nil).readNode().Handler(context.Background(), json.RawMessage(args))
 	if err != nil {
 		t.Fatalf("handler: %v", err)
 	}
@@ -116,7 +116,7 @@ func TestReadNodeTilemapStructured(t *testing.T) {
 }
 
 func TestReadNodeOutputSchemaAcceptsEnvelopeAndStatus(t *testing.T) {
-	tool := newToolset("", nil).readNode()
+	tool := newToolset("", nil, nil).readNode()
 	value := jsonValue(t, map[string]any{
 		"kind":     "tilemap",
 		"path":     "scenes/level.tscn",

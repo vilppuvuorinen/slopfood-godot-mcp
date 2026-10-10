@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
@@ -66,7 +65,7 @@ func (t *toolset) handleExportProject(ctx context.Context, raw json.RawMessage) 
 	}
 
 	stdout, _, _, failure, failed := runEngineCall(ctx, func(ctx context.Context) (string, string, int, error) {
-		return godot.Export(ctx, godot.Path(), project, args.PresetName, outputPath, args.Debug)
+		return t.headless.Export(ctx, project, args.PresetName, outputPath, args.Debug)
 	}, "Export failed", nil, nil)
 	if failed {
 		return failure, nil //nolint:nilerr // the failure is reported through the tool result.

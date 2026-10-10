@@ -5,8 +5,9 @@ import (
 	"errors"
 )
 
-// Session runs a bridge operation in the engine. It is the single seam the
-// tools use to reach Godot; *godot.Session satisfies it and tests fake it.
+// Session runs a bridge operation in the warm editor. It is one of the two
+// seams the tools use to reach Godot, alongside Headless's one-shot runner
+// (see headless.go); *godot.Session satisfies it and tests fake it.
 type Session interface {
 	Run(ctx context.Context, project, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error)
 }

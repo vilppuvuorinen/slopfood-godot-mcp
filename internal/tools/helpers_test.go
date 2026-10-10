@@ -69,7 +69,7 @@ func (s *oneShotSession) Run(ctx context.Context, project, operation string, par
 
 func callToolArgs(t *testing.T, build func(*toolset) mcp.Tool, project, args string) mcp.ToolResult {
 	t.Helper()
-	tool := build(newToolset(project, &oneShotSession{}))
+	tool := build(newToolset(project, &oneShotSession{}, NewGodotHeadless(godot.Path())))
 	out, err := tool.Handler(context.Background(), json.RawMessage(args))
 	if err != nil {
 		t.Fatalf("handler: %v", err)

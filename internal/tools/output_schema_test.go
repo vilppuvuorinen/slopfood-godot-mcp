@@ -75,7 +75,7 @@ func TestStatusOutputSchemaRequiresEnvelope(t *testing.T) {
 }
 
 func TestMutationErrorCarriesStatusEnvelope(t *testing.T) {
-	tool := newToolset("", nil).attachScript()
+	tool := newToolset("", nil, nil).attachScript()
 	result := callToolArgs(t, (*toolset).attachScript, "", "{}")
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
