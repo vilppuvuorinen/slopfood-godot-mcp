@@ -72,20 +72,20 @@ func (t *toolset) handleRunScript(ctx context.Context, raw json.RawMessage) (any
 		return result, nil
 	}
 
-	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
+	res, failure := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
 		return t.runEngine(ctx, "run_script", map[string]any{"body": args.Body})
 	}, "Failed to run script", headlessSolutions, headlessSolutions)
-	if failed {
-		return failure, nil //nolint:nilerr // the failure is reported through the tool result.
+	if failure != nil {
+		return *failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 
 	// The bridge reports compile and runtime failures inside the payload, so a
 	// non-error result must still carry the declared shape.
-	if hasPayload {
-		return mcp.JSONResult(payload), nil
+	if result, ok := enginePayloadResult(res); ok {
+		return result, nil
 	}
 	return mcp.ErrorResult(
-		"Failed to run script: run_script returned no structured output: "+stdout,
+		"Failed to run script: run_script returned no structured output: "+res.Stdout,
 		headlessSolutions...,
 	), nil
 }

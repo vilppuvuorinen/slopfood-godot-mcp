@@ -31,37 +31,43 @@ var headlessSolutions = []string{
 // engineCall runs one engine operation and returns its response.
 type engineCall func(ctx context.Context) (godot.RunResult, error)
 
-// runEngineCall executes call, maps a start failure or unexpected stderr to a
-// ready error result, and carries the frame payload when the engine emitted
-// one. When failed is true the caller returns failure; otherwise it renders
-// hasPayload/payload or its own fallback from stdout.
-func runEngineCall(ctx context.Context, call engineCall, label string, startSolutions, stderrSolutions []string) (stdout, payload string, hasPayload bool, failure mcp.ToolResult, failed bool) {
+// runEngineCall runs call and returns the engine result; a non-nil tool result
+// means the caller should return it (start failure or unexpected engine stderr).
+func runEngineCall(ctx context.Context, call engineCall, label string, startSolutions, stderrSolutions []string) (godot.RunResult, *mcp.ToolResult) {
 	result, err := call(ctx)
 	if err != nil {
-		return result.Stdout, "", false, mcp.ErrorResult(label+": "+err.Error(), startSolutions...), true
+		failure := mcp.ErrorResult(label+": "+err.Error(), startSolutions...)
+		return result, &failure
 	}
 	if scriptFailed(result.ExitCode, result.Stderr) {
-		return result.Stdout, "", false, mcp.ErrorResult(label+": "+result.Stderr, stderrSolutions...), true
+		failure := mcp.ErrorResult(label+": "+result.Stderr, stderrSolutions...)
+		return result, &failure
 	}
-	if result.Payload != "" {
-		return result.Stdout, indentJSON(result.Payload), true, mcp.ToolResult{}, false
+	return result, nil
+}
+
+// enginePayloadResult renders the engine's structured payload as an indented
+// JSON tool result; ok is false when the engine emitted no payload.
+func enginePayloadResult(res godot.RunResult) (mcp.ToolResult, bool) {
+	if res.Payload == "" {
+		return mcp.ToolResult{}, false
 	}
-	return result.Stdout, "", false, mcp.ToolResult{}, false
+	return mcp.JSONResult(indentJSON(res.Payload)), true
 }
 
 // Callers validate arguments, paths, and project/scene existence first; benign
 // engine stderr is allowlisted per tool via scriptFailed (see stderr.go).
 func (t *toolset) runHeadlessOperation(ctx context.Context, operation string, params, fields map[string]any) (any, error) {
-	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
+	res, failure := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
 		return t.runEngine(ctx, operation, params)
 	}, operation+" failed", headlessSolutions, headlessSolutions)
-	if failed {
-		return failure, nil //nolint:nilerr // the failure is reported through the tool result.
+	if failure != nil {
+		return *failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	if hasPayload {
-		return mcp.JSONResult(payload), nil
+	if result, ok := enginePayloadResult(res); ok {
+		return result, nil
 	}
-	return statusResult(t.project, operation+" succeeded.\n\nOutput: "+stdout, fields), nil
+	return statusResult(t.project, operation+" succeeded.\n\nOutput: "+res.Stdout, fields), nil
 }
 
 func statusResult(project, message string, fields map[string]any) mcp.ToolResult {

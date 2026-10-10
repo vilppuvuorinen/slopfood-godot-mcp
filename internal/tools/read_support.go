@@ -41,26 +41,26 @@ func (t *toolset) readSceneThrough(ctx context.Context, scenePath, nodePath stri
 	if depth != nil {
 		params["depth"] = *depth
 	}
-	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
+	res, failure := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
 		return t.runEngine(ctx, "read_scene", params)
 	}, "Failed to read scene", headlessSolutions, headlessSolutions)
-	if failed {
-		return failure, nil //nolint:nilerr // the failure is reported through the tool result.
+	if failure != nil {
+		return *failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 
 	// A non-error result always carries the declared node tree, so markerless or
 	// invalid output is a failure; the raw output stays in the message.
-	if hasPayload {
-		if json.Valid([]byte(payload)) {
-			return mcp.JSONResult(payload), nil
+	if result, ok := enginePayloadResult(res); ok {
+		if json.Valid([]byte(res.Payload)) {
+			return result, nil
 		}
 		return mcp.ErrorResult(
-			"Failed to read scene: read_scene returned invalid JSON: "+payload,
+			"Failed to read scene: read_scene returned invalid JSON: "+indentJSON(res.Payload),
 			headlessSolutions...,
 		), nil
 	}
 	return mcp.ErrorResult(
-		"Failed to read scene: read_scene returned no structured output: "+stdout,
+		"Failed to read scene: read_scene returned no structured output: "+res.Stdout,
 		headlessSolutions...,
 	), nil
 }

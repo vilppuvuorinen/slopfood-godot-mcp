@@ -81,18 +81,18 @@ func (t *toolset) handleExportMeshLibrary(ctx context.Context, raw json.RawMessa
 		params["meshItemNames"] = args.MeshItemNames
 	}
 
-	stdout, _, _, failure, failed := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
+	res, failure := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
 		return t.runEngine(ctx, "export_mesh_library", params)
 	}, "Failed to export mesh library", headlessSolutions, []string{
 		"Check if the scene contains valid 3D meshes",
 		"Ensure the output path is valid",
 		"Verify the scene file is valid",
 	})
-	if failed {
-		return failure, nil //nolint:nilerr // the failure is reported through the tool result.
+	if failure != nil {
+		return *failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 
-	message := fmt.Sprintf("MeshLibrary exported successfully to: %s\n\nOutput: %s", outputPath, stdout)
+	message := fmt.Sprintf("MeshLibrary exported successfully to: %s\n\nOutput: %s", outputPath, res.Stdout)
 	return statusResult(project, message, map[string]any{
 		"scenePath":          args.ScenePath,
 		"outputPath":         args.OutputPath,

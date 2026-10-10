@@ -65,14 +65,14 @@ func (t *toolset) handleExportProject(ctx context.Context, raw json.RawMessage) 
 		return invalidPathResultFor(err), nil
 	}
 
-	stdout, _, _, failure, failed := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
+	res, failure := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
 		out, errOut, code, err := t.engine.Export(ctx, project, args.PresetName, outputPath, args.Debug)
 		return godot.RunResult{Stdout: out, Stderr: errOut, ExitCode: code}, err //nolint:wrapcheck // the caller renders the export error.
 	}, "Export failed", nil, nil)
-	if failed {
-		return failure, nil //nolint:nilerr // the failure is reported through the tool result.
+	if failure != nil {
+		return *failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}
-	output := stdout
+	output := res.Stdout
 	if output == "" {
 		output = outputPath
 	}
