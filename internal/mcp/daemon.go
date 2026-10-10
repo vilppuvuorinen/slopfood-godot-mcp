@@ -4,24 +4,39 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"time"
+
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
 var errDaemonClosed = errors.New("daemon closed")
 
+// Identity of this process, used as the reference for same-user admission.
+func currentPeerIdentity() transport.PeerIdentity {
+	uid := os.Getuid()
+	var userID uint32
+	if uid >= 0 {
+		// os.Getuid is non-negative wherever meaningful; the guard keeps the
+		// conversion honest where it reports -1.
+		userID = uint32(uid) //nolint:gosec // guarded non-negative above.
+	}
+	return transport.PeerIdentity{UserID: userID, ProcessID: os.Getpid()}
+}
+
 type Daemon struct {
 	server *Server
 	queue  *Queue
-	listen ListenFunc
+	listen transport.ListenFunc
 	addr   string
 
 	lifeCtx    context.Context
 	lifeCancel context.CancelFunc
 
 	mu       sync.Mutex
-	listener Listener
-	conns    map[Connection]struct{}
+	listener transport.Listener
+	conns    map[transport.Connection]struct{}
 	closed   bool
 	// served is set once Serve starts; the idle timeout must be configured before it.
 	served bool
@@ -33,7 +48,7 @@ type Daemon struct {
 	connWG sync.WaitGroup
 }
 
-func NewDaemon(server *Server, queue *Queue, listen ListenFunc, addr string) *Daemon {
+func NewDaemon(server *Server, queue *Queue, listen transport.ListenFunc, addr string) *Daemon {
 	if queue != nil {
 		server.SetSubmit(queue.Submit)
 	}
@@ -45,7 +60,7 @@ func NewDaemon(server *Server, queue *Queue, listen ListenFunc, addr string) *Da
 		addr:       addr,
 		lifeCtx:    lifeCtx,
 		lifeCancel: lifeCancel,
-		conns:      make(map[Connection]struct{}),
+		conns:      make(map[transport.Connection]struct{}),
 	}
 }
 
@@ -123,7 +138,7 @@ func (d *Daemon) Close() error {
 	d.lifeCancel()
 	d.disarmIdleLocked()
 	listener := d.listener
-	conns := make([]Connection, 0, len(d.conns))
+	conns := make([]transport.Connection, 0, len(d.conns))
 	for conn := range d.conns {
 		conns = append(conns, conn)
 	}
@@ -149,7 +164,7 @@ func (d *Daemon) Close() error {
 
 // The connection is tracked before pre-auth and the token read runs off the
 // accept path, so a silent client cannot stall accepts and Close still waits.
-func (d *Daemon) startConnection(ctx context.Context, conn Connection) {
+func (d *Daemon) startConnection(ctx context.Context, conn transport.Connection) {
 	if !d.track(conn) {
 		_ = conn.Close()
 		return
@@ -158,21 +173,21 @@ func (d *Daemon) startConnection(ctx context.Context, conn Connection) {
 		defer d.untrack(conn)
 		defer func() { _ = conn.Close() }()
 		if err := preAuthenticate(conn); err != nil {
-			d.server.logger.Warn("rejected connection: token pre-auth failed", "error", err)
+			d.server.Logger().Warn("rejected connection: token pre-auth failed", "error", err)
 			return
 		}
 		if !d.authorize(conn) {
 			return
 		}
 		if err := d.server.Serve(ctx, conn, conn); err != nil {
-			d.server.logger.Debug("connection serve ended", "error", err)
+			d.server.Logger().Debug("connection serve ended", "error", err)
 		}
 	}()
 }
 
 // No-op for transports that do not implement TokenConnection.
-func preAuthenticate(conn Connection) error {
-	tokenConn, ok := conn.(TokenConnection)
+func preAuthenticate(conn transport.Connection) error {
+	tokenConn, ok := conn.(transport.TokenConnection)
 	if !ok {
 		return nil
 	}
@@ -185,31 +200,31 @@ func preAuthenticate(conn Connection) error {
 // Rejects any peer whose UID differs from this process's; unsupported
 // credentials fall back to filesystem permissions, and absent identity requires
 // a valid token. The caller must not track or serve a rejected connection.
-func (d *Daemon) authorize(conn Connection) bool {
+func (d *Daemon) authorize(conn transport.Connection) bool {
 	peer, err := conn.PeerIdentity()
 	if err != nil {
-		if errors.Is(err, errPeerIdentityUnsupported) {
-			d.server.logger.Debug("peer identity unavailable; relying on filesystem permissions")
+		if errors.Is(err, transport.ErrPeerIdentityUnsupported) {
+			d.server.Logger().Debug("peer identity unavailable; relying on filesystem permissions")
 			return true
 		}
-		if errors.Is(err, errPeerIdentityAbsent) {
-			if tokenConn, ok := conn.(TokenConnection); ok && tokenConn.Authenticated() {
+		if errors.Is(err, transport.ErrPeerIdentityAbsent) {
+			if tokenConn, ok := conn.(transport.TokenConnection); ok && tokenConn.Authenticated() {
 				return true
 			}
-			d.server.logger.Warn("rejected connection: transport has no peer identity and no valid token")
+			d.server.Logger().Warn("rejected connection: transport has no peer identity and no valid token")
 			return false
 		}
-		d.server.logger.Warn("rejected connection: cannot identify peer", "error", err)
+		d.server.Logger().Warn("rejected connection: cannot identify peer", "error", err)
 		return false
 	}
 	if self := currentPeerIdentity(); peer.UserID != self.UserID {
-		d.server.logger.Warn("rejected connection from another user", "uid", peer.UserID)
+		d.server.Logger().Warn("rejected connection from another user", "uid", peer.UserID)
 		return false
 	}
 	return true
 }
 
-func (d *Daemon) track(conn Connection) bool {
+func (d *Daemon) track(conn transport.Connection) bool {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.closed {
@@ -221,7 +236,7 @@ func (d *Daemon) track(conn Connection) bool {
 	return true
 }
 
-func (d *Daemon) untrack(conn Connection) {
+func (d *Daemon) untrack(conn transport.Connection) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	delete(d.conns, conn)

@@ -1,4 +1,4 @@
-package mcp
+package transport
 
 import (
 	"bufio"
@@ -154,7 +154,7 @@ func (c *tcpConn) Authenticated() bool { return c.authenticated }
 // A loopback port exposes no kernel credentials or filesystem gate, so the
 // daemon requires the token pre-auth instead.
 func (c *tcpConn) PeerIdentity() (PeerIdentity, error) {
-	return PeerIdentity{}, errPeerIdentityAbsent
+	return PeerIdentity{}, ErrPeerIdentityAbsent
 }
 
 func (c *tcpConn) Close() error {

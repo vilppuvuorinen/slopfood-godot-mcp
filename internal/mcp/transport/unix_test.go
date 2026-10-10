@@ -1,6 +1,6 @@
 //go:build !windows
 
-package mcp
+package transport_test
 
 import (
 	"bufio"
@@ -12,21 +12,20 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
 func TestUnixSocketServesProtocol(t *testing.T) {
-	sock := filepath.Join(t.TempDir(), "daemon.sock")
-	l, err := ListenUnix(sock)
-	if err != nil {
-		t.Fatalf("ListenUnix: %v", err)
-	}
-	d := NewDaemon(testServer(), nil, func(string) (Listener, error) { return l, nil }, sock)
+	listen, dial := newTestEndpoint(t)
+	d := mcp.NewDaemon(testServer(), nil, listen, "test")
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
-	client, err := DialUnix(sock)
+	client, err := dial("test")
 	if err != nil {
-		t.Fatalf("DialUnix: %v", err)
+		t.Fatalf("dial: %v", err)
 	}
 	defer func() { _ = client.Close() }()
 
@@ -46,7 +45,7 @@ func TestUnixSocketServesProtocol(t *testing.T) {
 
 func TestUnixSocketPermissions(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "nested", "daemon.sock")
-	l, err := ListenUnix(sock)
+	l, err := transport.ListenUnix(sock)
 	if err != nil {
 		t.Fatalf("ListenUnix: %v", err)
 	}
@@ -66,13 +65,13 @@ func TestUnixSocketPermissions(t *testing.T) {
 
 func TestUnixSecondListenFails(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "daemon.sock")
-	first, err := ListenUnix(sock)
+	first, err := transport.ListenUnix(sock)
 	if err != nil {
 		t.Fatalf("first ListenUnix: %v", err)
 	}
 	defer func() { _ = first.Close() }()
 
-	second, err := ListenUnix(sock)
+	second, err := transport.ListenUnix(sock)
 	if err == nil {
 		_ = second.Close()
 		t.Fatal("second ListenUnix succeeded, want the lock to reject it")
@@ -85,7 +84,7 @@ func TestUnixReclaimsStaleSocketPath(t *testing.T) {
 		t.Fatalf("seed stale path: %v", err)
 	}
 
-	l, err := ListenUnix(sock)
+	l, err := transport.ListenUnix(sock)
 	if err != nil {
 		t.Fatalf("ListenUnix over stale path: %v", err)
 	}
@@ -94,7 +93,7 @@ func TestUnixReclaimsStaleSocketPath(t *testing.T) {
 
 func TestUnixCloseRemovesSocket(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "daemon.sock")
-	l, err := ListenUnix(sock)
+	l, err := transport.ListenUnix(sock)
 	if err != nil {
 		t.Fatalf("ListenUnix: %v", err)
 	}
@@ -111,7 +110,7 @@ func TestUnixCloseRemovesSocket(t *testing.T) {
 
 func TestUnixDialWithoutListenerFails(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "missing.sock")
-	conn, err := DialUnix(sock)
+	conn, err := transport.DialUnix(sock)
 	if err == nil {
 		_ = conn.Close()
 		t.Fatal("DialUnix to a missing socket succeeded, want an error")
@@ -127,17 +126,17 @@ func TestUnixDisconnectCancelsEngine(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 	sock := filepath.Join(dir, "d.sock")
-	l, err := ListenUnix(sock)
+	l, err := transport.ListenUnix(sock)
 	if err != nil {
 		t.Fatalf("ListenUnix: %v", err)
 	}
 
-	q := NewQueue(4, testQueueTimeout)
-	d := NewDaemon(s, q, func(string) (Listener, error) { return l, nil }, sock)
+	q := mcp.NewQueue(4, testQueueTimeout)
+	d := mcp.NewDaemon(s, q, func(string) (transport.Listener, error) { return l, nil }, sock)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
-	client, err := DialUnix(sock)
+	client, err := transport.DialUnix(sock)
 	if err != nil {
 		t.Fatalf("DialUnix: %v", err)
 	}
@@ -162,13 +161,13 @@ func TestUnixDisconnectCancelsEngine(t *testing.T) {
 
 func TestUnixPeerIdentity(t *testing.T) {
 	sock := filepath.Join(t.TempDir(), "daemon.sock")
-	l, err := ListenUnix(sock)
+	l, err := transport.ListenUnix(sock)
 	if err != nil {
 		t.Fatalf("ListenUnix: %v", err)
 	}
 	defer func() { _ = l.Close() }()
 
-	client, err := DialUnix(sock)
+	client, err := transport.DialUnix(sock)
 	if err != nil {
 		t.Fatalf("DialUnix: %v", err)
 	}
@@ -181,7 +180,7 @@ func TestUnixPeerIdentity(t *testing.T) {
 	defer func() { _ = server.Close() }()
 
 	peer, err := server.PeerIdentity()
-	if errors.Is(err, errPeerIdentityUnsupported) {
+	if errors.Is(err, transport.ErrPeerIdentityUnsupported) {
 		t.Skip("peer credentials unsupported on this platform")
 	}
 	if err != nil {

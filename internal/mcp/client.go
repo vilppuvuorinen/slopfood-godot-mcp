@@ -7,6 +7,8 @@ import (
 	"io"
 	"log/slog"
 	"time"
+
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
 // A nil SpawnFunc disables spawn-on-demand, so a failed dial is fatal.
@@ -22,7 +24,7 @@ const (
 var errDaemonLost = errors.New("daemon connection closed")
 
 type Client struct {
-	dial   DialFunc
+	dial   transport.DialFunc
 	spawn  SpawnFunc
 	addr   string
 	logger *slog.Logger
@@ -33,7 +35,7 @@ type Client struct {
 
 // A nil spawn disables spawning, making a failed dial fatal; a nil logger uses
 // the default logger.
-func NewClient(dial DialFunc, spawn SpawnFunc, addr string, logger *slog.Logger) *Client {
+func NewClient(dial transport.DialFunc, spawn SpawnFunc, addr string, logger *slog.Logger) *Client {
 	if logger == nil {
 		logger = slog.Default()
 	}

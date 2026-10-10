@@ -253,6 +253,9 @@ func NewServer(info ServerInfo, logger *slog.Logger) *Server {
 	}
 }
 
+// Logger returns the server's logger so collaborators can log through it.
+func (s *Server) Logger() *slog.Logger { return s.logger }
+
 func (s *Server) RegisterTool(t Tool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

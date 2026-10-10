@@ -15,6 +15,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
 // Fresh Unix socket path under a short temp prefix, removed when the test ends.
@@ -36,7 +38,7 @@ func toolCallLine(name string) string {
 // -race would flag it and the final count would be short.
 func TestUnixDaemonConcurrentClientsSerialize(t *testing.T) {
 	sock := shortSocketPath(t)
-	l, err := ListenUnix(sock)
+	l, err := transport.ListenUnix(sock)
 	if err != nil {
 		t.Fatalf("ListenUnix: %v", err)
 	}
@@ -71,13 +73,13 @@ func TestUnixDaemonConcurrentClientsSerialize(t *testing.T) {
 	})
 
 	q := NewQueue(calls, testQueueTimeout)
-	d := NewDaemon(srv, q, func(string) (Listener, error) { return l, nil }, sock)
+	d := NewDaemon(srv, q, func(string) (transport.Listener, error) { return l, nil }, sock)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
 	var wg sync.WaitGroup
 	for range calls {
-		client, err := DialUnix(sock)
+		client, err := transport.DialUnix(sock)
 		if err != nil {
 			t.Fatalf("DialUnix: %v", err)
 		}
@@ -113,7 +115,7 @@ func TestUnixDaemonConcurrentClientsSerialize(t *testing.T) {
 // ordinary tool error rather than a protocol failure.
 func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 	sock := shortSocketPath(t)
-	l, err := ListenUnix(sock)
+	l, err := transport.ListenUnix(sock)
 	if err != nil {
 		t.Fatalf("ListenUnix: %v", err)
 	}
@@ -133,12 +135,12 @@ func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 	})
 
 	q := NewQueue(1, testQueueTimeout)
-	d := NewDaemon(srv, q, func(string) (Listener, error) { return l, nil }, sock)
+	d := NewDaemon(srv, q, func(string) (transport.Listener, error) { return l, nil }, sock)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
 	dial := func() io.ReadWriteCloser {
-		client, dialErr := DialUnix(sock)
+		client, dialErr := transport.DialUnix(sock)
 		if dialErr != nil {
 			t.Fatalf("DialUnix: %v", dialErr)
 		}
@@ -190,12 +192,12 @@ func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 
 func TestUnixDaemonIdleExitThenRespawn(t *testing.T) {
 	sock := shortSocketPath(t)
-	l, err := ListenUnix(sock)
+	l, err := transport.ListenUnix(sock)
 	if err != nil {
 		t.Fatalf("ListenUnix: %v", err)
 	}
 
-	d := NewDaemon(testServer(), nil, func(string) (Listener, error) { return l, nil }, sock)
+	d := NewDaemon(testServer(), nil, func(string) (transport.Listener, error) { return l, nil }, sock)
 	if err := d.SetIdleTimeout(20 * time.Millisecond); err != nil {
 		t.Fatalf("SetIdleTimeout: %v", err)
 	}
@@ -218,7 +220,7 @@ func TestUnixDaemonIdleExitThenRespawn(t *testing.T) {
 		t.Errorf("socket still present after idle exit: %v", statErr)
 	}
 
-	respawned, respawnErr := ListenUnix(sock)
+	respawned, respawnErr := transport.ListenUnix(sock)
 	if respawnErr != nil {
 		t.Fatalf("respawn ListenUnix: %v", respawnErr)
 	}

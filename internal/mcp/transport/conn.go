@@ -1,16 +1,15 @@
-package mcp
+package transport
 
 import (
 	"errors"
 	"io"
-	"os"
 )
 
 // Returned by the non-Linux Unix backend; the daemon falls back to filesystem permissions.
-var errPeerIdentityUnsupported = errors.New("peer credentials unsupported on this platform")
+var ErrPeerIdentityUnsupported = errors.New("peer credentials unsupported on this platform")
 
 // A transport with no peer identity and no filesystem gate; admission requires a successful token pre-auth.
-var errPeerIdentityAbsent = errors.New("peer identity absent for this transport")
+var ErrPeerIdentityAbsent = errors.New("peer identity absent for this transport")
 
 // Optional pre-auth seam for transports with no kernel peer identity or filesystem gate.
 type TokenConnection interface {
@@ -47,15 +46,3 @@ type ListenFunc func(addr string) (Listener, error)
 
 // Opens a client connection; an error means no daemon is listening yet.
 type DialFunc func(addr string) (io.ReadWriteCloser, error)
-
-// Identity of this process, used as the reference for same-user admission.
-func currentPeerIdentity() PeerIdentity {
-	uid := os.Getuid()
-	var userID uint32
-	if uid >= 0 {
-		// os.Getuid is non-negative wherever meaningful; the guard keeps the
-		// conversion honest where it reports -1.
-		userID = uint32(uid) //nolint:gosec // guarded non-negative above.
-	}
-	return PeerIdentity{UserID: userID, ProcessID: os.Getpid()}
-}

@@ -1,19 +1,23 @@
-package mcp
+package transport_test
 
 import (
 	"bytes"
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"strings"
 	"testing"
+
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
 // In-memory Connection; PeerIdentity reports whatever the test configured.
 type fakeConn struct {
 	in      io.Reader
 	out     bytes.Buffer
-	peer    PeerIdentity
+	peer    transport.PeerIdentity
 	peerErr error
 	closed  bool
 }
@@ -28,7 +32,7 @@ func (c *fakeConn) Write(p []byte) (int, error) {
 
 func (c *fakeConn) Close() error { c.closed = true; return nil }
 
-func (c *fakeConn) PeerIdentity() (PeerIdentity, error) {
+func (c *fakeConn) PeerIdentity() (transport.PeerIdentity, error) {
 	return c.peer, c.peerErr
 }
 
@@ -49,19 +53,19 @@ func (c *authConn) Authenticate() error {
 
 func (c *authConn) Authenticated() bool { return c.authenticated }
 
-func (c *authConn) PeerIdentity() (PeerIdentity, error) {
-	return PeerIdentity{}, errPeerIdentityAbsent
+func (c *authConn) PeerIdentity() (transport.PeerIdentity, error) {
+	return transport.PeerIdentity{}, transport.ErrPeerIdentityAbsent
 }
 
 var errListenerClosed = errors.New("listener closed")
 
 // Yields queued connections until closed; the closed check comes first for determinism.
 type fakeListener struct {
-	conns  chan Connection
+	conns  chan transport.Connection
 	closed chan struct{}
 }
 
-func (l *fakeListener) Accept() (Connection, error) {
+func (l *fakeListener) Accept() (transport.Connection, error) {
 	select {
 	case <-l.closed:
 		return nil, errListenerClosed
@@ -81,15 +85,16 @@ func (l *fakeListener) Close() error {
 }
 
 var (
-	_ Connection      = (*fakeConn)(nil)
-	_ Listener        = (*fakeListener)(nil)
-	_ TokenConnection = (*authConn)(nil)
+	_ transport.Connection      = (*fakeConn)(nil)
+	_ transport.Listener        = (*fakeListener)(nil)
+	_ transport.TokenConnection = (*authConn)(nil)
 )
 
 func TestConnectionServesProtocol(t *testing.T) {
 	conn := &fakeConn{in: strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}` + "\n")}
+	srv := mcp.NewServer(mcp.ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 
-	if err := testServer().Serve(context.Background(), conn, conn); err != nil {
+	if err := srv.Serve(context.Background(), conn, conn); err != nil {
 		t.Fatalf("Serve: %v", err)
 	}
 	if !strings.Contains(conn.out.String(), `"tools"`) {
@@ -98,7 +103,7 @@ func TestConnectionServesProtocol(t *testing.T) {
 }
 
 func TestConnectionPeerIdentity(t *testing.T) {
-	want := PeerIdentity{UserID: 1000, ProcessID: 4242}
+	want := transport.PeerIdentity{UserID: 1000, ProcessID: 4242}
 	conn := &fakeConn{peer: want}
 
 	got, err := conn.PeerIdentity()
@@ -131,7 +136,7 @@ func TestConnectionClose(t *testing.T) {
 
 func TestListenerAcceptReturnsConnection(t *testing.T) {
 	conn := &fakeConn{}
-	l := &fakeListener{conns: make(chan Connection, 1), closed: make(chan struct{})}
+	l := &fakeListener{conns: make(chan transport.Connection, 1), closed: make(chan struct{})}
 	l.conns <- conn
 
 	got, err := l.Accept()
@@ -144,7 +149,7 @@ func TestListenerAcceptReturnsConnection(t *testing.T) {
 }
 
 func TestListenerCloseStopsAccept(t *testing.T) {
-	l := &fakeListener{conns: make(chan Connection), closed: make(chan struct{})}
+	l := &fakeListener{conns: make(chan transport.Connection), closed: make(chan struct{})}
 	if err := l.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -155,9 +160,9 @@ func TestListenerCloseStopsAccept(t *testing.T) {
 }
 
 func TestListenFuncReturnsListener(t *testing.T) {
-	l := &fakeListener{conns: make(chan Connection), closed: make(chan struct{})}
+	l := &fakeListener{conns: make(chan transport.Connection), closed: make(chan struct{})}
 	var gotAddr string
-	var listen ListenFunc = func(addr string) (Listener, error) {
+	var listen transport.ListenFunc = func(addr string) (transport.Listener, error) {
 		gotAddr = addr
 		return l, nil
 	}

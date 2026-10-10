@@ -12,16 +12,18 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
 // fixedListen hands the daemon a pre-bound listener; the address is ignored.
-func fixedListen(l Listener) ListenFunc {
-	return func(string) (Listener, error) { return l, nil }
+func fixedListen(l transport.Listener) transport.ListenFunc {
+	return func(string) (transport.Listener, error) { return l, nil }
 }
 
 // failListen fails the test if the daemon ever binds; for tests that exercise
 // teardown or admit logic without serving.
-func failListen(string) (Listener, error) {
+func failListen(string) (transport.Listener, error) {
 	return nil, errors.New("daemon listen not expected in this test")
 }
 
@@ -163,7 +165,7 @@ func TestDaemonCloseClosesQueue(t *testing.T) {
 func TestDaemonServeAfterCloseFails(t *testing.T) {
 	// fakeListener is never accepted from; Serve short-circuits on closed before
 	// it reaches Accept.
-	l := &fakeListener{conns: make(chan Connection), closed: make(chan struct{})}
+	l := &fakeListener{conns: make(chan transport.Connection), closed: make(chan struct{})}
 	d := NewDaemon(testServer(), nil, fixedListen(l), "")
 	if err := d.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -355,7 +357,7 @@ func TestDaemonRejectsDifferentUser(t *testing.T) {
 	d := NewDaemon(testServer(), nil, failListen, "")
 	defer func() { _ = d.Close() }()
 
-	conn := &fakeConn{peer: PeerIdentity{UserID: currentPeerIdentity().UserID + 1}}
+	conn := &fakeConn{peer: transport.PeerIdentity{UserID: currentPeerIdentity().UserID + 1}}
 	if d.authorize(conn) {
 		t.Error("authorize accepted a peer owned by another user")
 	}
@@ -365,7 +367,7 @@ func TestDaemonRejectsAbsentPeerWithoutToken(t *testing.T) {
 	d := NewDaemon(testServer(), nil, failListen, "")
 	defer func() { _ = d.Close() }()
 
-	conn := &authConn{authErr: errTCPTokenRejected}
+	conn := &authConn{authErr: errors.New("token rejected")}
 	if d.authorize(conn) {
 		t.Error("authorize accepted a transport with no identity and no valid token")
 	}
@@ -388,7 +390,7 @@ func TestDaemonAllowsUnsupportedPeerIdentity(t *testing.T) {
 	d := NewDaemon(testServer(), nil, failListen, "")
 	defer func() { _ = d.Close() }()
 
-	conn := &fakeConn{peerErr: errPeerIdentityUnsupported}
+	conn := &fakeConn{peerErr: transport.ErrPeerIdentityUnsupported}
 	if !d.authorize(conn) {
 		t.Error("authorize rejected a transport whose credentials are unsupported")
 	}
