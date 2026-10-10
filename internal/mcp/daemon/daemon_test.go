@@ -17,17 +17,6 @@ import (
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
-// fixedListen hands the daemon a pre-bound listener; the address is ignored.
-func fixedListen(l transport.Listener) transport.ListenFunc {
-	return func(string) (transport.Listener, error) { return l, nil }
-}
-
-// failListen fails the test if the daemon ever binds; for tests that exercise
-// teardown or admit logic without serving.
-func failListen(string) (transport.Listener, error) {
-	return nil, errors.New("daemon listen not expected in this test")
-}
-
 func stopDaemon(t *testing.T, d *Daemon, done <-chan error) {
 	t.Helper()
 	if err := d.Close(); err != nil {
@@ -44,8 +33,8 @@ func stopDaemon(t *testing.T, d *Daemon, done <-chan error) {
 }
 
 func TestDaemonServesAcceptedConnections(t *testing.T) {
-	listen, dial := newTestEndpoint(t)
-	d := NewDaemon(testServer(), nil, listen, "tcp")
+	listener, dial := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listener)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -70,8 +59,8 @@ func TestDaemonServesAcceptedConnections(t *testing.T) {
 }
 
 func TestDaemonCloseClosesActiveConnections(t *testing.T) {
-	listen, dial := newTestEndpoint(t)
-	d := NewDaemon(testServer(), nil, listen, "tcp")
+	listener, dial := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listener)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -116,8 +105,8 @@ func TestDaemonSerializesAcrossConnections(t *testing.T) {
 		},
 	})
 	queue := mcp.NewQueue(64, testQueueTimeout)
-	listen, dial := newTestEndpoint(t)
-	d := NewDaemon(srv, queue, listen, "tcp")
+	listener, dial := newTestEndpoint(t)
+	d := NewDaemon(srv, queue, listener)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -153,7 +142,7 @@ func TestDaemonSerializesAcrossConnections(t *testing.T) {
 
 func TestDaemonCloseClosesQueue(t *testing.T) {
 	queue := mcp.NewQueue(1, testQueueTimeout)
-	d := NewDaemon(testServer(), queue, failListen, "")
+	d := NewDaemon(testServer(), queue, nil)
 
 	if err := d.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -167,7 +156,7 @@ func TestDaemonServeAfterCloseFails(t *testing.T) {
 	// fakeListener is never accepted from; Serve short-circuits on closed before
 	// it reaches Accept.
 	l := &fakeListener{conns: make(chan transport.Connection), closed: make(chan struct{})}
-	d := NewDaemon(testServer(), nil, fixedListen(l), "")
+	d := NewDaemon(testServer(), nil, l)
 	if err := d.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
 	}
@@ -181,8 +170,8 @@ func TestDaemonServeAfterCloseFails(t *testing.T) {
 
 func TestDaemonServeStopsOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	listen, _ := newTestEndpoint(t)
-	d := NewDaemon(testServer(), nil, listen, "tcp")
+	listener, _ := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listener)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(ctx) }()
 	cancel()
@@ -223,8 +212,8 @@ func roundTripPing(t *testing.T, client io.ReadWriteCloser) {
 }
 
 func TestDaemonActiveConnections(t *testing.T) {
-	listen, dial := newTestEndpoint(t)
-	d := NewDaemon(testServer(), nil, listen, "tcp")
+	listener, dial := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listener)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -243,8 +232,8 @@ func TestDaemonActiveConnections(t *testing.T) {
 }
 
 func TestDaemonIdleExit(t *testing.T) {
-	listen, _ := newTestEndpoint(t)
-	d := NewDaemon(testServer(), nil, listen, "tcp")
+	listener, _ := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listener)
 	if err := d.SetIdleTimeout(10 * time.Millisecond); err != nil {
 		t.Fatalf("SetIdleTimeout: %v", err)
 	}
@@ -270,8 +259,8 @@ func TestDaemonIdleExit(t *testing.T) {
 }
 
 func TestDaemonConnectionDisarmsIdleTimer(t *testing.T) {
-	listen, dial := newTestEndpoint(t)
-	d := NewDaemon(testServer(), nil, listen, "tcp")
+	listener, dial := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listener)
 	if err := d.SetIdleTimeout(80 * time.Millisecond); err != nil {
 		t.Fatalf("SetIdleTimeout: %v", err)
 	}
@@ -306,8 +295,8 @@ func TestDaemonConnectionDisarmsIdleTimer(t *testing.T) {
 }
 
 func TestDaemonIdleDisabledByDefault(t *testing.T) {
-	listen, _ := newTestEndpoint(t)
-	d := NewDaemon(testServer(), nil, listen, "tcp")
+	listener, _ := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listener)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -320,8 +309,8 @@ func TestDaemonIdleDisabledByDefault(t *testing.T) {
 }
 
 func TestDaemonShutdownStopsServe(t *testing.T) {
-	listen, _ := newTestEndpoint(t)
-	d := NewDaemon(testServer(), nil, listen, "tcp")
+	listener, _ := newTestEndpoint(t)
+	d := NewDaemon(testServer(), nil, listener)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -345,7 +334,7 @@ func TestDaemonShutdownStopsServe(t *testing.T) {
 }
 
 func TestDaemonRejectsUnidentifiedPeer(t *testing.T) {
-	d := NewDaemon(testServer(), nil, failListen, "")
+	d := NewDaemon(testServer(), nil, nil)
 	defer func() { _ = d.Close() }()
 
 	conn := &fakeConn{peerErr: errors.New("no credentials")}
@@ -355,7 +344,7 @@ func TestDaemonRejectsUnidentifiedPeer(t *testing.T) {
 }
 
 func TestDaemonRejectsDifferentUser(t *testing.T) {
-	d := NewDaemon(testServer(), nil, failListen, "")
+	d := NewDaemon(testServer(), nil, nil)
 	defer func() { _ = d.Close() }()
 
 	conn := &fakeConn{peer: transport.PeerIdentity{UserID: currentPeerIdentity().UserID + 1}}
@@ -365,7 +354,7 @@ func TestDaemonRejectsDifferentUser(t *testing.T) {
 }
 
 func TestDaemonRejectsAbsentPeerWithoutToken(t *testing.T) {
-	d := NewDaemon(testServer(), nil, failListen, "")
+	d := NewDaemon(testServer(), nil, nil)
 	defer func() { _ = d.Close() }()
 
 	conn := &authConn{authErr: errors.New("token rejected")}
@@ -376,7 +365,7 @@ func TestDaemonRejectsAbsentPeerWithoutToken(t *testing.T) {
 
 func TestDaemonAllowsAuthenticatedAbsentPeer(t *testing.T) {
 	conn := &authConn{}
-	d := NewDaemon(testServer(), nil, failListen, "")
+	d := NewDaemon(testServer(), nil, nil)
 	defer func() { _ = d.Close() }()
 
 	if err := conn.Authenticate(); err != nil {
@@ -388,7 +377,7 @@ func TestDaemonAllowsAuthenticatedAbsentPeer(t *testing.T) {
 }
 
 func TestDaemonAllowsUnsupportedPeerIdentity(t *testing.T) {
-	d := NewDaemon(testServer(), nil, failListen, "")
+	d := NewDaemon(testServer(), nil, nil)
 	defer func() { _ = d.Close() }()
 
 	conn := &fakeConn{peerErr: transport.ErrPeerIdentityUnsupported}

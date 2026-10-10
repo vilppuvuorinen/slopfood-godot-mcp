@@ -41,8 +41,5 @@ type Listener interface {
 	Close() error
 }
 
-// Opens a Listener; the address is opaque to the daemon core.
-type ListenFunc func(addr string) (Listener, error)
-
 // Opens a client connection; an error means no daemon is listening yet.
 type DialFunc func(addr string) (io.ReadWriteCloser, error)

@@ -16,7 +16,7 @@ import (
 
 func TestTCPServesProtocol(t *testing.T) {
 	listener, endpointPath := newTCPEndpointForTest(t)
-	d := daemon.NewDaemon(testServer(), nil, func(string) (transport.Listener, error) { return listener, nil }, "tcp")
+	d := daemon.NewDaemon(testServer(), nil, listener)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -42,7 +42,7 @@ func TestTCPServesProtocol(t *testing.T) {
 
 func TestTCPTokenRejectClosesWithoutServing(t *testing.T) {
 	listener, endpointPath := newTCPEndpointForTest(t)
-	d := daemon.NewDaemon(testServer(), nil, func(string) (transport.Listener, error) { return listener, nil }, "tcp")
+	d := daemon.NewDaemon(testServer(), nil, listener)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -69,7 +69,7 @@ func TestTCPTokenRejectClosesWithoutServing(t *testing.T) {
 
 func TestTCPMissingTokenRejected(t *testing.T) {
 	listener, endpointPath := newTCPEndpointForTest(t)
-	d := daemon.NewDaemon(testServer(), nil, func(string) (transport.Listener, error) { return listener, nil }, "tcp")
+	d := daemon.NewDaemon(testServer(), nil, listener)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 

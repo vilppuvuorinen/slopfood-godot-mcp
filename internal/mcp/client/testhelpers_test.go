@@ -8,7 +8,6 @@ import (
 	"log/slog"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
 func testServer() *mcp.Server {
@@ -45,8 +44,3 @@ func (c *fakeConn) Write(p []byte) (int, error) {
 }
 
 func (c *fakeConn) Close() error { c.closed = true; return nil }
-
-// fixedListen hands a pre-bound listener to a consumer that ignores the address.
-func fixedListen(l transport.Listener) transport.ListenFunc {
-	return func(string) (transport.Listener, error) { return l, nil }
-}

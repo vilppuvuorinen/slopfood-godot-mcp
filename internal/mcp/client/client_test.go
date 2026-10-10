@@ -39,10 +39,10 @@ func (b *lockedBuffer) String() string {
 
 func TestClientConnectsWithoutSpawning(t *testing.T) {
 	var spawns int32
-	dial := func(string) (io.ReadWriteCloser, error) { return &fakeConn{}, nil }
+	dial := func() (io.ReadWriteCloser, error) { return &fakeConn{}, nil }
 	spawn := func(context.Context) error { atomic.AddInt32(&spawns, 1); return nil }
 
-	c := NewClient(dial, spawn, "addr", testClientLogger())
+	c := NewClient(dial, spawn, testClientLogger())
 	conn, err := c.connect(context.Background())
 	if err != nil {
 		t.Fatalf("connect: %v", err)
@@ -57,7 +57,7 @@ func TestClientConnectsWithoutSpawning(t *testing.T) {
 
 func TestClientSpawnsAndPollsWhenDialFails(t *testing.T) {
 	var dials, spawns int32
-	dial := func(string) (io.ReadWriteCloser, error) {
+	dial := func() (io.ReadWriteCloser, error) {
 		if atomic.AddInt32(&dials, 1) < 3 {
 			return nil, errors.New("connection refused")
 		}
@@ -65,7 +65,7 @@ func TestClientSpawnsAndPollsWhenDialFails(t *testing.T) {
 	}
 	spawn := func(context.Context) error { atomic.AddInt32(&spawns, 1); return nil }
 
-	c := NewClient(dial, spawn, "addr", testClientLogger())
+	c := NewClient(dial, spawn, testClientLogger())
 	c.connectTimeout = time.Second
 	c.pollInterval = time.Millisecond
 
@@ -82,9 +82,9 @@ func TestClientSpawnsAndPollsWhenDialFails(t *testing.T) {
 
 func TestClientNoSpawnReturnsDialError(t *testing.T) {
 	want := errors.New("connection refused")
-	dial := func(string) (io.ReadWriteCloser, error) { return nil, want }
+	dial := func() (io.ReadWriteCloser, error) { return nil, want }
 
-	c := NewClient(dial, nil, "addr", testClientLogger())
+	c := NewClient(dial, nil, testClientLogger())
 	if _, err := c.connect(context.Background()); !errors.Is(err, want) {
 		t.Fatalf("connect err = %v, want %v", err, want)
 	}
@@ -92,10 +92,10 @@ func TestClientNoSpawnReturnsDialError(t *testing.T) {
 
 func TestClientSpawnErrorIsReturned(t *testing.T) {
 	want := errors.New("spawn failed")
-	dial := func(string) (io.ReadWriteCloser, error) { return nil, errors.New("refused") }
+	dial := func() (io.ReadWriteCloser, error) { return nil, errors.New("refused") }
 	spawn := func(context.Context) error { return want }
 
-	c := NewClient(dial, spawn, "addr", testClientLogger())
+	c := NewClient(dial, spawn, testClientLogger())
 	if _, err := c.connect(context.Background()); !errors.Is(err, want) {
 		t.Fatalf("connect err = %v, want %v", err, want)
 	}
@@ -103,10 +103,10 @@ func TestClientSpawnErrorIsReturned(t *testing.T) {
 
 func TestClientConnectStopsOnContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	dial := func(string) (io.ReadWriteCloser, error) { return nil, errors.New("refused") }
+	dial := func() (io.ReadWriteCloser, error) { return nil, errors.New("refused") }
 	spawn := func(context.Context) error { cancel(); return nil }
 
-	c := NewClient(dial, spawn, "addr", testClientLogger())
+	c := NewClient(dial, spawn, testClientLogger())
 	c.connectTimeout = time.Minute
 	c.pollInterval = time.Second
 
@@ -117,19 +117,15 @@ func TestClientConnectStopsOnContextCancel(t *testing.T) {
 
 // A notification gets no response, so a synchronous relay would hang there.
 func TestClientRunPumpsNotificationsAndReplies(t *testing.T) {
-	listen, dial := newTestEndpoint(t)
-	l, err := listen("test")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	defer func() { _ = l.Close() }()
+	listener, dial := newTestEndpoint(t)
+	defer func() { _ = listener.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	served := make(chan struct{})
 	go func() {
 		defer close(served)
-		conn, acceptErr := l.Accept()
+		conn, acceptErr := listener.Accept()
 		if acceptErr != nil {
 			return
 		}
@@ -137,7 +133,7 @@ func TestClientRunPumpsNotificationsAndReplies(t *testing.T) {
 		_ = testServer().Serve(ctx, conn, conn)
 	}()
 
-	client := NewClient(dial, nil, "test", testClientLogger())
+	client := NewClient(dial, nil, testClientLogger())
 
 	inR, inW := io.Pipe()
 	var out lockedBuffer
@@ -160,7 +156,7 @@ func TestClientRunPumpsNotificationsAndReplies(t *testing.T) {
 	}
 
 	cancel()
-	_ = l.Close()
+	_ = listener.Close()
 	select {
 	case <-served:
 	case <-time.After(time.Second):

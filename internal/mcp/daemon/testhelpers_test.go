@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"sync"
 	"testing"
 	"time"
 
@@ -84,6 +85,7 @@ var errListenerClosed = errors.New("listener closed")
 type fakeListener struct {
 	conns  chan transport.Connection
 	closed chan struct{}
+	once   sync.Once
 }
 
 func (l *fakeListener) Accept() (transport.Connection, error) {
@@ -101,7 +103,7 @@ func (l *fakeListener) Accept() (transport.Connection, error) {
 }
 
 func (l *fakeListener) Close() error {
-	close(l.closed)
+	l.once.Do(func() { close(l.closed) })
 	return nil
 }
 

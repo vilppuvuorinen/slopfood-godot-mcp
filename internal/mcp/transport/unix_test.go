@@ -19,8 +19,8 @@ import (
 )
 
 func TestUnixSocketServesProtocol(t *testing.T) {
-	listen, dial := newTestEndpoint(t)
-	d := daemon.NewDaemon(testServer(), nil, listen, "test")
+	listener, dial := newTestEndpoint(t)
+	d := daemon.NewDaemon(testServer(), nil, listener)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -133,7 +133,7 @@ func TestUnixDisconnectCancelsEngine(t *testing.T) {
 	}
 
 	q := mcp.NewQueue(4, testQueueTimeout)
-	d := daemon.NewDaemon(s, q, func(string) (transport.Listener, error) { return l, nil }, sock)
+	d := daemon.NewDaemon(s, q, l)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 

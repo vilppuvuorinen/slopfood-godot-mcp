@@ -7,9 +7,10 @@ import (
 	"io"
 	"log/slog"
 	"time"
-
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
+
+// Opens a client connection; an error means no daemon is listening yet.
+type Dialer func() (io.ReadWriteCloser, error)
 
 // A nil SpawnFunc disables spawn-on-demand, so a failed dial is fatal.
 type SpawnFunc func(ctx context.Context) error
@@ -24,9 +25,8 @@ const (
 var errDaemonLost = errors.New("daemon connection closed")
 
 type Client struct {
-	dial   transport.DialFunc
+	dial   Dialer
 	spawn  SpawnFunc
-	addr   string
 	logger *slog.Logger
 	// connectTimeout and pollInterval configure post-spawn dial polling.
 	connectTimeout time.Duration
@@ -35,14 +35,13 @@ type Client struct {
 
 // A nil spawn disables spawning, making a failed dial fatal; a nil logger uses
 // the default logger.
-func NewClient(dial transport.DialFunc, spawn SpawnFunc, addr string, logger *slog.Logger) *Client {
+func NewClient(dial Dialer, spawn SpawnFunc, logger *slog.Logger) *Client {
 	if logger == nil {
 		logger = slog.Default()
 	}
 	return &Client{
 		dial:           dial,
 		spawn:          spawn,
-		addr:           addr,
 		logger:         logger,
 		connectTimeout: defaultConnectTimeout,
 		pollInterval:   defaultConnectPoll,
@@ -58,7 +57,7 @@ func (c *Client) Run(ctx context.Context, stdin io.Reader, stdout io.Writer) err
 }
 
 func (c *Client) connect(ctx context.Context) (io.ReadWriteCloser, error) {
-	conn, err := c.dial(c.addr)
+	conn, err := c.dial()
 	if err == nil {
 		return conn, nil
 	}
@@ -71,7 +70,7 @@ func (c *Client) connect(ctx context.Context) (io.ReadWriteCloser, error) {
 	}
 	deadline := time.Now().Add(c.connectTimeout)
 	for {
-		conn, err = c.dial(c.addr)
+		conn, err = c.dial()
 		if err == nil {
 			return conn, nil
 		}

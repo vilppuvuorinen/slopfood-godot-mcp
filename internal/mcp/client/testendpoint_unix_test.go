@@ -23,8 +23,8 @@ func shortSocketPath(t *testing.T) string {
 }
 
 // newTestEndpoint binds the production Unix-socket transport, the default on
-// this platform, and returns its listen and dial functions.
-func newTestEndpoint(t *testing.T) (transport.ListenFunc, transport.DialFunc) {
+// this platform, and returns its listener and dial function.
+func newTestEndpoint(t *testing.T) (transport.Listener, Dialer) {
 	t.Helper()
 	sock := shortSocketPath(t)
 	l, err := transport.ListenUnix(sock)
@@ -32,6 +32,6 @@ func newTestEndpoint(t *testing.T) (transport.ListenFunc, transport.DialFunc) {
 		t.Fatalf("ListenUnix: %v", err)
 	}
 	t.Cleanup(func() { _ = l.Close() })
-	dial := func(string) (io.ReadWriteCloser, error) { return transport.DialUnix(sock) }
-	return fixedListen(l), dial
+	dial := func() (io.ReadWriteCloser, error) { return transport.DialUnix(sock) }
+	return l, dial
 }

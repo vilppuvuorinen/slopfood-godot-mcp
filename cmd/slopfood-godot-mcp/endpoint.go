@@ -6,6 +6,7 @@ import (
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/daemonpath"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/client"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp/transport"
 )
 
@@ -13,8 +14,8 @@ type daemonEndpoint struct {
 	transport    godot.Transport
 	endpointPath string
 	socketPath   string
-	// tcpListener is the pre-bound TCP listener, held so teardown before daemon construction closes it; nil for UDS.
-	tcpListener *transport.TCPListener
+	// listener is the pre-bound listener, held so teardown before daemon construction closes it.
+	listener transport.Listener
 }
 
 func newDaemonEndpoint(root string, explicit godot.Transport) (*daemonEndpoint, error) {
@@ -45,17 +46,22 @@ func (e *daemonEndpoint) addr() string {
 }
 
 // The TCP dialer re-reads the endpoint file each call to pick up a fresh daemon's port and token.
-func (e *daemonEndpoint) dialFunc() transport.DialFunc {
+func (e *daemonEndpoint) dialFunc() client.Dialer {
 	if e.transport == godot.TransportTCP {
-		return func(string) (io.ReadWriteCloser, error) { return transport.DialTCP(e.endpointPath) }
+		return func() (io.ReadWriteCloser, error) { return transport.DialTCP(e.endpointPath) }
 	}
-	return transport.DialUnix
+	return func() (io.ReadWriteCloser, error) { return transport.DialUnix(e.socketPath) }
 }
 
-// The TCP endpoint binds before the daemon is constructed so the record is published before any accept.
-func (e *daemonEndpoint) listenFunc() (transport.ListenFunc, error) {
+// Binds the endpoint before the daemon is constructed so the record is published before any accept.
+func (e *daemonEndpoint) listen() (transport.Listener, error) {
 	if e.transport != godot.TransportTCP {
-		return transport.ListenUnix, nil
+		listener, err := transport.ListenUnix(e.socketPath)
+		if err != nil {
+			return nil, fmt.Errorf("bind unix endpoint: %w", err)
+		}
+		e.listener = listener
+		return listener, nil
 	}
 	lock, err := transport.OpenListenerLock(e.endpointPath + ".lock")
 	if err != nil {
@@ -66,12 +72,12 @@ func (e *daemonEndpoint) listenFunc() (transport.ListenFunc, error) {
 		_ = lock.Close()
 		return nil, fmt.Errorf("bind tcp endpoint: %w", err)
 	}
-	e.tcpListener = listener
-	return func(string) (transport.Listener, error) { return listener, nil }, nil
+	e.listener = listener
+	return listener, nil
 }
 
 func (e *daemonEndpoint) close() {
-	if e.tcpListener != nil {
-		_ = e.tcpListener.Close()
+	if e.listener != nil {
+		_ = e.listener.Close()
 	}
 }

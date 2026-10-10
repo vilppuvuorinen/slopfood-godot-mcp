@@ -193,7 +193,7 @@ func runClient(args []string, stdin io.Reader, stdout, stderr io.Writer) error {
 		}
 		return nil
 	}
-	client := client.NewClient(endpoint.dialFunc(), spawn, endpoint.addr(), role.logger)
+	client := client.NewClient(endpoint.dialFunc(), spawn, role.logger)
 
 	if err := client.Run(role.ctx, stdin, stdout); err != nil && !errors.Is(err, context.Canceled) {
 		return fmt.Errorf("client: %w", err)
@@ -256,7 +256,7 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("resolve daemon endpoint: %w", err)
 	}
-	listen, err := endpoint.listenFunc()
+	listener, err := endpoint.listen()
 	if err != nil {
 		return fmt.Errorf("bind daemon endpoint: %w", err)
 	}
@@ -283,8 +283,7 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	d := daemon.NewDaemon(
 		server,
 		queue,
-		listen,
-		endpoint.addr(),
+		listener,
 	)
 	// Continuing with a quarantined queue risks two writers on the project.
 	queue.SetOnStuck(func(err error) {

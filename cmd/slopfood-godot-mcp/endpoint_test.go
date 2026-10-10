@@ -89,11 +89,7 @@ func TestEndpointFactoryTCP(t *testing.T) {
 		t.Errorf("addr = %q, want a .endpoint path", endpoint.addr())
 	}
 
-	listen, err := endpoint.listenFunc()
-	if err != nil {
-		t.Fatalf("listenFunc: %v", err)
-	}
-	listener, err := listen(endpoint.addr())
+	listener, err := endpoint.listen()
 	if err != nil {
 		t.Fatalf("listen: %v", err)
 	}
@@ -107,7 +103,7 @@ func TestEndpointFactoryTCP(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second newDaemonEndpoint: %v", err)
 	}
-	if _, err := second.listenFunc(); err == nil {
+	if _, err := second.listen(); err == nil {
 		t.Fatal("second TCP bind succeeded, want the exclusive lock to reject it")
 	}
 }
@@ -119,8 +115,8 @@ func TestEndpointFactoryTCPCloseReleasesEndpoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("newDaemonEndpoint: %v", err)
 	}
-	if _, err := endpoint.listenFunc(); err != nil {
-		t.Fatalf("listenFunc: %v", err)
+	if _, err := endpoint.listen(); err != nil {
+		t.Fatalf("listen: %v", err)
 	}
 	if _, statErr := os.Stat(endpoint.addr()); statErr != nil {
 		t.Fatalf("endpoint record missing after bind: %v", statErr)

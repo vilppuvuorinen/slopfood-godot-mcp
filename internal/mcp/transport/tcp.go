@@ -54,7 +54,7 @@ func ListenTCP(_ string, endpointPath string, lock io.Closer) (*TCPListener, err
 		return nil, fmt.Errorf("prepare tcp endpoint directory: %w", err)
 	}
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0") //nolint:noctx // the ListenFunc seam carries no context; binding is local and fast.
+	ln, err := net.Listen("tcp", "127.0.0.1:0") //nolint:noctx // binding a local loopback port is fast and carries no context.
 	if err != nil {
 		return nil, fmt.Errorf("listen tcp: %w", err)
 	}

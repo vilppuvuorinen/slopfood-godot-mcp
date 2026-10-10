@@ -11,9 +11,9 @@ import (
 )
 
 // newTestEndpoint binds the production loopback-TCP transport, the default on
-// Windows where Unix sockets are unavailable, and returns its listen and dial
-// functions.
-func newTestEndpoint(t *testing.T) (transport.ListenFunc, transport.DialFunc) {
+// Windows where Unix sockets are unavailable, and returns its listener and dial
+// function.
+func newTestEndpoint(t *testing.T) (transport.Listener, Dialer) {
 	t.Helper()
 	endpointPath := filepath.Join(t.TempDir(), "runtime", "proj.endpoint")
 	lock, err := transport.OpenListenerLock(endpointPath + ".lock")
@@ -26,6 +26,6 @@ func newTestEndpoint(t *testing.T) (transport.ListenFunc, transport.DialFunc) {
 		t.Fatalf("ListenTCP: %v", err)
 	}
 	t.Cleanup(func() { _ = listener.Close() })
-	dial := func(string) (io.ReadWriteCloser, error) { return transport.DialTCP(endpointPath) }
-	return fixedListen(listener), dial
+	dial := func() (io.ReadWriteCloser, error) { return transport.DialTCP(endpointPath) }
+	return listener, dial
 }

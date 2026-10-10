@@ -158,23 +158,3 @@ func TestListenerCloseStopsAccept(t *testing.T) {
 		t.Fatalf("err = %v, want %v", err, errListenerClosed)
 	}
 }
-
-func TestListenFuncReturnsListener(t *testing.T) {
-	l := &fakeListener{conns: make(chan transport.Connection), closed: make(chan struct{})}
-	var gotAddr string
-	var listen transport.ListenFunc = func(addr string) (transport.Listener, error) {
-		gotAddr = addr
-		return l, nil
-	}
-
-	got, err := listen("/tmp/demo.sock")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	if got != l {
-		t.Errorf("listener = %v, want the fake", got)
-	}
-	if gotAddr != "/tmp/demo.sock" {
-		t.Errorf("addr = %q, want the address passed to listen", gotAddr)
-	}
-}

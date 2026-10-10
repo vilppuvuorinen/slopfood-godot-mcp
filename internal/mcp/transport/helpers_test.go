@@ -76,11 +76,6 @@ func writeLine(t *testing.T, w io.Writer, line string) {
 	}
 }
 
-// fixedListen hands the daemon a pre-bound listener; the address is ignored.
-func fixedListen(l transport.Listener) transport.ListenFunc {
-	return func(string) (transport.Listener, error) { return l, nil }
-}
-
 // Fresh Unix socket path under a short temp prefix, removed when the test ends.
 func shortSocketPath(t *testing.T) string {
 	t.Helper()

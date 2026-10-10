@@ -29,8 +29,6 @@ func currentPeerIdentity() transport.PeerIdentity {
 type Daemon struct {
 	server *mcp.Server
 	queue  *mcp.Queue
-	listen transport.ListenFunc
-	addr   string
 
 	lifeCtx    context.Context
 	lifeCancel context.CancelFunc
@@ -49,7 +47,7 @@ type Daemon struct {
 	connWG sync.WaitGroup
 }
 
-func NewDaemon(server *mcp.Server, queue *mcp.Queue, listen transport.ListenFunc, addr string) *Daemon {
+func NewDaemon(server *mcp.Server, queue *mcp.Queue, listener transport.Listener) *Daemon {
 	if queue != nil {
 		server.SetSubmit(queue.Submit)
 	}
@@ -57,8 +55,7 @@ func NewDaemon(server *mcp.Server, queue *mcp.Queue, listen transport.ListenFunc
 	return &Daemon{
 		server:     server,
 		queue:      queue,
-		listen:     listen,
-		addr:       addr,
+		listener:   listener,
 		lifeCtx:    lifeCtx,
 		lifeCancel: lifeCancel,
 		conns:      make(map[transport.Connection]struct{}),
@@ -90,18 +87,16 @@ func (d *Daemon) Shutdown() { d.lifeCancel() }
 func (d *Daemon) Done() <-chan struct{} { return d.lifeCtx.Done() }
 
 func (d *Daemon) Serve(ctx context.Context) error {
-	l, err := d.listen(d.addr)
-	if err != nil {
-		return fmt.Errorf("daemon listen: %w", err)
-	}
-
 	d.mu.Lock()
 	if d.closed {
+		l := d.listener
 		d.mu.Unlock()
-		_ = l.Close()
+		if l != nil {
+			_ = l.Close()
+		}
 		return errDaemonClosed
 	}
-	d.listener = l
+	l := d.listener
 	d.served = true
 	d.loopWG.Add(1)
 	d.armIdleLocked()

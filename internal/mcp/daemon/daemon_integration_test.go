@@ -74,7 +74,7 @@ func TestUnixDaemonConcurrentClientsSerialize(t *testing.T) {
 	})
 
 	q := mcp.NewQueue(calls, testQueueTimeout)
-	d := NewDaemon(srv, q, func(string) (transport.Listener, error) { return l, nil }, sock)
+	d := NewDaemon(srv, q, l)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -136,7 +136,7 @@ func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 	})
 
 	q := mcp.NewQueue(1, testQueueTimeout)
-	d := NewDaemon(srv, q, func(string) (transport.Listener, error) { return l, nil }, sock)
+	d := NewDaemon(srv, q, l)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
 
@@ -198,7 +198,7 @@ func TestUnixDaemonIdleExitThenRespawn(t *testing.T) {
 		t.Fatalf("ListenUnix: %v", err)
 	}
 
-	d := NewDaemon(testServer(), nil, func(string) (transport.Listener, error) { return l, nil }, sock)
+	d := NewDaemon(testServer(), nil, l)
 	if err := d.SetIdleTimeout(20 * time.Millisecond); err != nil {
 		t.Fatalf("SetIdleTimeout: %v", err)
 	}

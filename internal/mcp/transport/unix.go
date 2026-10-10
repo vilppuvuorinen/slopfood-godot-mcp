@@ -38,7 +38,7 @@ func ListenUnix(addr string) (Listener, error) {
 		_ = lock.Close()
 		return nil, fmt.Errorf("remove stale socket: %w", removeErr)
 	}
-	ln, err := net.Listen("unix", addr) //nolint:noctx // the ListenFunc seam carries no context; binding is local and fast.
+	ln, err := net.Listen("unix", addr) //nolint:noctx // binding a local socket is fast and carries no context.
 	if err != nil {
 		_ = lock.Close()
 		return nil, fmt.Errorf("listen unix %q: %w", addr, err)
@@ -114,6 +114,5 @@ func (c *unixConn) PeerIdentity() (PeerIdentity, error) {
 var (
 	_ Connection = (*unixConn)(nil)
 	_ Listener   = (*unixListener)(nil)
-	_ ListenFunc = ListenUnix
 	_ DialFunc   = DialUnix
 )
