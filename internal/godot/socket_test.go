@@ -81,28 +81,29 @@ func TestEngineSocketReadFrameReassemblesPartialReads(t *testing.T) {
 	server.accept()
 
 	server.write(`{"id":1,"ok":true,`)
-	server.write(`"stdout":"one","stderr":""}`)
+	server.write(`"stdout":"one","stderr":"","payload":"{\"k\":1}"}`)
 	server.write("\n")
 	server.write(`{"id":2,"ok":true,"stdout":"two","stderr":""}` + "\n" +
 		`{"id":3,"ok":false,"stdout":"","stderr":"bad"}` + "\n")
 
 	want := []struct {
-		id     float64
-		ok     bool
-		stdout string
-		stderr string
+		id      float64
+		ok      bool
+		stdout  string
+		stderr  string
+		payload string
 	}{
-		{1, true, "one", ""},
-		{2, true, "two", ""},
-		{3, false, "", "bad"},
+		{1, true, "one", "", `{"k":1}`},
+		{2, true, "two", "", ""},
+		{3, false, "", "bad", ""},
 	}
 	for i, w := range want {
 		frame, err := client.readFrame()
 		if err != nil {
 			t.Fatalf("readFrame %d: %v", i+1, err)
 		}
-		if frame.ID == nil || *frame.ID != w.id || frame.OK != w.ok || frame.Stdout != w.stdout || frame.Stderr != w.stderr {
-			t.Fatalf("frame %d = %+v, want id=%v ok=%v stdout=%q stderr=%q", i+1, frame, w.id, w.ok, w.stdout, w.stderr)
+		if frame.ID == nil || *frame.ID != w.id || frame.OK != w.ok || frame.Stdout != w.stdout || frame.Stderr != w.stderr || frame.Payload != w.payload {
+			t.Fatalf("frame %d = %+v, want id=%v ok=%v stdout=%q stderr=%q payload=%q", i+1, frame, w.id, w.ok, w.stdout, w.stderr, w.payload)
 		}
 	}
 }
@@ -279,11 +280,11 @@ func TestSocketSessionDrivesRealBridge(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	if _, stderr, exitCode, runErr := session.Run(ctx, project, "run_script",
+	if run, runErr := session.Run(ctx, project, "run_script",
 		map[string]any{"body": seedSceneBody}); runErr != nil {
 		t.Fatalf("run_script: %v", runErr)
-	} else if exitCode != 0 {
-		t.Fatalf("run_script exitCode = %d; stderr:\n%s", exitCode, stderr)
+	} else if run.ExitCode != 0 {
+		t.Fatalf("run_script exitCode = %d; stderr:\n%s", run.ExitCode, run.Stderr)
 	}
 
 	proc := session.proc
@@ -304,16 +305,16 @@ func TestSocketSessionDrivesRealBridge(t *testing.T) {
 		t.Errorf("runtime dir mode = %o, want 700", info.Mode().Perm())
 	}
 
-	stdout, stderr, exitCode, err := session.Run(ctx, project, "read_scene",
+	run, err := session.Run(ctx, project, "read_scene",
 		map[string]any{"scenePath": "scenes/main.tscn"})
 	if err != nil {
 		t.Fatalf("read_scene: %v", err)
 	}
-	if exitCode != 0 {
-		t.Fatalf("read_scene exitCode = %d; stderr:\n%s", exitCode, stderr)
+	if run.ExitCode != 0 {
+		t.Fatalf("read_scene exitCode = %d; stderr:\n%s", run.ExitCode, run.Stderr)
 	}
-	if !strings.Contains(stdout, `"name":"root"`) {
-		t.Errorf("read_scene stdout = %q, want the root node payload", stdout)
+	if !strings.Contains(run.Payload, `"name":"root"`) {
+		t.Errorf("read_scene payload = %q, want the root node payload", run.Payload)
 	}
 
 	socketPath := proc.socketPath
@@ -353,11 +354,11 @@ func TestSocketSessionDrivesRealBridgeTCP(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	if _, stderr, exitCode, runErr := session.Run(ctx, project, "run_script",
+	if run, runErr := session.Run(ctx, project, "run_script",
 		map[string]any{"body": seedSceneBody}); runErr != nil {
 		t.Fatalf("run_script: %v", runErr)
-	} else if exitCode != 0 {
-		t.Fatalf("run_script exitCode = %d; stderr:\n%s", exitCode, stderr)
+	} else if run.ExitCode != 0 {
+		t.Fatalf("run_script exitCode = %d; stderr:\n%s", run.ExitCode, run.Stderr)
 	}
 
 	if proc := session.proc; proc == nil || proc.socketPath != "" {
@@ -367,16 +368,16 @@ func TestSocketSessionDrivesRealBridgeTCP(t *testing.T) {
 		t.Errorf("TCP run created engine sockets: %v", matches)
 	}
 
-	stdout, stderr, exitCode, err := session.Run(ctx, project, "read_scene",
+	run, err := session.Run(ctx, project, "read_scene",
 		map[string]any{"scenePath": "scenes/main.tscn"})
 	if err != nil {
 		t.Fatalf("read_scene: %v", err)
 	}
-	if exitCode != 0 {
-		t.Fatalf("read_scene exitCode = %d; stderr:\n%s", exitCode, stderr)
+	if run.ExitCode != 0 {
+		t.Fatalf("read_scene exitCode = %d; stderr:\n%s", run.ExitCode, run.Stderr)
 	}
-	if !strings.Contains(stdout, `"name":"root"`) {
-		t.Errorf("read_scene stdout = %q, want the root node payload", stdout)
+	if !strings.Contains(run.Payload, `"name":"root"`) {
+		t.Errorf("read_scene payload = %q, want the root node payload", run.Payload)
 	}
 	if err := session.Close(); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -549,15 +550,15 @@ func TestSocketSessionGatesEditorFilesystem(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
 
-	stdout, stderr, exitCode, err := session.Run(ctx, project, "ping", nil)
+	run, err := session.Run(ctx, project, "ping", nil)
 	if err != nil {
 		t.Fatalf("ping: %v", err)
 	}
-	if exitCode != 0 {
-		t.Fatalf("ping exitCode = %d; stderr:\n%s", exitCode, stderr)
+	if run.ExitCode != 0 {
+		t.Fatalf("ping exitCode = %d; stderr:\n%s", run.ExitCode, run.Stderr)
 	}
-	if !strings.Contains(stdout, "pong") {
-		t.Errorf("ping stdout = %q, want pong", stdout)
+	if !strings.Contains(run.Stdout, "pong") {
+		t.Errorf("ping stdout = %q, want pong", run.Stdout)
 	}
 
 	if _, statErr := os.Stat(filepath.Join(project, "scripts", "foo.gd.uid")); statErr != nil {

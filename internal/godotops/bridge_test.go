@@ -36,16 +36,16 @@ func TestDispatchSurvivesHandlerAbort(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	_, stderr, exitCode, err := sess.Run(ctx, project, "read_scene",
+	run, err := sess.Run(ctx, project, "read_scene",
 		map[string]any{"scenePath": 123})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if exitCode != 1 {
-		t.Fatalf("exitCode = %d, want 1; stderr:\n%s", exitCode, stderr)
+	if run.ExitCode != 1 {
+		t.Fatalf("exitCode = %d, want 1; stderr:\n%s", run.ExitCode, run.Stderr)
 	}
-	if !strings.Contains(stderr, "unhandled engine error") {
-		t.Errorf("stderr = %q, want the dispatcher's recovery message", stderr)
+	if !strings.Contains(run.Stderr, "unhandled engine error") {
+		t.Errorf("stderr = %q, want the dispatcher's recovery message", run.Stderr)
 	}
 }
 
@@ -74,8 +74,8 @@ func newBridge(t *testing.T) (string, *godot.Session, context.Context) {
 func TestBridgeGateScansAfterHandlerWrite(t *testing.T) {
 	project, sess, ctx := newBridge(t)
 	body := "var f = FileAccess.open(\"res://generated.gd\", FileAccess.WRITE)\nf.store_string(\"extends Node\\n\")\nreturn 0\n"
-	if _, stderr, code, err := sess.Run(ctx, project, "run_script", map[string]any{"body": body}); err != nil || code != 0 {
-		t.Fatalf("run_script: err=%v code=%d stderr=%s", err, code, stderr)
+	if run, err := sess.Run(ctx, project, "run_script", map[string]any{"body": body}); err != nil || run.ExitCode != 0 {
+		t.Fatalf("run_script: err=%v code=%d stderr=%s", err, run.ExitCode, run.Stderr)
 	}
 	if _, err := os.Stat(filepath.Join(project, "generated.gd.uid")); err != nil {
 		t.Fatalf("generated.gd.uid missing after the call: %v", err)
@@ -86,13 +86,13 @@ func TestBridgeGateScansAfterHandlerWrite(t *testing.T) {
 // reconciled by the entry scan of the next call.
 func TestBridgeGateSeesOutOfBandWrite(t *testing.T) {
 	project, sess, ctx := newBridge(t)
-	if _, _, _, err := sess.Run(ctx, project, "rescan_project", nil); err != nil {
+	if _, err := sess.Run(ctx, project, "rescan_project", nil); err != nil {
 		t.Fatalf("warmup rescan: %v", err)
 	}
 	if err := os.WriteFile(filepath.Join(project, "external.gd"), []byte("extends Node\n"), 0o644); err != nil { //nolint:gosec // test fixture.
 		t.Fatalf("write external.gd: %v", err)
 	}
-	if _, _, _, err := sess.Run(ctx, project, "ping", nil); err != nil {
+	if _, err := sess.Run(ctx, project, "ping", nil); err != nil {
 		t.Fatalf("ping: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(project, "external.gd.uid")); err != nil {
@@ -112,14 +112,14 @@ func TestBridgeUIDGuardPreservesDroppedUid(t *testing.T) {
 	if err := os.WriteFile(uidPath, []byte(original+"\n"), 0o644); err != nil { //nolint:gosec // test fixture.
 		t.Fatalf("write used.gd.uid: %v", err)
 	}
-	if _, _, _, err := sess.Run(ctx, project, "rescan_project", nil); err != nil {
+	if _, err := sess.Run(ctx, project, "rescan_project", nil); err != nil {
 		t.Fatalf("snapshot rescan: %v", err)
 	}
 	if err := os.Remove(uidPath); err != nil {
 		t.Fatalf("remove used.gd.uid: %v", err)
 	}
 	for pass := 0; pass < 2; pass++ {
-		if _, _, _, err := sess.Run(ctx, project, "rescan_project", nil); err != nil {
+		if _, err := sess.Run(ctx, project, "rescan_project", nil); err != nil {
 			t.Fatalf("restore rescan %d: %v", pass, err)
 		}
 		data, err := os.ReadFile(uidPath)

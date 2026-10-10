@@ -192,12 +192,12 @@ func TestReadResourcePathRejections(t *testing.T) {
 }
 
 func TestReadToolSuccess(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"scene","path":"scenes/main.tscn","data":{"root":{"name":"root","type":"Node2D","children":[{"name":"Child","type":"Sprite2D","children":[]}]},"connections":[]}}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, (*toolset).read, root, `{"type":"scene","path":"scenes/main.tscn"}`)
+	payload := `{"kind":"scene","path":"scenes/main.tscn","data":{"root":{"name":"root","type":"Node2D","children":[{"name":"Child","type":"Sprite2D","children":[]}]},"connections":[]}}`
+	result := callToolPayload(t, (*toolset).read, root, `{"type":"scene","path":"scenes/main.tscn"}`, payload)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -210,18 +210,18 @@ func TestReadToolSuccess(t *testing.T) {
 			t.Errorf("text = %q, want it to contain %q", text, want)
 		}
 	}
-	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
+	if strings.Contains(text, "GODOT_MCP_JSON") {
 		t.Errorf("text still contains markers: %q", text)
 	}
 }
 
 func TestReadToolPreservesNestedPropertyValues(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"scene","path":"scenes/main.tscn","data":{"root":{"name":"root","type":"Node2D","properties":{"config":{"myKey":1,"nested":{"a":[1,2,3]}},"position":{"$type":"Vector2","x":0,"y":0}},"children":[]},"connections":[]}}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, (*toolset).read, root, `{"type":"scene","path":"scenes/main.tscn"}`)
+	payload := `{"kind":"scene","path":"scenes/main.tscn","data":{"root":{"name":"root","type":"Node2D","properties":{"config":{"myKey":1,"nested":{"a":[1,2,3]}},"position":{"$type":"Vector2","x":0,"y":0}},"children":[]},"connections":[]}}`
+	result := callToolPayload(t, (*toolset).read, root, `{"type":"scene","path":"scenes/main.tscn"}`, payload)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}
@@ -276,12 +276,11 @@ func TestReadToolNoMarkersIsError(t *testing.T) {
 }
 
 func TestReadToolInvalidJSONIsError(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\nnot-json\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "main.tscn"), "[gd_scene]\n")
 
-	result := callToolArgs(t, (*toolset).read, root, `{"type":"scene","path":"main.tscn"}`)
+	result := callToolPayload(t, (*toolset).read, root, `{"type":"scene","path":"main.tscn"}`, "not-json")
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
 	}
@@ -289,7 +288,7 @@ func TestReadToolInvalidJSONIsError(t *testing.T) {
 	if !strings.HasPrefix(text, "Failed to read scene: ") || !strings.Contains(text, "not-json") {
 		t.Errorf("message = %q, want the failure prefix and the invalid payload", text)
 	}
-	if strings.Contains(text, jsonStartMarker) || strings.Contains(text, jsonEndMarker) {
+	if strings.Contains(text, "GODOT_MCP_JSON") {
 		t.Errorf("message still contains markers: %q", text)
 	}
 }
@@ -329,43 +328,42 @@ func TestReadToolSpawnFailure(t *testing.T) {
 
 func TestReadResourceStructured(t *testing.T) {
 	tests := []struct {
-		name string
-		body string
-		args string
-		want string
+		name    string
+		payload string
+		args    string
+		want    string
 	}{
 		{
-			name: "animation",
-			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"animation","path":"anims/walk.tres","data":{"length":2,"loopMode":"linear","tracks":[]}}\n<<<GODOT_MCP_JSON_END>>>\n'`,
-			args: `{"type":"animation","path":"anims/walk.tres"}`,
-			want: `"kind": "animation"`,
+			name:    "animation",
+			payload: `{"kind":"animation","path":"anims/walk.tres","data":{"length":2,"loopMode":"linear","tracks":[]}}`,
+			args:    `{"type":"animation","path":"anims/walk.tres"}`,
+			want:    `"kind": "animation"`,
 		},
 		{
-			name: "tileset",
-			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"tileset","path":"tiles/set.tres","data":{"tileShape":"square","sources":[]}}\n<<<GODOT_MCP_JSON_END>>>\n'`,
-			args: `{"type":"tileset","path":"tiles/set.tres"}`,
-			want: `"kind": "tileset"`,
+			name:    "tileset",
+			payload: `{"kind":"tileset","path":"tiles/set.tres","data":{"tileShape":"square","sources":[]}}`,
+			args:    `{"type":"tileset","path":"tiles/set.tres"}`,
+			want:    `"kind": "tileset"`,
 		},
 		{
-			name: "theme",
-			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"theme","path":"themes/main.tres","data":{"defaultFontSize":16,"types":[]}}\n<<<GODOT_MCP_JSON_END>>>\n'`,
-			args: `{"type":"theme","path":"themes/main.tres"}`,
-			want: `"kind": "theme"`,
+			name:    "theme",
+			payload: `{"kind":"theme","path":"themes/main.tres","data":{"defaultFontSize":16,"types":[]}}`,
+			args:    `{"type":"theme","path":"themes/main.tres"}`,
+			want:    `"kind": "theme"`,
 		},
 		{
-			name: "resource",
-			body: `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"resource","path":"resources/data.res","data":{"class":"Resource","properties":{"value":1}}}\n<<<GODOT_MCP_JSON_END>>>\n'`,
-			args: `{"type":"resource","path":"resources/data.res"}`,
-			want: `"kind": "resource"`,
+			name:    "resource",
+			payload: `{"kind":"resource","path":"resources/data.res","data":{"class":"Resource","properties":{"value":1}}}`,
+			args:    `{"type":"resource","path":"resources/data.res"}`,
+			want:    `"kind": "resource"`,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Setenv(godot.PathEnv, fakeGodotOps(t, tt.body))
 			root := t.TempDir()
 			makeProject(t, root)
 
-			result := callToolArgs(t, (*toolset).read, root, tt.args)
+			result := callToolPayload(t, (*toolset).read, root, tt.args, tt.payload)
 			if result.IsError {
 				t.Fatalf("unexpected error: %+v", result.Content)
 			}

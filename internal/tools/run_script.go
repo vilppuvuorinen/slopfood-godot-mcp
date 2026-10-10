@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
@@ -71,7 +72,7 @@ func (t *toolset) handleRunScript(ctx context.Context, raw json.RawMessage) (any
 		return result, nil
 	}
 
-	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (string, string, int, error) {
+	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
 		return t.runEngine(ctx, "run_script", map[string]any{"body": args.Body})
 	}, "Failed to run script", headlessSolutions, headlessSolutions)
 	if failed {

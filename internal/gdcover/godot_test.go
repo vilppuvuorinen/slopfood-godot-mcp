@@ -251,13 +251,13 @@ func TestInstrumentedOperationsScriptReportsHits(t *testing.T) {
 	defer func() { _ = sess.Close() }()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	_, stderr, exit, err := sess.Run(ctx, writeProject(t), "validate_project",
+	run, err := sess.Run(ctx, writeProject(t), "validate_project",
 		map[string]any{"operation": "validate_project"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if exit != 0 {
-		t.Fatalf("validate_project exited %d: %s", exit, stderr)
+	if run.ExitCode != 0 {
+		t.Fatalf("validate_project exited %d: %s", run.ExitCode, run.Stderr)
 	}
 
 	got := readHitsGlob(t, hits+"*")

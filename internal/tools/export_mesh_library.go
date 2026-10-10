@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
@@ -80,7 +81,7 @@ func (t *toolset) handleExportMeshLibrary(ctx context.Context, raw json.RawMessa
 		params["meshItemNames"] = args.MeshItemNames
 	}
 
-	stdout, _, _, failure, failed := runEngineCall(ctx, func(ctx context.Context) (string, string, int, error) {
+	stdout, _, _, failure, failed := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
 		return t.runEngine(ctx, "export_mesh_library", params)
 	}, "Failed to export mesh library", headlessSolutions, []string{
 		"Check if the scene contains valid 3D meshes",

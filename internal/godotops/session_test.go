@@ -38,22 +38,22 @@ if err != OK:
 DirAccess.make_dir_recursive_absolute("res://scenes")
 return ResourceSaver.save(packed, "res://scenes/main.tscn")
 `
-	if _, stderr, exitCode, runErr := session.Run(ctx, project, "run_script",
+	if run, runErr := session.Run(ctx, project, "run_script",
 		map[string]any{"body": body}); runErr != nil {
 		t.Fatalf("run_script: %v", runErr)
-	} else if exitCode != 0 {
-		t.Fatalf("run_script exitCode = %d; stderr:\n%s", exitCode, stderr)
+	} else if run.ExitCode != 0 {
+		t.Fatalf("run_script exitCode = %d; stderr:\n%s", run.ExitCode, run.Stderr)
 	}
 
-	stdout, stderr, exitCode, err := session.Run(ctx, project, "read_scene",
+	run, err := session.Run(ctx, project, "read_scene",
 		map[string]any{"scenePath": "scenes/main.tscn"})
 	if err != nil {
 		t.Fatalf("read_scene: %v", err)
 	}
-	if exitCode != 0 {
-		t.Fatalf("read_scene exitCode = %d; stderr:\n%s", exitCode, stderr)
+	if run.ExitCode != 0 {
+		t.Fatalf("read_scene exitCode = %d; stderr:\n%s", run.ExitCode, run.Stderr)
 	}
-	if !strings.Contains(stdout, `"name":"root"`) {
-		t.Errorf("read_scene stdout = %q, want the root node payload", stdout)
+	if !strings.Contains(run.Payload, `"name":"root"`) {
+		t.Errorf("read_scene payload = %q, want the root node payload", run.Payload)
 	}
 }

@@ -18,7 +18,7 @@ func TestSessionAppliesEngineEnv(t *testing.T) {
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 
-	if _, _, _, err := s.Run(context.Background(), t.TempDir(), "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), t.TempDir(), "op", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if got := f.envValue(t); got != "keyed/hits.txt" {

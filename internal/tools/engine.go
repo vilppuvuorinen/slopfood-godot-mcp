@@ -12,7 +12,7 @@ import (
 // satisfies the Run half, and godotEngine (NewGodotEngine) implements the whole
 // interface; tests fake it.
 type Engine interface {
-	Run(ctx context.Context, project, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error)
+	Run(ctx context.Context, project, operation string, params map[string]any) (godot.RunResult, error)
 	RunHeadless(ctx context.Context, project, scriptPath string, extraArgs ...string) (stdout, stderr string, exitCode int, err error)
 	Export(ctx context.Context, project, presetName, outputPath string, debug bool) (stdout, stderr string, exitCode int, err error)
 	Version(ctx context.Context) (string, error)
@@ -31,7 +31,7 @@ func NewGodotEngine(session *godot.Session, executable string) Engine {
 	return godotEngine{session: session, executable: executable}
 }
 
-func (e godotEngine) Run(ctx context.Context, project, operation string, params map[string]any) (string, string, int, error) {
+func (e godotEngine) Run(ctx context.Context, project, operation string, params map[string]any) (godot.RunResult, error) {
 	return e.session.Run(ctx, project, operation, params) //nolint:wrapcheck // session errors are already caller-facing.
 }
 
@@ -47,9 +47,9 @@ func (e godotEngine) Version(ctx context.Context) (string, error) {
 	return godot.Version(ctx, e.executable) //nolint:wrapcheck // godot errors are already caller-facing.
 }
 
-func (t *toolset) runEngine(ctx context.Context, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error) {
+func (t *toolset) runEngine(ctx context.Context, operation string, params map[string]any) (godot.RunResult, error) {
 	if t.engine == nil {
-		return "", "", 0, errors.New("engine session required: no engine installed on the toolset")
+		return godot.RunResult{}, errors.New("engine session required: no engine installed on the toolset")
 	}
 	return t.engine.Run(ctx, t.project, operation, params) //nolint:wrapcheck // session errors are already caller-facing.
 }

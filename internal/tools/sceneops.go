@@ -9,30 +9,17 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
-const (
-	jsonStartMarker = "<<<GODOT_MCP_JSON_START>>>"
-	jsonEndMarker   = "<<<GODOT_MCP_JSON_END>>>"
-)
-
-func markerJSON(stdout string) (string, bool) {
-	startIdx := strings.Index(stdout, jsonStartMarker)
-	if startIdx == -1 {
-		return "", false
-	}
-	rest := stdout[startIdx+len(jsonStartMarker):]
-	endIdx := strings.Index(rest, jsonEndMarker)
-	if endIdx == -1 {
-		return "", false
-	}
-	raw := strings.TrimSpace(rest[:endIdx])
+func indentJSON(raw string) string {
+	trimmed := strings.TrimSpace(raw)
 	var buf bytes.Buffer
-	if err := json.Indent(&buf, []byte(raw), "", "  "); err != nil {
-		return raw, true
+	if err := json.Indent(&buf, []byte(trimmed), "", "  "); err != nil {
+		return trimmed
 	}
-	return buf.String(), true
+	return buf.String()
 }
 
 var headlessSolutions = []string{
@@ -41,29 +28,31 @@ var headlessSolutions = []string{
 	"Verify the project path is accessible",
 }
 
-// engineCall runs one engine operation and returns its raw streams.
-type engineCall func(ctx context.Context) (stdout, stderr string, exitCode int, err error)
+// engineCall runs one engine operation and returns its response.
+type engineCall func(ctx context.Context) (godot.RunResult, error)
 
 // runEngineCall executes call, maps a start failure or unexpected stderr to a
-// ready error result, and extracts the marker payload when the engine emitted
+// ready error result, and carries the frame payload when the engine emitted
 // one. When failed is true the caller returns failure; otherwise it renders
 // hasPayload/payload or its own fallback from stdout.
 func runEngineCall(ctx context.Context, call engineCall, label string, startSolutions, stderrSolutions []string) (stdout, payload string, hasPayload bool, failure mcp.ToolResult, failed bool) {
-	stdout, stderr, exitCode, err := call(ctx)
+	result, err := call(ctx)
 	if err != nil {
-		return stdout, "", false, mcp.ErrorResult(label+": "+err.Error(), startSolutions...), true
+		return result.Stdout, "", false, mcp.ErrorResult(label+": "+err.Error(), startSolutions...), true
 	}
-	if scriptFailed(exitCode, stderr) {
-		return stdout, "", false, mcp.ErrorResult(label+": "+stderr, stderrSolutions...), true
+	if scriptFailed(result.ExitCode, result.Stderr) {
+		return result.Stdout, "", false, mcp.ErrorResult(label+": "+result.Stderr, stderrSolutions...), true
 	}
-	payload, hasPayload = markerJSON(stdout)
-	return stdout, payload, hasPayload, mcp.ToolResult{}, false
+	if result.Payload != "" {
+		return result.Stdout, indentJSON(result.Payload), true, mcp.ToolResult{}, false
+	}
+	return result.Stdout, "", false, mcp.ToolResult{}, false
 }
 
 // Callers validate arguments, paths, and project/scene existence first; benign
 // engine stderr is allowlisted per tool via scriptFailed (see stderr.go).
 func (t *toolset) runHeadlessOperation(ctx context.Context, operation string, params, fields map[string]any) (any, error) {
-	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (string, string, int, error) {
+	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
 		return t.runEngine(ctx, operation, params)
 	}, operation+" failed", headlessSolutions, headlessSolutions)
 	if failed {

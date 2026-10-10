@@ -95,12 +95,12 @@ func TestReadNodeDispatchMapping(t *testing.T) {
 }
 
 func TestReadNodeTilemapStructured(t *testing.T) {
-	t.Setenv(godot.PathEnv, fakeGodotOps(t, `printf '<<<GODOT_MCP_JSON_START>>>\n{"kind":"tilemap","path":"scenes/level.tscn","nodePath":"root/Ground","data":{"tileSet":"tiles/set.tres","cells":[{"sourceId":0}]}}\n<<<GODOT_MCP_JSON_END>>>\n'`))
 	root := t.TempDir()
 	makeProject(t, root)
 	seedFile(t, filepath.Join(root, "scenes", "level.tscn"), "[gd_scene format=3]\n")
 
-	result := callToolArgs(t, (*toolset).readNode, root, `{"type":"tilemap","path":"scenes/level.tscn","nodePath":"root/Ground"}`)
+	payload := `{"kind":"tilemap","path":"scenes/level.tscn","nodePath":"root/Ground","data":{"tileSet":"tiles/set.tres","cells":[{"sourceId":0}]}}`
+	result := callToolPayload(t, (*toolset).readNode, root, `{"type":"tilemap","path":"scenes/level.tscn","nodePath":"root/Ground"}`, payload)
 	if result.IsError {
 		t.Fatalf("unexpected error: %+v", result.Content)
 	}

@@ -21,9 +21,9 @@ type fakeSessionRun struct {
 	params    map[string]any
 }
 
-func (f *fakeSession) Run(_ context.Context, project, operation string, params map[string]any) (string, string, int, error) {
+func (f *fakeSession) Run(_ context.Context, project, operation string, params map[string]any) (godot.RunResult, error) {
 	f.runs = append(f.runs, fakeSessionRun{project: project, operation: operation, params: params})
-	return "", "", 0, nil
+	return godot.RunResult{}, nil
 }
 
 func (f *fakeSession) RunHeadless(context.Context, string, string, ...string) (string, string, int, error) {
@@ -39,7 +39,7 @@ func (f *fakeSession) Version(context.Context) (string, error) {
 }
 
 func TestRunEngineRequiresEngine(t *testing.T) {
-	_, _, _, err := (&toolset{}).runEngine(context.Background(), "attach_script", nil)
+	_, err := (&toolset{}).runEngine(context.Background(), "attach_script", nil)
 	if err == nil {
 		t.Fatal("runEngine with no engine: err = nil, want an error")
 	}
@@ -52,7 +52,7 @@ func TestRunEngineDelegates(t *testing.T) {
 	sess := &fakeSession{}
 	ts := newToolset("/proj", sess)
 
-	if _, _, _, err := ts.runEngine(context.Background(), "read_scene", map[string]any{"scenePath": "main.tscn"}); err != nil {
+	if _, err := ts.runEngine(context.Background(), "read_scene", map[string]any{"scenePath": "main.tscn"}); err != nil {
 		t.Fatalf("runEngine: %v", err)
 	}
 	if len(sess.runs) != 1 {

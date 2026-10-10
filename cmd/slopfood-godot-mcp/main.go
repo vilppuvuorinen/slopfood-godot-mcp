@@ -335,12 +335,12 @@ func runAutoRescan(ctx context.Context, logger *slog.Logger, queue *mcp.Queue, s
 		return
 	}
 	_, err := queue.Submit(ctx, func(ctx context.Context) (any, error) {
-		_, stderr, exitCode, err := session.Run(ctx, root, "rescan_project", nil)
+		result, err := session.Run(ctx, root, "rescan_project", nil)
 		if err != nil {
 			return nil, fmt.Errorf("auto rescan: %w", err)
 		}
-		if exitCode != 0 {
-			return nil, fmt.Errorf("rescan failed: %s", strings.TrimSpace(stderr))
+		if result.ExitCode != 0 {
+			return nil, fmt.Errorf("rescan failed: %s", strings.TrimSpace(result.Stderr))
 		}
 		return nil, nil
 	})

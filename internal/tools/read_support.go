@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
@@ -40,7 +41,7 @@ func (t *toolset) readSceneThrough(ctx context.Context, scenePath, nodePath stri
 	if depth != nil {
 		params["depth"] = *depth
 	}
-	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (string, string, int, error) {
+	stdout, payload, hasPayload, failure, failed := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
 		return t.runEngine(ctx, "read_scene", params)
 	}, "Failed to read scene", headlessSolutions, headlessSolutions)
 	if failed {

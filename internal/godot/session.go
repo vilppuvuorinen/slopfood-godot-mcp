@@ -114,10 +114,20 @@ type sessionProc struct {
 
 // ID is a pointer because the startup readiness line has no id; Godot emits ids as JSON numbers.
 type responseFrame struct {
-	ID     *float64 `json:"id"`
-	OK     bool     `json:"ok"`
-	Stdout string   `json:"stdout"`
-	Stderr string   `json:"stderr"`
+	ID      *float64 `json:"id"`
+	OK      bool     `json:"ok"`
+	Stdout  string   `json:"stdout"`
+	Stderr  string   `json:"stderr"`
+	Payload string   `json:"payload"`
+}
+
+// RunResult is a bridge response: the handler's raw streams, the structured
+// payload when the operation produced one, and the failure exit code.
+type RunResult struct {
+	Stdout   string
+	Stderr   string
+	Payload  string
+	ExitCode int
 }
 
 // A missing file is the zero stamp, so both appearance and disappearance change the stamp.
@@ -146,12 +156,12 @@ func NewSessionTransport(executable, script string, transport Transport) *Sessio
 	}
 }
 
-func (s *Session) Run(ctx context.Context, project, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error) {
+func (s *Session) Run(ctx context.Context, project, operation string, params map[string]any) (RunResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if s.closed {
-		return "", "", 0, fmt.Errorf("engine session: %w", os.ErrClosed)
+		return RunResult{}, fmt.Errorf("engine session: %w", os.ErrClosed)
 	}
 
 	stamp := stampFile(filepath.Join(project, "project.godot"))
@@ -161,7 +171,7 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 	// validate tool instead of retrying blindly.
 	if s.brokenErr != nil {
 		if s.brokenProject == project && s.brokenStamp == stamp {
-			return "", "", 0, s.brokenErr
+			return RunResult{}, s.brokenErr
 		}
 		s.brokenErr = nil
 	}
@@ -175,14 +185,14 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 	checkStartup := stamp != s.lastProjectStamp
 	p, err := s.startLocked(project, stamp, checkStartup)
 	if err != nil {
-		return "", "", 0, err
+		return RunResult{}, err
 	}
 
 	// A changed class cache is reconciled by a rescan in the warm editor; a
 	// changed project.godot is handled by a restart in restartNeeded.
 	if s.consumeRescan(project) {
 		if rescanErr := s.runRescanLocked(ctx, p); rescanErr != nil {
-			return "", "", 0, rescanErr
+			return RunResult{}, rescanErr
 		}
 	}
 
@@ -200,33 +210,38 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 	}{ID: id, Operation: operation, Params: params}
 	line, err := json.Marshal(payload)
 	if err != nil {
-		return "", "", 0, fmt.Errorf("engine session: encode request: %w", err)
+		return RunResult{}, fmt.Errorf("engine session: encode request: %w", err)
 	}
 	// A failed write means the process died; respawn once and retry before erroring.
 	if err = p.socket.writeRequest(line); err != nil {
 		s.stopLocked()
 		p, err = s.startLocked(project, stamp, false)
 		if err != nil {
-			return "", "", 0, err
+			return RunResult{}, err
 		}
 		if err = p.socket.writeRequest(line); err != nil {
 			s.stopLocked()
-			return "", "", 0, err
+			return RunResult{}, err
 		}
 	}
 
 	frame, err := s.recvFrameLocked(ctx, p, id)
 	if err != nil {
-		return "", "", 0, err
+		return RunResult{}, err
 	}
 	p.ops++
 	// Restamp so the next call does not rescan for the same change.
 	p.fingerprint = fingerprintProject(project)
 
-	if !frame.OK {
-		exitCode = 1
+	result := RunResult{
+		Stdout:  frame.Stdout,
+		Stderr:  frame.Stderr,
+		Payload: frame.Payload,
 	}
-	return frame.Stdout, frame.Stderr, exitCode, nil
+	if !frame.OK {
+		result.ExitCode = 1
+	}
+	return result, nil
 }
 
 // Close stops the engine, waiting up to closeTimeout for the graceful path. If

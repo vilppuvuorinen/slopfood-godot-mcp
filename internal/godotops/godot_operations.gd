@@ -4,9 +4,6 @@
 # logic originate there, but the file has been substantially reworked.
 extends SceneTree
 
-const JSON_START = "<<<GODOT_MCP_JSON_START>>>"
-const JSON_END = "<<<GODOT_MCP_JSON_END>>>"
-
 # Caps how many print/error lines a run_script call captures so a chatty script
 # cannot grow the frame without bound.
 const RUN_SCRIPT_LOG_LIMIT := 2000
@@ -21,6 +18,7 @@ class Result extends RefCounted:
     var ok := true
     var stdout := ""
     var stderr := ""
+    var payload := ""
 
     func out(message: String) -> void:
         stdout += message + "\n"
@@ -220,7 +218,7 @@ func _advance_transaction() -> void:
         # The closing scan reconciles whatever the handler wrote.
         _start_scan()
         return
-    _send_socket_response(_pending_request["id"], _pending_result.ok, _pending_result.stdout, _pending_result.stderr)
+    _send_socket_response(_pending_request["id"], _pending_result.ok, _pending_result.stdout, _pending_result.stderr, _pending_result.payload)
     _pending_request = null
     _pending_result = null
     _entry_done = false
@@ -285,11 +283,11 @@ func _read_peer() -> void:
 func _handle_socket_request(line: String) -> bool:
     var json := JSON.new()
     if json.parse(line) != OK:
-        _send_socket_response(-1, false, "", "malformed request: " + json.get_error_message())
+        _send_socket_response(-1, false, "", "malformed request: " + json.get_error_message(), "")
         return true
     var request = json.get_data()
     if not (request is Dictionary):
-        _send_socket_response(-1, false, "", "malformed request: not an object")
+        _send_socket_response(-1, false, "", "malformed request: not an object", "")
         return true
     if not _authenticated:
         var presented = request.get("token", null)
@@ -300,12 +298,12 @@ func _handle_socket_request(line: String) -> bool:
     var raw_id = request.get("id", null)
     var operation = request.get("operation", null)
     if not (raw_id is float or raw_id is int) or not (operation is String):
-        _send_socket_response(-1, false, "", "malformed request: missing id or operation")
+        _send_socket_response(-1, false, "", "malformed request: missing id or operation", "")
         return true
     var id := int(raw_id)
     # Acknowledge quit so the caller unblocks, then leave the main loop.
     if operation == "quit":
-        _send_socket_response(id, true, "", "")
+        _send_socket_response(id, true, "", "", "")
         # Exiting mid-scan aborts the scan thread and prints an extra warning, so defer the exit.
         if Engine.is_editor_hint() and _filesystem != null and _filesystem.is_scanning():
             _quit_pending = true
@@ -324,7 +322,7 @@ func _handle_socket_request(line: String) -> bool:
     _start_scan()
     return true
 
-func _send_socket_response(id: int, ok: bool, stdout: String, stderr: String) -> void:
+func _send_socket_response(id: int, ok: bool, stdout: String, stderr: String, payload: String) -> void:
     if _peer == null:
         return
     var frame := JSON.stringify({
@@ -332,6 +330,7 @@ func _send_socket_response(id: int, ok: bool, stdout: String, stderr: String) ->
         "ok": ok,
         "stdout": stdout,
         "stderr": stderr,
+        "payload": payload,
     }) + "\n"
     _peer.put_data(frame.to_utf8_buffer())
 
@@ -594,9 +593,7 @@ func read_scene(result: Result, params) -> Result:
     if params.has("nodePath") and params.nodePath != null and not str(params.nodePath).is_empty():
         payload["nodePath"] = str(params.nodePath)
 
-    result.out(JSON_START)
-    result.out(JSON.stringify(payload))
-    result.out(JSON_END)
+    result.payload = JSON.stringify(payload)
 
     return result
 
@@ -914,14 +911,12 @@ func run_script(result: Result, params) -> Result:
         if str(captured.get("file", "")).begins_with("gdscript://") and int(captured.get("line", 0)) > RUN_SCRIPT_PRELUDE_LINES:
             captured["line"] = int(captured["line"]) - RUN_SCRIPT_PRELUDE_LINES
 
-    result.out(JSON_START)
-    result.out(JSON.stringify({
+    result.payload = JSON.stringify({
         "compiled": compiled,
         "result": serialized,
         "logs": Array(logger.messages),
         "errors": logger.errors,
-    }))
-    result.out(JSON_END)
+    })
     return result
 
 # Indents a bare function body so it forms the body of the generated run().
@@ -961,13 +956,11 @@ func read_resource(result: Result, params) -> Result:
             if has_filter and not _matches_property_filter(prop_name, filter):
                 continue
             props[prop_name] = _variant_to_json(resource.get(prop_name))
-    result.out(JSON_START)
-    result.out(JSON.stringify({
+    result.payload = JSON.stringify({
         "kind": "resource",
         "path": project_relative(full_path),
         "data": {"class": resource.get_class(), "properties": props},
-    }))
-    result.out(JSON_END)
+    })
     return result
 
 
@@ -1071,9 +1064,7 @@ func read_animation(result: Result, params) -> Result:
             "tracks": tracks,
         },
     }
-    result.out(JSON_START)
-    result.out(JSON.stringify(payload))
-    result.out(JSON_END)
+    result.payload = JSON.stringify(payload)
     return result
 
 func _animation_track_to_json(animation, index) -> Dictionary:
@@ -1171,9 +1162,7 @@ func read_tileset(result: Result, params) -> Result:
             "sources": sources,
         },
     }
-    result.out(JSON_START)
-    result.out(JSON.stringify(payload))
-    result.out(JSON_END)
+    result.payload = JSON.stringify(payload)
     return result
 
 func _tileset_source_to_json(tile_set, source_id) -> Dictionary:
@@ -1280,9 +1269,7 @@ func read_theme(result: Result, params) -> Result:
             "types": types,
         },
     }
-    result.out(JSON_START)
-    result.out(JSON.stringify(payload))
-    result.out(JSON_END)
+    result.payload = JSON.stringify(payload)
     return result
 
 func _theme_type_to_json(theme, type_name) -> Dictionary:
@@ -1353,9 +1340,7 @@ func read_tilemap(result: Result, params) -> Result:
             "cells": cells,
         },
     }
-    result.out(JSON_START)
-    result.out(JSON.stringify(payload))
-    result.out(JSON_END)
+    result.payload = JSON.stringify(payload)
     return result
 
 # Starting the engine against the project is the whole check; the caller reads the engine's stderr and exit code.

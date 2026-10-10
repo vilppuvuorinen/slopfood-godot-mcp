@@ -38,14 +38,14 @@ func seedFile(t *testing.T, path, content string) {
 
 type oneShotSession struct{}
 
-func (s *oneShotSession) Run(ctx context.Context, project, operation string, params map[string]any) (stdout, stderr string, exitCode int, err error) {
+func (s *oneShotSession) Run(ctx context.Context, project, operation string, params map[string]any) (godot.RunResult, error) {
 	scriptPath, err := godotops.OperationsScript()
 	if err != nil {
-		return "", "", 0, fmt.Errorf("materialize operations script: %w", err)
+		return godot.RunResult{}, fmt.Errorf("materialize operations script: %w", err)
 	}
 	payload, err := json.Marshal(params)
 	if err != nil {
-		return "", "", 0, fmt.Errorf("encode operation params: %w", err)
+		return godot.RunResult{}, fmt.Errorf("encode operation params: %w", err)
 	}
 
 	cmd := exec.CommandContext(ctx, godot.Path(), //nolint:gosec // engine path is test-controlled via GODOT_PATH.
@@ -55,16 +55,16 @@ func (s *oneShotSession) Run(ctx context.Context, project, operation string, par
 	cmd.Stderr = &stderrBuf
 
 	runErr := cmd.Run()
-	stdout, stderr = stdoutBuf.String(), stderrBuf.String()
+	stdout, stderr := stdoutBuf.String(), stderrBuf.String()
 
 	var exitErr *exec.ExitError
 	if errors.As(runErr, &exitErr) {
-		return stdout, stderr, exitErr.ExitCode(), nil
+		return godot.RunResult{Stdout: stdout, Stderr: stderr, ExitCode: exitErr.ExitCode()}, nil
 	}
 	if runErr != nil {
-		return stdout, stderr, 0, fmt.Errorf("run godot operation: %w", runErr)
+		return godot.RunResult{Stdout: stdout, Stderr: stderr}, fmt.Errorf("run godot operation: %w", runErr)
 	}
-	return stdout, stderr, 0, nil
+	return godot.RunResult{Stdout: stdout, Stderr: stderr}, nil
 }
 
 func (s *oneShotSession) RunHeadless(ctx context.Context, project, scriptPath string, extraArgs ...string) (stdout, stderr string, exitCode int, err error) {
@@ -82,6 +82,32 @@ func (s *oneShotSession) Version(ctx context.Context) (string, error) {
 func callToolArgs(t *testing.T, build func(*toolset) mcp.Tool, project, args string) mcp.ToolResult {
 	t.Helper()
 	tool := build(newToolset(project, &oneShotSession{}))
+	out, err := tool.Handler(context.Background(), json.RawMessage(args))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	result, ok := out.(mcp.ToolResult)
+	if !ok {
+		t.Fatalf("result type %T, want mcp.ToolResult", out)
+	}
+	return result
+}
+
+// payloadSession is an Engine fake that returns a fixed bridge payload so tests
+// can exercise the structured-result path without a real engine.
+type payloadSession struct {
+	fakeSession
+	result godot.RunResult
+	err    error
+}
+
+func (s *payloadSession) Run(context.Context, string, string, map[string]any) (godot.RunResult, error) {
+	return s.result, s.err
+}
+
+func callToolPayload(t *testing.T, build func(*toolset) mcp.Tool, project, args, payload string) mcp.ToolResult {
+	t.Helper()
+	tool := build(newToolset(project, &payloadSession{result: godot.RunResult{Payload: payload}}))
 	out, err := tool.Handler(context.Background(), json.RawMessage(args))
 	if err != nil {
 		t.Fatalf("handler: %v", err)

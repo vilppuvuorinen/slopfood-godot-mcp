@@ -12,13 +12,13 @@ import (
 
 type runScriptSession struct {
 	fakeSession
-	run    fakeSessionRun
-	output string
+	run     fakeSessionRun
+	payload string
 }
 
-func (s *runScriptSession) Run(_ context.Context, project, operation string, params map[string]any) (string, string, int, error) {
+func (s *runScriptSession) Run(_ context.Context, project, operation string, params map[string]any) (godot.RunResult, error) {
 	s.run = fakeSessionRun{project: project, operation: operation, params: params}
-	return s.output, "", 0, nil
+	return godot.RunResult{Payload: s.payload}, nil
 }
 
 func TestRunScriptDelegatesToSession(t *testing.T) {
@@ -27,7 +27,7 @@ func TestRunScriptDelegatesToSession(t *testing.T) {
 	makeProject(t, root)
 
 	payload := `{"compiled":true,"result":{"answer":42},"logs":["hi"],"errors":[]}`
-	sess := &runScriptSession{output: jsonStartMarker + "\n" + payload + "\n" + jsonEndMarker}
+	sess := &runScriptSession{payload: payload}
 	body := "return 42\n"
 	raw, err := json.Marshal(map[string]any{"body": body})
 	if err != nil {

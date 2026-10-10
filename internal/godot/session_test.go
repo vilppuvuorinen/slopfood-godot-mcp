@@ -186,22 +186,22 @@ func TestSessionRoundTripFraming(t *testing.T) {
 	defer s.Close()
 	project := t.TempDir()
 
-	stdout, stderr, exitCode, err := s.Run(context.Background(), project, "run_script",
+	run, err := s.Run(context.Background(), project, "run_script",
 		map[string]any{"scenePath": "scenes/main.tscn"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if exitCode != 0 || stderr != "" || stdout != "out-1" {
-		t.Fatalf("first run: stdout=%q stderr=%q exit=%d", stdout, stderr, exitCode)
+	if run.ExitCode != 0 || run.Stderr != "" || run.Stdout != "out-1" {
+		t.Fatalf("first run: stdout=%q stderr=%q exit=%d", run.Stdout, run.Stderr, run.ExitCode)
 	}
 
-	stdout, stderr, exitCode, err = s.Run(context.Background(), project, "read_scene",
+	run, err = s.Run(context.Background(), project, "read_scene",
 		map[string]any{"scenePath": "scenes/main.tscn"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if exitCode != 0 || stderr != "" || stdout != "out-2" {
-		t.Fatalf("second run: stdout=%q stderr=%q exit=%d", stdout, stderr, exitCode)
+	if run.ExitCode != 0 || run.Stderr != "" || run.Stdout != "out-2" {
+		t.Fatalf("second run: stdout=%q stderr=%q exit=%d", run.Stdout, run.Stderr, run.ExitCode)
 	}
 
 	if got := f.startCount(t); got != 1 {
@@ -229,13 +229,13 @@ func TestSessionForcedTCPFraming(t *testing.T) {
 	defer s.Close()
 	project := t.TempDir()
 
-	stdout, stderr, exitCode, err := s.Run(context.Background(), project, "run_script",
+	run, err := s.Run(context.Background(), project, "run_script",
 		map[string]any{"scenePath": "scenes/main.tscn"})
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if exitCode != 0 || stderr != "" || stdout != "out-1" {
-		t.Fatalf("run: stdout=%q stderr=%q exit=%d", stdout, stderr, exitCode)
+	if run.ExitCode != 0 || run.Stderr != "" || run.Stdout != "out-1" {
+		t.Fatalf("run: stdout=%q stderr=%q exit=%d", run.Stdout, run.Stderr, run.ExitCode)
 	}
 
 	lines := f.argLines(t)
@@ -262,13 +262,13 @@ func TestSessionFramesRecorded(t *testing.T) {
 	defer s.Close()
 	project := t.TempDir()
 
-	if _, _, _, err := s.Run(context.Background(), project, "run_script", map[string]any{"scenePath": "a.tscn"}); err != nil {
+	if _, err := s.Run(context.Background(), project, "run_script", map[string]any{"scenePath": "a.tscn"}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if _, _, _, err := s.Run(context.Background(), project, "read_scene", map[string]any{"scenePath": "b.tscn"}); err != nil {
+	if _, err := s.Run(context.Background(), project, "read_scene", map[string]any{"scenePath": "b.tscn"}); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if _, _, _, err := s.Run(context.Background(), project, "read_node", nil); err != nil {
+	if _, err := s.Run(context.Background(), project, "read_node", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -301,18 +301,18 @@ func TestSessionStderrDiagnosticsOnly(t *testing.T) {
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 
-	_, stderr, exitCode, err := s.Run(context.Background(), t.TempDir(), "op", nil)
+	run, err := s.Run(context.Background(), t.TempDir(), "op", nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if exitCode != 0 {
-		t.Fatalf("exitCode = %d", exitCode)
+	if run.ExitCode != 0 {
+		t.Fatalf("exitCode = %d", run.ExitCode)
 	}
-	if stderr != "frame stderr line" {
-		t.Errorf("stderr = %q, want only the frame's stderr", stderr)
+	if run.Stderr != "frame stderr line" {
+		t.Errorf("stderr = %q, want only the frame's stderr", run.Stderr)
 	}
-	if strings.Contains(stderr, "engine diagnostic") {
-		t.Errorf("stderr merged process diagnostics: %q", stderr)
+	if strings.Contains(run.Stderr, "engine diagnostic") {
+		t.Errorf("stderr merged process diagnostics: %q", run.Stderr)
 	}
 }
 
@@ -322,12 +322,12 @@ func TestSessionSkipsNonFrameStdout(t *testing.T) {
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 
-	stdout, _, _, err := s.Run(context.Background(), t.TempDir(), "op", nil)
+	run, err := s.Run(context.Background(), t.TempDir(), "op", nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if stdout != "out-1" {
-		t.Errorf("stdout = %q, want the frame's stdout only", stdout)
+	if run.Stdout != "out-1" {
+		t.Errorf("stdout = %q, want the frame's stdout only", run.Stdout)
 	}
 }
 
@@ -338,7 +338,7 @@ func TestSessionRescanProjectDrivesScan(t *testing.T) {
 	defer s.Close()
 	project := t.TempDir()
 
-	if _, _, _, err := s.Run(context.Background(), project, "rescan_project", nil); err != nil {
+	if _, err := s.Run(context.Background(), project, "rescan_project", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if got := f.startCount(t); got != 1 {
@@ -362,14 +362,14 @@ func TestSessionOperationCapRestarts(t *testing.T) {
 	project := t.TempDir()
 
 	for i := 0; i < 2; i++ {
-		if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+		if _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 			t.Fatalf("Run %d: %v", i, err)
 		}
 	}
 	if got := f.startCount(t); got != 1 {
 		t.Fatalf("starts = %d, want 1 after two operations", got)
 	}
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("third Run: %v", err)
 	}
 	if got := f.startCount(t); got != 2 {
@@ -383,10 +383,10 @@ func TestSessionProjectChangeRestarts(t *testing.T) {
 	s := NewSession(f.bin, "/ops.gd")
 	defer s.Close()
 
-	if _, _, _, err := s.Run(context.Background(), t.TempDir(), "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), t.TempDir(), "op", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if _, _, _, err := s.Run(context.Background(), t.TempDir(), "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), t.TempDir(), "op", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if got := f.startCount(t); got != 2 {
@@ -409,7 +409,7 @@ func TestSessionProjectGodotChangeRestarts(t *testing.T) {
 	if err := os.WriteFile(projectFile, []byte("config_version=5\n"), 0o644); err != nil { //nolint:gosec // test fixture.
 		t.Fatalf("write project.godot: %v", err)
 	}
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if got := f.startCount(t); got != 1 {
@@ -420,7 +420,7 @@ func TestSessionProjectGodotChangeRestarts(t *testing.T) {
 	if err := os.WriteFile(projectFile, []byte("config_version=5\n\n[application]\n"), 0o644); err != nil { //nolint:gosec // test fixture.
 		t.Fatalf("rewrite project.godot: %v", err)
 	}
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if got := f.startCount(t); got != 2 {
@@ -458,13 +458,13 @@ func TestSessionClassCacheRescans(t *testing.T) {
 	if err := os.WriteFile(cacheFile, []byte("config_version=5\n"), 0o644); err != nil { //nolint:gosec // test fixture.
 		t.Fatalf("write class cache: %v", err)
 	}
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if err := os.WriteFile(cacheFile, []byte("config_version=5\n[class]\n"), 0o644); err != nil { //nolint:gosec // test fixture.
 		t.Fatalf("rewrite class cache: %v", err)
 	}
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if got := f.startCount(t); got != 1 {
@@ -497,7 +497,7 @@ func TestSessionBrokenProjectGodotFails(t *testing.T) {
 		t.Fatalf("write project.godot: %v", err)
 	}
 
-	_, _, _, err := s.Run(context.Background(), project, "op", nil)
+	_, err := s.Run(context.Background(), project, "op", nil)
 	if err == nil {
 		t.Fatal("Run succeeded on a broken project.godot, want an error")
 	}
@@ -506,7 +506,7 @@ func TestSessionBrokenProjectGodotFails(t *testing.T) {
 	}
 	starts := f.startCount(t)
 
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err == nil {
+	if _, err := s.Run(context.Background(), project, "op", nil); err == nil {
 		t.Fatal("second Run succeeded, want the remembered parse error")
 	}
 	if got := f.startCount(t); got != starts {
@@ -521,11 +521,11 @@ func TestSessionEOFRespawn(t *testing.T) {
 	defer s.Close()
 	project := t.TempDir()
 
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("first Run: %v", err)
 	}
 	time.Sleep(50 * time.Millisecond)
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("second Run: %v", err)
 	}
 	if got := f.startCount(t); got != 2 {
@@ -555,12 +555,12 @@ func TestSessionRetriesOnceOnWriteFailure(t *testing.T) {
 		project: project,
 	}
 
-	stdout, _, _, err := s.Run(context.Background(), project, "op", nil)
+	run, err := s.Run(context.Background(), project, "op", nil)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if stdout != "out-1" {
-		t.Errorf("stdout = %q, want the retried response", stdout)
+	if run.Stdout != "out-1" {
+		t.Errorf("stdout = %q, want the retried response", run.Stdout)
 	}
 	if got := f.startCount(t); got != 1 {
 		t.Errorf("starts = %d, want 1: the retry spawns a fresh process", got)
@@ -575,7 +575,7 @@ func TestSessionResponseIDDesyncAborts(t *testing.T) {
 	defer s.Close()
 	project := t.TempDir()
 
-	_, _, _, err := s.Run(context.Background(), project, "op", nil)
+	_, err := s.Run(context.Background(), project, "op", nil)
 	if err == nil {
 		t.Fatal("Run accepted a mismatched response id, want an error")
 	}
@@ -585,7 +585,7 @@ func TestSessionResponseIDDesyncAborts(t *testing.T) {
 
 	healthy := newSocketSessionFake(t, defaultSocketResponse)
 	s.executable = healthy.bin
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("Run after desync: %v", err)
 	}
 }
@@ -600,7 +600,7 @@ func TestSessionContextCancelKill(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	_, _, _, err := s.Run(ctx, project, "op", nil)
+	_, err := s.Run(ctx, project, "op", nil)
 	if err == nil {
 		t.Fatal("Run reported success, want a context error")
 	}
@@ -610,7 +610,7 @@ func TestSessionContextCancelKill(t *testing.T) {
 
 	healthy := newSocketSessionFake(t, defaultSocketResponse)
 	s.executable = healthy.bin
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("Run after cancel: %v", err)
 	}
 }
@@ -664,7 +664,7 @@ func TestSessionCloseQuitAndFailsRuns(t *testing.T) {
 	s := NewSession(f.bin, "/ops.gd")
 	project := t.TempDir()
 
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err != nil {
+	if _, err := s.Run(context.Background(), project, "op", nil); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 	if err := s.Close(); err != nil {
@@ -676,7 +676,7 @@ func TestSessionCloseQuitAndFailsRuns(t *testing.T) {
 	if err := s.Close(); err != nil {
 		t.Fatalf("second Close: %v", err)
 	}
-	if _, _, _, err := s.Run(context.Background(), project, "op", nil); err == nil {
+	if _, err := s.Run(context.Background(), project, "op", nil); err == nil {
 		t.Fatal("Run after Close succeeded, want an error")
 	}
 }
