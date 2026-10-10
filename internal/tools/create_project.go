@@ -11,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
 
@@ -100,7 +99,7 @@ func (t *toolset) handleCreateProject(ctx context.Context, raw json.RawMessage) 
 	}
 
 	if isDotnet {
-		sdkVersion := detectGodotNetSDKVersion(ctx)
+		sdkVersion := t.detectGodotNetSDKVersion(ctx)
 		csproj := generateCsprojContent(args.ProjectName, sdkVersion, defaultDotnetTargetFramework)
 		csprojPath := filepath.Join(project, assemblyName+".csproj")
 		if err := os.WriteFile(csprojPath, []byte(csproj), 0o644); err != nil { //nolint:gosec // user-facing project file.
@@ -173,8 +172,8 @@ func generateCsprojContent(projectName, sdkVersion, targetFramework string) stri
 `, sdkVersion, targetFramework, rootNamespace)
 }
 
-func detectGodotNetSDKVersion(ctx context.Context) string {
-	out, err := godot.Version(ctx, godot.Path())
+func (t *toolset) detectGodotNetSDKVersion(ctx context.Context) string {
+	out, err := t.headless.Version(ctx)
 	if err != nil {
 		return defaultGodotNetSDKVersion
 	}
