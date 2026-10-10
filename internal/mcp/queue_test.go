@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"sync"
 	"sync/atomic"
@@ -14,6 +15,36 @@ const testQueueTimeout = time.Minute
 
 // Generous so a cooperative job is never mistaken for a stuck one.
 const testQueueStopGrace = time.Second
+
+func TestQueueWrapRunsHandlerOnWorker(t *testing.T) {
+	q := NewQueue(4, testQueueTimeout)
+	defer q.Close()
+
+	handler := q.Wrap(func(context.Context, json.RawMessage) (any, error) {
+		return 7, nil
+	})
+	value, err := handler(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("wrapped handler: %v", err)
+	}
+	if value != 7 {
+		t.Errorf("value = %v, want 7", value)
+	}
+}
+
+func TestQueueWrapNilReturnsHandlerUnchanged(t *testing.T) {
+	var q *Queue
+	handler := ToolHandler(func(context.Context, json.RawMessage) (any, error) {
+		return 7, nil
+	})
+	value, err := q.Wrap(handler)(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("wrapped handler: %v", err)
+	}
+	if value != 7 {
+		t.Errorf("value = %v, want 7", value)
+	}
+}
 
 func TestQueueReturnsJobResult(t *testing.T) {
 	q := NewQueue(4, testQueueTimeout)

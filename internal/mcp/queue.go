@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"sync"
@@ -187,6 +188,20 @@ func (q *Queue) Submit(ctx context.Context, run Job) (any, error) {
 		return nil, stuck
 	case <-ctx.Done():
 		return nil, fmt.Errorf("queue submit: %w", ctx.Err())
+	}
+}
+
+// Wrap serializes a tool handler through the queue. It submits the handler as a
+// job, so the handler runs on the single worker with the queue's derived context
+// and kill deadline. A nil queue returns the handler unchanged.
+func (q *Queue) Wrap(h ToolHandler) ToolHandler {
+	if q == nil {
+		return h
+	}
+	return func(ctx context.Context, args json.RawMessage) (any, error) {
+		return q.Submit(ctx, func(ctx context.Context) (any, error) {
+			return h(ctx, args)
+		})
 	}
 }
 

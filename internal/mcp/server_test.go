@@ -13,9 +13,17 @@ import (
 	"time"
 )
 
-func testServer() *Server {
+func testServer() *Server { return testServerWrapped(nil) }
+
+func testServerWrapped(wrap HandlerWrapper) *Server {
 	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	s.Instructions = "test instructions"
+	handler := ToolHandler(func(_ context.Context, args json.RawMessage) (any, error) {
+		return string(args), nil
+	})
+	if wrap != nil {
+		handler = wrap(handler)
+	}
 	s.RegisterTool(Tool{
 		Name:         "echo",
 		Title:        "Echo",
@@ -23,9 +31,7 @@ func testServer() *Server {
 		InputSchema:  map[string]any{"type": "object"},
 		OutputSchema: map[string]any{"type": "object"},
 		Annotations:  &ToolAnnotations{ReadOnlyHint: Bool(true)},
-		Handler: func(_ context.Context, args json.RawMessage) (any, error) {
-			return string(args), nil
-		},
+		Handler:      handler,
 	})
 	return s
 }
@@ -190,10 +196,9 @@ func TestServeToolsCall(t *testing.T) {
 // The input stream is held open until the reply arrives, since a disconnect
 // cancels an in-flight queued call.
 func TestServeToolsCallThroughQueue(t *testing.T) {
-	s := testServer()
 	q := NewQueue(4, testQueueTimeout)
 	defer q.Close()
-	s.SetSubmit(q.Submit)
+	s := testServerWrapped(q.Wrap)
 
 	inR, inW := io.Pipe()
 	var out lockedBuffer
@@ -310,14 +315,13 @@ func TestCallToolSerializesThroughQueue(t *testing.T) {
 	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	q := NewQueue(64, testQueueTimeout)
 	defer q.Close()
-	s.SetSubmit(q.Submit)
 
 	var active, maxActive int64
 	s.RegisterTool(Tool{
 		Name:        "engine",
 		Description: "engine",
 		InputSchema: map[string]any{"type": "object"},
-		Handler: func(context.Context, json.RawMessage) (any, error) {
+		Handler: q.Wrap(func(context.Context, json.RawMessage) (any, error) {
 			n := atomic.AddInt64(&active, 1)
 			for {
 				highest := atomic.LoadInt64(&maxActive)
@@ -328,7 +332,7 @@ func TestCallToolSerializesThroughQueue(t *testing.T) {
 			time.Sleep(time.Millisecond)
 			atomic.AddInt64(&active, -1)
 			return nil, nil
-		},
+		}),
 	})
 
 	const calls = 20
@@ -353,16 +357,15 @@ func TestCallToolQueueTimeoutIsToolError(t *testing.T) {
 	s := NewServer(ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	q := NewQueue(4, 20*time.Millisecond)
 	defer q.Close()
-	s.SetSubmit(q.Submit)
 
 	s.RegisterTool(Tool{
 		Name:        "hang",
 		Description: "hang",
 		InputSchema: map[string]any{"type": "object"},
-		Handler: func(ctx context.Context, _ json.RawMessage) (any, error) {
+		Handler: q.Wrap(func(ctx context.Context, _ json.RawMessage) (any, error) {
 			<-ctx.Done()
 			return nil, ctx.Err()
-		},
+		}),
 	})
 
 	result, err := s.callTool(context.Background(), json.RawMessage(`{"name":"hang"}`))

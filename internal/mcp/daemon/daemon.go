@@ -48,9 +48,6 @@ type Daemon struct {
 }
 
 func NewDaemon(server *mcp.Server, queue *mcp.Queue, listener transport.Listener) *Daemon {
-	if queue != nil {
-		server.SetSubmit(queue.Submit)
-	}
 	lifeCtx, lifeCancel := context.WithCancel(context.Background())
 	return &Daemon{
 		server:     server,

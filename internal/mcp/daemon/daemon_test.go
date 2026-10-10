@@ -85,13 +85,14 @@ func TestDaemonCloseClosesActiveConnections(t *testing.T) {
 }
 
 func TestDaemonSerializesAcrossConnections(t *testing.T) {
+	queue := mcp.NewQueue(64, testQueueTimeout)
 	srv := mcp.NewServer(mcp.ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
 	var active, maxActive int64
 	srv.RegisterTool(mcp.Tool{
 		Name:        "engine",
 		Description: "engine",
 		InputSchema: map[string]any{"type": "object"},
-		Handler: func(context.Context, json.RawMessage) (any, error) {
+		Handler: queue.Wrap(func(context.Context, json.RawMessage) (any, error) {
 			n := atomic.AddInt64(&active, 1)
 			for {
 				highest := atomic.LoadInt64(&maxActive)
@@ -102,9 +103,8 @@ func TestDaemonSerializesAcrossConnections(t *testing.T) {
 			time.Sleep(time.Millisecond)
 			atomic.AddInt64(&active, -1)
 			return nil, nil
-		},
+		}),
 	})
-	queue := mcp.NewQueue(64, testQueueTimeout)
 	listener, dial := newTestEndpoint(t)
 	d := NewDaemon(srv, queue, listener)
 	done := make(chan error, 1)

@@ -131,7 +131,7 @@ func newLogger(logLevel string, stderr io.Writer) (*slog.Logger, error) {
 	return slog.New(slog.NewJSONHandler(stderr, &slog.HandlerOptions{Level: level})), nil
 }
 
-func (r *role) newServer(engine tools.Engine) *mcp.Server {
+func (r *role) newServer(engine tools.Engine, wrap mcp.HandlerWrapper) *mcp.Server {
 	srv := mcp.NewServer(mcp.ServerInfo{
 		Name:    "slopfood-godot-mcp",
 		Version: version,
@@ -149,7 +149,7 @@ func (r *role) newServer(engine tools.Engine) *mcp.Server {
 		instructions += " The bound engine version could not be determined from the Godot binary."
 	}
 	srv.Instructions = instructions
-	tools.Register(srv, r.root, engine)
+	tools.Register(srv, r.root, engine, wrap)
 	return srv
 }
 
@@ -279,8 +279,8 @@ func runDaemon(args []string, stdout, stderr io.Writer) error {
 	}()
 
 	engine := tools.NewGodotEngine(session, enginePath)
-	server := role.newServer(engine)
 	queue := mcp.NewQueue(operationQueueDepth, operationQueueTimeout)
+	server := role.newServer(engine, queue.Wrap)
 	d := daemon.NewDaemon(
 		server,
 		queue,

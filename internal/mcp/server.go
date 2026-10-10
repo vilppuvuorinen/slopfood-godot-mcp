@@ -55,13 +55,8 @@ type Server struct {
 	Instructions string
 	mu           sync.RWMutex
 	tools        map[string]Tool
-	// submit, when set, serializes tool calls across all connections; nil runs handlers inline.
-	submit  SubmitFunc
-	writeMu sync.Mutex
+	writeMu      sync.Mutex
 }
-
-// SubmitFunc runs a job, possibly serialized by an operation queue.
-type SubmitFunc func(context.Context, Job) (any, error)
 
 type Tool struct {
 	Name         string           `json:"name"`
@@ -85,6 +80,10 @@ type ToolAnnotations struct {
 func Bool(b bool) *bool { return &b }
 
 type ToolHandler func(ctx context.Context, args json.RawMessage) (any, error)
+
+// HandlerWrapper decorates a tool handler at registration time, e.g. to
+// serialize it through an operation queue.
+type HandlerWrapper func(ToolHandler) ToolHandler
 
 // Only the fields relevant to Type are populated.
 type Content struct {
@@ -260,13 +259,6 @@ func (s *Server) RegisterTool(t Tool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.tools[t.Name] = t
-}
-
-// With a submit function installed, concurrent calls run one at a time; nil runs inline.
-func (s *Server) SetSubmit(fn SubmitFunc) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.submit = fn
 }
 
 // The reader runs on its own goroutine and cancels the connection context on
@@ -535,12 +527,11 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (ToolResu
 	}
 	s.mu.RLock()
 	tool, ok := s.tools[p.Name]
-	submit := s.submit
 	s.mu.RUnlock()
 	if !ok {
 		return ToolResult{}, errors.New("unknown tool: " + p.Name)
 	}
-	out, err := s.callHandler(ctx, submit, tool.Handler, p.Arguments)
+	out, err := tool.Handler(ctx, p.Arguments)
 	if err != nil {
 		return ErrorResult(err.Error()), nil
 	}
@@ -552,19 +543,6 @@ func (s *Server) callTool(ctx context.Context, params json.RawMessage) (ToolResu
 		return ToolResult{}, fmt.Errorf("encode tool result: %w", err)
 	}
 	return TextResult(string(text)), nil
-}
-
-// Submits through the installed submit function so engine calls serialize; a
-// queue timeout cancels any engine work the handler started. Consistency is the
-// engine's: the bridge brackets every request in a scan, so Go does no pre-call
-// settle.
-func (s *Server) callHandler(ctx context.Context, submit SubmitFunc, handler ToolHandler, args json.RawMessage) (any, error) {
-	if submit == nil {
-		return handler(ctx, args)
-	}
-	return submit(ctx, func(ctx context.Context) (any, error) {
-		return handler(ctx, args)
-	})
 }
 
 func (s *Server) write(w io.Writer, resp response) error {

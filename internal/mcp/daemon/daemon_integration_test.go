@@ -52,11 +52,12 @@ func TestUnixDaemonConcurrentClientsSerialize(t *testing.T) {
 	completed := make(chan struct{}, calls)
 
 	srv := mcp.NewServer(mcp.ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	q := mcp.NewQueue(calls, testQueueTimeout)
 	srv.RegisterTool(mcp.Tool{
 		Name:        "mutate",
 		Description: "mutate",
 		InputSchema: map[string]any{"type": "object"},
-		Handler: func(context.Context, json.RawMessage) (any, error) {
+		Handler: q.Wrap(func(context.Context, json.RawMessage) (any, error) {
 			n := atomic.AddInt32(&active, 1)
 			for {
 				highest := atomic.LoadInt32(&maxActive)
@@ -70,10 +71,9 @@ func TestUnixDaemonConcurrentClientsSerialize(t *testing.T) {
 			atomic.AddInt32(&active, -1)
 			completed <- struct{}{}
 			return nil, nil
-		},
+		}),
 	})
 
-	q := mcp.NewQueue(calls, testQueueTimeout)
 	d := NewDaemon(srv, q, l)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()
@@ -124,18 +124,18 @@ func TestUnixDaemonSaturationReturnsOverload(t *testing.T) {
 	var startedOnce sync.Once
 	started := make(chan struct{})
 	srv := mcp.NewServer(mcp.ServerInfo{Name: "test", Version: "0.0.0"}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	q := mcp.NewQueue(1, testQueueTimeout)
 	srv.RegisterTool(mcp.Tool{
 		Name:        "block",
 		Description: "block",
 		InputSchema: map[string]any{"type": "object"},
-		Handler: func(ctx context.Context, _ json.RawMessage) (any, error) {
+		Handler: q.Wrap(func(ctx context.Context, _ json.RawMessage) (any, error) {
 			startedOnce.Do(func() { close(started) })
 			<-ctx.Done()
 			return nil, ctx.Err()
-		},
+		}),
 	})
 
-	q := mcp.NewQueue(1, testQueueTimeout)
 	d := NewDaemon(srv, q, l)
 	done := make(chan error, 1)
 	go func() { done <- d.Serve(context.Background()) }()

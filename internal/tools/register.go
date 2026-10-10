@@ -15,9 +15,14 @@ var allTools = []func(*toolset) mcp.Tool{
 	(*toolset).readNode,
 }
 
-func Register(s *mcp.Server, project string, engine Engine) {
+func Register(s *mcp.Server, project string, engine Engine, wrap mcp.HandlerWrapper) {
+	if wrap == nil {
+		wrap = func(h mcp.ToolHandler) mcp.ToolHandler { return h }
+	}
 	ts := newToolset(project, engine)
 	for _, newTool := range allTools {
-		s.RegisterTool(newTool(ts))
+		tool := newTool(ts)
+		tool.Handler = wrap(tool.Handler)
+		s.RegisterTool(tool)
 	}
 }
