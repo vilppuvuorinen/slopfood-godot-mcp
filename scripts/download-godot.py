@@ -25,7 +25,10 @@ wins. A release whose manifest lacks the engine asset for the target GODOT_OS
 be published before every platform build finishes uploading. The manifests live
 in the godot-builds repository, which is shallow-cloned
 once into <builds-dir> (a few MB) and refreshed on later runs, so no GitHub API
-and no token are involved. A checksum missing from the manifest is filled in from
+and no token are involved. Because a manifest is committed while its release is
+still a draft, a candidate is confirmed to be live with a HEAD probe of its
+asset URLs before it is selected, so a not-yet-published tag is skipped in favor
+of a complete older one. A checksum missing from the manifest is filled in from
 the selected release manifest (releases/godot-<tag>.json), which lists the sha512
 of every published asset, so verification works without a pinned manifest. This
 is how CI chases the newest published build per supported minor:
@@ -332,13 +335,13 @@ def candidate_tags(tags, minor):
 def release_has_assets(release, version, config):
     """Return whether a release manifest carries the assets an install needs.
 
-    A tag's manifest is committed when the release is published, but the
-    release can go public before every platform build finishes uploading, so
-    the newest tag is not always installable. Require the engine asset, and the
-    export templates when they were requested, so resolution can fall back to
-    the newest release that can actually be installed. A missing manifest
-    (offline, or an old tag without one) is treated as usable so pinned and
-    offline flows keep working.
+    A tag's manifest is committed as a release is prepared, so it can list the
+    engine asset, and the export templates when they were requested, before the
+    release is actually published. This manifest-level check drops a tag that
+    will never carry what this install needs; release_assets_live below drops a
+    tag whose assets are not on GitHub yet. A missing manifest (offline, or an
+    old tag without one) is treated as usable so pinned and offline flows keep
+    working.
     """
     if release is None:
         return True
@@ -351,25 +354,56 @@ def release_has_assets(release, version, config):
     return True
 
 
-def select_latest_release(records):
-    """Pick from (tag, release_date, stable, ...) records for a minor line.
+def asset_url(version, asset, config):
+    """Return the GitHub release-download URL for a single release asset."""
+    return "https://github.com/%s/releases/download/%s/%s" % (
+        config.repo,
+        version,
+        asset,
+    )
 
-    A stable release wins when the line has any; otherwise the newest release
-    by date wins. A zero date (manifest unavailable) defers to the tag's
-    version/stage ordering, so resolution still works offline.
+
+def asset_published(url):
+    """Return whether a release asset answers on GitHub.
+
+    A manifest is committed while a release is still a draft, so its assets
+    return 404 until the release goes live; a HEAD probe is what keeps a
+    not-yet-published tag from winning resolution. Only a definitive 404 counts
+    as missing; any other failure (offline, DNS, timeout, rate limit) is
+    inconclusive and treated as published, so offline and pinned flows keep
+    working.
     """
-    stables = [record for record in records if record[2]]
-    pool = stables or records
-    return max(pool, key=lambda record: (record[1], release_sort_key(record[0])))[0]
+    request = urllib.request.Request(
+        url, method="HEAD", headers={"User-Agent": USER_AGENT}
+    )
+    try:
+        with urllib.request.urlopen(request) as response:
+            return response.status < 400
+    except urllib.error.HTTPError as exc:
+        return exc.code != 404
+    except (urllib.error.URLError, OSError):
+        return True
+
+
+def release_assets_live(version, config):
+    """Return whether a release's needed assets are downloadable right now."""
+    assets = [engine_asset_name(version, config)]
+    if config.download_templates == "1":
+        assets.append(templates_asset_name(version))
+    return all(
+        asset_published(asset_url(version, asset, config)) for asset in assets
+    )
 
 
 def resolve_latest_release(minor, config):
     """Return the newest installable release tag for a minor line.
 
-    Ordering comes from each release's release_date in the godot-builds
-    release manifest, with a stable release preferred when the line has one.
-    Releases missing the assets this install needs are dropped first, so a
-    half-published tag never wins over a complete older one.
+    Candidates are ordered by release_date from the godot-builds manifest, with
+    a stable release preferred when the line has one, then walked best-first
+    until one has the needed assets in its manifest and those assets are live
+    on GitHub. This way a tag whose manifest is committed ahead of its release,
+    or that is still missing a platform build, never wins over a complete,
+    published older one.
     """
     candidates = candidate_tags(release_tags(config), minor)
     if not candidates:
@@ -378,33 +412,36 @@ def resolve_latest_release(minor, config):
     for tag in candidates:
         manifest = load_release_manifest(tag, config)
         date = int(manifest.get("release_date") or 0) if manifest else 0
-        records.append(
-            (
-                tag,
-                date,
-                tag.endswith("-stable"),
-                release_has_assets(manifest, tag, config),
-            )
+        records.append((tag, date, tag.endswith("-stable"), manifest))
+    stables = [record for record in records if record[2]]
+    ordered = sorted(
+        stables or records,
+        key=lambda record: (record[1], release_sort_key(record[0])),
+        reverse=True,
+    )
+    for tag, _, _, manifest in ordered:
+        if not release_has_assets(manifest, tag, config):
+            continue
+        if not release_assets_live(tag, config):
+            info("release %s is not published yet; skipping" % tag)
+            continue
+        return tag
+    needed = (
+        "engine or export-template"
+        if config.download_templates == "1"
+        else "engine"
+    )
+    die(
+        "no installable release for minor '%s' in %s: every candidate (%s) "
+        "lacks the %s assets for GODOT_OS=%s"
+        % (
+            minor,
+            config.repo,
+            ", ".join(record[0] for record in records),
+            needed,
+            config.os,
         )
-    installable = [record for record in records if record[3]]
-    if not installable:
-        needed = (
-            "engine or export-template"
-            if config.download_templates == "1"
-            else "engine"
-        )
-        die(
-            "no installable release for minor '%s' in %s: every candidate (%s) "
-            "lacks the %s assets for GODOT_OS=%s"
-            % (
-                minor,
-                config.repo,
-                ", ".join(record[0] for record in records),
-                needed,
-                config.os,
-            )
-        )
-    return select_latest_release(installable)
+    )
 
 
 def list_minors(lower, config, stable_only=False):
