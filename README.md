@@ -80,7 +80,7 @@ sf-godot-mcp [flags]
 | Flag | Default | Description |
 | --- | --- | --- |
 | `--project` | cwd | Godot project directory to bind to |
-| `--log-level` | `info` | `debug`, `info`, `warn`, or `error` |
+| `--log-level` | `warn` | `debug`, `info`, `warn`, or `error` |
 | `--version` | | Print the version and exit |
 
 ## Environment

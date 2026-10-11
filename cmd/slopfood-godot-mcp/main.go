@@ -79,7 +79,7 @@ func newFlags(name string) (*flag.FlagSet, *options) {
 	opts := &options{transport: "auto"}
 	fs := flag.NewFlagSet(name, flag.ContinueOnError)
 	fs.BoolVar(&opts.showVersion, "version", false, "print version and exit")
-	fs.StringVar(&opts.logLevel, "log-level", "info", "log level (debug, info, warn, error)")
+	fs.StringVar(&opts.logLevel, "log-level", "warn", "log level (debug, info, warn, error)")
 	fs.StringVar(&opts.project, "project", "", "Godot project directory to bind to (default: $"+projectEnv+", then the working directory)")
 	fs.DurationVar(&opts.idleTimeout, "idle-timeout", defaultIdleTimeout, "daemon: exit after this long with no clients (0 disables)")
 	fs.StringVar(&opts.logFile, "log-file", "", "daemon: log file (default: a per-project path under the runtime directory)")
