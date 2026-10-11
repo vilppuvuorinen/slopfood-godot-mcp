@@ -15,6 +15,7 @@ licenses.
 - [Command line](#command-line)
 - [Environment](#environment)
 - [Tools](#tools)
+- [Security](#security)
 - [How it differs from upstream](#how-it-differs-from-upstream)
 
 ## Requirements
@@ -107,6 +108,14 @@ The server logs to stderr.
 Scenes, nodes, tilemaps, tilesets, themes, animations, and generic resources are
 mutated through `run_script`; `create_project`, `attach_script`, and the two
 export tools are the dedicated engine-owned operations.
+
+## Security
+
+The server is not a sandbox. `run_script` executes arbitrary GDScript in the
+editor session with the privileges of the user running the server, so it can
+read and write any file that user can, not only files under the bound project.
+The path checks the other tools apply are lexical conveniences, not a security
+boundary. Run the server only against projects and clients you trust.
 
 ## How it differs from upstream
 
