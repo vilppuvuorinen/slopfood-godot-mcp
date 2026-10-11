@@ -3,10 +3,26 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
 )
+
+// runScriptTimeout bounds one run_script call. A synchronous GDScript body runs
+// on the engine main thread and cannot be preempted, so on expiry the session
+// kills and recycles the engine. 60s clears engine boot, a reconcile scan, and
+// legitimately heavy scripts, while sparing an accidental runaway the
+// ten-minute queue deadline.
+const runScriptTimeout = 60 * time.Second
+
+var runScriptTimeoutSolutions = []string{
+	"The body did not finish within " + runScriptTimeout.String() + " and the engine was stopped",
+	"Check for an unbounded loop or a blocking delay and return from the body instead",
+	"An await in the body is not resumed because run() is invoked synchronously",
+}
 
 func (t *toolset) runScript() mcp.Tool {
 	return mcp.Tool{
@@ -72,10 +88,22 @@ func (t *toolset) handleRunScript(ctx context.Context, raw json.RawMessage) (any
 		return result, nil
 	}
 
+	// Bound an accidental runaway or blocking body. Cancellation propagates to
+	// Session.Run, which kills and recycles the engine, so the fault costs this
+	// budget instead of the ten-minute queue deadline.
+	ctx, cancel := context.WithTimeout(ctx, runScriptTimeout)
+	defer cancel()
+
 	res, failure := runEngineCall(ctx, func(ctx context.Context) (godot.RunResult, error) {
 		return t.runEngine(ctx, "run_script", map[string]any{"body": args.Body})
 	}, "Failed to run script", headlessSolutions, headlessSolutions)
 	if failure != nil {
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			return mcp.ErrorResult(
+				fmt.Sprintf("Failed to run script: the body did not finish within %s and the engine was stopped", runScriptTimeout),
+				runScriptTimeoutSolutions...,
+			), nil
+		}
 		return *failure, nil //nolint:nilerr // the failure is reported through the tool result.
 	}
 

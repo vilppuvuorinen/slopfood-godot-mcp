@@ -3,8 +3,11 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/godot"
 	"github.com/vilppuvuorinen/slopfood-godot-mcp/internal/mcp"
@@ -72,6 +75,43 @@ func TestRunScriptRequiresBody(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+}
+
+type blockingRunScriptSession struct {
+	fakeSession
+}
+
+func (s *blockingRunScriptSession) Run(ctx context.Context, _ string, _ string, _ map[string]any) (godot.RunResult, error) {
+	<-ctx.Done()
+	return godot.RunResult{}, fmt.Errorf("engine session: %w", ctx.Err())
+}
+
+func TestRunScriptTimesOut(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+
+	// A short parent deadline wins over runScriptTimeout, so the call expires
+	// without waiting the full budget.
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	out, err := newToolset(root, &blockingRunScriptSession{}).runScript().Handler(ctx, json.RawMessage(`{"body":"while true:\n\tpass\n"}`))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	result, ok := out.(mcp.ToolResult)
+	if !ok {
+		t.Fatalf("result type %T", out)
+	}
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	message := result.Content[0].Text
+	if !strings.Contains(message, "did not finish within") {
+		t.Fatalf("message = %q, want a timeout explanation", message)
+	}
+	if strings.Contains(message, "context deadline exceeded") {
+		t.Fatalf("message = %q, want a classified timeout, not the raw context error", message)
 	}
 }
 
