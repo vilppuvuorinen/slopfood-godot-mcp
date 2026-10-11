@@ -7,7 +7,108 @@ operations bridge is a substantially reworked version of that lineage's
 GDScript, and the rest is a Go rewrite. See `THIRD_PARTY_NOTICES` for the
 licenses.
 
-What it does differently from upstream:
+## Contents
+
+- [Requirements](#requirements)
+- [Install](#install)
+- [Configure your MCP client](#configure-your-mcp-client)
+- [Command line](#command-line)
+- [Environment](#environment)
+- [Tools](#tools)
+- [How it differs from upstream](#how-it-differs-from-upstream)
+
+## Requirements
+
+- **Godot 4.7 or newer.** The server resolves the engine in this order:
+  `$GODOT_PATH`, a local `.godot/<minor>/Godot_v*` build (searched upward from
+  the working directory and from the executable's directory), then `godot` on
+  `PATH`.
+- **An MCP client** that speaks stdio, such as Claude Desktop, Cursor, VS Code,
+  or any client built on the MCP Go/Python/TypeScript SDKs.
+- Building from source needs **Go 1.27 or newer**. The prebuilt binaries are
+  static and have no runtime dependencies.
+
+## Install
+
+### Prebuilt binary
+
+Linux (x86-64):
+
+```sh
+curl -fsSL -o sf-godot-mcp \
+  https://github.com/vilppuvuorinen/slopfood-godot-mcp/releases/download/latest/slopfood-godot-mcp_<version>_linux_amd64
+chmod +x sf-godot-mcp
+sudo install -m 0755 sf-godot-mcp /usr/local/bin/sf-godot-mcp
+```
+
+macOS (Apple silicon):
+
+```sh
+curl -fsSL -o sf-godot-mcp \
+  https://github.com/vilppuvuorinen/slopfood-godot-mcp/releases/download/latest/slopfood-godot-mcp_<version>_darwin_arm64
+chmod +x sf-godot-mcp
+mv sf-godot-mcp /usr/local/bin/sf-godot-mcp
+```
+
+## Configure your MCP client
+
+Point the client at `sf-godot-mcp` and name the project it should bind to. The
+project comes from `--project`, then the process working directory. Most clients
+do not set a useful working directory, so pass the project explicitly:
+
+```json
+{
+  "mcpServers": {
+    "godot": {
+      "command": "sf-godot-mcp",
+      "args": ["--project", "/absolute/path/to/your/godot/project"]
+    }
+  }
+}
+```
+
+Each bound project gets its own long-lived editor process (see
+[How it differs from upstream](#how-it-differs-from-upstream)); it starts on
+first use and shuts down when idle.
+
+## Command line
+
+```text
+sf-godot-mcp [flags]
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--project` | cwd | Godot project directory to bind to |
+| `--log-level` | `info` | `debug`, `info`, `warn`, or `error` |
+| `--version` | | Print the version and exit |
+
+## Environment
+
+| Variable | Description |
+| --- | --- |
+| `GODOT_PATH` | Path to the Godot executable; overrides engine discovery |
+
+The server logs to stderr.
+
+## Tools
+
+| Tool | Writes | Summary |
+| --- | --- | --- |
+| `create_project` | yes | Scaffold a new project (optionally .NET/C#) in the bound root |
+| `validate` | no | Parse `project.godot` and every GDScript, returning diagnostics |
+| `read` | no | Read a scene, animation, tileset, theme, or binary resource |
+| `read_node` | no | Read a node subtree or a tilemap's cells |
+| `run_script` | yes | Run a GDScript body in the live editor session |
+| `attach_script` | yes | Attach a GDScript to a scene node |
+| `export_project` | yes | Export using a preset from `export_presets.cfg` |
+| `export_mesh_library` | yes | Export a scene as a `MeshLibrary` resource |
+
+Scenes, nodes, tilemaps, tilesets, themes, animations, and generic resources are
+mutated through `run_script`; `create_project`, `attach_script`, and the two
+export tools are the dedicated engine-owned operations.
+
+## How it differs from upstream
 
 - **Godot matrix.** CI builds and tests against every published minor from 4.7
   forward, including dev/beta/rc, rather than a single pinned version.
