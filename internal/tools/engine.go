@@ -13,6 +13,7 @@ import (
 // interface; tests fake it.
 type Engine interface {
 	Run(ctx context.Context, project, operation string, params map[string]any) (godot.RunResult, error)
+	RunIsolated(ctx context.Context, project, operation string, params map[string]any) (godot.RunResult, error)
 	RunHeadless(ctx context.Context, project, scriptPath string, extraArgs ...string) (stdout, stderr string, exitCode int, err error)
 	Export(ctx context.Context, project, presetName, outputPath string, debug bool) (stdout, stderr string, exitCode int, err error)
 	Version(ctx context.Context) (string, error)
@@ -35,6 +36,10 @@ func (e godotEngine) Run(ctx context.Context, project, operation string, params 
 	return e.session.Run(ctx, project, operation, params) //nolint:wrapcheck // session errors are already caller-facing.
 }
 
+func (e godotEngine) RunIsolated(ctx context.Context, project, operation string, params map[string]any) (godot.RunResult, error) {
+	return e.session.RunIsolated(ctx, project, operation, params) //nolint:wrapcheck // session errors are already caller-facing.
+}
+
 func (e godotEngine) RunHeadless(ctx context.Context, project, scriptPath string, extraArgs ...string) (string, string, int, error) {
 	return godot.RunScript(ctx, e.executable, project, scriptPath, extraArgs...) //nolint:wrapcheck // godot errors are already caller-facing.
 }
@@ -52,4 +57,11 @@ func (t *toolset) runEngine(ctx context.Context, operation string, params map[st
 		return godot.RunResult{}, errors.New("engine session required: no engine installed on the toolset")
 	}
 	return t.engine.Run(ctx, t.project, operation, params) //nolint:wrapcheck // session errors are already caller-facing.
+}
+
+func (t *toolset) runIsolated(ctx context.Context, operation string, params map[string]any) (godot.RunResult, error) {
+	if t.engine == nil {
+		return godot.RunResult{}, errors.New("engine session required: no engine installed on the toolset")
+	}
+	return t.engine.RunIsolated(ctx, t.project, operation, params) //nolint:wrapcheck // session errors are already caller-facing.
 }

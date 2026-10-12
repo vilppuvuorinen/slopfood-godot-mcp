@@ -105,7 +105,7 @@ The server logs to stderr.
 | `validate` | no | Parse `project.godot` and every GDScript, returning diagnostics |
 | `read` | no | Read a scene, animation, tileset, theme, or binary resource |
 | `read_node` | no | Read a node subtree or a tilemap's cells |
-| `run_script` | yes | Run a GDScript body in the live editor session |
+| `run_script` | yes | Run a GDScript body in a throwaway non-editor engine, then rescan the editor |
 | `attach_script` | yes | Attach a GDScript to a scene node |
 | `export_project` | yes | Export using a preset from `export_presets.cfg` |
 | `export_mesh_library` | yes | Export a scene as a `MeshLibrary` resource |
@@ -138,9 +138,14 @@ boundary. Run the server only against projects and clients you trust.
   read and write; it fills the gaps a text editor leaves. `read` and
   `read_node` expose state that is awkward or impossible to read as text:
   scene trees, tilemaps, tilesets, themes, animations, and binary resources.
-  `run_script` runs GDScript in the live editor session for edits plain text
-  cannot express safely, which is how scenes, nodes, tilemaps, tilesets,
-  themes, animations, and generic resources are mutated. A few engine-owned
+  `run_script` runs GDScript in a throwaway non-editor engine for edits plain
+  text cannot express safely, which is how scenes, nodes, tilemaps, tilesets,
+  themes, animations, and generic resources are mutated. Running without the
+  editor is deliberate: the editor process instantiates non-`@tool` scripts as
+  placeholders, so a body could not read or write plain member state or call
+  methods on a loaded scene; the non-editor engine gives those scripts real
+  instances. The editor session is rescanned after each run to reconcile imports
+  and UIDs. A few engine-owned
   operations stay as dedicated tools: project scaffolding (`create_project`),
   script attachment (`attach_script`), export mutation (`export_project`,
   `export_mesh_library`), and validation (`validate`). A `project.godot` change

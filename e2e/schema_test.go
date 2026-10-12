@@ -79,7 +79,7 @@ func TestToolSchemas(t *testing.T) {
 				}
 			}
 		}},
-		{"run_script", "Run a GDScript function body in the live editor session and return its output; the code runs with full access to the project and editor state", func(t *testing.T, schema toolSchema) {
+		{"run_script", "Run a GDScript function body in a throwaway non-editor engine and return its output; without the editor, non-@tool scripts get real instances, and the editor session is rescanned afterward to reconcile imports and UIDs", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "body")
 			schema.requireStringProps(t, "body")
 			schema.requirePropCount(t, 1)

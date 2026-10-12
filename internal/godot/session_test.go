@@ -250,6 +250,36 @@ func TestSessionForcedTCPFraming(t *testing.T) {
 	}
 }
 
+func TestSessionRunIsolatedIsNonEditor(t *testing.T) {
+	shortRuntimeDir(t)
+	f := newSocketSessionFake(t, defaultSocketResponse)
+	s := NewSessionTransport(f.bin, "/ops.gd", EngineTransportAuto)
+	defer s.Close()
+	project := t.TempDir()
+
+	run, err := s.RunIsolated(context.Background(), project, "run_script", map[string]any{"body": "return 1"})
+	if err != nil {
+		t.Fatalf("RunIsolated: %v", err)
+	}
+	if run.ExitCode != 0 || run.Stdout != "out-1" {
+		t.Fatalf("isolated run: stdout=%q exit=%d", run.Stdout, run.ExitCode)
+	}
+
+	lines := f.argLines(t)
+	if len(lines) != 1 {
+		t.Fatalf("spawn arg lines = %d, want 1 (only the isolated engine)", len(lines))
+	}
+	if strings.Contains(lines[0], "--editor") {
+		t.Errorf("isolated spawn args carry --editor: %q", lines[0])
+	}
+	if !strings.Contains(lines[0], "-- --gd-tcp 127.0.0.1:0") {
+		t.Errorf("isolated spawn args %q missing the ephemeral --gd-tcp user arg", lines[0])
+	}
+	if got := f.startCount(t); got != 1 {
+		t.Fatalf("starts = %d, want 1 (the warm session must not spawn)", got)
+	}
+}
+
 func TestSessionFramesRecorded(t *testing.T) {
 	shortRuntimeDir(t)
 	reqs := filepath.Join(t.TempDir(), "reqs")

@@ -28,9 +28,9 @@ func themeTypeByName(payload testThemePayload, name string) map[string]any {
 }
 
 // TestRunScriptEditorOperations smoke tests the editor-mode mutations that the
-// removed mutation tools used to wrap. The scripts run in the live editor
-// session and the results are read back with the fixed read tools, so a bridge
-// change that breaks editor-mode mutation fails here.
+// removed mutation tools used to wrap. The scripts run through run_script and
+// the results are read back with the fixed read tools, so a bridge change that
+// breaks editor-mode mutation fails here.
 func TestRunScriptEditorOperations(t *testing.T) {
 	t.Parallel()
 
@@ -302,7 +302,7 @@ func childByName(node sceneNode, name string) *sceneNode {
 // TestRunScriptSceneOperations smoke tests the load-mutate-pack-save GDScript
 // that the removed create_scene, add_node, modify_scene_node,
 // remove_scene_node, rename_scene_node, duplicate_scene_node and move_scene_node
-// tools used to wrap. The scripts run in the live editor session and the result
+// tools used to wrap. The scripts run through run_script and the result
 // is read back with read(type=scene), so a bridge change that breaks editor-mode
 // scene mutation fails here.
 func TestRunScriptSceneOperations(t *testing.T) {
@@ -546,7 +546,7 @@ return ResourceSaver.save(packed, "res://scenes/move.tscn")
 		requireContains(t, readFile(t, filepath.Join(root, "scenes", "move.tscn")), `parent="World"`)
 	})
 
-	t.Run("reports a structure error from the editor session", func(t *testing.T) {
+	t.Run("reports a structure error from a run", func(t *testing.T) {
 		root := newProject(t)
 		session := connectProject(t, root)
 		createScene(t, session, "scenes/fail.tscn", "Node2D")
@@ -581,7 +581,7 @@ func readSceneConnections(t *testing.T, session *mcp.ClientSession, scenePath st
 
 // TestRunScriptSceneSignals smoke tests the signal connections the removed
 // add_scene_signal/remove_scene_signal tools used to wrap. The scripts edit the
-// scene through the live editor session and the result is read back from the
+// scene through run_script and the result is read back from the
 // file and with read(type=scene), so a bridge change that breaks editor-mode scene
 // mutation fails here.
 func TestRunScriptSceneSignals(t *testing.T) {

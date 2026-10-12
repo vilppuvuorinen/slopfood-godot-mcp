@@ -16,7 +16,7 @@ metallic = 0.5
 `
 
 // seedResource creates a resource through run_script, since resource creation
-// now goes through the live editor session rather than a dedicated tool.
+// goes through run_script rather than a dedicated tool.
 func seedResource(t *testing.T, session *mcp.ClientSession, resourcePath, resourceType string) {
 	t.Helper()
 	requireScriptSave(t, session, `var resource := `+resourceType+`.new()

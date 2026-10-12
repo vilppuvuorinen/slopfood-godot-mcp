@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"testing"
 )
 
@@ -44,17 +45,6 @@ func TestRunScriptTool(t *testing.T) {
 		}
 		if result["answer"] != float64(42) {
 			t.Errorf("result.answer = %v, want 42", result["answer"])
-		}
-	})
-
-	t.Run("runs in the live editor session", func(t *testing.T) {
-		body := "return EditorInterface.get_resource_filesystem() != null\n"
-		doc := decodeRunScript(t, requireToolText(t, session, "run_script", map[string]any{"body": body}))
-		if !doc.Compiled {
-			t.Fatalf("compiled = false, errors = %+v", doc.Errors)
-		}
-		if doc.Result != true {
-			t.Errorf("result = %v, want true (EditorInterface available)", doc.Result)
 		}
 	})
 
@@ -108,6 +98,57 @@ func TestRunScriptTool(t *testing.T) {
 			t.Fatal("errors = none, want the invalid access diagnostic")
 		}
 	})
+}
+
+// TestRunScriptRealInstances covers the non-editor execution path: a node
+// loaded from a scene gets a real script instance, so plain member state and
+// methods work (an editor-session placeholder exposes only exported properties
+// and cannot run script code).
+func TestRunScriptRealInstances(t *testing.T) {
+	t.Parallel()
+	root := newProject(t)
+	writeE2EFile(t, filepath.Join(root, "scripts", "target.gd"), `extends StaticBody3D
+
+@export var label: String = ""
+var last_region: String = ""
+
+func ping() -> String:
+	return "pong"
+`)
+	writeE2EFile(t, filepath.Join(root, "scenes", "target.tscn"), `[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/target.gd" id="1"]
+
+[node name="RangeTarget" type="StaticBody3D"]
+script = ExtResource("1")
+`)
+	session := connectProject(t, root)
+
+	body := `var inst = load("res://scenes/target.tscn").instantiate()
+inst.set("last_region", "x")
+inst.set("label", "abc")
+return {"last_region": inst.get("last_region"), "label": inst.get("label"), "ping": inst.call("ping")}
+`
+	doc := decodeRunScript(t, requireToolText(t, session, "run_script", map[string]any{"body": body}))
+	if !doc.Compiled {
+		t.Fatalf("compiled = false, errors = %+v", doc.Errors)
+	}
+	if len(doc.Errors) != 0 {
+		t.Errorf("errors = %+v, want none", doc.Errors)
+	}
+	result, ok := doc.Result.(map[string]any)
+	if !ok {
+		t.Fatalf("result = %#v, want an object", doc.Result)
+	}
+	if result["last_region"] != "x" {
+		t.Errorf("last_region = %v, want x", result["last_region"])
+	}
+	if result["label"] != "abc" {
+		t.Errorf("label = %v, want abc", result["label"])
+	}
+	if result["ping"] != "pong" {
+		t.Errorf("ping = %v, want pong", result["ping"])
+	}
 }
 
 func TestRunScriptErrors(t *testing.T) {

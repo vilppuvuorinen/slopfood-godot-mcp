@@ -67,6 +67,10 @@ func (s *oneShotSession) Run(ctx context.Context, project, operation string, par
 	return godot.RunResult{Stdout: stdout, Stderr: stderr}, nil
 }
 
+func (s *oneShotSession) RunIsolated(ctx context.Context, project, operation string, params map[string]any) (godot.RunResult, error) {
+	return s.Run(ctx, project, operation, params)
+}
+
 func (s *oneShotSession) RunHeadless(ctx context.Context, project, scriptPath string, extraArgs ...string) (stdout, stderr string, exitCode int, err error) {
 	return godot.RunScript(ctx, godot.Path(), project, scriptPath, extraArgs...) //nolint:wrapcheck // godot errors are already caller-facing.
 }

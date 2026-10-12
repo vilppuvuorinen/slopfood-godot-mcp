@@ -12,7 +12,8 @@ import (
 )
 
 type fakeSession struct {
-	runs []fakeSessionRun
+	runs         []fakeSessionRun
+	isolatedRuns []fakeSessionRun
 }
 
 type fakeSessionRun struct {
@@ -23,6 +24,11 @@ type fakeSessionRun struct {
 
 func (f *fakeSession) Run(_ context.Context, project, operation string, params map[string]any) (godot.RunResult, error) {
 	f.runs = append(f.runs, fakeSessionRun{project: project, operation: operation, params: params})
+	return godot.RunResult{}, nil
+}
+
+func (f *fakeSession) RunIsolated(_ context.Context, project, operation string, params map[string]any) (godot.RunResult, error) {
+	f.isolatedRuns = append(f.isolatedRuns, fakeSessionRun{project: project, operation: operation, params: params})
 	return godot.RunResult{}, nil
 }
 

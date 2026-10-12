@@ -19,7 +19,7 @@ type runScriptSession struct {
 	payload string
 }
 
-func (s *runScriptSession) Run(_ context.Context, project, operation string, params map[string]any) (godot.RunResult, error) {
+func (s *runScriptSession) RunIsolated(_ context.Context, project, operation string, params map[string]any) (godot.RunResult, error) {
 	s.run = fakeSessionRun{project: project, operation: operation, params: params}
 	return godot.RunResult{Payload: s.payload}, nil
 }
@@ -62,6 +62,81 @@ func TestRunScriptDelegatesToSession(t *testing.T) {
 	}
 }
 
+// isolatedRunScriptSession records editor vs isolated calls and returns a fixed
+// payload for the isolated run so the routing and rescan can be asserted.
+type isolatedRunScriptSession struct {
+	fakeSession
+	payload       string
+	runCalls      []fakeSessionRun
+	isolatedCalls []fakeSessionRun
+}
+
+func (s *isolatedRunScriptSession) Run(_ context.Context, project, operation string, params map[string]any) (godot.RunResult, error) {
+	s.runCalls = append(s.runCalls, fakeSessionRun{project: project, operation: operation, params: params})
+	return godot.RunResult{Payload: s.payload}, nil
+}
+
+func (s *isolatedRunScriptSession) RunIsolated(_ context.Context, project, operation string, params map[string]any) (godot.RunResult, error) {
+	s.isolatedCalls = append(s.isolatedCalls, fakeSessionRun{project: project, operation: operation, params: params})
+	return godot.RunResult{Payload: s.payload}, nil
+}
+
+func TestRunScriptRescansEditor(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+
+	sess := &isolatedRunScriptSession{payload: `{"compiled":true,"result":1,"logs":[],"errors":[]}`}
+	out, err := newToolset(root, sess).runScript().Handler(context.Background(), json.RawMessage(`{"body":"return 1\n"}`))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	result, ok := out.(mcp.ToolResult)
+	if !ok {
+		t.Fatalf("result type %T", out)
+	}
+	if result.IsError {
+		t.Fatalf("unexpected error: %+v", result.Content)
+	}
+	if len(sess.isolatedCalls) != 1 || sess.isolatedCalls[0].operation != "run_script" {
+		t.Fatalf("isolated calls = %+v, want one run_script", sess.isolatedCalls)
+	}
+	if len(sess.runCalls) != 1 || sess.runCalls[0].operation != "rescan_project" {
+		t.Fatalf("editor calls = %+v, want one rescan_project", sess.runCalls)
+	}
+}
+
+type isolatedRescanFailureSession struct {
+	fakeSession
+}
+
+func (s *isolatedRescanFailureSession) RunIsolated(context.Context, string, string, map[string]any) (godot.RunResult, error) {
+	return godot.RunResult{Payload: `{"compiled":true,"result":null,"logs":[],"errors":[]}`}, nil
+}
+
+func (s *isolatedRescanFailureSession) Run(context.Context, string, string, map[string]any) (godot.RunResult, error) {
+	return godot.RunResult{ExitCode: 1, Stderr: "scan exploded"}, nil
+}
+
+func TestRunScriptRescanFailure(t *testing.T) {
+	root := t.TempDir()
+	makeProject(t, root)
+
+	out, err := newToolset(root, &isolatedRescanFailureSession{}).runScript().Handler(context.Background(), json.RawMessage(`{"body":"return 1\n"}`))
+	if err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	result, ok := out.(mcp.ToolResult)
+	if !ok {
+		t.Fatalf("result type %T", out)
+	}
+	if !result.IsError {
+		t.Fatalf("expected an error result: %+v", result.Content)
+	}
+	if message := result.Content[0].Text; !strings.Contains(message, "could not be rescanned") {
+		t.Fatalf("message = %q, want a rescan-failure explanation", message)
+	}
+}
+
 func TestRunScriptRequiresBody(t *testing.T) {
 	root := t.TempDir()
 	makeProject(t, root)
@@ -82,7 +157,7 @@ type blockingRunScriptSession struct {
 	fakeSession
 }
 
-func (s *blockingRunScriptSession) Run(ctx context.Context, _ string, _ string, _ map[string]any) (godot.RunResult, error) {
+func (s *blockingRunScriptSession) RunIsolated(ctx context.Context, _ string, _ string, _ map[string]any) (godot.RunResult, error) {
 	<-ctx.Done()
 	return godot.RunResult{}, fmt.Errorf("engine session: %w", ctx.Err())
 }

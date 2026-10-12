@@ -51,6 +51,12 @@ type Session struct {
 
 	transport EngineTransport
 
+	// editor selects --editor at spawn. The warm session is editor-mode so
+	// EditorInterface/EditorFileSystem are live; a throwaway isolated session
+	// (RunIsolated) is not, which is what gives non-@tool scripts real
+	// instances instead of editor placeholders.
+	editor bool
+
 	operationCap int
 
 	proc   *sessionProc
@@ -147,6 +153,7 @@ func NewSessionTransport(executable, script string, transport EngineTransport) *
 		executable:   executable,
 		script:       script,
 		transport:    transport,
+		editor:       true,
 		operationCap: defaultOperationCap,
 		closeTimeout: closeQuitTimeout + closeKillGrace,
 	}
@@ -185,8 +192,10 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 	}
 
 	// A changed class cache is reconciled by a rescan in the warm editor; a
-	// changed project.godot is handled by a restart in restartNeeded.
-	if s.consumeRescan(project) {
+	// changed project.godot is handled by a restart in restartNeeded. A
+	// non-editor session has no EditorFileSystem to rescan with, so it skips
+	// this.
+	if s.editor && s.consumeRescan(project) {
 		if rescanErr := s.runRescanLocked(ctx, p); rescanErr != nil {
 			return RunResult{}, rescanErr
 		}
@@ -238,6 +247,25 @@ func (s *Session) Run(ctx context.Context, project, operation string, params map
 		result.ExitCode = 1
 	}
 	return result, nil
+}
+
+// RunIsolated runs one operation in a throwaway non-editor engine and stops it.
+// Without --editor, GDScript creates real script instances rather than editor
+// placeholders, so a run_script body can read and write script member state and
+// call methods on loaded scenes. The throwaway engine binds an ephemeral
+// loopback TCP port instead of the warm session's Unix socket, so it cannot
+// clobber it; the caller reconciles the editor session's imports and UIDs
+// afterward with a rescan.
+func (s *Session) RunIsolated(ctx context.Context, project, operation string, params map[string]any) (RunResult, error) {
+	isolated := &Session{
+		executable:   s.executable,
+		script:       s.script,
+		transport:    EngineTransportTCP,
+		operationCap: s.operationCap,
+		closeTimeout: s.closeTimeout,
+	}
+	defer func() { _ = isolated.Close() }()
+	return isolated.Run(ctx, project, operation, params)
 }
 
 // Close stops the engine, waiting up to closeTimeout for the graceful path. If
@@ -386,7 +414,7 @@ func (s *Session) startLocked(project string, stamp fileStamp, checkStartup bool
 	if s.proc != nil {
 		return s.proc, nil
 	}
-	p, err := startSessionProc(s.executable, s.script, project, s.transport, checkStartup)
+	p, err := startSessionProc(s.executable, s.script, project, s.transport, s.editor, checkStartup)
 	if err != nil {
 		s.lastProjectStamp = stamp
 		var broken *projectBrokenError
@@ -433,7 +461,7 @@ func engineLaunch(project string, transport EngineTransport) (args []string, soc
 	return nil, "", fmt.Errorf("engine session: unsupported transport %q", transport)
 }
 
-func startSessionProc(executable, script, project string, transport EngineTransport, checkStartup bool) (*sessionProc, error) {
+func startSessionProc(executable, script, project string, transport EngineTransport, editor, checkStartup bool) (*sessionProc, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	launchArgs, socketPath, err := engineLaunch(project, transport)
 	if err != nil {
@@ -441,7 +469,12 @@ func startSessionProc(executable, script, project string, transport EngineTransp
 		return nil, err
 	}
 	// --editor makes EditorInterface and EditorFileSystem live; user args after -- reach OS.get_cmdline_user_args.
-	args := append([]string{"--headless", "--editor", "--path", project, "--script", script, "--"}, launchArgs...)
+	args := []string{"--headless"}
+	if editor {
+		args = append(args, "--editor")
+	}
+	args = append(args, "--path", project, "--script", script, "--")
+	args = append(args, launchArgs...)
 
 	cmd := newCommand(ctx, executable, args...)
 	stdout, err := cmd.StdoutPipe()
