@@ -272,7 +272,8 @@ jobs:
           set -euo pipefail
           # Recreate rather than clobber so the `latest` tag tracks HEAD; asset
           # names are version-independent, so the download URLs stay stable.
-          gh release delete latest --yes --cleanup-tag || true
+          # --repo is required: this job never checks out, so gh cannot infer it.
+          gh release delete latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
           gh release create latest dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
