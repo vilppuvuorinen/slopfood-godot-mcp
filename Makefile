@@ -28,14 +28,16 @@ EVALS_ARGS ?=
 all: fmt vet test build
 
 # Cross-compile every release target into dist/ and write checksums.txt, then
-# guard portability by building/vetting for Windows and macOS.
+# guard portability by building/vetting for Windows and macOS. Asset names are
+# version-independent so releases/latest/download/<name> is a permanent URL; the
+# version lives in the binary itself (-ldflags) and in the release title.
 .PHONY: build
 build:
 	rm -rf '$(DIST)'
 	mkdir -p '$(DIST)'
 	@set -e; for target in $(RELEASE_TARGETS); do \
 		os=$${target%/*}; arch=$${target#*/}; \
-		name='$(BINARY)_$(VERSION)_'$$os'_'$$arch; \
+		name='$(BINARY)_'$$os'_'$$arch; \
 		if [ "$$os" = windows ]; then name=$$name.exe; fi; \
 		printf 'building %s\n' "$$name"; \
 		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch \

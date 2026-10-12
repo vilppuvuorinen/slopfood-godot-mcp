@@ -33,11 +33,16 @@ licenses.
 
 ### Prebuilt binary
 
+The rolling `latest` release uses version-independent asset names, so these
+URLs always point at the newest build. Swap `linux_amd64` for `linux_arm64`,
+`darwin_amd64`, `darwin_arm64`, `windows_amd64.exe`, or `windows_arm64.exe` as
+needed.
+
 Linux (x86-64):
 
 ```sh
 curl -fsSL -o sf-godot-mcp \
-  https://github.com/vilppuvuorinen/slopfood-godot-mcp/releases/download/latest/slopfood-godot-mcp_<version>_linux_amd64
+  https://github.com/vilppuvuorinen/slopfood-godot-mcp/releases/download/latest/slopfood-godot-mcp_linux_amd64
 chmod +x sf-godot-mcp
 sudo install -m 0755 sf-godot-mcp /usr/local/bin/sf-godot-mcp
 ```
@@ -46,7 +51,7 @@ macOS (Apple silicon):
 
 ```sh
 curl -fsSL -o sf-godot-mcp \
-  https://github.com/vilppuvuorinen/slopfood-godot-mcp/releases/download/latest/slopfood-godot-mcp_<version>_darwin_arm64
+  https://github.com/vilppuvuorinen/slopfood-godot-mcp/releases/download/latest/slopfood-godot-mcp_darwin_arm64
 chmod +x sf-godot-mcp
 mv sf-godot-mcp /usr/local/bin/sf-godot-mcp
 ```

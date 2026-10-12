@@ -107,11 +107,11 @@ jobs:
           name: release-dist
           path: dist
       # Artifacts lose the executable bit; restore it before the suite execs it.
-      - run: chmod +x "dist/slopfood-godot-mcp_${{ needs.build.outputs.version }}_linux_amd64"
+      - run: chmod +x "dist/slopfood-godot-mcp_linux_amd64"
       - name: e2e (Godot ${{ matrix.minor }})
         working-directory: e2e
         env:
-          GODOT_MCP_BIN: ${{ github.workspace }}/dist/slopfood-godot-mcp_${{ needs.build.outputs.version }}_linux_amd64
+          GODOT_MCP_BIN: ${{ github.workspace }}/dist/slopfood-godot-mcp_linux_amd64
           GODOT_MINOR: ${{ matrix.minor }}
         run: |
           go mod download
@@ -168,7 +168,7 @@ jobs:
         working-directory: e2e
         shell: pwsh
         env:
-          GODOT_MCP_BIN: ${{ github.workspace }}\dist\slopfood-godot-mcp_${{ needs.build.outputs.version }}_windows_amd64.exe
+          GODOT_MCP_BIN: ${{ github.workspace }}\dist\slopfood-godot-mcp_windows_amd64.exe
           GODOT_MINOR: ${{ env.GODOT_MINOR }}
         run: |
           go mod download
@@ -234,7 +234,7 @@ jobs:
             x86_64) goarch=amd64 ;;
             *) echo "::error::unsupported arch $(uname -m)"; exit 1 ;;
           esac
-          binary="$GITHUB_WORKSPACE/dist/slopfood-godot-mcp_${{ needs.build.outputs.version }}_darwin_$goarch"
+          binary="$GITHUB_WORKSPACE/dist/slopfood-godot-mcp_darwin_$goarch"
           chmod +x "$binary"
           echo "GODOT_MCP_BIN=$binary" >> "$GITHUB_ENV"
       - name: e2e (Godot ${{ env.GODOT_MINOR }}, macos)
@@ -270,8 +270,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Asset names embed VERSION, so recreate rather than clobber: this
-          # drops the previous build's files and re-points the tag at HEAD.
+          # Recreate rather than clobber so the `latest` tag tracks HEAD; asset
+          # names are version-independent, so the download URLs stay stable.
           gh release delete latest --yes --cleanup-tag || true
           gh release create latest dist/* \
             --repo "$GITHUB_REPOSITORY" \
