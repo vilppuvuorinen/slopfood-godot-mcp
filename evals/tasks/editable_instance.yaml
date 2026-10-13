@@ -1,0 +1,41 @@
+id: editable_instance
+description: Edit a node inside an instanced sub-scene so the override persists.
+fixture: editable_instance
+prompt: |
+  In main.tscn, the node "Foe" is an instance of res://foe.tscn and has a Label
+  child (path Foe/Label). Change that Label's text to "3" in main.tscn and save
+  the scene. Keep Foe as an instance of res://foe.tscn, and do not modify
+  foe.tscn.
+checks:
+  - kind: node_property
+    scene: res://main.tscn
+    path: Foe/Label
+    property: text
+    value: "3"
+    required: true
+  # pack() only records nodes owned by the packed root, so the override is
+  # dropped unless the instance is marked editable first. Its presence proves
+  # the edit was persisted as an instance override.
+  - kind: file_contains
+    path: res://main.tscn
+    value: '[editable path="Foe"]'
+  # The Foe node must stay a real instance; inlining the sub-scene to force the
+  # change through is not acceptable.
+  - kind: node_instance
+    scene: res://main.tscn
+    path: Foe
+    scene_file: res://foe.tscn
+    required: true
+  - kind: file_unchanged
+    path: res://foe.tscn
+    required: true
+targets:
+  - path: res://main.tscn
+    form: text
+  - path: res://foe.tscn
+    form: text
+rubric: |
+  main.tscn's Foe node stays an instance of res://foe.tscn and the Label under
+  it now has text "3", persisted as an override ([editable path="Foe"]).
+  foe.tscn itself is unchanged.
+timeout_s: 300

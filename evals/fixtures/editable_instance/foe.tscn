@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[node name="Foe" type="CharacterBody2D"]
+
+[node name="Label" type="Label" parent="."]
+text = "100"
