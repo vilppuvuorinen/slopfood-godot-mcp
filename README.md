@@ -106,21 +106,27 @@ The server logs to stderr.
 | `read` | no | Read a scene, animation, tileset, theme, or binary resource |
 | `read_node` | no | Read a node subtree or a tilemap's cells |
 | `run_script` | yes | Run a GDScript body in a throwaway non-editor engine, then rescan the editor |
+| `run_script_file` | yes | Run a project GDScript file headlessly via `--script`, returning stdout, stderr, and exit code |
+| `run_project` | yes | Boot the main scene in a headless engine for a bounded number of frames, returning stdout, stderr, and exit code |
 | `attach_script` | yes | Attach a GDScript to a scene node |
 | `export_project` | yes | Export using a preset from `export_presets.cfg` |
 | `export_mesh_library` | yes | Export a scene as a `MeshLibrary` resource |
 
 Scenes, nodes, tilemaps, tilesets, themes, animations, and generic resources are
 mutated through `run_script`; `create_project`, `attach_script`, and the two
-export tools are the dedicated engine-owned operations.
+export tools are the dedicated engine-owned operations. `run_script_file` and
+`run_project` are one-shot test/boot runners: both spawn a throwaway `--headless`
+engine, capture its raw output, and return the exit code without touching the
+warm editor session or rescanning it afterward.
 
 ## Security
 
-The server is not a sandbox. `run_script` executes arbitrary GDScript in the
-editor session with the privileges of the user running the server, so it can
-read and write any file that user can, not only files under the bound project.
-The path checks the other tools apply are lexical conveniences, not a security
-boundary. Run the server only against projects and clients you trust.
+The server is not a sandbox. `run_script`, `run_script_file`, and `run_project`
+execute arbitrary GDScript in a throwaway engine with the privileges of the user
+running the server, so they can read and write any file that user can, not only
+files under the bound project. The path checks the other tools apply are lexical
+conveniences, not a security boundary. Run the server only against projects and
+clients you trust.
 
 ## How it differs from upstream
 
@@ -153,9 +159,12 @@ boundary. Run the server only against projects and clients you trust.
   call fails with the engine's parse error until it is fixed, and `validate`
   reports both the project and script diagnostics. Imports and UID sidecars are
   reconciled automatically by the editor session, so there is no explicit
-  rescan tool. Upstream's runtime
-  tools (`run_project`, `stop_project`, `get_debug_output`, `launch_editor`) are
-  not present.
+  rescan tool. The test/boot runners (`run_script_file`, `run_project`) are
+  likewise one-shot `--headless` spawns: they run a `--script` entrypoint or the
+  main scene for a bounded number of frames and return raw stdout, stderr, and
+  the exit code. Upstream's interactive runtime control (`stop_project`,
+  `get_debug_output`, `launch_editor`) is not present; `run_project` is a
+  bounded smoke run, not a start/stop handle.
 - **No runtime dependencies.** The server is built from the Go standard library
   only.
 

@@ -11,6 +11,8 @@ var allTools = []func(*toolset) mcp.Tool{
 	(*toolset).exportMeshLibrary,
 	(*toolset).attachScript,
 	(*toolset).runScript,
+	(*toolset).runScriptFile,
+	(*toolset).runProject,
 	(*toolset).read,
 	(*toolset).readNode,
 }

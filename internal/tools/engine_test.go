@@ -36,6 +36,10 @@ func (f *fakeSession) RunHeadless(context.Context, string, string, ...string) (s
 	return "", "", 0, nil
 }
 
+func (f *fakeSession) RunProject(context.Context, string, int, ...string) (string, string, int, error) {
+	return "", "", 0, nil
+}
+
 func (f *fakeSession) Export(context.Context, string, string, string, bool) (string, string, int, error) {
 	return "", "", 0, nil
 }

@@ -42,7 +42,7 @@ func registeredToolNames(t *testing.T) map[string]bool {
 
 func TestRegisterAllTools(t *testing.T) {
 	names := registeredToolNames(t)
-	for _, name := range []string{"validate", "attach_script", "run_script", "read", "read_node"} {
+	for _, name := range []string{"validate", "attach_script", "run_script", "run_script_file", "run_project", "read", "read_node"} {
 		if !names[name] {
 			t.Errorf("tool %q not registered", name)
 		}
@@ -61,8 +61,8 @@ func TestToolsUnique(t *testing.T) {
 		}
 		seen[tool.Name] = true
 	}
-	if len(seen) != 8 {
-		t.Errorf("registered %d tools, want 8", len(seen))
+	if len(seen) != 10 {
+		t.Errorf("registered %d tools, want 10", len(seen))
 	}
 }
 

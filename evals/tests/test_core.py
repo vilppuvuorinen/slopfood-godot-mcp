@@ -14,7 +14,9 @@ REGISTERED_MCP = [
     "export_project",
     "read",
     "read_node",
+    "run_project",
     "run_script",
+    "run_script_file",
     "validate",
 ]
 KNOWN_CHECK_KINDS = {

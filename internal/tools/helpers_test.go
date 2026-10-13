@@ -79,6 +79,10 @@ func (s *oneShotSession) Export(ctx context.Context, project, presetName, output
 	return godot.Export(ctx, godot.Path(), project, presetName, outputPath, debug) //nolint:wrapcheck // godot errors are already caller-facing.
 }
 
+func (s *oneShotSession) RunProject(ctx context.Context, project string, quitAfter int, extraArgs ...string) (stdout, stderr string, exitCode int, err error) {
+	return godot.RunProject(ctx, godot.Path(), project, quitAfter, extraArgs...) //nolint:wrapcheck // godot errors are already caller-facing.
+}
+
 func (s *oneShotSession) Version(ctx context.Context) (string, error) {
 	return godot.Version(ctx, godot.Path()) //nolint:wrapcheck // godot errors are already caller-facing.
 }

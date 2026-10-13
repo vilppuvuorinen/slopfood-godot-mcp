@@ -15,6 +15,7 @@ type Engine interface {
 	Run(ctx context.Context, project, operation string, params map[string]any) (godot.RunResult, error)
 	RunIsolated(ctx context.Context, project, operation string, params map[string]any) (godot.RunResult, error)
 	RunHeadless(ctx context.Context, project, scriptPath string, extraArgs ...string) (stdout, stderr string, exitCode int, err error)
+	RunProject(ctx context.Context, project string, quitAfter int, extraArgs ...string) (stdout, stderr string, exitCode int, err error)
 	Export(ctx context.Context, project, presetName, outputPath string, debug bool) (stdout, stderr string, exitCode int, err error)
 	Version(ctx context.Context) (string, error)
 }
@@ -44,6 +45,10 @@ func (e godotEngine) RunHeadless(ctx context.Context, project, scriptPath string
 	return godot.RunScript(ctx, e.executable, project, scriptPath, extraArgs...) //nolint:wrapcheck // godot errors are already caller-facing.
 }
 
+func (e godotEngine) RunProject(ctx context.Context, project string, quitAfter int, extraArgs ...string) (string, string, int, error) {
+	return godot.RunProject(ctx, e.executable, project, quitAfter, extraArgs...) //nolint:wrapcheck // godot errors are already caller-facing.
+}
+
 func (e godotEngine) Export(ctx context.Context, project, presetName, outputPath string, debug bool) (string, string, int, error) {
 	return godot.Export(ctx, e.executable, project, presetName, outputPath, debug) //nolint:wrapcheck // godot errors are already caller-facing.
 }
@@ -64,4 +69,20 @@ func (t *toolset) runIsolated(ctx context.Context, operation string, params map[
 		return godot.RunResult{}, errors.New("engine session required: no engine installed on the toolset")
 	}
 	return t.engine.RunIsolated(ctx, t.project, operation, params) //nolint:wrapcheck // session errors are already caller-facing.
+}
+
+// runHeadless runs a project GDScript file as a one-shot --script entrypoint.
+func (t *toolset) runHeadless(ctx context.Context, scriptPath string, extraArgs ...string) (string, string, int, error) {
+	if t.engine == nil {
+		return "", "", 0, errors.New("engine session required: no engine installed on the toolset")
+	}
+	return t.engine.RunHeadless(ctx, t.project, scriptPath, extraArgs...) //nolint:wrapcheck // godot errors are already caller-facing.
+}
+
+// runHeadlessProject boots the project's main scene in a one-shot headless engine.
+func (t *toolset) runHeadlessProject(ctx context.Context, quitAfter int, extraArgs ...string) (string, string, int, error) {
+	if t.engine == nil {
+		return "", "", 0, errors.New("engine session required: no engine installed on the toolset")
+	}
+	return t.engine.RunProject(ctx, t.project, quitAfter, extraArgs...) //nolint:wrapcheck // godot errors are already caller-facing.
 }
