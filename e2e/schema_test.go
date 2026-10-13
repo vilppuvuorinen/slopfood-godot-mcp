@@ -20,7 +20,8 @@ func TestToolSchemas(t *testing.T) {
 		}},
 		{"create_project", "Create a new Godot project in the bound project root (additive; fails if project.godot already exists)", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t, "projectName")
-			schema.requireProps(t, "projectName", "dotnet")
+			schema.requireProps(t, "projectName", "description", "mainScene", "dotnet")
+			schema.requireStringProps(t, "projectName", "description", "mainScene")
 			schema.requireType(t, "dotnet", "boolean")
 		}},
 		{"export_mesh_library", "Export a scene as a MeshLibrary resource, overwriting the output file if it exists", func(t *testing.T, schema toolSchema) {

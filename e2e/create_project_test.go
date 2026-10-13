@@ -7,6 +7,24 @@ import (
 	"testing"
 )
 
+// engineFeatureTag is the major.minor tag create_project embeds, mirroring the
+// server's engine resolution: an explicit GODOT_PATH, then GODOT_MINOR, then the
+// pinned default minor.
+func engineFeatureTag(t *testing.T) string {
+	t.Helper()
+	if path := os.Getenv("GODOT_PATH"); path != "" {
+		parts := strings.Split(godotVersion(t, path), ".")
+		if len(parts) < 2 {
+			t.Fatalf("engine version from GODOT_PATH has no major.minor")
+		}
+		return parts[0] + "." + parts[1]
+	}
+	if minor := os.Getenv("GODOT_MINOR"); minor != "" {
+		return minor
+	}
+	return defaultGodotMinor
+}
+
 // The server is bound to the target directory because create_project creates the bound root itself.
 func TestCreateProjectTool(t *testing.T) {
 	t.Parallel()
@@ -24,12 +42,28 @@ func TestCreateProjectTool(t *testing.T) {
 		requireContains(t, content,
 			"config_version=5",
 			`config/name="My Game"`,
-			`config/features=PackedStringArray("4.4")`,
+			`config/features=PackedStringArray("`+engineFeatureTag(t)+`")`,
 		)
 		requireNotContains(t, content, "[dotnet]")
 		if _, err := os.Stat(filepath.Join(dir, "My_Game.csproj")); !os.IsNotExist(err) {
 			t.Errorf("plain project unexpectedly wrote a .csproj (err=%v)", err)
 		}
+	})
+
+	t.Run("accepts description and main scene", func(t *testing.T) {
+		dir := filepath.Join(t.TempDir(), "game")
+		session := connectProject(t, dir)
+		requireToolText(t, session, "create_project", map[string]any{
+			"projectName": "Settled",
+			"description": "A demo game",
+			"mainScene":   "scenes/main.tscn",
+		})
+
+		content := readFile(t, filepath.Join(dir, "project.godot"))
+		requireContains(t, content,
+			`config/description="A demo game"`,
+			`run/main_scene="res://scenes/main.tscn"`,
+		)
 	})
 
 	t.Run("existing project rejected", func(t *testing.T) {
@@ -63,7 +97,7 @@ func TestCreateProjectDotnetTool(t *testing.T) {
 
 	content := readFile(t, filepath.Join(dir, "project.godot"))
 	requireContains(t, content,
-		`config/features=PackedStringArray("4.4", "C#")`,
+		`config/features=PackedStringArray("`+engineFeatureTag(t)+`", "C#")`,
 		"[dotnet]",
 		`project/assembly_name="My_Rpg_Game_"`,
 	)

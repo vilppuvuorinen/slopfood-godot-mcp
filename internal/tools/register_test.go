@@ -157,6 +157,17 @@ func assertTypedSchemas(t *testing.T, toolName, path string, node any) {
 			return
 		}
 		for key, value := range n {
+			// A properties map is a container of schemas, not a schema itself;
+			// recurse into each property's schema so a property literally named
+			// "description" is not mistaken for a bare-description node.
+			if key == "properties" {
+				if props, ok := value.(map[string]any); ok {
+					for name, schema := range props {
+						assertTypedSchemas(t, toolName, path+".properties."+name, schema)
+					}
+					continue
+				}
+			}
 			assertTypedSchemas(t, toolName, path+"."+key, value)
 		}
 	case []any:

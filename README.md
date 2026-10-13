@@ -101,7 +101,7 @@ The server logs to stderr.
 
 | Tool | Writes | Summary |
 | --- | --- | --- |
-| `create_project` | yes | Scaffold a new project (optionally .NET/C#) in the bound root |
+| `create_project` | yes | Scaffold a new project (name, description, main scene, optionally .NET/C#) in the bound root |
 | `validate` | no | Parse `project.godot` and every GDScript, returning diagnostics |
 | `read` | no | Read a scene, animation, tileset, theme, or binary resource |
 | `read_node` | no | Read a node subtree or a tilemap's cells |
