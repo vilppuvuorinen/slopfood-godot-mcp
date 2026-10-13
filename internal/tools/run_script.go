@@ -33,9 +33,24 @@ var runScriptTimeoutSolutions = []string{
 
 func (t *toolset) runScript() mcp.Tool {
 	return mcp.Tool{
-		Name:        "run_script",
-		Title:       "Run GDScript",
-		Description: "Run a GDScript function body in a throwaway non-editor engine and return its output; without the editor, non-@tool scripts get real instances, and the editor session is rescanned afterward to reconcile imports and UIDs",
+		Name:  "run_script",
+		Title: "Run GDScript",
+		Description: `Run a GDScript function body in a throwaway non-editor engine and return its output; without the editor, non-@tool scripts get real instances, and the editor session is rescanned afterward to reconcile imports and UIDs.
+
+Scene edits follow a load, instantiate, mutate, pack, save pattern:
+
+    var scene: PackedScene = load("res://main.tscn")
+    var root: Node = scene.instantiate()
+    root.get_node("Player").visible = false
+    var packed := PackedScene.new()
+    packed.pack(root)
+    return ResourceSaver.save(packed, "res://main.tscn")
+
+pack records only nodes owned by the packed root, so a change to a node inside an instanced sub-scene is dropped unless that instance is marked editable first:
+
+    var foe: Node = root.get_node("Foe")  # instance of foe.tscn
+    foe.get_node("Health").value = 3
+    foe.get_owner().set_editable_instance(foe, true)`,
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: mcp.Bool(true), IdempotentHint: mcp.Bool(false), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type": "object",
