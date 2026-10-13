@@ -73,7 +73,7 @@ func TestValidateSchema(t *testing.T) {
 	if tool.Name != "validate" {
 		t.Errorf("name = %q", tool.Name)
 	}
-	if tool.Description != "Validate project.godot and every GDScript file in the project, returning all diagnostics" {
+	if tool.Description != "Validate project.godot and every GDScript file in the project, returning all diagnostics. Reads from disk; the editor session reconciles on-disk changes automatically on each tool call." {
 		t.Errorf("description = %q", tool.Description)
 	}
 	if tool.Annotations == nil || tool.Annotations.ReadOnlyHint == nil || !*tool.Annotations.ReadOnlyHint {

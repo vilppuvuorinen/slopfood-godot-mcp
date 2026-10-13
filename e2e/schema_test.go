@@ -100,7 +100,7 @@ pack records only nodes owned by the packed root, so a change to a node inside a
 			schema.requireStringProps(t, "body")
 			schema.requirePropCount(t, 1)
 		}},
-		{"validate", "Validate project.godot and every GDScript file in the project, returning all diagnostics", func(t *testing.T, schema toolSchema) {
+		{"validate", "Validate project.godot and every GDScript file in the project, returning all diagnostics. Reads from disk; the editor session reconciles on-disk changes automatically on each tool call.", func(t *testing.T, schema toolSchema) {
 			schema.requireRequired(t)
 			schema.requirePropCount(t, 0)
 		}},

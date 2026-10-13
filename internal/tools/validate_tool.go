@@ -16,7 +16,7 @@ func (t *toolset) validate() mcp.Tool {
 	return mcp.Tool{
 		Name:        "validate",
 		Title:       "Validate",
-		Description: "Validate project.godot and every GDScript file in the project, returning all diagnostics",
+		Description: "Validate project.godot and every GDScript file in the project, returning all diagnostics. Reads from disk; the editor session reconciles on-disk changes automatically on each tool call.",
 		Annotations: &mcp.ToolAnnotations{ReadOnlyHint: mcp.Bool(true), OpenWorldHint: mcp.Bool(false)},
 		InputSchema: map[string]any{
 			"type":       "object",
