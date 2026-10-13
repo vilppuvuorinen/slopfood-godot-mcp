@@ -32,7 +32,7 @@ func (t *toolset) readNode() mcp.Tool {
 				},
 				"nodePath": map[string]any{
 					"type":        "string",
-					"description": `Path to the node within the scene, relative to the scene root (e.g., "Player" or "Player/Sprite2D")`,
+					"description": `Path to the node within the scene, relative to the scene root. Use "." for the scene root itself (e.g., ".", "Player", or "Player/Sprite2D")`,
 				},
 				"depth": map[string]any{
 					"type":        "integer",
