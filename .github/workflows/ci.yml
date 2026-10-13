@@ -270,10 +270,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          # Publishing an empty release is worse than failing: the README's
+          # stable download URLs would 404 on the missing assets.
+          if [ -z "$(ls -A dist)" ]; then
+            echo "::error::dist/ is empty; refusing to publish an asset-less release" >&2
+            exit 1
+          fi
           # Recreate rather than clobber so the `latest` tag tracks HEAD; asset
           # names are version-independent, so the download URLs stay stable.
           # --repo is required: this job never checks out, so gh cannot infer it.
+          # Drop the release and its tag before recreating: gh refuses to create
+          # with --target while the tag still exists, and --cleanup-tag alone
+          # leaves the tag behind when there is no release to delete.
           gh release delete latest --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
+          gh api --method DELETE "repos/$GITHUB_REPOSITORY/git/refs/tags/latest" >/dev/null 2>&1 || true
           gh release create latest dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
