@@ -626,7 +626,7 @@ func _inherited_scene_base(full_scene_path):
     return project_relative(str(ext_paths.get(root_instance, "")))
 
 # The name must start its own attribute, so an id lookup does not match inside uid=.
-func _tscn_attr(line, name):
+func _tscn_attr(line, name) -> String:
     var marker = name + "=\""
     var start = 0
     while true:
@@ -640,6 +640,7 @@ func _tscn_attr(line, name):
                 return ""
             return line.substr(value_start, end - value_start)
         start = at + 1
+    return ""
 
 # pack() cannot re-serialize an inherited root as an instance; it would replace the base reference with a full copy.
 func _reject_inherited_scene(result: Result, full_scene_path):
@@ -865,11 +866,10 @@ func attach_script(result: Result, params) -> Result:
     result.out("Script '" + full_script_path + "' attached successfully to node in: " + full_scene_path)
     return result
 
-# Compiles the caller's function body in-memory and runs it inside the live
-# editor session. The engine default logger still prints to stdout; the
-# ScriptRunLogger observes the same stream so logs and errors can be returned in
-# the frame. The body becomes the body of a generated run() method whose return
-# value is reported.
+# Compiles the caller's function body in-memory and runs it. The engine default
+# logger still prints to stdout; the ScriptRunLogger observes the same stream so
+# logs and errors can be returned in the frame. The body becomes the body of a
+# generated run() method whose return value is reported.
 func run_script(result: Result, params) -> Result:
     if not params.has("body") or not (params.body is String):
         result.err("body is required")
@@ -884,6 +884,15 @@ func run_script(result: Result, params) -> Result:
     var logger := ScriptRunLogger.new()
     logger.limit = RUN_SCRIPT_LOG_LIMIT
     OS.add_logger(logger)
+
+    # A non-editor ResourceSaver cannot reach the editor UID database, so its
+    # saves omit the uid= attributes an editor save writes on a scene header and
+    # its ext_resources. Remember the UIDs the project already exposes so the
+    # body's saves can re-emit them. The editor session runs with the database,
+    # so it needs no snapshot.
+    var uid_snapshot := {}
+    if not Engine.is_editor_hint():
+        uid_snapshot = _snapshot_resource_uids()
 
     var compiled := false
     var value = null
@@ -902,6 +911,9 @@ func run_script(result: Result, params) -> Result:
         else:
             value = instance.call("run")
             serialized = _variant_to_json(value)
+
+    if compiled and not uid_snapshot.is_empty():
+        _restore_resource_uids(uid_snapshot)
 
     OS.remove_logger(logger)
 
@@ -935,6 +947,149 @@ func _indent_body(body: String) -> String:
             index += 1
         out.append("\t" + "\t".repeat(index) + line.substr(index))
     return "\n".join(out)
+
+# The text resource formats whose UIDs live in the file itself (a header uid=
+# and the uid= of each ext_resource), unlike a script's .uid sidecar.
+const UID_TEXT_EXTENSIONS := ["tscn", "tres", "escn"]
+
+# Records, keyed by path, every UID the project exposes for a text resource and
+# the ext_resources it references. "files" marks the text resources present
+# before the run, so a file the run creates can be told from one it rewrote.
+func _snapshot_resource_uids() -> Dictionary:
+    var snapshot := {"files": {}, "uids": {}}
+    _walk_text_resources("res://", func(path): _record_resource_uids(path, snapshot))
+    return snapshot
+
+func _walk_text_resources(path: String, visit: Callable) -> void:
+    var dir := DirAccess.open(path)
+    if dir == null:
+        return
+    dir.list_dir_begin()
+    var name := dir.get_next()
+    while name != "":
+        if dir.current_is_dir():
+            if name != "." and name != ".." and not name.begins_with("."):
+                _walk_text_resources(path.path_join(name), visit)
+        elif name.get_extension().to_lower() in UID_TEXT_EXTENSIONS:
+            visit.call(path.path_join(name))
+        name = dir.get_next()
+    dir.list_dir_end()
+
+# Only the resource-header block carries uids: the [gd_scene]/[gd_resource]
+# tag and the [ext_resource] lines above the first body tag. Reading just that
+# keeps the pass proportional to the number of resources, not to the size of
+# their node/subre source bodies.
+func _read_resource_header(path: String) -> PackedStringArray:
+    var file := FileAccess.open(path, FileAccess.READ)
+    if file == null:
+        return PackedStringArray()
+    var header := PackedStringArray()
+    var tag_seen := false
+    while not file.eof_reached():
+        var line := file.get_line()
+        var stripped := line.strip_edges()
+        if stripped.begins_with("["):
+            if tag_seen and not stripped.begins_with("[ext_resource"):
+                break
+            tag_seen = true
+        header.append(line)
+    file.close()
+    return header
+
+func _record_resource_uids(path: String, snapshot: Dictionary) -> void:
+    var header := _read_resource_header(path)
+    if header.is_empty():
+        return
+    snapshot["files"][path] = true
+    for raw_line in header:
+        var line := raw_line.strip_edges()
+        if line.begins_with("[gd_scene") or line.begins_with("[gd_resource"):
+            var self_uid := _tscn_attr(line, "uid")
+            if not self_uid.is_empty():
+                snapshot["uids"][path] = self_uid
+        elif line.begins_with("[ext_resource"):
+            var ref_uid := _tscn_attr(line, "uid")
+            var ref_path := _tscn_attr(line, "path")
+            if not ref_path.is_empty() and not ref_uid.is_empty():
+                snapshot["uids"][ref_path] = ref_uid
+
+# Re-emits a dropped uid= on the header and ext_resources of every text resource
+# the body wrote. A file present before the run keeps its recorded UID; a file
+# the run created adopts a fresh one, matching an editor save.
+func _restore_resource_uids(snapshot: Dictionary) -> void:
+    var files := []
+    _walk_text_resources("res://", func(path): files.append(path))
+    for path in files:
+        _repair_resource_uids(path, snapshot)
+
+# The common case (nothing lost) reads only the header; a file that actually
+# lost a uid is the only one read and rewritten in full.
+func _repair_resource_uids(path: String, snapshot: Dictionary) -> void:
+    var header := _read_resource_header(path)
+    if header.is_empty():
+        return
+    var patched := _patched_header(header, path, snapshot)
+    if patched == header:
+        return
+    var lines := FileAccess.get_file_as_string(path).split("\n")
+    for index in range(patched.size()):
+        if index < lines.size():
+            lines[index] = patched[index]
+    var file := FileAccess.open(path, FileAccess.WRITE)
+    if file != null:
+        file.store_string("\n".join(lines))
+
+func _patched_header(header: PackedStringArray, path: String, snapshot: Dictionary) -> PackedStringArray:
+    var patched := PackedStringArray()
+    var is_new: bool = not snapshot["files"].has(path)
+    for raw_line in header:
+        var line := raw_line.strip_edges()
+        if (line.begins_with("[gd_scene") or line.begins_with("[gd_resource")) and _tscn_attr(line, "uid").is_empty():
+            var uid := _uid_from_snapshot(path, snapshot)
+            if uid.is_empty() and is_new:
+                uid = _generate_text_uid(path)
+            if not uid.is_empty():
+                raw_line = _insert_uid_before_end(raw_line, uid)
+        elif line.begins_with("[ext_resource") and _tscn_attr(line, "uid").is_empty():
+            var ref_path := _tscn_attr(line, "path")
+            var uid := _uid_from_snapshot(ref_path, snapshot)
+            if uid.is_empty():
+                uid = _uid_from_sidecar(ref_path)
+            if not uid.is_empty():
+                raw_line = _insert_uid_after_type(raw_line, uid)
+        patched.append(raw_line)
+    return patched
+
+func _uid_from_snapshot(path: String, snapshot: Dictionary) -> String:
+    return str(snapshot["uids"].get(path, ""))
+
+# A UID the referenced resource exposes outside this scene: a script's .uid
+# sidecar, an imported resource's .import file, or a nested scene's header.
+func _uid_from_sidecar(path: String) -> String:
+    if path.is_empty():
+        return ""
+    var uid := ResourceUID.path_to_uid(path)
+    if uid.begins_with("uid://"):
+        return uid
+    return ""
+
+func _generate_text_uid(path: String) -> String:
+    var uid := ResourceUID.create_id()
+    ResourceUID.add_id(uid, path)
+    return ResourceUID.id_to_text(uid)
+
+func _insert_uid_before_end(line: String, uid: String) -> String:
+    var at := line.rfind("]")
+    if at == -1:
+        return line
+    return line.substr(0, at) + ' uid="' + uid + '"' + line.substr(at)
+
+# Matches the engine's ext_resource attribute order: type, uid, path, id.
+func _insert_uid_after_type(line: String, uid: String) -> String:
+    var at := line.find(' path="')
+    if at != -1:
+        return line.substr(0, at) + ' uid="' + uid + '"' + line.substr(at)
+    return _insert_uid_before_end(line, uid)
 
 func read_resource(result: Result, params) -> Result:
     var resource_path = params.get("resourcePath", "")

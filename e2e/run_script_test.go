@@ -151,6 +151,55 @@ return {"last_region": inst.get("last_region"), "label": inst.get("label"), "pin
 	}
 }
 
+// A run_script save goes through a throwaway non-editor engine, which cannot
+// query the editor UID database. The bridge must still preserve the uid= on a
+// scene header and its ext_resources so the editor does not regenerate them and
+// churn references on its next save.
+func TestRunScriptPreservesResourceUIDs(t *testing.T) {
+	t.Parallel()
+	root := newProject(t)
+	writeE2EFile(t, filepath.Join(root, "player.gd"), "extends Node\n")
+	writeE2EFile(t, filepath.Join(root, "player.gd.uid"), "uid://bplayeruid0001\n")
+	scene := "[gd_scene load_steps=2 format=3 uid=\"uid://csceneuid0001\"]\n\n" +
+		"[ext_resource type=\"Script\" uid=\"uid://bplayeruid0001\" path=\"res://player.gd\" id=\"1_player\"]\n\n" +
+		"[node name=\"root\" type=\"Node2D\"]\nscript = ExtResource(\"1_player\")\n"
+	writeE2EFile(t, filepath.Join(root, "main.tscn"), scene)
+	session := connectProject(t, root)
+
+	doc := decodeRunScript(t, requireToolText(t, session, "run_script", map[string]any{"body": `var packed_scene: PackedScene = load("res://main.tscn")
+var root_node: Node = packed_scene.instantiate()
+var added := Node.new()
+added.name = "Added"
+root_node.add_child(added)
+added.owner = root_node
+var packed := PackedScene.new()
+packed.pack(root_node)
+return ResourceSaver.save(packed, "res://main.tscn")
+`}))
+	if code, ok := doc.Result.(float64); !ok || code != 0 {
+		t.Fatalf("save result = %v, want 0 (errors = %+v)", doc.Result, doc.Errors)
+	}
+
+	after := readFile(t, filepath.Join(root, "main.tscn"))
+	requireContains(t, after,
+		`uid="uid://csceneuid0001"`,
+		`uid="uid://bplayeruid0001"`,
+		`name="Added"`,
+	)
+
+	// A text resource the body creates gets a fresh UID, matching an editor save.
+	doc = decodeRunScript(t, requireToolText(t, session, "run_script", map[string]any{"body": `var node := Node2D.new()
+node.name = "root"
+var packed := PackedScene.new()
+packed.pack(node)
+return ResourceSaver.save(packed, "res://fresh.tscn")
+`}))
+	if code, ok := doc.Result.(float64); !ok || code != 0 {
+		t.Fatalf("fresh save result = %v, want 0 (errors = %+v)", doc.Result, doc.Errors)
+	}
+	requireContains(t, readFile(t, filepath.Join(root, "fresh.tscn")), `uid="uid://`)
+}
+
 func TestRunScriptErrors(t *testing.T) {
 	t.Parallel()
 
